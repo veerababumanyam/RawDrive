@@ -16,7 +16,9 @@ describe("StatTile", () => {
   });
 
   it("exposes role=group with aria-labelledby binding label and value", () => {
-    const { container } = render(<StatTile label="Peak Viewers" value={1234} />);
+    const { container } = render(
+      <StatTile label="Peak Viewers" value={1234} />,
+    );
     const group = container.querySelector("[role='group']");
     expect(group).toBeTruthy();
     const labelledBy = group?.getAttribute("aria-labelledby") ?? "";

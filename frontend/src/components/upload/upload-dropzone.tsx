@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { useDropzone, type DropEvent, type FileRejection } from "react-dropzone";
+import {
+  useDropzone,
+  type DropEvent,
+  type FileRejection,
+} from "react-dropzone";
+import { ArrowUpTray } from "@/components/icons";
 import { STILL_IMAGE_DROPZONE_ACCEPT } from "@/lib/still-image-formats";
 
 interface UploadDropzoneProps {
@@ -18,7 +23,10 @@ type FileSystemEntryLike = {
 };
 
 type FileSystemFileEntryLike = FileSystemEntryLike & {
-  file: (success: (file: File) => void, error?: (error: DOMException) => void) => void;
+  file: (
+    success: (file: File) => void,
+    error?: (error: DOMException) => void,
+  ) => void;
 };
 
 type FileSystemDirectoryEntryLike = FileSystemEntryLike & {
@@ -34,11 +42,15 @@ type DataTransferItemWithEntry = DataTransferItem & {
   webkitGetAsEntry?: () => FileSystemEntryLike | null;
 };
 
-function isDirectoryEntry(entry: FileSystemEntryLike): entry is FileSystemDirectoryEntryLike {
+function isDirectoryEntry(
+  entry: FileSystemEntryLike,
+): entry is FileSystemDirectoryEntryLike {
   return entry.isDirectory;
 }
 
-function isFileEntry(entry: FileSystemEntryLike): entry is FileSystemFileEntryLike {
+function isFileEntry(
+  entry: FileSystemEntryLike,
+): entry is FileSystemFileEntryLike {
   return entry.isFile;
 }
 
@@ -56,9 +68,11 @@ async function readEntry(entry: FileSystemEntryLike): Promise<File[]> {
   const reader = entry.createReader();
   const entries: FileSystemEntryLike[] = [];
   for (;;) {
-    const batch = await new Promise<FileSystemEntryLike[]>((resolve, reject) => {
-      reader.readEntries(resolve, reject);
-    });
+    const batch = await new Promise<FileSystemEntryLike[]>(
+      (resolve, reject) => {
+        reader.readEntries(resolve, reject);
+      },
+    );
     if (batch.length === 0) break;
     entries.push(...batch);
   }
@@ -68,7 +82,9 @@ async function readEntry(entry: FileSystemEntryLike): Promise<File[]> {
 }
 
 async function getFilesFromEvent(event: DropEvent): Promise<File[]> {
-  const nativeEvent = ("nativeEvent" in event ? event.nativeEvent : event) as Event & {
+  const nativeEvent = (
+    "nativeEvent" in event ? event.nativeEvent : event
+  ) as Event & {
     dataTransfer?: DataTransfer;
   };
   if (!nativeEvent.dataTransfer) {
@@ -76,9 +92,14 @@ async function getFilesFromEvent(event: DropEvent): Promise<File[]> {
     return Array.from(target?.files ?? []);
   }
 
-  const items = Array.from(nativeEvent.dataTransfer.items ?? []) as DataTransferItemWithEntry[];
+  const items = Array.from(
+    nativeEvent.dataTransfer.items ?? [],
+  ) as DataTransferItemWithEntry[];
   const entries = items
-    .map((item) => (item.webkitGetAsEntry?.() ?? null) as FileSystemEntryLike | null)
+    .map(
+      (item) =>
+        (item.webkitGetAsEntry?.() ?? null) as FileSystemEntryLike | null,
+    )
     .filter((entry): entry is FileSystemEntryLike => entry !== null);
 
   if (entries.length === 0) {
@@ -105,7 +126,7 @@ export function UploadDropzone({
         onFilesAccepted(accepted);
       }
     },
-    [onFilesAccepted]
+    [onFilesAccepted],
   );
 
   const { getRootProps, getInputProps, isDragActive, isDragReject } =
@@ -140,7 +161,10 @@ export function UploadDropzone({
           className="hidden"
           multiple
           // React does not type Chromium's directory picker attributes yet.
-          {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
+          {...({ webkitdirectory: "", directory: "" } as Record<
+            string,
+            string
+          >)}
           disabled={disabled}
           onChange={(event) => {
             const selected = Array.from(event.currentTarget.files ?? []);
@@ -153,13 +177,13 @@ export function UploadDropzone({
 
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center">
-            <svg className="w-6 h-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-            </svg>
+            <ArrowUpTray className="w-6 h-6 text-accent" />
           </div>
 
           {isDragActive ? (
-            <p className="text-sm font-medium text-accent">Drop files here...</p>
+            <p className="text-sm font-medium text-accent">
+              Drop files here...
+            </p>
           ) : (
             <>
               <p className="text-sm font-medium text-text-primary">
@@ -173,7 +197,7 @@ export function UploadDropzone({
               </p>
               <button
                 type="button"
-                className="rounded-lg border border-border-default bg-surface-elevated px-3 py-2 text-xs font-medium text-text-primary transition-colors hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-border-focus"
+                className="min-h-[var(--touch-target-min)] rounded-lg border border-border-default bg-surface-elevated px-3 text-xs font-medium text-text-primary transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
                 disabled={disabled}
                 onClick={(event) => {
                   event.stopPropagation();

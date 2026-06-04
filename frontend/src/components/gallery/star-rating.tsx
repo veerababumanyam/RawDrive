@@ -1,6 +1,8 @@
 "use client";
 
 import { Star } from "@/components/icons";
+import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { cn } from "@/lib/utils";
 
 interface StarRatingProps {
   rating: number;
@@ -9,24 +11,57 @@ interface StarRatingProps {
   size?: "sm" | "md";
 }
 
-export function StarRating({ rating, onChange, readonly = false, size = "md" }: StarRatingProps) {
-  const starSize = size === "sm" ? "w-4 h-4" : "w-5 h-5";
+export function StarRating({
+  rating,
+  onChange,
+  readonly = false,
+  size = "md",
+}: StarRatingProps) {
+  const starSize = size === "sm" ? "h-4 w-4" : "h-5 w-5";
+  const buttonSize = size === "sm" ? "sm" : "md";
 
   return (
-    <div className="flex items-center gap-0.5" role="group" aria-label="Star rating">
-      {[1, 2, 3, 4, 5].map((star) => (
-        <button
-          key={star}
-          onClick={() => !readonly && onChange?.(star === rating ? 0 : star)}
-          disabled={readonly}
-          className={`transition-colors ${readonly ? "cursor-default" : "cursor-pointer hover:scale-110"}`}
-          aria-label={`${star} star${star !== 1 ? "s" : ""}`}
-        >
-          <span className={`${starSize} inline-block ${star <= rating ? "text-amber-400" : "text-secondary/30"}`}>
+    <div
+      className="flex items-center gap-0.5"
+      role="group"
+      aria-label="Star rating"
+    >
+      {[1, 2, 3, 4, 5].map((star) => {
+        const active = star <= rating;
+        const label = `${star} star${star !== 1 ? "s" : ""}`;
+        const icon = (
+          <span
+            className={cn(
+              starSize,
+              "inline-block",
+              active ? "rating-star" : "text-text-tertiary",
+            )}
+          >
             <Star />
           </span>
-        </button>
-      ))}
+        );
+
+        return readonly ? (
+          <span
+            key={star}
+            aria-label={label}
+            className="inline-flex items-center justify-center"
+          >
+            {icon}
+          </span>
+        ) : (
+          <GlassIconButton
+            key={star}
+            size={buttonSize}
+            variant="ghost"
+            label={label}
+            active={active}
+            onClick={() => onChange?.(star === rating ? 0 : star)}
+          >
+            {icon}
+          </GlassIconButton>
+        );
+      })}
     </div>
   );
 }

@@ -74,7 +74,7 @@ export function ImpersonationBanner() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed inset-x-0 top-0 z-[60] flex items-center justify-center gap-3 bg-feedback-warning/15 px-4 py-2 text-center backdrop-blur-md"
+      className="fixed inset-x-0 top-0 z-[60] flex items-center justify-center gap-3 bg-feedback-warning/15 px-4 py-2 text-center glass-blur-medium"
     >
       <svg
         className="h-4 w-4 shrink-0 text-feedback-warning"
@@ -84,12 +84,22 @@ export function ImpersonationBanner() {
         strokeWidth={1.5}
         aria-hidden="true"
       >
-        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12a9.75 9.75 0 1119.5 0 9.75 9.75 0 01-19.5 0z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8.25v4.5M12 15.75h.008" />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M2.25 12a9.75 9.75 0 1119.5 0 9.75 9.75 0 01-19.5 0z"
+        />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M12 8.25v4.5M12 15.75h.008"
+        />
       </svg>
       <p className="text-xs font-medium text-text-primary sm:text-sm">
         <span className="font-semibold">Read-only impersonation session.</span>{" "}
-        <span className="text-text-secondary">You are viewing this account as an admin. Changes are disabled.</span>
+        <span className="text-text-secondary">
+          You are viewing this account as an admin. Changes are disabled.
+        </span>
       </p>
       <button
         type="button"

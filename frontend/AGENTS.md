@@ -29,3 +29,19 @@ All UI tests that involve image uploads, galleries, or photo display MUST use `t
 - Generate new page layouts and explore variants using RawDrive's design system.
 - Design system definition: `.stitch/DESIGN.md` (synced from `design-tokens.json`).
 - Always feed token values into Stitch prompts — never let Stitch invent colors/spacing.
+
+## Performance Hot Paths
+
+- Gallery, cover, preview, photo-search, and album views must use batched gallery
+  asset hydration. Prefer `/api/v1/galleries/{id}/assets?include_assets=true`;
+  do not add `Promise.all(assetIds.map(getAsset))` or other per-asset fetch loops.
+- Filmstrips, lightboxes, grids, and media rails must not render every asset for
+  large galleries. Use a bounded active-index window or a real virtualizer, and
+  keep selection/navigation indexes mapped to the full asset list.
+- Upload screening must avoid double full-file reads. Hash bytes already read by
+  screening when available; otherwise use the existing chunked/incremental hash
+  helper. WebCrypto `subtle.digest()` is not streaming.
+- Upload progress updates should skip unchanged state to avoid render churn during
+  large batches.
+- Add regression tests that prove request counts and rendered thumb counts stay
+  bounded as gallery size grows.

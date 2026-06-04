@@ -1,5 +1,11 @@
 import { Suspense } from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import GallerySettingsPage from "../[id]/settings/page";
 
@@ -9,7 +15,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("next/link", () => ({
-  default: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
+  default: ({
+    href,
+    children,
+    ...props
+  }: {
+    href: string;
+    children: React.ReactNode;
+  }) => (
     <a href={href} {...props}>
       {children}
     </a>
@@ -73,15 +86,18 @@ describe("Gallery settings — access window / expiry", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getGallery.mockResolvedValue(gallery());
-    mocks.updateGallerySettings.mockImplementation(async (_token, _id, payload) =>
-      gallery(payload as Record<string, unknown>),
+    mocks.updateGallerySettings.mockImplementation(
+      async (_token, _id, payload) =>
+        gallery(payload as Record<string, unknown>),
     );
   });
 
   it("renders an Access window section", async () => {
     await renderPage();
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Access window" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: "Access window" }),
+      ).toBeInTheDocument();
     });
   });
 
@@ -93,7 +109,9 @@ describe("Gallery settings — access window / expiry", () => {
     fireEvent.click(screen.getByRole("button", { name: "30 days" }));
 
     await waitFor(() => expect(mocks.updateGallerySettings).toHaveBeenCalled());
-    const payload = mocks.updateGallerySettings.mock.calls[0][2] as { expires_at?: string };
+    const payload = mocks.updateGallerySettings.mock.calls[0][2] as {
+      expires_at?: string;
+    };
     expect(typeof payload.expires_at).toBe("string");
     const expMs = Date.parse(payload.expires_at as string);
     const after = Date.now();
@@ -103,16 +121,22 @@ describe("Gallery settings — access window / expiry", () => {
   });
 
   it("clears the access window when No expiry is chosen", async () => {
-    mocks.getGallery.mockResolvedValue(gallery({ expires_at: "2026-12-31T00:00:00Z" }));
+    mocks.getGallery.mockResolvedValue(
+      gallery({ expires_at: "2026-12-31T00:00:00Z" }),
+    );
     await renderPage();
     await waitFor(() => screen.getByRole("heading", { name: "Access window" }));
 
     fireEvent.click(screen.getByRole("button", { name: "No expiry" }));
 
     await waitFor(() =>
-      expect(mocks.updateGallerySettings).toHaveBeenCalledWith("token-1", "gallery-1", {
-        expires_at: null,
-      }),
+      expect(mocks.updateGallerySettings).toHaveBeenCalledWith(
+        "token-1",
+        "gallery-1",
+        {
+          expires_at: null,
+        },
+      ),
     );
   });
 
@@ -125,7 +149,11 @@ describe("Gallery settings — access window / expiry", () => {
     });
 
     await waitFor(() => expect(mocks.updateGallerySettings).toHaveBeenCalled());
-    const payload = mocks.updateGallerySettings.mock.calls[0][2] as { expires_at?: string };
-    expect(payload.expires_at).toBe(new Date("2026-06-15T23:59:59").toISOString());
+    const payload = mocks.updateGallerySettings.mock.calls[0][2] as {
+      expires_at?: string;
+    };
+    expect(payload.expires_at).toBe(
+      new Date("2026-06-15T23:59:59").toISOString(),
+    );
   });
 });

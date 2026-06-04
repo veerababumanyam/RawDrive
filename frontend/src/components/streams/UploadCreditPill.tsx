@@ -58,15 +58,19 @@ export function UploadCreditPill({ className }: UploadCreditPillProps) {
           size="sm"
           onClick={() => setOpen(true)}
           data-testid="upload-credit-pill-button"
-          className="px-3 w-auto rounded-full"
+          className="upload-credit-pill__button"
         >
-          <span className="flex items-center gap-1.5 text-xs font-medium">
+          <span className="upload-credit-pill__content text-xs font-medium">
             <ArrowUpTray className="h-4 w-4" />
             <span data-testid="upload-credit-pill-credits">{display}</span>
           </span>
         </GlassIconButton>
       </div>
-      <RechargeModal open={open} onClose={handleClose} initialSurface="uploads" />
+      <RechargeModal
+        open={open}
+        onClose={handleClose}
+        initialSurface="uploads"
+      />
     </>
   );
 }

@@ -2,6 +2,8 @@
 
 import { useSyncExternalStore } from "react";
 
+import { Clock } from "@/components/icons";
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
 
@@ -40,8 +42,15 @@ interface GalleryExpiryBannerProps {
  * its expiry the public page renders the dedicated "Gallery Has Expired" state
  * (see app/g/[slug]/page.tsx), so this banner only covers the run-up window.
  */
-export function GalleryExpiryBanner({ expiresAt, thresholdDays = 14 }: GalleryExpiryBannerProps) {
-  const now = useSyncExternalStore(subscribeTime, getTimeSnapshot, getServerTimeSnapshot);
+export function GalleryExpiryBanner({
+  expiresAt,
+  thresholdDays = 14,
+}: GalleryExpiryBannerProps) {
+  const now = useSyncExternalStore(
+    subscribeTime,
+    getTimeSnapshot,
+    getServerTimeSnapshot,
+  );
 
   if (now === 0 || !expiresAt) return null;
 
@@ -65,18 +74,10 @@ export function GalleryExpiryBanner({ expiresAt, thresholdDays = 14 }: GalleryEx
       className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-3 text-sm text-text-secondary"
     >
       <span className="inline-flex items-center gap-2 rounded-full border border-border-default bg-surface-sunken px-3 py-1.5">
-        <svg
-          aria-hidden="true"
-          className="h-4 w-4 text-text-tertiary"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={1.5}
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
+        <Clock aria-hidden="true" className="h-4 w-4 text-text-tertiary" />
         <span>
-          Available until <span className="font-semibold text-text-primary">{dateLabel}</span>
+          Available until{" "}
+          <span className="font-semibold text-text-primary">{dateLabel}</span>
           {" · "}
           <span className="font-semibold text-text-primary">
             {daysLeft} day{daysLeft === 1 ? "" : "s"} left

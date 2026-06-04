@@ -16,7 +16,7 @@
  *  - Transport + fetcher are injectable props for unit testing
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { Download, Sparkle, CheckCircle, InfoCircle } from "@/components/icons";
 import {
@@ -43,17 +43,35 @@ interface StartResponse {
   expiresAt: string;
 }
 
-type Phase = "idle" | "starting" | "measuring" | "ready" | "testing" | "done" | "error";
+type Phase =
+  | "idle"
+  | "starting"
+  | "measuring"
+  | "ready"
+  | "testing"
+  | "done"
+  | "error";
 
 const API_BASE = "/api/v1/streaming/streams/preflight";
 
-export function PreflightPanel({ streamId, fetcher, transport }: PreflightPanelProps) {
-  const doFetch: Fetcher = fetcher ?? ((u, i) => fetch(u, i));
+export function PreflightPanel({
+  streamId,
+  fetcher,
+  transport,
+}: PreflightPanelProps) {
+  const doFetch = useMemo<Fetcher>(
+    () => fetcher ?? ((u, i) => fetch(u, i)),
+    [fetcher],
+  );
   const [phase, setPhase] = useState<Phase>("idle");
   const [session, setSession] = useState<StartResponse | null>(null);
-  const [classifyResult, setClassifyResult] = useState<ClassifyResult | null>(null);
+  const [classifyResult, setClassifyResult] = useState<ClassifyResult | null>(
+    null,
+  );
   const [errorMsg, setErrorMsg] = useState("");
-  const [testStatus, setTestStatus] = useState<"idle" | "active" | "stopped">("idle");
+  const [testStatus, setTestStatus] = useState<"idle" | "active" | "stopped">(
+    "idle",
+  );
 
   // Build a sensible default transport once we know the session id. Tests
   // pass their own `transport` so this branch never runs under vitest.
@@ -104,9 +122,12 @@ export function PreflightPanel({ streamId, fetcher, transport }: PreflightPanelP
   const handleDownloadOBS = useCallback(async () => {
     if (!session) return;
     try {
-      const res = await doFetch(`${API_BASE}/${session.sessionId}/obs-profile`, {
-        method: "GET",
-      });
+      const res = await doFetch(
+        `${API_BASE}/${session.sessionId}/obs-profile`,
+        {
+          method: "GET",
+        },
+      );
       if (!res.ok) throw new Error(`obs-profile failed: ${res.status}`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -130,7 +151,8 @@ export function PreflightPanel({ streamId, fetcher, transport }: PreflightPanelP
         `${API_BASE}/${session.sessionId}/test-broadcast/start`,
         { method: "POST" },
       );
-      if (!startRes.ok) throw new Error(`test-broadcast start: ${startRes.status}`);
+      if (!startRes.ok)
+        throw new Error(`test-broadcast start: ${startRes.status}`);
       setTestStatus("active");
       // Immediate stop — in production this would be driven by the 60s
       // session TTL or a user "Finish" action; the sequence itself is what
@@ -139,7 +161,8 @@ export function PreflightPanel({ streamId, fetcher, transport }: PreflightPanelP
         `${API_BASE}/${session.sessionId}/test-broadcast/stop`,
         { method: "POST" },
       );
-      if (!stopRes.ok) throw new Error(`test-broadcast stop: ${stopRes.status}`);
+      if (!stopRes.ok)
+        throw new Error(`test-broadcast stop: ${stopRes.status}`);
       setTestStatus("stopped");
       setPhase("done");
     } catch (e) {
@@ -150,18 +173,27 @@ export function PreflightPanel({ streamId, fetcher, transport }: PreflightPanelP
 
   const verdictTone = classifyResult?.verdict ?? "warn";
   const verdictVariant =
-    verdictTone === "pass" ? "success" : verdictTone === "warn" ? "accent" : "danger";
+    verdictTone === "pass"
+      ? "success"
+      : verdictTone === "warn"
+        ? "accent"
+        : "danger";
 
   return (
     <section
       data-testid="preflight-panel"
       aria-label="Desktop preflight"
-      className="rounded-2xl border border-white/10 bg-white/5 p-5 space-y-4"
+      className="stream-panel space-y-4 p-5"
     >
       <header className="flex items-center justify-between">
-        <h3 className="text-base font-medium text-white/90">Stream preflight</h3>
+        <h3 className="text-base font-medium text-text-media">
+          Stream preflight
+        </h3>
         {errorMsg && (
-          <span data-testid="preflight-error" className="text-sm text-feedback-error">
+          <span
+            data-testid="preflight-error"
+            className="text-sm text-feedback-error"
+          >
             {errorMsg}
           </span>
         )}
@@ -179,7 +211,10 @@ export function PreflightPanel({ streamId, fetcher, transport }: PreflightPanelP
       )}
 
       {(phase === "starting" || phase === "measuring") && (
-        <p className="text-sm text-white/70" data-testid="preflight-measuring">
+        <p
+          className="text-sm text-text-media/70"
+          data-testid="preflight-measuring"
+        >
           Measuring uplink…
         </p>
       )}
@@ -195,14 +230,14 @@ export function PreflightPanel({ streamId, fetcher, transport }: PreflightPanelP
               {verdictTone === "pass" && <CheckCircle />}
               {verdictTone !== "pass" && <InfoCircle />}
               <span className="ml-1 capitalize">{verdictTone}</span>
-              <span className="ml-2 text-white/70">
+              <span className="ml-2 text-text-media/70">
                 · {bw.mbps.toFixed(1)} Mbps · {classifyResult.tier}
               </span>
             </span>
           </div>
           <ul
             data-testid="recommendations"
-            className="list-disc space-y-1 pl-5 text-sm text-white/75"
+            className="list-disc space-y-1 pl-5 text-sm text-text-media/75"
           >
             {classifyResult.recommendations.map((r, i) => (
               <li key={i}>{r}</li>
@@ -228,7 +263,10 @@ export function PreflightPanel({ streamId, fetcher, transport }: PreflightPanelP
             </GlassIconButton>
           </div>
           {testStatus === "stopped" && (
-            <p className="text-xs text-white/60" data-testid="test-broadcast-done">
+            <p
+              className="text-xs text-text-media/60"
+              data-testid="test-broadcast-done"
+            >
               Test broadcast completed.
             </p>
           )}

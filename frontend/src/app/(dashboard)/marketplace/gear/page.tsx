@@ -100,13 +100,15 @@ export default function GearPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
       {error && (
-        <div className="mb-4 rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
+        <div className="mb-4 rounded-xl border border-feedback-error/20 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error">
           {error}
         </div>
       )}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Gear Rental</h1>
+          <h1 className="text-2xl font-semibold text-text-primary">
+            Gear Rental
+          </h1>
           <p className="text-sm text-text-secondary mt-1">
             Rent cameras, lenses, and accessories from other photographers
           </p>
@@ -140,7 +142,10 @@ export default function GearPage() {
       <div className="flex flex-wrap gap-3">
         <select
           value={stateID}
-          onChange={(e) => { setStateID(e.target.value ? Number(e.target.value) : ""); setDistrict(""); }}
+          onChange={(e) => {
+            setStateID(e.target.value ? Number(e.target.value) : "");
+            setDistrict("");
+          }}
           className="input-base min-w-[160px]"
           aria-label="Filter by state"
         >
@@ -152,7 +157,8 @@ export default function GearPage() {
           ))}
         </select>
         {(() => {
-          const selectedStateName = states.find((s) => s.id === stateID)?.name ?? "";
+          const selectedStateName =
+            states.find((s) => s.id === stateID)?.name ?? "";
           const districts = getDistrictsForState(selectedStateName);
           return (
             <select
@@ -164,7 +170,9 @@ export default function GearPage() {
             >
               <option value="">All Districts</option>
               {districts.map((d) => (
-                <option key={d} value={d}>{d}</option>
+                <option key={d} value={d}>
+                  {d}
+                </option>
               ))}
             </select>
           );
@@ -182,7 +190,10 @@ export default function GearPage() {
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3, 4, 5, 6].map((item) => (
-            <div key={item} className="h-64 bg-surface-sunken rounded-xl animate-pulse" />
+            <div
+              key={item}
+              className="h-64 bg-surface-sunken rounded-xl animate-pulse"
+            />
           ))}
         </div>
       ) : gear.length === 0 ? (
@@ -203,15 +214,21 @@ export default function GearPage() {
                 </div>
               ) : (
                 <div className="h-40 bg-surface-sunken flex items-center justify-center">
-                  <span className="text-text-secondary text-xs">{entry.category.replace("_", " ")}</span>
+                  <span className="text-text-secondary text-xs">
+                    {entry.category.replace("_", " ")}
+                  </span>
                 </div>
               )}
               <div className="p-4 space-y-2">
                 <div className="flex items-start justify-between">
-                  <h3 className="text-sm font-semibold text-text-primary">{entry.title}</h3>
+                  <h3 className="text-sm font-semibold text-text-primary">
+                    {entry.title}
+                  </h3>
                   <span
                     className={cn(
-                      availabilityClasses[entry.is_available ? "available" : "unavailable"],
+                      availabilityClasses[
+                        entry.is_available ? "available" : "unavailable"
+                      ],
                     )}
                   >
                     {entry.is_available ? "Available" : "Booked"}
@@ -230,7 +247,9 @@ export default function GearPage() {
                     </span>
                   </span>
                   {entry.city && (
-                    <span className="text-xs text-text-secondary">{entry.city}</span>
+                    <span className="text-xs text-text-secondary">
+                      {entry.city}
+                    </span>
                   )}
                 </div>
               </div>

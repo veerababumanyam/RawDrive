@@ -1,4 +1,9 @@
-import { createElement, type AnchorHTMLAttributes, type ImgHTMLAttributes, type ReactNode } from "react";
+import {
+  createElement,
+  type AnchorHTMLAttributes,
+  type ImgHTMLAttributes,
+  type ReactNode,
+} from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import DashboardLayout from "../layout";
@@ -22,14 +27,11 @@ import { ThemeProvider } from "@/components/theme/ThemeProvider";
  * OWNS and renders directly — the global-search form, the quick-nav links,
  * and the notifications link. They intentionally do NOT scan the whole header
  * or the whole tree, because the header also mounts SEPARATE components this
- * file does not own — ThemeToggleButton (imports lucide Moon/Sun),
- * PwaInstallHeaderButton (imports lucide Download/X), and the role sidebars
- * (AdminSidebar/DealerSidebar/…, which import lucide). Migrating those is a
- * follow-up wave; F-090 spans 58 files. Scoping to layout.tsx's own glyphs
- * keeps this test honest: it is green only because the nine icons this file
- * used were migrated, and it turns RED the moment any of them is reverted to
- * lucide (verified by reintroducing the lucide `Search` import — the
- * search-form assertion below then fails).
+ * file does not own — ThemeToggleButton, PwaInstallHeaderButton, and the role
+ * sidebars. Scoping to layout.tsx's own glyphs keeps this test honest: it is
+ * green only because the icons this file owns were migrated, and it turns RED
+ * the moment any of them is reverted to lucide (verified by reintroducing the
+ * lucide `Search` import — the search-form assertion below then fails).
  *
  * The mocks below are scoped to this file's own module registry, so they do
  * not interfere with the sibling layout.test.tsx render tests.
@@ -46,7 +48,10 @@ vi.mock("next/link", () => ({
     href,
     children,
     ...props
-  }: { href: string; children: ReactNode } & AnchorHTMLAttributes<HTMLAnchorElement>) => (
+  }: {
+    href: string;
+    children: ReactNode;
+  } & AnchorHTMLAttributes<HTMLAnchorElement>) => (
     <a href={href} {...props}>
       {children}
     </a>
@@ -82,28 +87,35 @@ function renderDashboardLayout() {
 }
 
 beforeEach(() => {
-  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
-    const url = typeof input === "string" ? input : input.toString();
-    if (url.includes("/api/v1/auth/me")) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/api/v1/auth/me")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            display_name: "Studio User",
+            email: "studio@example.test",
+            plan_tier: "pro",
+          }),
+        } as Response;
+      }
+      if (url.includes("/api/v1/uploads/balance")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ available_credits: 500, low_balance: false }),
+        } as Response;
+      }
       return {
         ok: true,
         status: 200,
-        json: async () => ({
-          display_name: "Studio User",
-          email: "studio@example.test",
-          plan_tier: "pro",
-        }),
+        json: async () => ({ packages: [] }),
       } as Response;
-    }
-    if (url.includes("/api/v1/uploads/balance")) {
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ available_credits: 500, low_balance: false }),
-      } as Response;
-    }
-    return { ok: true, status: 200, json: async () => ({ packages: [] }) } as Response;
-  }));
+    }),
+  );
 });
 
 function hasLucideClass(svg: Element): boolean {
@@ -118,11 +130,16 @@ function layoutOwnedSvgs(): SVGElement[] {
   const searchInput = screen.getByRole("searchbox", {
     name: "Search galleries, clients, or files...",
   });
-  searchInput.closest("form")?.querySelectorAll("svg").forEach((s) => svgs.push(s));
+  searchInput
+    .closest("form")
+    ?.querySelectorAll("svg")
+    .forEach((s) => svgs.push(s));
 
-  // Quick-nav links — layout.tsx renders the Home glyph here.
-  const quickNav = screen.getByRole("navigation", { name: "Workspace quick navigation" });
-  quickNav.querySelectorAll("svg").forEach((s) => svgs.push(s));
+  // Header shortcuts — layout.tsx renders the Home and Photo glyphs here.
+  const shortcuts = screen.getByRole("navigation", {
+    name: "Primary workspace shortcuts",
+  });
+  shortcuts.querySelectorAll("svg").forEach((s) => svgs.push(s));
 
   // Notifications link — layout.tsx renders the Bell glyph here.
   const notifications = screen.getByRole("link", { name: "Notifications" });

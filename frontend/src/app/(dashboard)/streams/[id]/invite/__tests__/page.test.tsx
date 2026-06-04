@@ -13,6 +13,8 @@ describe("streams/[id]/invite page", () => {
   it("renders InviteGenerator with the resolved streamId", async () => {
     const el = await Page({ params: Promise.resolve({ id: "stream-abc" }) });
     render(el);
-    expect(screen.getByTestId("invite-generator-mock").textContent).toBe("stream-abc");
+    expect(screen.getByTestId("invite-generator-mock").textContent).toBe(
+      "stream-abc",
+    );
   });
 });

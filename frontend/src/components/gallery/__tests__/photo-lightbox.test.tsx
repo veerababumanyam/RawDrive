@@ -59,7 +59,9 @@ describe("PhotoLightbox", () => {
     render(<PhotoLightbox {...props} />);
 
     const deleteButton = screen.getByRole("button", { name: "Delete photo" });
-    expect(deleteButton).toHaveClass("bg-feedback-error", "text-white");
+    // Destructive affordance comes from the design-system danger variant
+    // (token-driven), not hardcoded color classes.
+    expect(deleteButton).toHaveClass("glass-icon-button--danger");
 
     fireEvent.click(deleteButton);
 

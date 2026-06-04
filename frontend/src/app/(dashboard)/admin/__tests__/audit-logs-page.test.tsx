@@ -17,19 +17,37 @@ const mockListLogs = vi.mocked(listAuditLogs);
 const sampleLogs = {
   items: [
     {
-      id: "log1", actor_id: "u1", actor_email: "admin@rawdrive.in",
-      action: "user.suspended", resource_type: "user", resource_id: "u5",
-      ip_address: "192.168.1.1", severity: "high", inserted_at: "2026-04-08T10:00:00Z",
+      id: "log1",
+      actor_id: "u1",
+      actor_email: "admin@rawdrive.in",
+      action: "user.suspended",
+      resource_type: "user",
+      resource_id: "u5",
+      ip_address: "192.168.1.1",
+      severity: "high",
+      inserted_at: "2026-04-08T10:00:00Z",
     },
     {
-      id: "log2", actor_id: "u1", actor_email: "admin@rawdrive.in",
-      action: "moderation.approved", resource_type: "gallery", resource_id: "g3",
-      ip_address: "192.168.1.1", severity: "medium", inserted_at: "2026-04-08T09:30:00Z",
+      id: "log2",
+      actor_id: "u1",
+      actor_email: "admin@rawdrive.in",
+      action: "moderation.approved",
+      resource_type: "gallery",
+      resource_id: "g3",
+      ip_address: "192.168.1.1",
+      severity: "medium",
+      inserted_at: "2026-04-08T09:30:00Z",
     },
     {
-      id: "log3", actor_id: "u2", actor_email: "support@rawdrive.in",
-      action: "user.role_changed", resource_type: "user", resource_id: "u10",
-      ip_address: "10.0.0.5", severity: "high", inserted_at: "2026-04-07T16:00:00Z",
+      id: "log3",
+      actor_id: "u2",
+      actor_email: "support@rawdrive.in",
+      action: "user.role_changed",
+      resource_type: "user",
+      resource_id: "u10",
+      ip_address: "10.0.0.5",
+      severity: "high",
+      inserted_at: "2026-04-07T16:00:00Z",
     },
   ],
   total_count: 3,
@@ -52,7 +70,9 @@ describe("AdminAuditLogsPage", () => {
   it("shows actor emails", async () => {
     render(<AdminAuditLogsPage />);
     await waitFor(() => {
-      expect(screen.getAllByText("admin@rawdrive.in").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("admin@rawdrive.in").length).toBeGreaterThan(
+        0,
+      );
     });
   });
 
@@ -111,7 +131,10 @@ describe("AdminAuditLogsPage", () => {
   it("calls listAuditLogs on mount", async () => {
     render(<AdminAuditLogsPage />);
     await waitFor(() => {
-      expect(mockListLogs).toHaveBeenCalledWith("test-token", expect.any(Object));
+      expect(mockListLogs).toHaveBeenCalledWith(
+        "test-token",
+        expect.any(Object),
+      );
     });
   });
 });

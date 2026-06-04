@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CalendarDays, Clock, Crown, HardDrive, Zap } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  Clock,
+  Crown,
+  HardDrive,
+  Zap,
+} from "lucide-react";
 import { getStoredAccessToken } from "@/lib/auth";
 import { pricingPlans } from "@/lib/tokens";
 
@@ -53,9 +60,12 @@ export default function SubscriptionPage() {
       }
 
       try {
-        const response = await fetch(`${API_BASE}/api/v1/workspace/subscription`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const response = await fetch(
+          `${API_BASE}/api/v1/workspace/subscription`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const nextData = (await response.json()) as SubscriptionData;
         if (!cancelled) {
@@ -64,7 +74,9 @@ export default function SubscriptionPage() {
         }
       } catch (err: unknown) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load subscription");
+          setError(
+            err instanceof Error ? err.message : "Failed to load subscription",
+          );
           setLoading(false);
         }
       }
@@ -134,7 +146,9 @@ export default function SubscriptionPage() {
               <div className="flex items-center gap-2 rounded-lg bg-surface-container-high px-3 py-2.5">
                 <HardDrive className="h-4 w-4 shrink-0 text-text-tertiary" />
                 <p className="text-sm text-on-surface">
-                  <span className="font-semibold text-accent">{planStorage}</span>
+                  <span className="font-semibold text-accent">
+                    {planStorage}
+                  </span>
                   <span className="text-text-secondary"> storage included</span>
                 </p>
               </div>
@@ -148,7 +162,9 @@ export default function SubscriptionPage() {
                     <p className="text-[10px] uppercase tracking-widest text-text-tertiary font-semibold">
                       Started
                     </p>
-                    <p className="text-sm text-on-surface">{formatDate(data.started_at)}</p>
+                    <p className="text-sm text-on-surface">
+                      {formatDate(data.started_at)}
+                    </p>
                   </div>
                 </div>
               )}
@@ -160,7 +176,9 @@ export default function SubscriptionPage() {
                     <p className="text-[10px] uppercase tracking-widest text-text-tertiary font-semibold">
                       Expires
                     </p>
-                    <p className="text-sm text-on-surface">{formatDate(data.expires_at)}</p>
+                    <p className="text-sm text-on-surface">
+                      {formatDate(data.expires_at)}
+                    </p>
                   </div>
                 </div>
               ) : (
@@ -182,7 +200,9 @@ export default function SubscriptionPage() {
                     <p className="text-[10px] uppercase tracking-widest text-text-tertiary font-semibold">
                       Days Left
                     </p>
-                    <p className={`text-sm font-semibold ${data.days_left <= 7 ? "text-feedback-warning" : "text-on-surface"}`}>
+                    <p
+                      className={`text-sm font-semibold ${data.days_left <= 7 ? "text-feedback-warning" : "text-on-surface"}`}
+                    >
                       {data.days_left} {data.days_left === 1 ? "day" : "days"}
                     </p>
                   </div>
@@ -195,9 +215,12 @@ export default function SubscriptionPage() {
           {isFreeTier && (
             <div className="rounded-xl border border-accent/30 bg-accent/5 p-6 flex items-center justify-between gap-4">
               <div className="space-y-1">
-                <p className="font-semibold text-on-surface">Unlock more with a paid plan</p>
+                <p className="font-semibold text-on-surface">
+                  Unlock more with a paid plan
+                </p>
                 <p className="text-sm text-text-secondary">
-                  More storage, advanced AI tools, priority support, and team features.
+                  More storage, advanced AI tools, priority support, and team
+                  features.
                 </p>
               </div>
               <Link
@@ -213,7 +236,9 @@ export default function SubscriptionPage() {
           {!isFreeTier && (
             <div className="rounded-xl border border-border-subtle bg-surface-container-low p-5 flex items-center justify-between gap-4">
               <div className="space-y-1">
-                <p className="font-semibold text-on-surface">Need a higher tier?</p>
+                <p className="font-semibold text-on-surface">
+                  Need a higher tier?
+                </p>
                 <p className="text-sm text-text-secondary">
                   Compare plans and upgrade anytime.
                 </p>

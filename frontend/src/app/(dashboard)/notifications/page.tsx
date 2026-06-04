@@ -38,7 +38,9 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(() => !!getStoredAccessToken());
   const [error, setError] = useState<string | null>(() =>
-    getStoredAccessToken() ? null : "Your session expired. Please log in again.",
+    getStoredAccessToken()
+      ? null
+      : "Your session expired. Please log in again.",
   );
   const [markingAll, setMarkingAll] = useState(false);
 
@@ -60,10 +62,17 @@ export default function NotificationsPage() {
         setError(null);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load notifications");
+        if (!cancelled)
+          setError(
+            err instanceof Error ? err.message : "Failed to load notifications",
+          );
       })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Optimistic mark-as-read. The backend endpoint returns 200 with no
@@ -76,7 +85,11 @@ export default function NotificationsPage() {
     setNotifications((prev) =>
       prev.map((n) =>
         n.id === id
-          ? { ...n, is_read: true, read_at: n.read_at ?? new Date().toISOString() }
+          ? {
+              ...n,
+              is_read: true,
+              read_at: n.read_at ?? new Date().toISOString(),
+            }
           : n,
       ),
     );
@@ -183,7 +196,9 @@ export default function NotificationsPage() {
                 <div className="min-w-0 flex-1">
                   <p
                     className={`text-sm ${
-                      n.is_read ? "text-text-secondary" : "font-medium text-text-primary"
+                      n.is_read
+                        ? "text-text-secondary"
+                        : "font-medium text-text-primary"
                     }`}
                   >
                     {n.title}

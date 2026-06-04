@@ -13,14 +13,19 @@ import DealerApplicationModal from "../DealerApplicationModal";
  * required accessible label).
  *
  * These tests assert:
- *   - the close control is GlassIconButton at the WCAG 44px size (h-11 w-11),
+ *   - the close control is GlassIconButton at the WCAG 44px size token,
  *   - it never reintroduces the sub-44px h-8/w-8 hit area,
  *   - it carries an accessible name and still invokes onClose.
  */
 
 function stubStatesFetch() {
-  return vi.fn(async () =>
-    ({ ok: true, status: 200, json: async () => ({ states: [] }) }) as unknown as Response,
+  return vi.fn(
+    async () =>
+      ({
+        ok: true,
+        status: 200,
+        json: async () => ({ states: [] }),
+      }) as unknown as Response,
   );
 }
 
@@ -31,7 +36,9 @@ describe("DealerApplicationModal — F-044 touch target", () => {
 
   it("returns null when closed", () => {
     vi.stubGlobal("fetch", stubStatesFetch());
-    const { container } = render(<DealerApplicationModal open={false} onClose={() => {}} />);
+    const { container } = render(
+      <DealerApplicationModal open={false} onClose={() => {}} />,
+    );
     expect(container.firstChild).toBeNull();
   });
 
@@ -45,9 +52,8 @@ describe("DealerApplicationModal — F-044 touch target", () => {
     vi.stubGlobal("fetch", stubStatesFetch());
     render(<DealerApplicationModal open onClose={() => {}} />);
     const close = screen.getByRole("button", { name: "Close" });
-    // GlassIconButton size="md" => h-11 w-11 (44px)
-    expect(close.className).toContain("h-11");
-    expect(close.className).toContain("w-11");
+    // GlassIconButton size="md" => 44px via token-backed CSS.
+    expect(close.className).toContain("glass-icon-button--md");
     // The failing baseline was h-8 w-8 (32px) — it must not return.
     expect(close.className).not.toMatch(/\bh-8\b/);
     expect(close.className).not.toMatch(/\bw-8\b/);
@@ -57,7 +63,9 @@ describe("DealerApplicationModal — F-044 touch target", () => {
     vi.stubGlobal("fetch", stubStatesFetch());
     render(<DealerApplicationModal open onClose={() => {}} />);
     const close = screen.getByRole("button", { name: "Close" });
-    expect(close.className).not.toMatch(/\b(?:bg|text|border)-(?:neutral|gray)-\d/);
+    expect(close.className).not.toMatch(
+      /\b(?:bg|text|border)-(?:neutral|gray)-\d/,
+    );
     expect(close.className).not.toMatch(/\[#[0-9a-fA-F]{3,8}\]/);
   });
 

@@ -12,7 +12,11 @@ vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: vi.fn(() => "test-token"),
 }));
 
-import { listModerationQueue, approveModeration, rejectModeration } from "@/lib/api/admin";
+import {
+  listModerationQueue,
+  approveModeration,
+  rejectModeration,
+} from "@/lib/api/admin";
 import AdminModerationPage from "../moderation/page";
 
 const mockListQueue = vi.mocked(listModerationQueue);
@@ -22,12 +26,23 @@ const mockReject = vi.mocked(rejectModeration);
 const sampleQueue = {
   items: [
     {
-      id: "mod1", content_type: "gallery", content_id: "g1", workspace_id: "ws1",
-      reason: "auto_flagged", status: "pending", created_at: "2026-04-01T12:00:00Z",
+      id: "mod1",
+      content_type: "gallery",
+      content_id: "g1",
+      workspace_id: "ws1",
+      reason: "auto_flagged",
+      status: "pending",
+      created_at: "2026-04-01T12:00:00Z",
     },
     {
-      id: "mod2", content_type: "image", content_id: "img1", workspace_id: "ws2",
-      reason: "reported", reporter_id: "u5", status: "pending", created_at: "2026-04-02T14:00:00Z",
+      id: "mod2",
+      content_type: "image",
+      content_id: "img1",
+      workspace_id: "ws2",
+      reason: "reported",
+      reporter_id: "u5",
+      status: "pending",
+      created_at: "2026-04-02T14:00:00Z",
     },
   ],
   total_count: 2,
@@ -65,7 +80,9 @@ describe("AdminModerationPage", () => {
   it("has approve button", async () => {
     render(<AdminModerationPage />);
     await waitFor(() => {
-      expect(screen.getAllByRole("button", { name: /approve/i }).length).toBeGreaterThan(0);
+      expect(
+        screen.getAllByRole("button", { name: /approve/i }).length,
+      ).toBeGreaterThan(0);
     });
   });
 
@@ -87,14 +104,20 @@ describe("AdminModerationPage", () => {
     const rejectBtns = screen.getAllByRole("button", { name: /reject/i });
     fireEvent.click(rejectBtns[0]);
     await waitFor(() => {
-      expect(mockReject).toHaveBeenCalledWith("test-token", "mod1", expect.any(String));
+      expect(mockReject).toHaveBeenCalledWith(
+        "test-token",
+        "mod1",
+        expect.any(String),
+      );
     });
   });
 
   it("has escalate option", async () => {
     render(<AdminModerationPage />);
     await waitFor(() => {
-      expect(screen.getAllByRole("button", { name: /escalate/i }).length).toBeGreaterThan(0);
+      expect(
+        screen.getAllByRole("button", { name: /escalate/i }).length,
+      ).toBeGreaterThan(0);
     });
   });
 
@@ -130,7 +153,10 @@ describe("AdminModerationPage", () => {
   it("calls listModerationQueue on mount", async () => {
     render(<AdminModerationPage />);
     await waitFor(() => {
-      expect(mockListQueue).toHaveBeenCalledWith("test-token", expect.any(Object));
+      expect(mockListQueue).toHaveBeenCalledWith(
+        "test-token",
+        expect.any(Object),
+      );
     });
   });
 });

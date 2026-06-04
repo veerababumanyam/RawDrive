@@ -68,11 +68,13 @@ export function AiMomentSection() {
             >
               Ranked, grouped, and searchable
               <br />
-              <span className="text-text-secondary">— before you start editing.</span>
+              <span className="text-text-secondary">
+                — before you start editing.
+              </span>
             </h2>
             <p className="mt-6 max-w-md text-base leading-relaxed text-text-secondary sm:text-lg">
-              A quiet intelligence layer that looks at every photo so you do
-              not have to.
+              A quiet intelligence layer that looks at every photo so you do not
+              have to.
             </p>
           </div>
 

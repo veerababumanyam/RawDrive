@@ -30,7 +30,9 @@ describe("UploadDropzone", () => {
   it("offers folder selection for large recursive photo batches", () => {
     render(<UploadDropzone onFilesAccepted={vi.fn()} />);
 
-    expect(screen.getByRole("button", { name: "Select folder" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Select folder" }),
+    ).toBeInTheDocument();
     const directoryInput = document.querySelector('input[webkitdirectory=""]');
     expect(directoryInput).toBeInstanceOf(HTMLInputElement);
   });
@@ -38,7 +40,9 @@ describe("UploadDropzone", () => {
   it("defaults to a wedding-scale batch limit", () => {
     render(<UploadDropzone onFilesAccepted={vi.fn()} />);
 
-    const input = document.querySelector('input[type="file"]:not([webkitdirectory])');
+    const input = document.querySelector(
+      'input[type="file"]:not([webkitdirectory])',
+    );
     expect(input).toHaveAttribute("multiple");
   });
 
@@ -80,8 +84,12 @@ describe("UploadDropzone", () => {
     const dropzone = screen.getByText(/camera RAW/i).closest("div");
     expect(dropzone).not.toBeNull();
 
-    const heic = new File(["heic-bytes"], "ceremony.heic", { type: "image/heic" });
-    const avif = new File(["avif-bytes"], "portrait.avif", { type: "image/avif" });
+    const heic = new File(["heic-bytes"], "ceremony.heic", {
+      type: "image/heic",
+    });
+    const avif = new File(["avif-bytes"], "portrait.avif", {
+      type: "image/avif",
+    });
     // Browsers frequently report camera RAW with an empty MIME type, so the
     // dropzone must accept it by extension alone.
     const cr2 = new File(["raw-bytes"], "IMG_0042.CR2", { type: "" });
@@ -102,8 +110,12 @@ describe("UploadDropzone", () => {
     render(<UploadDropzone onFilesAccepted={onFilesAccepted} />);
 
     const dropzone = screen.getByText(/camera RAW/i).closest("div");
-    const pdf = new File(["%PDF-1.7"], "contract.pdf", { type: "application/pdf" });
-    const exe = new File(["MZ"], "installer.exe", { type: "application/x-msdownload" });
+    const pdf = new File(["%PDF-1.7"], "contract.pdf", {
+      type: "application/pdf",
+    });
+    const exe = new File(["MZ"], "installer.exe", {
+      type: "application/x-msdownload",
+    });
 
     await dropFiles(dropzone as HTMLElement, [pdf, exe]);
 

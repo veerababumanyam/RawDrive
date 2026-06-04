@@ -31,7 +31,10 @@ function isMarketingRoute(pathname: string | null) {
     return true;
   }
 
-  if (pathname.startsWith("/solutions/") || pathname.startsWith("/marketplaces/")) {
+  if (
+    pathname.startsWith("/solutions/") ||
+    pathname.startsWith("/marketplaces/")
+  ) {
     return true;
   }
 

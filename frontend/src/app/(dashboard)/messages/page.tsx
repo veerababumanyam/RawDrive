@@ -86,7 +86,9 @@ function InquiryConversation({
   // Reset messages + loading when the conversation changes (inquiry.id or
   // token). Using a render-time "reset on key change" pattern avoids
   // synchronous setState calls inside an effect.
-  const [prevConversationKey, setPrevConversationKey] = useState(`${token}:${inquiry.id}`);
+  const [prevConversationKey, setPrevConversationKey] = useState(
+    `${token}:${inquiry.id}`,
+  );
   const conversationKey = `${token}:${inquiry.id}`;
   if (prevConversationKey !== conversationKey) {
     setPrevConversationKey(conversationKey);
@@ -98,10 +100,18 @@ function InquiryConversation({
     if (!token) return;
     let cancelled = false;
     getInquiryMessages(token, inquiry.id)
-      .then((data) => { if (!cancelled) setMessages(data); })
-      .catch(() => { /* non-fatal — show empty thread */ })
-      .finally(() => { if (!cancelled) setLoadingMessages(false); });
-    return () => { cancelled = true; };
+      .then((data) => {
+        if (!cancelled) setMessages(data);
+      })
+      .catch(() => {
+        /* non-fatal — show empty thread */
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingMessages(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [token, inquiry.id]);
 
   useEffect(() => {
@@ -444,7 +454,7 @@ export default function MessagesPage() {
           <>
             {/* Channel sidebar — hidden on mobile when a channel is active (future) */}
             <aside
-              className="w-full md:w-72 md:shrink-0 border-r border-border-default bg-white/[0.02] flex flex-col
+              className="w-full md:w-72 md:shrink-0 border-r border-border-default bg-surface-overlay/5 flex flex-col
               hidden md:flex"
             >
               <div className="p-4 border-b border-border-default flex items-center justify-between">
@@ -520,7 +530,7 @@ export default function MessagesPage() {
                       className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors min-h-[44px] ${
                         activeChannel === ch.id
                           ? "bg-accent/10 text-accent font-medium"
-                          : "text-text-secondary hover:text-text-primary hover:bg-white/5"
+                          : "text-text-secondary hover:text-text-primary hover:bg-surface-overlay/5"
                       }`}
                     >
                       <span className="mr-2 text-xs opacity-60">

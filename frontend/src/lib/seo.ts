@@ -448,6 +448,33 @@ export function serializeJsonLd(data: unknown): string {
 }
 
 /**
+ * ImageGallery JSON-LD for public client galleries (/g/[slug]). Grounds the
+ * shared link for search and AI engines; image is the OG/cover derivative.
+ */
+export function buildPublicGalleryJsonLd(input: {
+  slug: string;
+  title: string;
+  description: string;
+  brandName: string;
+  imageUrl?: string;
+  publishedAt?: string;
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "ImageGallery",
+    name: input.title,
+    description: input.description,
+    url: absoluteUrl(`/g/${input.slug}`),
+    ...(input.imageUrl ? { image: input.imageUrl } : {}),
+    ...(input.publishedAt ? { datePublished: input.publishedAt } : {}),
+    provider: {
+      "@type": "Organization",
+      name: input.brandName,
+    },
+  };
+}
+
+/**
  * BreadcrumbList JSON-LD for a page's location in the site hierarchy.
  * Still earns Google rich results in 2026 and grounds the page for AI engines.
  */
@@ -510,7 +537,7 @@ export function buildSiteJsonLd() {
           {
             "@type": "ContactPoint",
             contactType: "product information",
-            email: "infor@rawdrive.in",
+            email: "info@rawdrive.in",
             areaServed: "IN",
             availableLanguage: ["en-IN", "hi", "te", "ta", "kn"],
           },

@@ -45,7 +45,10 @@ export default function PublicPersonPhotosPage({
         setPerson(list.find((p) => p.id === personId) ?? null);
         setAssetIds(photos.asset_ids);
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load person");
+        if (!cancelled)
+          setError(
+            err instanceof Error ? err.message : "Failed to load person",
+          );
       }
     })();
     return () => {
@@ -66,8 +69,12 @@ export default function PublicPersonPhotosPage({
       </Link>
 
       <header className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">Person</p>
-        <h1 className="text-2xl font-semibold text-text-primary">{displayName}</h1>
+        <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">
+          Person
+        </p>
+        <h1 className="text-2xl font-semibold text-text-primary">
+          {displayName}
+        </h1>
         {person && (
           <p className="text-sm text-text-secondary">
             {person.asset_count} {person.asset_count === 1 ? "photo" : "photos"}

@@ -23,7 +23,13 @@ interface NewUserDialogProps {
   onCreated?: () => void;
 }
 
-const ALLOWED_ROLES: Role[] = ["admin", "photographer", "dealer", "team_member", "client"];
+const ALLOWED_ROLES: Role[] = [
+  "admin",
+  "photographer",
+  "dealer",
+  "team_member",
+  "client",
+];
 
 // Empty string sentinel == "no plan grant"; the user picks their plan in
 // the onboarding wizard like a self-serve signup. Anything else is a tier
@@ -39,7 +45,11 @@ function formatPaiseAsInr(paise: number): string {
   return `₹${rupees.toLocaleString("en-IN")}/mo`;
 }
 
-export default function NewUserDialog({ open, onClose, onCreated }: NewUserDialogProps) {
+export default function NewUserDialog({
+  open,
+  onClose,
+  onCreated,
+}: NewUserDialogProps) {
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState<Role>("photographer");
@@ -69,7 +79,9 @@ export default function NewUserDialog({ open, onClose, onCreated }: NewUserDialo
       })
       .catch((err) => {
         if (cancelled) return;
-        setPlansError(err instanceof Error ? err.message : "Failed to load plans");
+        setPlansError(
+          err instanceof Error ? err.message : "Failed to load plans",
+        );
         setPlans([]);
       });
     return () => {
@@ -101,7 +113,9 @@ export default function NewUserDialog({ open, onClose, onCreated }: NewUserDialo
         email,
         full_name: fullName,
         role,
-        ...(sendInvite ? { send_invite: true } : { initial_password: initialPassword }),
+        ...(sendInvite
+          ? { send_invite: true }
+          : { initial_password: initialPassword }),
         // Send plan_tier only when (a) the role is photographer, AND
         // (b) the admin actually picked one. Sending an empty string
         // would just be ignored server-side, but omitting the field
@@ -125,7 +139,7 @@ export default function NewUserDialog({ open, onClose, onCreated }: NewUserDialo
       role="dialog"
       aria-modal="true"
       aria-labelledby="new-user-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-surface-scrim-strong/40 glass-blur-subtle"
     >
       <form
         onSubmit={onSubmit}
@@ -147,7 +161,9 @@ export default function NewUserDialog({ open, onClose, onCreated }: NewUserDialo
         </label>
 
         <label className="block mb-3">
-          <span className="block text-sm text-text-secondary mb-1">Full name</span>
+          <span className="block text-sm text-text-secondary mb-1">
+            Full name
+          </span>
           <input
             type="text"
             required
@@ -178,7 +194,8 @@ export default function NewUserDialog({ open, onClose, onCreated }: NewUserDialo
         {role === "photographer" && (
           <label className="block mb-3">
             <span className="block text-sm text-text-secondary mb-1">
-              Plan grant <span className="text-text-tertiary">(optional, 100% comp)</span>
+              Plan grant{" "}
+              <span className="text-text-tertiary">(optional, 100% comp)</span>
             </span>
             <select
               value={planTier}
@@ -191,20 +208,23 @@ export default function NewUserDialog({ open, onClose, onCreated }: NewUserDialo
               </option>
               {plans.map((p) => (
                 <option key={p.tier} value={p.tier}>
-                  {p.name} — {formatPaiseAsInr(p.monthly_price_paise)} (free for this user)
+                  {p.name} — {formatPaiseAsInr(p.monthly_price_paise)} (free for
+                  this user)
                 </option>
               ))}
             </select>
             {plansError && (
               <p className="mt-1 text-xs text-feedback-error">
-                Couldn&apos;t load plan list ({plansError}). The user can still be created
-                without a plan grant — they&apos;ll pick a plan during onboarding.
+                Couldn&apos;t load plan list ({plansError}). The user can still
+                be created without a plan grant — they&apos;ll pick a plan
+                during onboarding.
               </p>
             )}
             {!plansError && planTier !== NO_GRANT_VALUE && (
               <p className="mt-1 text-xs text-text-tertiary">
-                This user&apos;s workspace will be created on the selected plan automatically when they
-                complete onboarding. No payment is collected.
+                This user&apos;s workspace will be created on the selected plan
+                automatically when they complete onboarding. No payment is
+                collected.
               </p>
             )}
           </label>

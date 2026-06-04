@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, type LucideIcon } from "lucide-react";
+import { ArrowRight, CheckCircle2, type LucideIcon } from "@/components/icons";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { buildBreadcrumbJsonLd } from "@/lib/seo";
 
@@ -73,20 +73,23 @@ export async function SolutionShowcasePage({
   return (
     <div className="bg-surface text-text-primary">
       <JsonLd id="solution-breadcrumb" data={breadcrumb} nonce={nonce} />
-      <section className="mx-auto grid max-w-7xl gap-12 px-4 py-16 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-24">
+      <section className="solution-showcase-grid mx-auto max-w-7xl px-4 py-16 lg:px-8 lg:py-24">
         <div className="space-y-8">
-          <span className="inline-flex rounded-full bg-accent-subtle px-4 py-2 text-xs font-bold uppercase tracking-[0.24em] text-accent">
-            {eyebrow}
-          </span>
+          <span className="eyebrow-pill">{eyebrow}</span>
           <div className="space-y-5">
-            <h1 className="font-headline text-4xl font-extrabold tracking-[-0.03em] text-text-primary md:text-6xl">
+            <h1 className="font-headline text-4xl font-extrabold text-text-primary md:text-6xl">
               {title}
             </h1>
-            <p className="max-w-2xl text-lg leading-8 text-text-secondary">{description}</p>
+            <p className="max-w-2xl text-lg leading-8 text-text-secondary">
+              {description}
+            </p>
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <Link href={primaryCta.href} className="btn-primary px-6 py-3 text-sm font-semibold">
+            <Link
+              href={primaryCta.href}
+              className="btn-primary px-6 py-3 text-sm font-semibold"
+            >
               {primaryCta.label}
             </Link>
             {secondaryCta ? (
@@ -102,9 +105,7 @@ export async function SolutionShowcasePage({
           <div className="grid gap-4 sm:grid-cols-3">
             {stats.map((stat) => (
               <div key={stat.label} className="surface-panel p-5">
-                <p className="text-xs font-bold uppercase tracking-[0.24em] text-text-tertiary">
-                  {stat.label}
-                </p>
+                <p className="form-label">{stat.label}</p>
                 <p className="mt-3 font-headline text-2xl font-bold text-text-primary">
                   {stat.value}
                 </p>
@@ -114,15 +115,17 @@ export async function SolutionShowcasePage({
         </div>
 
         <div className="relative">
-          <div className="absolute inset-x-10 top-10 h-48 rounded-full bg-accent-muted blur-[120px]" />
+          <div className="solution-preview-glow" />
           <div className="glass-card relative overflow-hidden p-3">
-            <div className="overflow-hidden rounded-[1.5rem] bg-surface-container-high">
-              <img src={previewSrc} alt={previewAlt} className="h-auto w-full object-cover" />
+            <div className="solution-preview-frame">
+              <img
+                src={previewSrc}
+                alt={previewAlt}
+                className="h-auto w-full object-cover"
+              />
             </div>
             <div className="px-2 pb-2 pt-4">
-              <span className="inline-flex rounded-full bg-accent-subtle px-3 py-1 text-[11px] font-bold uppercase tracking-[0.22em] text-accent">
-                {previewLabel}
-              </span>
+              <span className="eyebrow-pill px-3 py-1">{previewLabel}</span>
             </div>
           </div>
         </div>
@@ -138,7 +141,9 @@ export async function SolutionShowcasePage({
               <h2 className="mt-6 font-headline text-2xl font-bold text-text-primary">
                 {feature.title}
               </h2>
-              <p className="mt-3 leading-7 text-text-secondary">{feature.description}</p>
+              <p className="mt-3 leading-7 text-text-secondary">
+                {feature.description}
+              </p>
             </article>
           ))}
         </div>
@@ -146,19 +151,23 @@ export async function SolutionShowcasePage({
 
       <section className="border-y border-border bg-surface-sunken px-4 py-12 lg:px-8">
         <div className="mx-auto max-w-7xl">
-          <p className="text-xs font-bold uppercase text-accent">Best-fit summary</p>
+          <p className="text-xs font-bold uppercase text-accent">
+            Best-fit summary
+          </p>
           <h2 className="mt-3 font-headline text-3xl font-bold text-text-primary">
             What is RawDrive {eyebrow.toLowerCase()} best for?
           </h2>
-          <p className="mt-4 max-w-3xl leading-8 text-text-secondary">{answer}</p>
+          <p className="mt-4 max-w-3xl leading-8 text-text-secondary">
+            {answer}
+          </p>
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-8 px-4 py-16 lg:grid-cols-[1.05fr_0.95fr] lg:px-8">
+      <section className="solution-showcase-grid mx-auto max-w-7xl px-4 py-16 lg:px-8">
         <div className="space-y-6">
           <div className="space-y-3">
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-accent">Workflow</p>
-            <h2 className="font-headline text-3xl font-bold tracking-[-0.02em] text-text-primary">
+            <p className="form-label text-accent">Workflow</p>
+            <h2 className="font-headline text-3xl font-bold text-text-primary">
               A connected workflow from first action to final delivery
             </h2>
           </div>
@@ -169,8 +178,12 @@ export async function SolutionShowcasePage({
                   {index + 1}
                 </div>
                 <div>
-                  <h3 className="font-headline text-lg font-bold text-text-primary">{step.title}</h3>
-                  <p className="mt-2 text-sm leading-7 text-text-secondary">{step.description}</p>
+                  <h3 className="font-headline text-lg font-bold text-text-primary">
+                    {step.title}
+                  </h3>
+                  <p className="mt-2 text-sm leading-7 text-text-secondary">
+                    {step.description}
+                  </p>
                 </div>
               </div>
             ))}
@@ -178,15 +191,18 @@ export async function SolutionShowcasePage({
         </div>
 
         <aside className="glass-card p-8">
-          <div className="inline-flex rounded-full bg-accent-subtle px-3 py-1 text-[11px] font-bold uppercase tracking-[0.22em] text-accent">
-            Studio fit
-          </div>
-          <h3 className="mt-5 font-headline text-2xl font-bold text-text-primary">{quoteTitle}</h3>
+          <div className="eyebrow-pill px-3 py-1">Studio fit</div>
+          <h3 className="mt-5 font-headline text-2xl font-bold text-text-primary">
+            {quoteTitle}
+          </h3>
           <p className="mt-4 leading-8 text-text-secondary">{quoteBody}</p>
 
           <ul className="mt-8 space-y-4">
             {features.slice(0, 3).map((feature) => (
-              <li key={feature.title} className="flex gap-3 text-sm text-text-secondary">
+              <li
+                key={feature.title}
+                className="flex gap-3 text-sm text-text-secondary"
+              >
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
                 <span>{feature.title}</span>
               </li>

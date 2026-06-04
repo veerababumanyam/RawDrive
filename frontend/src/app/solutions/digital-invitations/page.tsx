@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { CalendarHeart, ImageIcon, Send, Smartphone } from "lucide-react";
+import { CalendarHeart, ImageIcon, Send, Smartphone } from "@/components/icons";
 import { SolutionShowcasePage } from "@/components/marketing/SolutionShowcasePage";
 import { createPageMetadata } from "@/lib/seo";
 

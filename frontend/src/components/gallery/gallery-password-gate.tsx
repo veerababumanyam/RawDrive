@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { Lock } from "@/components/icons";
+
 interface Props {
   slug: string;
   brandName?: string;
@@ -17,7 +19,12 @@ function absoluteApiUrl(url?: string | null) {
   return `${API_BASE}${url}`;
 }
 
-export function GalleryPasswordGate({ slug, brandName = "RawDrive", logoUrl, children }: Props) {
+export function GalleryPasswordGate({
+  slug,
+  brandName = "RawDrive",
+  logoUrl,
+  children,
+}: Props) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -33,17 +40,21 @@ export function GalleryPasswordGate({ slug, brandName = "RawDrive", logoUrl, chi
     setError("");
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/public/galleries/${slug}/verify-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ password }),
-      });
+      const res = await fetch(
+        `${API_BASE}/api/v1/public/galleries/${slug}/verify-password`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ password }),
+        },
+      );
       if (res.ok) {
         const body = await res.json().catch(() => ({}));
         if (body.token && typeof window !== "undefined") {
           sessionStorage.setItem(`gallery_session_${slug}`, body.token);
-          const secure = window.location.protocol === "https:" ? "; Secure" : "";
+          const secure =
+            window.location.protocol === "https:" ? "; Secure" : "";
           document.cookie = `gallery_session=${encodeURIComponent(body.token)}; Path=/; Max-Age=86400; SameSite=Strict${secure}`;
           const url = new URL(window.location.href);
           url.searchParams.delete("gallery_session");
@@ -74,15 +85,19 @@ export function GalleryPasswordGate({ slug, brandName = "RawDrive", logoUrl, chi
               className="mx-auto mb-4 h-14 w-14 rounded-2xl bg-surface-sunken object-contain p-2"
             />
           ) : (
-          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-surface-sunken flex items-center justify-center">
-            <svg className="w-7 h-7 text-text-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-            </svg>
-          </div>
+            <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-surface-sunken flex items-center justify-center">
+              <Lock className="w-7 h-7 text-text-tertiary" aria-hidden="true" />
+            </div>
           )}
-          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-text-tertiary">{brandName}</p>
-          <h1 className="text-xl font-semibold text-text-primary">This gallery is protected</h1>
-          <p className="mt-2 text-sm text-text-secondary">Enter the password to view photos.</p>
+          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-text-tertiary">
+            {brandName}
+          </p>
+          <h1 className="text-xl font-semibold text-text-primary">
+            This gallery is protected
+          </h1>
+          <p className="mt-2 text-sm text-text-secondary">
+            Enter the password to view photos.
+          </p>
           <form onSubmit={handleSubmit} className="mt-6 space-y-3">
             <input
               type="password"

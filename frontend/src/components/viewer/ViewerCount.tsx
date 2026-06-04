@@ -15,8 +15,17 @@ export type ViewerCountProps = {
   className?: string;
 };
 
-export function ViewerCount({ shortlink, token, pollMs, className }: ViewerCountProps) {
-  const { current, loading, error } = useViewerCount({ shortlink, token, pollMs });
+export function ViewerCount({
+  shortlink,
+  token,
+  pollMs,
+  className,
+}: ViewerCountProps) {
+  const { current, loading, error } = useViewerCount({
+    shortlink,
+    token,
+    pollMs,
+  });
 
   const state = error ? "error" : loading ? "loading" : "ready";
   const display = current == null ? "—" : `${current.toLocaleString()}`;

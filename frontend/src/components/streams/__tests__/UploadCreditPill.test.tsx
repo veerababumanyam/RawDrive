@@ -36,16 +36,27 @@ describe("UploadCreditPill", () => {
         } as Response);
       }
       // Other URLs (uploads/packages when modal opens) return empty
-      return Promise.resolve({ ok: true, status: 200, json: async () => ({ packages: [] }) } as Response);
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ packages: [] }),
+      } as Response);
     });
 
     render(<UploadCreditPill />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("upload-credit-pill-credits").textContent).toBe("1,234 credits");
+      expect(screen.getByTestId("upload-credit-pill-credits").textContent).toBe(
+        "1,234 credits",
+      );
     });
+    expect(screen.getByTestId("upload-credit-pill-button").className).toContain(
+      "upload-credit-pill__button",
+    );
     // Low-balance data attribute reflects the response (false here).
-    expect(screen.getByTestId("upload-credit-pill").getAttribute("data-low-balance")).toBe("false");
+    expect(
+      screen.getByTestId("upload-credit-pill").getAttribute("data-low-balance"),
+    ).toBe("false");
   });
 
   it("marks pill as low-balance when server flag is set", async () => {
@@ -62,9 +73,13 @@ describe("UploadCreditPill", () => {
     render(<UploadCreditPill />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("upload-credit-pill-credits").textContent).toBe("42 credits");
+      expect(screen.getByTestId("upload-credit-pill-credits").textContent).toBe(
+        "42 credits",
+      );
     });
-    expect(screen.getByTestId("upload-credit-pill").getAttribute("data-low-balance")).toBe("true");
+    expect(
+      screen.getByTestId("upload-credit-pill").getAttribute("data-low-balance"),
+    ).toBe("true");
   });
 
   it("hides entirely when the backend returns 404 (feature flag off)", async () => {
@@ -78,7 +93,9 @@ describe("UploadCreditPill", () => {
 
     await waitFor(() => {
       // The pill should NOT be in the DOM — it returns null when disabled.
-      expect(container.querySelector("[data-testid='upload-credit-pill']")).toBeNull();
+      expect(
+        container.querySelector("[data-testid='upload-credit-pill']"),
+      ).toBeNull();
     });
   });
 
@@ -110,7 +127,11 @@ describe("UploadCreditPill", () => {
         } as Response);
       }
       // Streaming packages — RechargeModal also fires this hook on mount
-      return Promise.resolve({ ok: true, status: 200, json: async () => ({ packages: [] }) } as Response);
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ packages: [] }),
+      } as Response);
     });
 
     render(<UploadCreditPill />);

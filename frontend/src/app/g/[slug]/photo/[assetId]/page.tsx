@@ -41,7 +41,10 @@ function PhotoUnavailable({ title, body }: { title: string; body: string }) {
   );
 }
 
-export default async function PublicSinglePhotoPage({ params, searchParams }: Props) {
+export default async function PublicSinglePhotoPage({
+  params,
+  searchParams,
+}: Props) {
   const { slug, assetId } = await params;
   const query = searchParams ? await searchParams : {};
   const ws = typeof query.ws === "string" && query.ws ? query.ws : undefined;
@@ -96,8 +99,11 @@ export default async function PublicSinglePhotoPage({ params, searchParams }: Pr
   // gallery.settings once access is proven; the durable session is never
   // placed in an image URL.
   const assetAccessToken =
-    gallery.settings && typeof (gallery.settings as Record<string, unknown>).asset_access_token === "string"
-      ? ((gallery.settings as Record<string, unknown>).asset_access_token as string)
+    gallery.settings &&
+    typeof (gallery.settings as Record<string, unknown>).asset_access_token ===
+      "string"
+      ? ((gallery.settings as Record<string, unknown>)
+          .asset_access_token as string)
       : null;
 
   return (
@@ -121,7 +127,9 @@ export async function generateMetadata({ params, searchParams }: Props) {
       getPublicGallery(slug, ws),
       getPublicGalleryBranding(slug, ws).catch(() => null),
     ]);
-    const brandName = branding?.can_customize ? branding.brand_name : "RawDrive";
+    const brandName = branding?.can_customize
+      ? branding.brand_name
+      : "RawDrive";
     return {
       title: `Photo | ${brandName}`,
       description: `A photo shared from ${gallery.title}`,
@@ -136,6 +144,9 @@ export async function generateMetadata({ params, searchParams }: Props) {
       },
     };
   } catch {
-    return { title: "Photo Not Found", robots: { index: false, follow: false } };
+    return {
+      title: "Photo Not Found",
+      robots: { index: false, follow: false },
+    };
   }
 }

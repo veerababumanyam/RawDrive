@@ -39,8 +39,14 @@ interface GeoAsset {
 function extractGeoAssets(assets: Asset[]): GeoAsset[] {
   const result: GeoAsset[] = [];
   for (const a of assets) {
-    const lat = typeof a.gps_latitude === "number" ? a.gps_latitude : extractExifGps(a.exif_data, "gps_latitude");
-    const lon = typeof a.gps_longitude === "number" ? a.gps_longitude : extractExifGps(a.exif_data, "gps_longitude");
+    const lat =
+      typeof a.gps_latitude === "number"
+        ? a.gps_latitude
+        : extractExifGps(a.exif_data, "gps_latitude");
+    const lon =
+      typeof a.gps_longitude === "number"
+        ? a.gps_longitude
+        : extractExifGps(a.exif_data, "gps_longitude");
     if (lat == null || lon == null) continue;
     result.push({
       id: a.id,
@@ -58,7 +64,10 @@ function extractGeoAssets(assets: Asset[]): GeoAsset[] {
   return result;
 }
 
-function extractExifGps(exif: Record<string, unknown> | undefined, key: string): number | null {
+function extractExifGps(
+  exif: Record<string, unknown> | undefined,
+  key: string,
+): number | null {
   if (!exif) return null;
   const raw = exif[key];
   if (typeof raw === "number") return raw;
@@ -139,9 +148,13 @@ export function MapView({ assets, onSelect }: Props) {
             style={{ left: `${x * 100}%`, top: `${y * 100}%` }}
           >
             {/* Pin head */}
-            <div className="relative h-10 w-10 overflow-hidden rounded-full border-2 border-white shadow-lg transition-transform group-hover:scale-110">
+            <div className="relative h-10 w-10 overflow-hidden rounded-full border-2 border-text-media shadow-lg transition-transform group-hover:scale-110">
               {g.thumbUrl ? (
-                <img src={g.thumbUrl} alt="" className="h-full w-full object-cover" />
+                <img
+                  src={g.thumbUrl}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
               ) : (
                 <div className="h-full w-full bg-accent-primary" />
               )}
@@ -149,7 +162,7 @@ export function MapView({ assets, onSelect }: Props) {
             {/* Pin tail */}
             <div
               aria-hidden
-              className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 rotate-45 bg-white"
+              className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 rotate-45 bg-text-media"
               style={{ marginTop: "-4px" }}
             />
           </button>
@@ -157,7 +170,7 @@ export function MapView({ assets, onSelect }: Props) {
       })}
 
       {/* Legend */}
-      <div className="absolute bottom-4 left-4 rounded-full bg-black/60 backdrop-blur-sm px-3 py-1.5 text-xs text-white/90">
+      <div className="absolute bottom-4 left-4 rounded-full bg-surface-scrim-strong/60 glass-blur-subtle px-3 py-1.5 text-xs text-text-media/90">
         {geo.length} geotagged photo{geo.length === 1 ? "" : "s"}
       </div>
     </div>

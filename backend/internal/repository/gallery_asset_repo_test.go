@@ -50,9 +50,15 @@ func TestF073_BuildReorderArrays_ParallelAndLengthInvariant(t *testing.T) {
 //     legacy client call is a harmless no-op rather than a clobber;
 //   - retain the workspace-join tenant guard so a cross-workspace asset is
 //     pruned to zero rows and never linked.
+//   - persist a default cover only when galleries.cover_asset_id is missing or
+//     stale, so the first uploaded photo becomes the cover without overwriting a
+//     valid photographer manual choice.
 func TestS3G4_LinkServerSQL_AssignsMaxPlusOneAndIsIdempotent(t *testing.T) {
 	sql := sqlGalleryAssetLinkServer
 
+	if !strings.Contains(sql, "WITH inserted AS") {
+		t.Fatalf("server link SQL must use CTEs so gallery linking and default-cover assignment stay together; got:\n%s", sql)
+	}
 	if !strings.Contains(sql, "MAX(ga.sort_order)") || !strings.Contains(sql, ") + 1") {
 		t.Fatalf("server link SQL must assign sort_order = MAX+1 within the gallery; got:\n%s", sql)
 	}
@@ -71,6 +77,19 @@ func TestS3G4_LinkServerSQL_AssignsMaxPlusOneAndIsIdempotent(t *testing.T) {
 	} {
 		if !strings.Contains(sql, frag) {
 			t.Fatalf("server link SQL missing tenant-guard fragment %q; got:\n%s", frag, sql)
+		}
+	}
+	for _, frag := range []string{
+		"cover_candidates AS",
+		"UPDATE galleries g",
+		"current_cover.id = g.cover_asset_id",
+		"current_cover.deleted_at IS NULL",
+		"SELECT gallery_id, asset_id, sort_order, added_at FROM inserted",
+		"ORDER BY cc.sort_order ASC, cc.added_at ASC, cc.asset_id ASC",
+		"EXISTS (SELECT 1 FROM linked)",
+	} {
+		if !strings.Contains(sql, frag) {
+			t.Fatalf("server link SQL missing default-cover fragment %q; got:\n%s", frag, sql)
 		}
 	}
 }

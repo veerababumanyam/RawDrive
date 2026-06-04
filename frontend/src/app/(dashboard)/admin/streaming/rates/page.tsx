@@ -26,10 +26,15 @@ function formatINR(paise: number): string {
 function formatDateTime(iso: string): string {
   try {
     return new Date(iso).toLocaleString("en-IN", {
-      year: "numeric", month: "short", day: "numeric",
-      hour: "2-digit", minute: "2-digit",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
-  } catch { return iso; }
+  } catch {
+    return iso;
+  }
 }
 
 function isFutureISO(iso: string): boolean {
@@ -77,12 +82,16 @@ export default function SuperAdminStreamingRatesPage() {
   }, [token, selectedId]);
 
   useEffect(() => {
-    async function initialFetch() { await refreshPackages(); }
+    async function initialFetch() {
+      await refreshPackages();
+    }
     void initialFetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
-    async function initialFetch() { await refreshRates(); }
+    async function initialFetch() {
+      await refreshRates();
+    }
     void initialFetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, token]);
@@ -120,7 +129,9 @@ export default function SuperAdminStreamingRatesPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Package list */}
         <section className="lg:col-span-1 space-y-3">
-          <h3 className="font-headline text-lg font-bold text-on-surface">Packages</h3>
+          <h3 className="font-headline text-lg font-bold text-on-surface">
+            Packages
+          </h3>
           <div className="space-y-2">
             {packages.map((pkg) => (
               <button
@@ -129,21 +140,25 @@ export default function SuperAdminStreamingRatesPage() {
                 className={`w-full text-left p-4 rounded-2xl border transition ${
                   selectedId === pkg.id
                     ? "border-primary bg-primary/10"
-                    : "border-white/[0.03] bg-surface-container-low/40 hover:border-primary/40"
+                    : "border-border-subtle bg-surface-container-low/40 hover:border-primary/40"
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-medium text-on-surface">{pkg.name}</span>
+                  <span className="font-medium text-on-surface">
+                    {pkg.name}
+                  </span>
                   <span className="text-[10px] uppercase tracking-[0.1em] text-text-secondary">
                     {pkg.tier}
                   </span>
                 </div>
                 <div className="text-xs text-text-secondary mt-1">
-                  {pkg.minutes} min · up to {pkg.max_concurrent_viewers} viewers ·
-                  {" "}{pkg.replay_ttl_days}d replay
+                  {pkg.minutes} min · up to {pkg.max_concurrent_viewers} viewers
+                  · {pkg.replay_ttl_days}d replay
                 </div>
                 {!pkg.is_active && (
-                  <div className="text-[10px] text-feedback-error mt-1">INACTIVE</div>
+                  <div className="text-[10px] text-feedback-error mt-1">
+                    INACTIVE
+                  </div>
                 )}
               </button>
             ))}
@@ -166,7 +181,7 @@ export default function SuperAdminStreamingRatesPage() {
                 </div>
                 <button
                   onClick={() => setShowPatch(true)}
-                  className="px-4 py-2 rounded-xl bg-surface-container-low/60 border border-white/[0.05]
+                  className="px-4 py-2 rounded-xl bg-surface-container-low/60 border border-border-subtle
                     text-sm text-on-surface hover:border-primary/40"
                 >
                   Edit package
@@ -175,9 +190,18 @@ export default function SuperAdminStreamingRatesPage() {
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <StatCard label="Minutes" value={String(selected.minutes)} />
-                <StatCard label="Max viewers" value={String(selected.max_concurrent_viewers)} />
-                <StatCard label="Replay TTL" value={`${selected.replay_ttl_days} days`} />
-                <StatCard label="Active" value={selected.is_active ? "Yes" : "No"} />
+                <StatCard
+                  label="Max viewers"
+                  value={String(selected.max_concurrent_viewers)}
+                />
+                <StatCard
+                  label="Replay TTL"
+                  value={`${selected.replay_ttl_days} days`}
+                />
+                <StatCard
+                  label="Active"
+                  value={selected.is_active ? "Yes" : "No"}
+                />
               </div>
 
               <div className="flex items-center justify-between">
@@ -204,7 +228,7 @@ export default function SuperAdminStreamingRatesPage() {
                   return (
                     <div
                       key={rc.id}
-                      className="p-4 rounded-2xl border border-white/[0.03] bg-surface-container-low/40"
+                      className="p-4 rounded-2xl border border-border-subtle bg-surface-container-low/40"
                     >
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-text-secondary">
@@ -220,19 +244,25 @@ export default function SuperAdminStreamingRatesPage() {
                       </div>
                       <div className="mt-2 grid grid-cols-3 gap-4 text-sm">
                         <div>
-                          <span className="text-text-secondary text-xs">Price</span>
+                          <span className="text-text-secondary text-xs">
+                            Price
+                          </span>
                           <div className="text-on-surface font-medium">
                             ₹{formatINR(rc.price_paise)}
                           </div>
                         </div>
                         <div>
-                          <span className="text-text-secondary text-xs">Base rate</span>
+                          <span className="text-text-secondary text-xs">
+                            Base rate
+                          </span>
                           <div className="text-on-surface font-medium">
                             ₹{formatINR(rc.base_rate_paise_per_min)}/min
                           </div>
                         </div>
                         <div>
-                          <span className="text-text-secondary text-xs">Overage</span>
+                          <span className="text-text-secondary text-xs">
+                            Overage
+                          </span>
                           <div className="text-on-surface font-medium">
                             ₹{formatINR(rc.overage_rate_paise_per_min)}/min
                           </div>
@@ -244,7 +274,9 @@ export default function SuperAdminStreamingRatesPage() {
               </div>
             </>
           ) : (
-            <p className="text-text-secondary">Select a package to view rates.</p>
+            <p className="text-text-secondary">
+              Select a package to view rates.
+            </p>
           )}
         </section>
       </div>
@@ -254,7 +286,10 @@ export default function SuperAdminStreamingRatesPage() {
         <NewRateModal
           pkg={selected}
           onClose={() => setShowNewRate(false)}
-          onCreated={async () => { setShowNewRate(false); await refreshRates(); }}
+          onCreated={async () => {
+            setShowNewRate(false);
+            await refreshRates();
+          }}
           token={token}
         />
       )}
@@ -262,7 +297,10 @@ export default function SuperAdminStreamingRatesPage() {
         <PatchPackageModal
           pkg={selected}
           onClose={() => setShowPatch(false)}
-          onPatched={async () => { setShowPatch(false); await refreshPackages(); }}
+          onPatched={async () => {
+            setShowPatch(false);
+            await refreshPackages();
+          }}
           token={token}
         />
       )}
@@ -272,7 +310,7 @@ export default function SuperAdminStreamingRatesPage() {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="p-4 rounded-2xl border border-white/[0.03] bg-surface-container-low/40">
+    <div className="p-4 rounded-2xl border border-border-subtle bg-surface-container-low/40">
       <div className="text-[10px] uppercase tracking-[0.1em] text-text-secondary">
         {label}
       </div>
@@ -284,7 +322,10 @@ function StatCard({ label, value }: { label: string; value: string }) {
 }
 
 function NewRateModal({
-  pkg, onClose, onCreated, token,
+  pkg,
+  onClose,
+  onCreated,
+  token,
 }: {
   pkg: StreamingPackage;
   onClose: () => void;
@@ -298,8 +339,11 @@ function NewRateModal({
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   tomorrow.setHours(0, 0, 0, 0);
-  const defaultIso = new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60_000)
-    .toISOString().slice(0, 16);
+  const defaultIso = new Date(
+    tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60_000,
+  )
+    .toISOString()
+    .slice(0, 16);
   const [effectiveFrom, setEffectiveFrom] = useState(defaultIso);
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -313,16 +357,20 @@ function NewRateModal({
     const baseP = Math.round(parseFloat(baseRupees) * 100);
     const overP = Math.round(parseFloat(overageRupees) * 100);
     if (!Number.isFinite(priceP) || priceP < 0) {
-      setLocalError("Price must be ≥ 0"); return;
+      setLocalError("Price must be ≥ 0");
+      return;
     }
     if (!Number.isFinite(baseP) || baseP <= 0) {
-      setLocalError("Base rate must be > 0"); return;
+      setLocalError("Base rate must be > 0");
+      return;
     }
     if (!Number.isFinite(overP) || overP <= 0) {
-      setLocalError("Overage rate must be > 0"); return;
+      setLocalError("Overage rate must be > 0");
+      return;
     }
     if (!futureValid) {
-      setLocalError("Effective From must be in the future"); return;
+      setLocalError("Effective From must be in the future");
+      return;
     }
     try {
       setSubmitting(true);
@@ -341,10 +389,10 @@ function NewRateModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop p-4">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-md rounded-3xl bg-surface-container border border-white/[0.05] p-6 space-y-4"
+        className="w-full max-w-md rounded-3xl bg-surface-container border border-border-subtle p-6 space-y-4"
       >
         <h3 className="font-headline text-xl font-bold text-on-surface">
           New rate for {pkg.name}
@@ -352,24 +400,46 @@ function NewRateModal({
 
         <div className="space-y-3">
           <Field label="Price (₹)">
-            <input type="number" step="0.01" min={0} value={priceRupees}
+            <input
+              type="number"
+              step="0.01"
+              min={0}
+              value={priceRupees}
               onChange={(e) => setPriceRupees(e.target.value)}
-              className="input" required />
+              className="input"
+              required
+            />
           </Field>
           <Field label="Base rate (₹/min)">
-            <input type="number" step="0.01" min={0.01} value={baseRupees}
+            <input
+              type="number"
+              step="0.01"
+              min={0.01}
+              value={baseRupees}
               onChange={(e) => setBaseRupees(e.target.value)}
-              className="input" required />
+              className="input"
+              required
+            />
           </Field>
           <Field label="Overage rate (₹/min)">
-            <input type="number" step="0.01" min={0.01} value={overageRupees}
+            <input
+              type="number"
+              step="0.01"
+              min={0.01}
+              value={overageRupees}
               onChange={(e) => setOverageRupees(e.target.value)}
-              className="input" required />
+              className="input"
+              required
+            />
           </Field>
           <Field label="Effective from (must be in the future)">
-            <input type="datetime-local" value={effectiveFrom}
+            <input
+              type="datetime-local"
+              value={effectiveFrom}
               onChange={(e) => setEffectiveFrom(e.target.value)}
-              className="input" required />
+              className="input"
+              required
+            />
             {!futureValid && (
               <span className="text-xs text-feedback-error">
                 Effective From must be later than now.
@@ -383,13 +453,19 @@ function NewRateModal({
         )}
 
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose}
-            className="px-4 py-2 rounded-xl border border-white/[0.05] text-sm text-on-surface">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl border border-border-subtle text-sm text-on-surface"
+          >
             Cancel
           </button>
-          <button type="submit" disabled={submitting || !futureValid}
+          <button
+            type="submit"
+            disabled={submitting || !futureValid}
             className="px-4 py-2 rounded-xl bg-primary text-on-primary text-sm font-medium
-              disabled:opacity-50">
+              disabled:opacity-50"
+          >
             {submitting ? "Publishing…" : "Publish rate"}
           </button>
         </div>
@@ -398,8 +474,12 @@ function NewRateModal({
           .input {
             width: 100%;
             padding: 0.5rem 0.75rem;
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.08);
+            background: color-mix(
+              in srgb,
+              var(--surface-container-low) 68%,
+              transparent
+            );
+            border: 1px solid var(--border-subtle);
             border-radius: 0.75rem;
             color: inherit;
             font: inherit;
@@ -412,7 +492,10 @@ function NewRateModal({
 }
 
 function PatchPackageModal({
-  pkg, onClose, onPatched, token,
+  pkg,
+  onClose,
+  onPatched,
+  token,
 }: {
   pkg: StreamingPackage;
   onClose: () => void;
@@ -433,13 +516,26 @@ function PatchPackageModal({
     const m = parseInt(minutes, 10);
     const v = parseInt(viewers, 10);
     const t = parseInt(ttl, 10);
-    if (!Number.isFinite(m) || m <= 0) { setLocalError("Minutes must be > 0"); return; }
-    if (!Number.isFinite(v) || v <= 0) { setLocalError("Viewers must be > 0"); return; }
-    if (!Number.isFinite(t) || t <= 0) { setLocalError("TTL must be > 0"); return; }
+    if (!Number.isFinite(m) || m <= 0) {
+      setLocalError("Minutes must be > 0");
+      return;
+    }
+    if (!Number.isFinite(v) || v <= 0) {
+      setLocalError("Viewers must be > 0");
+      return;
+    }
+    if (!Number.isFinite(t) || t <= 0) {
+      setLocalError("TTL must be > 0");
+      return;
+    }
     try {
       setSubmitting(true);
       await patchStreamingPackage(token, pkg.id, {
-        name, minutes: m, max_concurrent_viewers: v, replay_ttl_days: t, is_active: isActive,
+        name,
+        minutes: m,
+        max_concurrent_viewers: v,
+        replay_ttl_days: t,
+        is_active: isActive,
       });
       await onPatched();
     } catch (err) {
@@ -450,10 +546,10 @@ function PatchPackageModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop p-4">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-md rounded-3xl bg-surface-container border border-white/[0.05] p-6 space-y-4"
+        className="w-full max-w-md rounded-3xl bg-surface-container border border-border-subtle p-6 space-y-4"
       >
         <h3 className="font-headline text-xl font-bold text-on-surface">
           Edit {pkg.name}
@@ -461,33 +557,71 @@ function PatchPackageModal({
 
         <div className="space-y-3">
           <Field label="Name">
-            <input value={name} onChange={(e) => setName(e.target.value)} className="input" required />
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="input"
+              required
+            />
           </Field>
           <Field label="Minutes">
-            <input type="number" min={1} value={minutes} onChange={(e) => setMinutes(e.target.value)} className="input" required />
+            <input
+              type="number"
+              min={1}
+              value={minutes}
+              onChange={(e) => setMinutes(e.target.value)}
+              className="input"
+              required
+            />
           </Field>
           <Field label="Max concurrent viewers">
-            <input type="number" min={1} value={viewers} onChange={(e) => setViewers(e.target.value)} className="input" required />
+            <input
+              type="number"
+              min={1}
+              value={viewers}
+              onChange={(e) => setViewers(e.target.value)}
+              className="input"
+              required
+            />
           </Field>
           <Field label="Replay TTL (days)">
-            <input type="number" min={1} value={ttl} onChange={(e) => setTtl(e.target.value)} className="input" required />
+            <input
+              type="number"
+              min={1}
+              value={ttl}
+              onChange={(e) => setTtl(e.target.value)}
+              className="input"
+              required
+            />
           </Field>
           <label className="flex items-center gap-2 text-sm text-on-surface">
-            <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={isActive}
+              onChange={(e) => setIsActive(e.target.checked)}
+            />
             Active
           </label>
         </div>
 
-        {localError && <div className="text-sm text-feedback-error">{localError}</div>}
+        {localError && (
+          <div className="text-sm text-feedback-error">{localError}</div>
+        )}
 
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose}
-            className="px-4 py-2 rounded-xl border border-white/[0.05] text-sm text-on-surface">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl border border-border-subtle text-sm text-on-surface"
+          >
             Cancel
           </button>
-          <button type="submit" disabled={submitting}
+          <button
+            type="submit"
+            disabled={submitting}
             className="px-4 py-2 rounded-xl bg-primary text-on-primary text-sm font-medium
-              disabled:opacity-50">
+              disabled:opacity-50"
+          >
             {submitting ? "Saving…" : "Save"}
           </button>
         </div>
@@ -496,8 +630,12 @@ function PatchPackageModal({
           .input {
             width: 100%;
             padding: 0.5rem 0.75rem;
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.08);
+            background: color-mix(
+              in srgb,
+              var(--surface-container-low) 68%,
+              transparent
+            );
+            border: 1px solid var(--border-subtle);
             border-radius: 0.75rem;
             color: inherit;
             font: inherit;
@@ -509,10 +647,18 @@ function PatchPackageModal({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <label className="block space-y-1">
-      <span className="text-[10px] uppercase tracking-[0.1em] text-text-secondary">{label}</span>
+      <span className="text-[10px] uppercase tracking-[0.1em] text-text-secondary">
+        {label}
+      </span>
       {children}
     </label>
   );

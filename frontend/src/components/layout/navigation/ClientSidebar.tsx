@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  Download,
-  Heart,
-  ImageIcon,
-  CheckCircle2,
-} from "lucide-react";
+import { Download, Heart, ImageIcon, CheckCircle2 } from "@/components/icons";
 import { SidebarShell, SidebarAvatar } from "./SidebarShell";
 import type { NavGroup } from "./SidebarShell";
 
@@ -33,7 +28,12 @@ interface ClientSidebarProps {
   onMobileClose?: () => void;
 }
 
-export function ClientSidebar({ userName, avatarUrl, mobileOpen, onMobileClose }: ClientSidebarProps) {
+export function ClientSidebar({
+  userName,
+  avatarUrl,
+  mobileOpen,
+  onMobileClose,
+}: ClientSidebarProps) {
   return (
     <SidebarShell
       subtitle="My Photos"
@@ -41,11 +41,7 @@ export function ClientSidebar({ userName, avatarUrl, mobileOpen, onMobileClose }
       mobileOpen={mobileOpen}
       onMobileClose={onMobileClose}
       footer={
-        <SidebarAvatar
-          name={userName}
-          avatarUrl={avatarUrl}
-          badge="Client"
-        />
+        <SidebarAvatar name={userName} avatarUrl={avatarUrl} badge="Client" />
       }
     />
   );

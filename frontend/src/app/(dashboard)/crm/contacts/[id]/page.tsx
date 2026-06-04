@@ -3,16 +3,23 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getClientProfile, getClientTimeline } from "@/lib/api/crm";
-import type {
-  ClientProfileResponse,
-  TimelineEntry,
-} from "@/lib/api/crm";
+import type { ClientProfileResponse, TimelineEntry } from "@/lib/api/crm";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
-import { DocumentText, CalendarDays, ChatBubble, ChevronLeft } from "@/components/icons";
+import {
+  DocumentText,
+  CalendarDays,
+  ChatBubble,
+  ChevronLeft,
+} from "@/components/icons";
 import { ClientTimeline } from "@/components/crm/client-timeline";
-import { GalleryList, InvoiceList, ProjectList, BookingList } from "@/components/crm/client-linked-entities";
+import {
+  GalleryList,
+  InvoiceList,
+  ProjectList,
+  BookingList,
+} from "@/components/crm/client-linked-entities";
 
 type Tab = "timeline" | "galleries" | "invoices" | "deals" | "bookings";
 
@@ -118,21 +125,34 @@ export default function ClientDetailPage() {
     );
   }
 
-  const { contact, galleries, invoices, projects = [], deals, events } = profile;
-  const projectRows = projects.length > 0
-    ? projects
-    : deals.map((deal) => ({
-        id: deal.id,
-        name: deal.title,
-        status: deal.stage === "confirmed" ? "booked" : deal.stage === "completed" ? "delivered" : "quoted",
-        project_type: deal.event_type || "other",
-        event_date: deal.event_date,
-        expected_value_paisa: deal.amount_paisa,
-        booked_value_paisa: deal.amount_paisa,
-        balance_due_paisa: 0,
-        contract_status: "not_started",
-        gallery_status: "not_started",
-      }));
+  const {
+    contact,
+    galleries,
+    invoices,
+    projects = [],
+    deals,
+    events,
+  } = profile;
+  const projectRows =
+    projects.length > 0
+      ? projects
+      : deals.map((deal) => ({
+          id: deal.id,
+          name: deal.title,
+          status:
+            deal.stage === "confirmed"
+              ? "booked"
+              : deal.stage === "completed"
+                ? "delivered"
+                : "quoted",
+          project_type: deal.event_type || "other",
+          event_date: deal.event_date,
+          expected_value_paisa: deal.amount_paisa,
+          booked_value_paisa: deal.amount_paisa,
+          balance_due_paisa: 0,
+          contract_status: "not_started",
+          gallery_status: "not_started",
+        }));
   const token = getStoredAccessToken();
 
   const tabs: { key: Tab; label: string; count: number }[] = [
@@ -164,7 +184,9 @@ export default function ClientDetailPage() {
               {getInitials(contact.name)}
             </div>
             <div className="min-w-0">
-              <h1 className="text-2xl font-semibold text-text-primary truncate">{contact.name}</h1>
+              <h1 className="text-2xl font-semibold text-text-primary truncate">
+                {contact.name}
+              </h1>
               <div className="flex flex-wrap items-center gap-2 mt-1">
                 <span className="status-badge status-badge--accent capitalize">
                   {contact.contact_type}
@@ -174,14 +196,16 @@ export default function ClientDetailPage() {
                     {contact.client_source}
                   </span>
                 )}
-                {contact.tags && contact.tags.length > 0 && contact.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="text-xs px-2 py-0.5 rounded-full bg-surface-sunken text-text-secondary"
-                  >
-                    {tag}
-                  </span>
-                ))}
+                {contact.tags &&
+                  contact.tags.length > 0 &&
+                  contact.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="text-xs px-2 py-0.5 rounded-full bg-surface-sunken text-text-secondary"
+                    >
+                      {tag}
+                    </span>
+                  ))}
               </div>
             </div>
           </div>
@@ -221,13 +245,17 @@ export default function ClientDetailPage() {
             {contact.gstin && (
               <div>
                 <span className="text-text-tertiary">GSTIN</span>
-                <p className="text-text-primary font-mono text-xs">{contact.gstin}</p>
+                <p className="text-text-primary font-mono text-xs">
+                  {contact.gstin}
+                </p>
               </div>
             )}
             {contact.pan && (
               <div>
                 <span className="text-text-tertiary">PAN</span>
-                <p className="text-text-primary font-mono text-xs">{contact.pan}</p>
+                <p className="text-text-primary font-mono text-xs">
+                  {contact.pan}
+                </p>
               </div>
             )}
           </div>
@@ -235,20 +263,26 @@ export default function ClientDetailPage() {
           {/* Quick Actions */}
           <div className="flex flex-wrap gap-3 pt-2">
             <button
-              onClick={() => router.push(`/crm/projects?create=true&client=${contactId}`)}
+              onClick={() =>
+                router.push(`/crm/projects?create=true&client=${contactId}`)
+              }
               className="inline-flex items-center gap-2 rounded-xl border border-border-default px-4 py-2.5 text-sm font-medium text-text-primary hover:bg-surface-sunken min-h-[44px] transition-colors"
             >
               Create Project
             </button>
             <button
-              onClick={() => router.push(`/billing?create=true&client=${contactId}`)}
-              className="inline-flex items-center gap-2 rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px] transition-colors"
+              onClick={() =>
+                router.push(`/billing?create=true&client=${contactId}`)
+              }
+              className="inline-flex items-center gap-2 rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-text-inverse hover:bg-accent-primary/90 min-h-[44px] transition-colors"
             >
               <DocumentText className="h-4 w-4" />
               Create Invoice
             </button>
             <button
-              onClick={() => router.push(`/calendar?create=true&client=${contactId}`)}
+              onClick={() =>
+                router.push(`/calendar?create=true&client=${contactId}`)
+              }
               className="inline-flex items-center gap-2 rounded-xl border border-border-default px-4 py-2.5 text-sm font-medium text-text-primary hover:bg-surface-sunken min-h-[44px] transition-colors"
             >
               <CalendarDays className="h-4 w-4" />
@@ -283,15 +317,21 @@ export default function ClientDetailPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-xs text-text-tertiary">Galleries</p>
-                <p className="text-lg font-semibold text-text-primary">{galleries.length}</p>
+                <p className="text-lg font-semibold text-text-primary">
+                  {galleries.length}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-text-tertiary">Invoices</p>
-                <p className="text-lg font-semibold text-text-primary">{invoices.length}</p>
+                <p className="text-lg font-semibold text-text-primary">
+                  {invoices.length}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-text-tertiary">Projects</p>
-                <p className="text-lg font-semibold text-text-primary">{projectRows.length}</p>
+                <p className="text-lg font-semibold text-text-primary">
+                  {projectRows.length}
+                </p>
               </div>
             </div>
             {contact.birthday && (
@@ -319,7 +359,9 @@ export default function ClientDetailPage() {
             {contact.notes && (
               <div>
                 <p className="text-xs text-text-tertiary">Notes</p>
-                <p className="text-sm text-text-secondary whitespace-pre-line">{contact.notes}</p>
+                <p className="text-sm text-text-secondary whitespace-pre-line">
+                  {contact.notes}
+                </p>
               </div>
             )}
           </div>
@@ -342,7 +384,9 @@ export default function ClientDetailPage() {
             >
               {tab.label}
               {tab.count > 0 && (
-                <span className="ml-1.5 text-xs text-text-tertiary">({tab.count})</span>
+                <span className="ml-1.5 text-xs text-text-tertiary">
+                  ({tab.count})
+                </span>
               )}
             </button>
           ))}
@@ -354,7 +398,9 @@ export default function ClientDetailPage() {
         {activeTab === "timeline" && (
           <ClientTimeline entries={timeline} loading={timelineLoading} />
         )}
-        {activeTab === "galleries" && <GalleryList galleries={galleries} token={token} />}
+        {activeTab === "galleries" && (
+          <GalleryList galleries={galleries} token={token} />
+        )}
         {activeTab === "invoices" && <InvoiceList invoices={invoices} />}
         {activeTab === "deals" && <ProjectList projects={projectRows} />}
         {activeTab === "bookings" && <BookingList events={events} />}

@@ -30,7 +30,8 @@ describe("StreamsPage delete control (F-084)", () => {
       /import\s*\{\s*GlassIconButton\s*\}\s*from\s*["']@\/components\/ui\/glass-icon-button["']/,
     );
     expect(src).toMatch(
-      /import\s*\{\s*Trash\s*\}\s*from\s*["']@\/components\/icons["']/,
+      // Trash may be imported alongside other icons (e.g. { Plus, Trash, Video }).
+      /import\s*\{[^}]*\bTrash\b[^}]*\}\s*from\s*["']@\/components\/icons["']/,
     );
   });
 

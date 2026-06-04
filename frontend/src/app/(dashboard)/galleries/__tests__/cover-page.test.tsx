@@ -1,5 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import CoverDesignPage from "../[id]/cover/page";
 import { updateGalleryDesign } from "@/lib/api/galleries";
 import type { Asset } from "@/lib/api/assets";
@@ -10,7 +16,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("next/link", () => ({
-  default: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
+  default: ({
+    href,
+    children,
+    ...props
+  }: {
+    href: string;
+    children: React.ReactNode;
+  }) => (
     <a href={href} {...props}>
       {children}
     </a>
@@ -67,7 +80,13 @@ vi.mock("@/lib/api/galleries", () => ({
     settings: {},
   })),
   listGalleryAssets: vi.fn(async () => [
-    { id: "ga-1", gallery_id: "gallery-1", asset_id: "asset-cover", sort_order: 0, is_hero: true },
+    {
+      id: "ga-1",
+      gallery_id: "gallery-1",
+      asset_id: "asset-cover",
+      sort_order: 0,
+      is_hero: true,
+    },
   ]),
   updateGalleryDesign: mocks.updateGalleryDesign,
 }));
@@ -81,7 +100,10 @@ vi.mock("@/lib/media-encryption/use-decrypted-asset-url", () => ({
     mediaAsset: Asset | PublicAsset | null | undefined,
     variants: readonly string[],
   ) => ({
-    src: variants.map((variant) => mediaAsset?.thumbnail_urls?.[variant]).find(Boolean) || "",
+    src:
+      variants
+        .map((variant) => mediaAsset?.thumbnail_urls?.[variant])
+        .find(Boolean) || "",
     loading: false,
     error: null,
   }),
@@ -104,7 +126,9 @@ describe("CoverDesignPage", () => {
     await renderPage();
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /haldi warm/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /haldi warm/i }),
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /haldi warm/i }));
@@ -120,7 +144,9 @@ describe("CoverDesignPage", () => {
     fireEvent.change(screen.getByLabelText("Editor section"), {
       target: { value: "scenes" },
     });
-    fireEvent.click(screen.getByRole("checkbox", { name: /haldi scene header/i }));
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /haldi scene header/i }),
+    );
 
     fireEvent.change(screen.getByLabelText("Editor section"), {
       target: { value: "brand" },
@@ -130,13 +156,16 @@ describe("CoverDesignPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /top right/i }));
 
-    fireEvent.click(screen.getByRole("button", { name: /save cover and design/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /save cover and design/i }),
+    );
 
     await waitFor(() => {
       expect(updateGalleryDesign).toHaveBeenCalled();
     });
 
-    const savedConfig = vi.mocked(updateGalleryDesign).mock.calls[0]?.[2] as Record<string, unknown>;
+    const savedConfig = vi.mocked(updateGalleryDesign).mock
+      .calls[0]?.[2] as Record<string, unknown>;
     expect(savedConfig).toMatchObject({
       cover: {
         layoutPreset: "haldi-warm",

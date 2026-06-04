@@ -108,10 +108,7 @@ export function EmbeddedVideosPanel({
       setError("That video is already in this gallery.");
       return;
     }
-    const next = [
-      ...videos,
-      buildEmbeddedVideo(parsed, { title: titleInput }),
-    ];
+    const next = [...videos, buildEmbeddedVideo(parsed, { title: titleInput })];
     setUrlInput("");
     setTitleInput("");
     await persist(next);
@@ -173,7 +170,7 @@ export function EmbeddedVideosPanel({
                   if (error) setError(null);
                 }}
                 placeholder="https://youtube.com/watch?v=… or https://vimeo.com/…"
-                className="mt-1 w-full rounded-xl border border-border-default bg-surface-raised px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-accent-primary focus:outline-none min-h-[44px]"
+                className="mt-1 w-full rounded-xl border border-border-default bg-surface-raised px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-accent-primary focus:outline-none touch-min"
                 autoComplete="off"
                 spellCheck={false}
               />
@@ -200,7 +197,7 @@ export function EmbeddedVideosPanel({
                 value={titleInput}
                 onChange={(e) => setTitleInput(e.target.value)}
                 placeholder="Highlights reel"
-                className="mt-1 w-full rounded-xl border border-border-default bg-surface-raised px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-accent-primary focus:outline-none min-h-[44px]"
+                className="mt-1 w-full rounded-xl border border-border-default bg-surface-raised px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-accent-primary focus:outline-none touch-min"
                 maxLength={80}
               />
             </div>
@@ -212,7 +209,7 @@ export function EmbeddedVideosPanel({
             <button
               type="submit"
               disabled={!preview || saving}
-              className="shrink-0 rounded-xl bg-accent-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-primary/90 disabled:cursor-not-allowed disabled:opacity-50 min-h-[40px]"
+              className="shrink-0 rounded-xl bg-accent-primary px-4 py-2 text-sm font-medium text-text-inverse transition-colors hover:bg-accent-primary/90 disabled:cursor-not-allowed disabled:opacity-50 touch-min"
             >
               Add video
             </button>
@@ -245,10 +242,18 @@ export function EmbeddedVideosPanel({
               key={v.id}
               className="overflow-hidden rounded-xl border border-border-default bg-surface-raised"
             >
-              <div className="relative aspect-video w-full bg-black">
+              <div className="relative aspect-video w-full bg-surface-scrim-strong">
+                {/* Loading shimmer behind the iframe — visible until the
+                    provider paints its player, then covered by it. */}
+                <div
+                  aria-hidden="true"
+                  className="absolute inset-0 animate-pulse bg-surface-sunken"
+                />
                 <iframe
                   src={embedUrlFor(v)}
-                  title={v.title || `Embedded ${v.provider} video ${v.video_id}`}
+                  title={
+                    v.title || `Embedded ${v.provider} video ${v.video_id}`
+                  }
                   loading="lazy"
                   // YouTube/Vimeo require these specific allow tokens to
                   // play. Without `encrypted-media` Chromium throws on
@@ -266,7 +271,10 @@ export function EmbeddedVideosPanel({
               <div className="flex items-center justify-between gap-3 px-4 py-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-text-primary">
-                    {v.title || (v.provider === "youtube" ? "YouTube video" : "Vimeo video")}
+                    {v.title ||
+                      (v.provider === "youtube"
+                        ? "YouTube video"
+                        : "Vimeo video")}
                   </p>
                   {/* Always-present click-through link. Cross-origin
                       iframe failure (uploader-disabled embedding, region
@@ -293,7 +301,11 @@ export function EmbeddedVideosPanel({
                       strokeWidth={2}
                       aria-hidden
                     >
-                      <path d="M14 5l7 7-7 7M21 12H3" strokeLinecap="round" strokeLinejoin="round" />
+                      <path
+                        d="M14 5l7 7-7 7M21 12H3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
                     </svg>
                   </a>
                 </div>

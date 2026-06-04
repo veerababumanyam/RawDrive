@@ -11,7 +11,11 @@ vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: vi.fn(() => "test-token"),
 }));
 
-import { getEngagementMetrics, getGrowthMetrics, getFeatureAdoption } from "@/lib/api/admin";
+import {
+  getEngagementMetrics,
+  getGrowthMetrics,
+  getFeatureAdoption,
+} from "@/lib/api/admin";
 import AdminAnalyticsPage from "../analytics/page";
 
 const mockEngagement = vi.mocked(getEngagementMetrics);
@@ -21,11 +25,18 @@ const mockFeatureAdoption = vi.mocked(getFeatureAdoption);
 beforeEach(() => {
   vi.clearAllMocks();
   mockEngagement.mockResolvedValue({
-    dau: 1200, wau: 5400, mau: 18000,
-    uploads_today: 3500, galleries_created: 120, avg_session_minutes: 14.5,
+    dau: 1200,
+    wau: 5400,
+    mau: 18000,
+    uploads_today: 3500,
+    galleries_created: 120,
+    avg_session_minutes: 14.5,
   });
   mockGrowth.mockResolvedValue({
-    total_users: 25000, new_users_today: 45, new_users_week: 280, new_users_month: 1100,
+    total_users: 25000,
+    new_users_today: 45,
+    new_users_week: 280,
+    new_users_month: 1100,
     timeseries: [
       { date: "2026-04-01", new_users: 40, cumulative: 24900 },
       { date: "2026-04-02", new_users: 45, cumulative: 24945 },

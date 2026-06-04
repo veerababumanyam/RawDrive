@@ -43,7 +43,11 @@ function diffParts(targetMs: number, nowMs: number) {
   return { ms, days, hours, minutes, seconds };
 }
 
-export function CountdownView({ scheduledAt, brandName, onElapsed }: CountdownViewProps) {
+export function CountdownView({
+  scheduledAt,
+  brandName,
+  onElapsed,
+}: CountdownViewProps) {
   const target = new Date(scheduledAt).getTime();
   const validTarget = !Number.isNaN(target);
 
@@ -55,7 +59,9 @@ export function CountdownView({ scheduledAt, brandName, onElapsed }: CountdownVi
   // Seed `now` so the pre-mount diff is deterministic (exactly 0). For an
   // invalid target we fall back to Date.now(), but that branch never reaches
   // the countdown render — it short-circuits to the pending state below.
-  const [now, setNow] = useState<number>(() => (validTarget ? target : Date.now()));
+  const [now, setNow] = useState<number>(() =>
+    validTarget ? target : Date.now(),
+  );
 
   useEffect(() => {
     if (!validTarget) return;
@@ -80,8 +86,12 @@ export function CountdownView({ scheduledAt, brandName, onElapsed }: CountdownVi
         {brandName && (
           <p className="text-sm font-medium text-text-secondary">{brandName}</p>
         )}
-        <h1 className="text-2xl font-semibold text-text-primary">Starting soon</h1>
-        <p className="text-sm text-text-secondary">This stream will begin shortly.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">
+          Starting soon
+        </h1>
+        <p className="text-sm text-text-secondary">
+          This stream will begin shortly.
+        </p>
       </section>
     );
   }
@@ -95,7 +105,9 @@ export function CountdownView({ scheduledAt, brandName, onElapsed }: CountdownVi
       {brandName && (
         <p className="text-sm font-medium text-text-secondary">{brandName}</p>
       )}
-      <h1 className="text-2xl font-semibold text-text-primary">Stream starts in</h1>
+      <h1 className="text-2xl font-semibold text-text-primary">
+        Stream starts in
+      </h1>
       <div className="grid grid-cols-4 gap-3 text-text-primary">
         {[
           { v: parts.days, l: "Days" },
@@ -107,7 +119,9 @@ export function CountdownView({ scheduledAt, brandName, onElapsed }: CountdownVi
             <div className="text-2xl font-semibold tabular-nums">
               {mounted ? String(p.v).padStart(2, "0") : "--"}
             </div>
-            <div className="text-xs uppercase tracking-wide text-text-tertiary">{p.l}</div>
+            <div className="text-xs uppercase tracking-wide text-text-tertiary">
+              {p.l}
+            </div>
           </div>
         ))}
       </div>

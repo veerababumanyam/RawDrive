@@ -77,7 +77,10 @@ export default function DealerTerritoryPage() {
         {header}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-28 rounded-2xl bg-surface-sunken animate-pulse" />
+            <div
+              key={i}
+              className="h-28 rounded-2xl bg-surface-sunken animate-pulse"
+            />
           ))}
         </div>
       </div>
@@ -116,7 +119,10 @@ export default function DealerTerritoryPage() {
     },
   ];
 
-  if (dealer.commission_rate_pct !== null && dealer.commission_rate_pct !== undefined) {
+  if (
+    dealer.commission_rate_pct !== null &&
+    dealer.commission_rate_pct !== undefined
+  ) {
     cards.push({
       label: "Commission Rate",
       value: `${dealer.commission_rate_pct}%`,

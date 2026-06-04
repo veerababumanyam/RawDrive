@@ -35,7 +35,13 @@ interface Props {
 
 const SPEEDS = [0.5, 1, 1.5, 2] as const;
 
-export function VideoPlayer({ src, poster, showTrim = false, onTrimChange, className }: Props) {
+export function VideoPlayer({
+  src,
+  poster,
+  showTrim = false,
+  onTrimChange,
+  className,
+}: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -92,7 +98,11 @@ export function VideoPlayer({ src, poster, showTrim = false, onTrimChange, class
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      )
+        return;
       switch (e.key) {
         case " ":
           e.preventDefault();
@@ -136,7 +146,10 @@ export function VideoPlayer({ src, poster, showTrim = false, onTrimChange, class
   };
 
   return (
-    <div ref={containerRef} className={`relative flex flex-col gap-2 ${className ?? ""}`}>
+    <div
+      ref={containerRef}
+      className={`relative flex flex-col gap-2 ${className ?? ""}`}
+    >
       <video
         ref={videoRef}
         src={src}
@@ -151,11 +164,11 @@ export function VideoPlayer({ src, poster, showTrim = false, onTrimChange, class
       />
 
       {/* Control bar — rendered outside the video so fullscreen wraps the container. */}
-      <div className="flex items-center gap-3 rounded-2xl bg-white/[0.08] backdrop-blur-xl border border-white/[0.12] px-4 py-2 text-white">
+      <div className="flex items-center gap-3 rounded-2xl bg-surface-overlay/10 glass-blur-full border border-text-media/[0.12] px-4 py-2 text-text-media">
         <button
           type="button"
           onClick={togglePlay}
-          className="h-9 w-9 shrink-0 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-sm font-medium"
+          className="h-9 w-9 shrink-0 rounded-full bg-surface-overlay/10 hover:bg-surface-overlay/20 flex items-center justify-center text-sm font-medium"
           aria-label={playing ? "Pause (Space)" : "Play (Space)"}
         >
           {playing ? "❚❚" : "▶"}
@@ -169,10 +182,10 @@ export function VideoPlayer({ src, poster, showTrim = false, onTrimChange, class
           step={0.01}
           value={current}
           onChange={(e) => seek(parseFloat(e.target.value))}
-          className="flex-1 accent-white"
+          className="flex-1 accent-text-media"
           aria-label="Seek"
         />
-        <span className="w-20 text-right tabular-nums text-xs text-white/70">
+        <span className="w-20 text-right tabular-nums text-xs text-text-media/70">
           {fmt(current)} / {fmt(duration)}
         </span>
 
@@ -180,7 +193,7 @@ export function VideoPlayer({ src, poster, showTrim = false, onTrimChange, class
         <button
           type="button"
           onClick={() => setMuted((m) => !m)}
-          className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-sm"
+          className="h-8 w-8 rounded-full hover:bg-surface-overlay/10 flex items-center justify-center text-sm"
           aria-label={muted ? "Unmute (M)" : "Mute (M)"}
         >
           {muted || volume === 0 ? "🔇" : volume < 0.5 ? "🔈" : "🔊"}
@@ -195,19 +208,21 @@ export function VideoPlayer({ src, poster, showTrim = false, onTrimChange, class
             setVolume(parseFloat(e.target.value));
             setMuted(false);
           }}
-          className="w-20 accent-white"
+          className="w-20 accent-text-media"
           aria-label="Volume"
         />
 
         {/* Speed */}
         <select
           value={speed}
-          onChange={(e) => setSpeed(parseFloat(e.target.value) as (typeof SPEEDS)[number])}
-          className="rounded-lg bg-white/10 border border-white/15 px-2 py-1 text-xs text-white hover:bg-white/15"
+          onChange={(e) =>
+            setSpeed(parseFloat(e.target.value) as (typeof SPEEDS)[number])
+          }
+          className="rounded-lg bg-surface-overlay/10 border border-text-media/15 px-2 py-1 text-xs text-text-media hover:bg-surface-overlay/15"
           aria-label="Playback speed"
         >
           {SPEEDS.map((s) => (
-            <option key={s} value={s} className="bg-black text-white">
+            <option key={s} value={s} className="bg-surface-scrim-strong text-text-media">
               {s}x
             </option>
           ))}
@@ -224,8 +239,8 @@ export function VideoPlayer({ src, poster, showTrim = false, onTrimChange, class
 
       {/* Trim slider (GAL-FR-096) */}
       {showTrim && duration > 0 && (
-        <div className="rounded-2xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.1] px-4 py-3">
-          <div className="mb-2 flex items-center justify-between text-[11px] text-white/60">
+        <div className="rounded-2xl bg-surface-overlay/10 glass-blur-full border border-text-media/[0.1] px-4 py-3">
+          <div className="mb-2 flex items-center justify-between text-[11px] text-text-media/60">
             <span>Trim</span>
             <span className="tabular-nums">
               {fmt(trimIn)} → {fmt(trimOut)}

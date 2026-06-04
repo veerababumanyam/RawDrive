@@ -90,7 +90,8 @@ const COPY = {
       },
       dsar_processing: {
         label: "डेटा अनुरोधों की अनुमति दें",
-        helper: "निर्यात/मिटाने के अनुरोधों को संसाधित करने के लिए (DPDP अनुपालन)।",
+        helper:
+          "निर्यात/मिटाने के अनुरोधों को संसाधित करने के लिए (DPDP अनुपालन)।",
       },
       gallery_notifications: {
         label: "मुझे अपडेट ईमेल करें",
@@ -126,11 +127,20 @@ const COPY = {
 } as const;
 
 // Grouping for the banner UI — matches the 4 visible sections.
-const GROUPS: Array<{ key: "essential" | "features" | "ai" | "marketing"; purposes: ConsentPurpose[] }> = [
+const GROUPS: Array<{
+  key: "essential" | "features" | "ai" | "marketing";
+  purposes: ConsentPurpose[];
+}> = [
   { key: "essential", purposes: ["terms_of_service", "dsar_processing"] },
-  { key: "features", purposes: ["gallery_notifications", "analytics_tracking"] },
+  {
+    key: "features",
+    purposes: ["gallery_notifications", "analytics_tracking"],
+  },
   { key: "ai", purposes: ["biometric_face_id", "ai_content_tagging"] },
-  { key: "marketing", purposes: ["marketing_communications", "third_party_sharing"] },
+  {
+    key: "marketing",
+    purposes: ["marketing_communications", "third_party_sharing"],
+  },
 ];
 
 const DEFAULT_GRANTS: ConsentGrants = {
@@ -186,7 +196,7 @@ export function ConsentBanner({
 
   const acceptAll = () => {
     const all = Object.fromEntries(
-      (Object.keys(DEFAULT_GRANTS) as ConsentPurpose[]).map((k) => [k, true])
+      (Object.keys(DEFAULT_GRANTS) as ConsentPurpose[]).map((k) => [k, true]),
     ) as ConsentGrants;
     setGrants(all);
     void submit(all);
@@ -198,7 +208,11 @@ export function ConsentBanner({
   };
 
   const declineOptional = () => {
-    const essentialsOnly = { ...DEFAULT_GRANTS, terms_of_service: true, dsar_processing: true };
+    const essentialsOnly = {
+      ...DEFAULT_GRANTS,
+      terms_of_service: true,
+      dsar_processing: true,
+    };
     setGrants(essentialsOnly);
     void submit(essentialsOnly);
     onDismiss();
@@ -215,7 +229,7 @@ export function ConsentBanner({
           granted: grants[p],
         })),
       })),
-    [copy, grants]
+    [copy, grants],
   );
 
   return (
@@ -227,7 +241,10 @@ export function ConsentBanner({
     >
       <div className="max-w-2xl mx-auto space-y-5">
         <header>
-          <h3 id="consent-title" className="text-lg sm:text-xl font-semibold text-primary">
+          <h3
+            id="consent-title"
+            className="text-lg sm:text-xl font-semibold text-primary"
+          >
             {copy.title}
           </h3>
           <p className="text-sm text-secondary mt-1">{copy.lead}</p>
@@ -242,7 +259,7 @@ export function ConsentBanner({
               {group.rows.map((row) => (
                 <label
                   key={row.key}
-                  className="flex items-start gap-3 p-2 rounded-lg hover:bg-glass-surface cursor-pointer min-h-[44px]"
+                  className="flex items-start gap-3 p-2 rounded-lg hover:bg-glass-surface cursor-pointer touch-min"
                 >
                   <input
                     type="checkbox"
@@ -252,8 +269,13 @@ export function ConsentBanner({
                     aria-describedby={`helper-${row.key}`}
                   />
                   <span className="flex-1">
-                    <span className="text-sm text-primary block">{row.label}</span>
-                    <span id={`helper-${row.key}`} className="text-xs text-muted block mt-0.5">
+                    <span className="text-sm text-primary block">
+                      {row.label}
+                    </span>
+                    <span
+                      id={`helper-${row.key}`}
+                      className="text-xs text-muted block mt-0.5"
+                    >
                       {row.helper}
                     </span>
                   </span>
@@ -268,21 +290,21 @@ export function ConsentBanner({
             type="button"
             onClick={acceptSelected}
             disabled={!termsAccepted}
-            className="flex-1 min-h-[44px] py-3 rounded-xl bg-accent text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex-1 touch-min py-3 rounded-xl bg-accent text-text-inverse font-medium disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {copy.accept}
           </button>
           <button
             type="button"
             onClick={acceptAll}
-            className="min-h-[44px] px-5 py-3 rounded-xl glass-surface border border-glass-border text-primary text-sm"
+            className="touch-min px-5 py-3 rounded-xl glass-surface border border-glass-border text-primary text-sm"
           >
             {copy.acceptAll}
           </button>
           <button
             type="button"
             onClick={declineOptional}
-            className="min-h-[44px] px-5 py-3 rounded-xl glass-surface border border-glass-border text-secondary text-sm"
+            className="touch-min px-5 py-3 rounded-xl glass-surface border border-glass-border text-secondary text-sm"
           >
             {copy.decline}
           </button>

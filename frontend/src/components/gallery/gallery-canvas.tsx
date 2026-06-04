@@ -59,8 +59,14 @@ export function GalleryCanvas({
 
   // Virtual scroll: only render visible rows
   const visibleRange = useMemo(() => {
-    const startRow = Math.max(0, Math.floor(scrollTop / (ITEM_HEIGHT + gap)) - OVERSCAN);
-    const endRow = Math.min(rowCount, Math.ceil((scrollTop + containerHeight) / (ITEM_HEIGHT + gap)) + OVERSCAN);
+    const startRow = Math.max(
+      0,
+      Math.floor(scrollTop / (ITEM_HEIGHT + gap)) - OVERSCAN,
+    );
+    const endRow = Math.min(
+      rowCount,
+      Math.ceil((scrollTop + containerHeight) / (ITEM_HEIGHT + gap)) + OVERSCAN,
+    );
     return { startRow, endRow };
   }, [scrollTop, containerHeight, rowCount, gap]);
 
@@ -79,15 +85,18 @@ export function GalleryCanvas({
     }
   }, []);
 
-  const toggleSelection = useCallback((id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      onSelectionChange?.(next);
-      return next;
-    });
-  }, [onSelectionChange]);
+  const toggleSelection = useCallback(
+    (id: string) => {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        onSelectionChange?.(next);
+        return next;
+      });
+    },
+    [onSelectionChange],
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -96,16 +105,22 @@ export function GalleryCanvas({
         <div className="flex items-center gap-2">
           <span className="text-sm text-secondary">{assets.length} photos</span>
           {selectedIds.size > 0 && (
-            <span className="text-sm text-accent font-medium">{selectedIds.size} selected</span>
+            <span className="text-sm text-accent font-medium">
+              {selectedIds.size} selected
+            </span>
           )}
         </div>
         <div className="flex items-center gap-1">
-          {(["dense", "standard", "spacious"] as Density[]).map(d => (
+          {(["dense", "standard", "spacious"] as Density[]).map((d) => (
             <button
               key={d}
-              onClick={() => {/* density change handled by parent */}}
+              onClick={() => {
+                /* density change handled by parent */
+              }}
               className={`px-2 py-1 text-xs rounded-md transition-colors ${
-                density === d ? "bg-accent/20 text-accent" : "text-secondary hover:text-primary"
+                density === d
+                  ? "bg-accent/20 text-accent"
+                  : "text-secondary hover:text-accent"
               }`}
             >
               {d}
@@ -167,16 +182,27 @@ interface PhotoCardProps {
 }
 
 function PhotoCard({
-  asset, isSelected, isHovered, onMouseEnter, onMouseLeave, onClick, onSelect, isProofing,
+  asset,
+  isSelected,
+  isHovered,
+  onMouseEnter,
+  onMouseLeave,
+  onClick,
+  onSelect,
+  isProofing,
 }: PhotoCardProps) {
   const thumbnailUrl = getAssetPreviewUrl(asset);
-  const isFavorite = (asset as unknown as Record<string, unknown>).is_favorite === true;
-  const isLocked = (asset as unknown as Record<string, unknown>).is_sensitive === true;
+  const isFavorite =
+    (asset as unknown as Record<string, unknown>).is_favorite === true;
+  const isLocked =
+    (asset as unknown as Record<string, unknown>).is_sensitive === true;
 
   return (
     <div
       className={`relative rounded-xl overflow-hidden cursor-pointer transition-all duration-200 group ${
-        isSelected ? "ring-2 ring-accent shadow-lg scale-[0.98]" : "hover:shadow-md"
+        isSelected
+          ? "ring-2 ring-accent shadow-lg scale-[0.98]"
+          : "hover:shadow-md"
       }`}
       style={{ height: ITEM_HEIGHT }}
       onMouseEnter={onMouseEnter}
@@ -203,10 +229,13 @@ function PhotoCard({
         <button
           className={`absolute top-2 left-2 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
             isSelected
-              ? "bg-accent border-accent text-white"
-              : "bg-black/30 border-white/60 hover:border-white"
+              ? "bg-accent border-accent text-text-inverse"
+              : "bg-surface-scrim-strong/30 border-text-media/60 hover:border-text-media"
           }`}
-          onClick={(e) => { e.stopPropagation(); onSelect(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect();
+          }}
         >
           {isSelected && <span className="text-xs">✓</span>}
         </button>
@@ -215,18 +244,20 @@ function PhotoCard({
       {/* Favorite indicator */}
       {isFavorite && (
         <div className="absolute top-2 right-2">
-          <span className="text-red-500 text-lg">♥</span>
+          <span className="text-feedback-error text-lg">♥</span>
         </div>
       )}
 
       {/* Hover action bar */}
       {isHovered && !isLocked && (
-        <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/60 to-transparent flex gap-1 justify-end">
+        <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-surface-scrim-strong/60 to-transparent flex gap-1 justify-end">
           <GlassIconButton
             label="Info"
             size="sm"
             variant="glass"
-            onClick={(e: React.MouseEvent) => { e.stopPropagation(); }}
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+            }}
           >
             <InfoCircle className="w-4 h-4" />
           </GlassIconButton>

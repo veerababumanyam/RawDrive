@@ -22,7 +22,10 @@ interface DealerApplicationModalProps {
   onClose: () => void;
 }
 
-export default function DealerApplicationModal({ open, onClose }: DealerApplicationModalProps) {
+export default function DealerApplicationModal({
+  open,
+  onClose,
+}: DealerApplicationModalProps) {
   const [states, setStates] = useState<State[]>([]);
   const [dealerEmail, setDealerEmail] = useState("");
   const [businessName, setBusinessName] = useState("");
@@ -41,7 +44,9 @@ export default function DealerApplicationModal({ open, onClose }: DealerApplicat
     fetch(`${apiBase}/api/v1/states`)
       .then((r) => r.json())
       .then((d) => setStates(d.states ?? []))
-      .catch(() => {/* non-fatal — user can still type state name */});
+      .catch(() => {
+        /* non-fatal — user can still type state name */
+      });
   }, [open, states.length]);
 
   const reset = () => {
@@ -101,13 +106,18 @@ export default function DealerApplicationModal({ open, onClose }: DealerApplicat
       role="dialog"
       aria-modal="true"
       aria-labelledby="dealer-app-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-surface-scrim-strong/50 glass-blur-subtle p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) handleClose();
+      }}
     >
       <div className="w-full max-w-lg rounded-2xl bg-surface-container border border-border-subtle shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border-subtle">
-          <h2 id="dealer-app-title" className="font-headline text-xl font-bold text-text-primary">
+          <h2
+            id="dealer-app-title"
+            className="font-headline text-xl font-bold text-text-primary"
+          >
             Partner application
           </h2>
           <GlassIconButton
@@ -125,10 +135,12 @@ export default function DealerApplicationModal({ open, onClose }: DealerApplicat
         {submitted ? (
           <div className="px-6 py-10 text-center space-y-3">
             <div className="text-4xl">✓</div>
-            <h3 className="font-headline text-lg font-bold text-text-primary">Application received</h3>
+            <h3 className="font-headline text-lg font-bold text-text-primary">
+              Application received
+            </h3>
             <p className="text-sm text-text-secondary leading-6">
-              We have sent a confirmation to <strong>{dealerEmail}</strong>.
-              Our partnerships team will reach out within 3–5 business days.
+              We have sent a confirmation to <strong>{dealerEmail}</strong>. Our
+              partnerships team will reach out within 3–5 business days.
             </p>
             <button
               type="button"
@@ -214,7 +226,9 @@ export default function DealerApplicationModal({ open, onClose }: DealerApplicat
             {/* PAN + GSTIN */}
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
-                <span className="block text-sm font-medium text-text-secondary mb-1">PAN number</span>
+                <span className="block text-sm font-medium text-text-secondary mb-1">
+                  PAN number
+                </span>
                 <input
                   type="text"
                   value={panNumber}
@@ -225,7 +239,9 @@ export default function DealerApplicationModal({ open, onClose }: DealerApplicat
                 />
               </label>
               <label className="block">
-                <span className="block text-sm font-medium text-text-secondary mb-1">GSTIN</span>
+                <span className="block text-sm font-medium text-text-secondary mb-1">
+                  GSTIN
+                </span>
                 <input
                   type="text"
                   value={gstin}
@@ -239,7 +255,9 @@ export default function DealerApplicationModal({ open, onClose }: DealerApplicat
 
             {/* Business profile */}
             <label className="block">
-              <span className="block text-sm font-medium text-text-secondary mb-1">About your business</span>
+              <span className="block text-sm font-medium text-text-secondary mb-1">
+                About your business
+              </span>
               <textarea
                 value={businessProfile}
                 onChange={(e) => setBusinessProfile(e.target.value)}

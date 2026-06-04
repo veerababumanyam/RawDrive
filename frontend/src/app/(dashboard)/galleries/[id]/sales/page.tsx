@@ -7,12 +7,18 @@ import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav"
 import { getGallery, type Gallery } from "@/lib/api/galleries";
 import { getStoredAccessToken } from "@/lib/auth";
 
-export default function GallerySalesPage({ params }: { params: Promise<{ id: string }> }) {
+export default function GallerySalesPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = use(params);
   const [gallery, setGallery] = useState<Gallery | null>(null);
   const [token] = useState(() => getStoredAccessToken());
   const [loadError, setLoadError] = useState("");
-  const error = token ? loadError : "Your session expired. Please log in again.";
+  const error = token
+    ? loadError
+    : "Your session expired. Please log in again.";
 
   useEffect(() => {
     if (!token) return;
@@ -22,7 +28,10 @@ export default function GallerySalesPage({ params }: { params: Promise<{ id: str
         if (!cancelled) setGallery(nextGallery);
       })
       .catch((err) => {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : "Failed to load gallery");
+        if (!cancelled)
+          setLoadError(
+            err instanceof Error ? err.message : "Failed to load gallery",
+          );
       });
     return () => {
       cancelled = true;
@@ -35,18 +44,25 @@ export default function GallerySalesPage({ params }: { params: Promise<{ id: str
           element on mobile (matches the AI and settings sub-pages). */}
       <GalleryWorkspaceNav galleryId={id} />
 
-      <Link href={`/galleries/${id}`} className="btn-tertiary px-0 py-0 text-sm">
+      <Link
+        href={`/galleries/${id}`}
+        className="btn-tertiary px-0 py-0 text-sm"
+      >
         Back to gallery
       </Link>
 
       <div className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">Sales</p>
+        <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">
+          Sales
+        </p>
         <h1 className="text-2xl font-semibold text-text-primary">
-          {gallery?.title ? `${gallery.title} sales continuity` : "Sales continuity"}
+          {gallery?.title
+            ? `${gallery.title} sales continuity`
+            : "Sales continuity"}
         </h1>
         <p className="max-w-2xl text-sm leading-relaxed text-text-secondary">
-          Invoices, deals, and projects linked to this gallery roll up here so commerce stays in the
-          same workspace as the photos.
+          Invoices, deals, and projects linked to this gallery roll up here so
+          commerce stays in the same workspace as the photos.
         </p>
       </div>
 

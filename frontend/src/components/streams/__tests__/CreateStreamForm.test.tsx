@@ -19,14 +19,18 @@ vi.mock("@/lib/api/authFetch", () => ({
 // Keep streams mock for backward compat (unused after migration but
 // prevents import errors).
 vi.mock("@/lib/api/streams", async () => {
-  const actual = await vi.importActual<Record<string, unknown>>("@/lib/api/streams");
+  const actual =
+    await vi.importActual<Record<string, unknown>>("@/lib/api/streams");
   return { ...actual };
 });
 
 import { CreateStreamForm } from "../CreateStreamForm";
 
 function fill(id: string, value: string) {
-  const el = screen.getByTestId(id) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+  const el = screen.getByTestId(id) as
+    | HTMLInputElement
+    | HTMLTextAreaElement
+    | HTMLSelectElement;
   fireEvent.change(el, { target: { value } });
 }
 

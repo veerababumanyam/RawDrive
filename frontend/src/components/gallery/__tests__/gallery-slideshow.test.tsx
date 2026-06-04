@@ -15,9 +15,18 @@ afterEach(() => {
 
 const IMAGES = ["/img/a.webp", "/img/b.webp", "/img/c.webp"];
 
-function setup(props: Partial<React.ComponentProps<typeof GallerySlideshow>> = {}) {
+function setup(
+  props: Partial<React.ComponentProps<typeof GallerySlideshow>> = {},
+) {
   const onClose = vi.fn();
-  render(<GallerySlideshow images={IMAGES} intervalMs={1000} onClose={onClose} {...props} />);
+  render(
+    <GallerySlideshow
+      images={IMAGES}
+      intervalMs={1000}
+      onClose={onClose}
+      {...props}
+    />,
+  );
   return { onClose };
 }
 
@@ -45,7 +54,9 @@ describe("GallerySlideshow", () => {
     });
     expect(screen.getByAltText("Slide 1 of 3")).toBeInTheDocument();
     // The control now offers Play (resume).
-    expect(screen.getByRole("button", { name: "Play slideshow" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Play slideshow" }),
+    ).toBeInTheDocument();
   });
 
   it("advances and goes back with the next/prev controls", () => {
@@ -66,18 +77,25 @@ describe("GallerySlideshow", () => {
 
   it("renders the audio element and a mute toggle only when music is provided", () => {
     const { onClose } = setup({ musicUrl: "/api/v1/public/galleries/x/music" });
-    expect(screen.getByTestId("slideshow-audio")).toHaveAttribute("src", "/api/v1/public/galleries/x/music");
+    expect(screen.getByTestId("slideshow-audio")).toHaveAttribute(
+      "src",
+      "/api/v1/public/galleries/x/music",
+    );
     // starts muted (autoplay policy) → control offers to unmute
     const muteBtn = screen.getByRole("button", { name: "Unmute music" });
     fireEvent.click(muteBtn);
-    expect(screen.getByRole("button", { name: "Mute music" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Mute music" }),
+    ).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
   });
 
   it("omits audio + mute control when there is no music", () => {
     setup();
     expect(screen.queryByTestId("slideshow-audio")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /mute music/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /mute music/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("moves focus into the modal dialog on open so aria-modal isn't lying", () => {

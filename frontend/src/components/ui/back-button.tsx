@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft } from "@/components/icons";
 
 interface BackButtonProps {
   href?: string;
@@ -12,7 +12,7 @@ interface BackButtonProps {
 export function BackButton({ href, label = "Go back" }: BackButtonProps) {
   const router = useRouter();
   const cls =
-    "inline-flex items-center gap-1 text-sm text-text-secondary hover:text-on-surface transition-colors";
+    "touch-min inline-flex items-center gap-1 text-sm text-text-secondary transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus";
 
   if (href) {
     return (

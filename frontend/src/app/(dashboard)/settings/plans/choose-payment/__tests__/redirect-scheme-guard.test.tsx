@@ -61,7 +61,11 @@ function stubUpgradeFetch(redirectUrl: string, phonePeConfigured = true) {
         }),
       } as unknown as Response;
     }
-    return { ok: true, status: 200, json: async () => ({}) } as unknown as Response;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+    } as unknown as Response;
   });
 }
 
@@ -85,7 +89,10 @@ afterEach(() => {
 
 describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
   it("does NOT navigate and surfaces an error for a non-https redirect_url", async () => {
-    vi.stubGlobal("fetch", stubUpgradeFetch("javascript:alert(document.cookie)"));
+    vi.stubGlobal(
+      "fetch",
+      stubUpgradeFetch("javascript:alert(document.cookie)"),
+    );
 
     render(<ChoosePaymentPage />);
 
@@ -96,7 +103,9 @@ describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
 
     // Guard must reject the URL: error banner shown, no navigation.
     await waitFor(() => {
-      expect(screen.getByText("Invalid payment redirect URL")).toBeInTheDocument();
+      expect(
+        screen.getByText("Invalid payment redirect URL"),
+      ).toBeInTheDocument();
     });
     expect(assignSpy).not.toHaveBeenCalled();
   });
@@ -112,13 +121,18 @@ describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
     fireEvent.click(payButton);
 
     await waitFor(() => {
-      expect(screen.getByText("Invalid payment redirect URL")).toBeInTheDocument();
+      expect(
+        screen.getByText("Invalid payment redirect URL"),
+      ).toBeInTheDocument();
     });
     expect(assignSpy).not.toHaveBeenCalled();
   });
 
   it("navigates for a valid https redirect_url (control)", async () => {
-    vi.stubGlobal("fetch", stubUpgradeFetch("https://mercury.phonepe.com/pay/abc123"));
+    vi.stubGlobal(
+      "fetch",
+      stubUpgradeFetch("https://mercury.phonepe.com/pay/abc123"),
+    );
 
     render(<ChoosePaymentPage />);
 
@@ -128,7 +142,9 @@ describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
     fireEvent.click(payButton);
 
     await waitFor(() => {
-      expect(assignSpy).toHaveBeenCalledWith("https://mercury.phonepe.com/pay/abc123");
+      expect(assignSpy).toHaveBeenCalledWith(
+        "https://mercury.phonepe.com/pay/abc123",
+      );
     });
     expect(
       screen.queryByText("Invalid payment redirect URL"),
@@ -136,7 +152,10 @@ describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
   });
 
   it("keeps PhonePe visible but disabled when the backend reports it is not configured", async () => {
-    vi.stubGlobal("fetch", stubUpgradeFetch("https://mercury.phonepe.com/pay/abc123", false));
+    vi.stubGlobal(
+      "fetch",
+      stubUpgradeFetch("https://mercury.phonepe.com/pay/abc123", false),
+    );
 
     render(<ChoosePaymentPage />);
 
@@ -144,6 +163,8 @@ describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
       name: /pay .* with razorpay/i,
     });
     expect(screen.getByText("Not configured")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /phonepe not configured/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /phonepe not configured/i }),
+    ).toBeDisabled();
   });
 });

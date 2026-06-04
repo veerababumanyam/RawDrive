@@ -62,7 +62,7 @@ export function PreviewChrome({ gallery, publicUrl }: Props) {
   return (
     <div
       data-testid="preview-chrome"
-      className="sticky top-16 z-30 mb-6 -mx-4 lg:-mx-8 border-b border-border-default bg-surface/95 px-4 py-3 backdrop-blur"
+      className="sticky top-16 z-30 mb-6 -mx-4 lg:-mx-8 border-b border-border-default bg-surface/95 px-4 py-3 glass-blur-soft"
     >
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3">
         <Link
@@ -103,8 +103,8 @@ export function PreviewChrome({ gallery, publicUrl }: Props) {
               !publicUrl
                 ? "bg-surface-container-high text-text-tertiary cursor-not-allowed"
                 : copied
-                ? "bg-success text-text-inverse"
-                : "bg-accent text-text-inverse hover:bg-accent-hover",
+                  ? "bg-success text-text-inverse"
+                  : "bg-accent text-text-inverse hover:bg-accent-hover",
             )}
             title={publicUrl ? `Copy ${publicUrl}` : "Publish to share"}
           >

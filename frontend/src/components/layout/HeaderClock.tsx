@@ -42,7 +42,11 @@ export function HeaderClock() {
   }, []);
 
   const timeLabel = now
-    ? now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false })
+    ? now.toLocaleTimeString("en-IN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      })
     : "—:—";
   const titleLabel = now
     ? now.toLocaleString("en-IN", {

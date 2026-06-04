@@ -4,11 +4,22 @@ import Link from "next/link";
 import { use, useEffect, useMemo, useState } from "react";
 import { DeliveryContinuityPanel } from "@/components/gallery/delivery-continuity-panel";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
-import { getGallery, listGalleryAssets, type Gallery } from "@/lib/api/galleries";
-import { listProofingSelections, type ProofingSelection } from "@/lib/api/proofing";
+import {
+  getGallery,
+  listGalleryAssets,
+  type Gallery,
+} from "@/lib/api/galleries";
+import {
+  listProofingSelections,
+  type ProofingSelection,
+} from "@/lib/api/proofing";
 import { getStoredAccessToken } from "@/lib/auth";
 
-export default function GalleryDeliveryPage({ params }: { params: Promise<{ id: string }> }) {
+export default function GalleryDeliveryPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = use(params);
   const [gallery, setGallery] = useState<Gallery | null>(null);
   // Real proofing/asset state — drives selectedCount/totalCount. Sourced the
@@ -18,7 +29,9 @@ export default function GalleryDeliveryPage({ params }: { params: Promise<{ id: 
   const [totalCount, setTotalCount] = useState(0);
   const [token] = useState(() => getStoredAccessToken());
   const [loadError, setLoadError] = useState("");
-  const error = token ? loadError : "Your session expired. Please log in again.";
+  const error = token
+    ? loadError
+    : "Your session expired. Please log in again.";
 
   useEffect(() => {
     if (!token) return;
@@ -38,7 +51,10 @@ export default function GalleryDeliveryPage({ params }: { params: Promise<{ id: 
         setTotalCount(nextAssets.length);
       })
       .catch((err) => {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : "Failed to load gallery");
+        if (!cancelled)
+          setLoadError(
+            err instanceof Error ? err.message : "Failed to load gallery",
+          );
       });
     return () => {
       cancelled = true;
@@ -64,18 +80,25 @@ export default function GalleryDeliveryPage({ params }: { params: Promise<{ id: 
           element on mobile (matches the AI and settings sub-pages). */}
       <GalleryWorkspaceNav galleryId={id} />
 
-      <Link href={`/galleries/${id}`} className="btn-tertiary px-0 py-0 text-sm">
+      <Link
+        href={`/galleries/${id}`}
+        className="btn-tertiary px-0 py-0 text-sm"
+      >
         Back to gallery
       </Link>
 
       <div className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">Delivery</p>
+        <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">
+          Delivery
+        </p>
         <h1 className="text-2xl font-semibold text-text-primary">
-          {gallery?.title ? `${gallery.title} delivery continuity` : "Delivery continuity"}
+          {gallery?.title
+            ? `${gallery.title} delivery continuity`
+            : "Delivery continuity"}
         </h1>
         <p className="max-w-2xl text-sm leading-relaxed text-text-secondary">
-          Downloads, views, and proofing progress stay attached to this gallery workspace so hand-off
-          status never drifts into a separate module.
+          Downloads, views, and proofing progress stay attached to this gallery
+          workspace so hand-off status never drifts into a separate module.
         </p>
       </div>
 

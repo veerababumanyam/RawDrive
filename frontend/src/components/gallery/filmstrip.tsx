@@ -14,7 +14,10 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { Asset } from "@/lib/api/assets";
 import { getStoredAccessToken } from "@/lib/auth";
-import { FILMSTRIP_VARIANTS, LIGHTBOX_VARIANTS } from "@/lib/media-encryption/asset-media";
+import {
+  FILMSTRIP_VARIANTS,
+  LIGHTBOX_VARIANTS,
+} from "@/lib/media-encryption/asset-media";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 
 interface Props {
@@ -58,12 +61,12 @@ function FilmstripThumb({
       onClick={() => onSelect(asset.id)}
       className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 transition-all ${
         active
-          ? "border-white scale-105 shadow-lg"
-          : "border-white/20 opacity-60 hover:opacity-100"
+          ? "border-text-media scale-105 shadow-lg"
+          : "border-text-media/20 opacity-60 hover:opacity-100"
       }`}
     >
       {media.loading ? (
-        <div className="h-full w-full animate-pulse bg-white/5" />
+        <div className="h-full w-full animate-pulse bg-surface-overlay/5" />
       ) : media.src && !imageFailed ? (
         <img
           src={media.src}
@@ -75,7 +78,7 @@ function FilmstripThumb({
           onError={handleImageError}
         />
       ) : (
-        <div className="h-full w-full bg-white/5" />
+        <div className="h-full w-full bg-surface-overlay/5" />
       )}
     </button>
   );

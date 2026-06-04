@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import { BYOKSetup } from "../BYOKSetup";
 
 // Mock the API module
@@ -74,7 +80,11 @@ describe("BYOKSetup", () => {
     fireEvent.click(saveBtn);
 
     await waitFor(() => {
-      expect(mockSaveAIConfig).toHaveBeenCalledWith("test", "AIzaSyTestKey12345", "gemini-2.0-flash");
+      expect(mockSaveAIConfig).toHaveBeenCalledWith(
+        "test",
+        "AIzaSyTestKey12345",
+        "gemini-2.0-flash",
+      );
     });
   });
 
@@ -105,7 +115,10 @@ describe("BYOKSetup", () => {
       provider: "gemini",
       key_masked: "AIza...xxxx",
     });
-    mockValidateAIKey.mockResolvedValue({ valid: false, error: "API key expired" });
+    mockValidateAIKey.mockResolvedValue({
+      valid: false,
+      error: "API key expired",
+    });
 
     render(<BYOKSetup token="test" />);
 
@@ -141,8 +154,9 @@ describe("BYOKSetup", () => {
       resolveB = res as (cfg: unknown) => void;
     });
 
-    mockGetAIConfig.mockImplementation((tok: string) =>
-      (tok === "token-A" ? aPromise : bPromise) as Promise<never>,
+    mockGetAIConfig.mockImplementation(
+      (tok: string) =>
+        (tok === "token-A" ? aPromise : bPromise) as Promise<never>,
     );
 
     const { rerender } = render(<BYOKSetup token="token-A" />);

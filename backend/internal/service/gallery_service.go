@@ -322,7 +322,9 @@ func (s *GalleryService) AddAsset(ctx context.Context, galleryID, assetID, works
 		return fmt.Errorf("gallery not found")
 	}
 	if gallery.CoverAssetID == nil && s.coverSvc != nil {
-		s.coverSvc.AutoSetCover(ctx, galleryID)
+		if err := s.coverSvc.AutoSetCover(ctx, galleryID); err != nil {
+			return fmt.Errorf("gallery service add asset cover: %w", err)
+		}
 	}
 	return nil
 }
@@ -337,8 +339,10 @@ func (s *GalleryService) RemoveAsset(ctx context.Context, galleryID, assetID uui
 	if err != nil {
 		return fmt.Errorf("gallery service remove asset: %w", err)
 	}
-	if gallery != nil && gallery.CoverAssetID != nil && *gallery.CoverAssetID == assetID {
-		s.coverSvc.AutoSetCover(ctx, galleryID)
+	if gallery != nil && gallery.CoverAssetID != nil && *gallery.CoverAssetID == assetID && s.coverSvc != nil {
+		if err := s.coverSvc.AutoSetCover(ctx, galleryID); err != nil {
+			return fmt.Errorf("gallery service remove asset cover: %w", err)
+		}
 	}
 	return nil
 }

@@ -25,7 +25,9 @@ describe("M39 E5-S2: admin NewUserDialog", () => {
     expect(fileExists("src/components/admin/NewUserDialog.tsx")).toBe(true);
   });
   it("NewUserDialog is a default-exported React component", () => {
-    expect(fileContains("src/components/admin/NewUserDialog.tsx", /export default/)).toBe(true);
+    expect(
+      fileContains("src/components/admin/NewUserDialog.tsx", /export default/),
+    ).toBe(true);
   });
 });
 
@@ -43,7 +45,9 @@ describe("M39 E7-S3: dealer admin UI action components", () => {
     expect(fileExists("src/components/admin/DealerSearchInput.tsx")).toBe(true);
   });
   it("DealerDeleteConfirmDialog exists", () => {
-    expect(fileExists("src/components/admin/DealerDeleteConfirmDialog.tsx")).toBe(true);
+    expect(
+      fileExists("src/components/admin/DealerDeleteConfirmDialog.tsx"),
+    ).toBe(true);
   });
 });
 
@@ -61,12 +65,27 @@ describe("M39 E9-S2: photo-trail feed page", () => {
 
 describe("M39 API helpers", () => {
   it("lib/api/admin exports a createUser helper", () => {
-    expect(fileContains("src/lib/api/admin.ts", /export\s+(async\s+)?function\s+createUser\b/)).toBe(true);
+    expect(
+      fileContains(
+        "src/lib/api/admin.ts",
+        /export\s+(async\s+)?function\s+createUser\b/,
+      ),
+    ).toBe(true);
   });
   it("lib/api/auth exports a requestPasswordReset helper", () => {
-    expect(fileContains("src/lib/api/auth.ts", /export\s+(async\s+)?function\s+requestPasswordReset\b/)).toBe(true);
+    expect(
+      fileContains(
+        "src/lib/api/auth.ts",
+        /export\s+(async\s+)?function\s+requestPasswordReset\b/,
+      ),
+    ).toBe(true);
   });
   it("lib/api/auth exports a resetPassword helper", () => {
-    expect(fileContains("src/lib/api/auth.ts", /export\s+(async\s+)?function\s+resetPassword\b/)).toBe(true);
+    expect(
+      fileContains(
+        "src/lib/api/auth.ts",
+        /export\s+(async\s+)?function\s+resetPassword\b/,
+      ),
+    ).toBe(true);
   });
 });

@@ -29,16 +29,26 @@ interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
-function ConfirmDialog({ title, message, confirmLabel = "Confirm", danger, onConfirm, onCancel }: ConfirmDialogProps) {
+function ConfirmDialog({
+  title,
+  message,
+  confirmLabel = "Confirm",
+  danger,
+  onConfirm,
+  onCancel,
+}: ConfirmDialogProps) {
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-dialog-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-surface-scrim-strong/40 glass-blur-subtle"
     >
       <div className="w-full max-w-sm rounded-xl bg-surface-container p-6 shadow-lg border border-border-subtle">
-        <h2 id="confirm-dialog-title" className="text-base font-semibold text-on-surface mb-2">
+        <h2
+          id="confirm-dialog-title"
+          className="text-base font-semibold text-on-surface mb-2"
+        >
           {title}
         </h2>
         <p className="text-sm text-text-secondary mb-5">{message}</p>
@@ -55,7 +65,7 @@ function ConfirmDialog({ title, message, confirmLabel = "Confirm", danger, onCon
             onClick={onConfirm}
             className={
               danger
-                ? "rounded-lg px-4 py-2 text-sm font-medium bg-feedback-error text-white hover:bg-feedback-error/90 transition-colors"
+                ? "rounded-lg px-4 py-2 text-sm font-medium bg-feedback-error text-text-media hover:bg-feedback-error/90 transition-colors"
                 : "btn-primary px-4 py-2 text-sm"
             }
           >
@@ -69,13 +79,27 @@ function ConfirmDialog({ title, message, confirmLabel = "Confirm", danger, onCon
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, { bg: string; text: string; dot: string }> = {
-    active: { bg: "bg-feedback-success/10", text: "text-feedback-success", dot: "bg-feedback-success" },
-    suspended: { bg: "bg-feedback-error/10", text: "text-feedback-error", dot: "bg-feedback-error" },
-    deleted: { bg: "bg-surface-container/10", text: "text-text-tertiary", dot: "bg-surface-container-high" },
+    active: {
+      bg: "bg-feedback-success/10",
+      text: "text-feedback-success",
+      dot: "bg-feedback-success",
+    },
+    suspended: {
+      bg: "bg-feedback-error/10",
+      text: "text-feedback-error",
+      dot: "bg-feedback-error",
+    },
+    deleted: {
+      bg: "bg-surface-container/10",
+      text: "text-text-tertiary",
+      dot: "bg-surface-container-high",
+    },
   };
   const c = colors[status] || colors.deleted;
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ${c.bg} ${c.text} text-[10px] font-bold uppercase`}>
+    <span
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ${c.bg} ${c.text} text-[10px] font-bold uppercase`}
+    >
       <span className={`w-1 h-1 rounded-full ${c.dot}`} />
       {status}
     </span>
@@ -93,13 +117,25 @@ export default function AdminUsersPage() {
   // Issue #4: modal state for admin-initiated user creation.
   const [createOpen, setCreateOpen] = useState(false);
   const [pendingRoleChange, setPendingRoleChange] = useState<{
-    id: string; currentRole: string; newRole: string; userName: string;
+    id: string;
+    currentRole: string;
+    newRole: string;
+    userName: string;
   } | null>(null);
   const [pendingTierChange, setPendingTierChange] = useState<{
-    id: string; currentTier: string; newTier: string; userName: string;
+    id: string;
+    currentTier: string;
+    newTier: string;
+    userName: string;
   } | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
-  const [pendingPasswordReset, setPendingPasswordReset] = useState<{ email: string; name: string } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [pendingPasswordReset, setPendingPasswordReset] = useState<{
+    email: string;
+    name: string;
+  } | null>(null);
 
   const fetchUsers = async () => {
     const token = getStoredAccessToken();
@@ -117,7 +153,9 @@ export default function AdminUsersPage() {
   };
 
   useEffect(() => {
-    async function initialFetch() { await fetchUsers(); }
+    async function initialFetch() {
+      await fetchUsers();
+    }
     void initialFetch();
   }, []);
 
@@ -127,7 +165,11 @@ export default function AdminUsersPage() {
       await suspendUser(token, id, "Admin action");
       fetchUsers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to suspend user. Check that the user exists and you have admin permissions.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to suspend user. Check that the user exists and you have admin permissions.",
+      );
     }
   };
 
@@ -137,7 +179,9 @@ export default function AdminUsersPage() {
       await reactivateUser(token, id);
       fetchUsers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to reactivate user");
+      setError(
+        err instanceof Error ? err.message : "Failed to reactivate user",
+      );
     }
   };
 
@@ -158,7 +202,12 @@ export default function AdminUsersPage() {
     }
   };
 
-  const handleRoleChange = (id: string, newRole: string, currentRole: string, userName: string) => {
+  const handleRoleChange = (
+    id: string,
+    newRole: string,
+    currentRole: string,
+    userName: string,
+  ) => {
     if (newRole === currentRole) return;
     setPendingRoleChange({ id, currentRole, newRole, userName });
   };
@@ -172,11 +221,18 @@ export default function AdminUsersPage() {
       await changeUserRole(token, id, newRole);
       fetchUsers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to change user role");
+      setError(
+        err instanceof Error ? err.message : "Failed to change user role",
+      );
     }
   };
 
-  const handleTierChange = (id: string, newTier: string, currentTier: string, userName: string) => {
+  const handleTierChange = (
+    id: string,
+    newTier: string,
+    currentTier: string,
+    userName: string,
+  ) => {
     if (newTier === currentTier) return;
     setPendingTierChange({ id, currentTier, newTier, userName });
   };
@@ -190,7 +246,9 @@ export default function AdminUsersPage() {
       await changeUserTier(token, id, newTier);
       fetchUsers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to change user tier");
+      setError(
+        err instanceof Error ? err.message : "Failed to change user tier",
+      );
     }
   };
 
@@ -214,7 +272,9 @@ export default function AdminUsersPage() {
       setError(null);
       setSuccessMsg(`Password reset email sent to ${email}.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send password reset");
+      setError(
+        err instanceof Error ? err.message : "Failed to send password reset",
+      );
     }
   };
 
@@ -229,7 +289,9 @@ export default function AdminUsersPage() {
     URL.revokeObjectURL(url);
   };
 
-  const stateOptions = [...new Set(users.map((u) => u.state_name).filter(Boolean))].sort() as string[];
+  const stateOptions = [
+    ...new Set(users.map((u) => u.state_name).filter(Boolean)),
+  ].sort() as string[];
 
   const columns: ColumnDef<UserRow>[] = [
     {
@@ -237,7 +299,9 @@ export default function AdminUsersPage() {
       label: "Name",
       sortable: true,
       render: (value) => (
-        <span className="text-sm font-semibold text-on-surface">{String(value ?? "")}</span>
+        <span className="text-sm font-semibold text-on-surface">
+          {String(value ?? "")}
+        </span>
       ),
     },
     {
@@ -255,9 +319,18 @@ export default function AdminUsersPage() {
       // (backend/internal/database/migrations/035_add_platform_roles.up.sql).
       // Previously "user" was listed — no rows carry that value, so the
       // filter returned zero results and looked broken.
-      filterOptions: ["super_admin", "admin", "photographer", "dealer", "client", "team_member"],
+      filterOptions: [
+        "super_admin",
+        "admin",
+        "photographer",
+        "dealer",
+        "client",
+        "team_member",
+      ],
       render: (value) => (
-        <span className="text-sm text-secondary font-medium">{String(value ?? "")}</span>
+        <span className="text-sm text-secondary font-medium">
+          {String(value ?? "")}
+        </span>
       ),
     },
     {
@@ -282,16 +355,26 @@ export default function AdminUsersPage() {
       label: "Tier",
       sortable: true,
       filterable: true,
-      filterOptions: ["Free", "Starter", "Professional", "Business", "Enterprise"],
+      filterOptions: [
+        "Free",
+        "Starter",
+        "Professional",
+        "Business",
+        "Enterprise",
+      ],
       render: (value) => (
-        <span className="text-sm font-medium text-primary">{value ? String(value) : "\u2014"}</span>
+        <span className="text-sm font-medium text-primary">
+          {value ? String(value) : "\u2014"}
+        </span>
       ),
     },
     {
       key: "workspace_count",
       label: "Workspaces",
       sortable: true,
-      render: (value) => <span className="text-sm font-medium">{String(value ?? 0)}</span>,
+      render: (value) => (
+        <span className="text-sm font-medium">{String(value ?? 0)}</span>
+      ),
     },
     {
       key: "actions",
@@ -303,7 +386,10 @@ export default function AdminUsersPage() {
           <div className="flex items-center gap-1.5 justify-end">
             {row.status === "active" && (
               <button
-                onClick={(e) => { e.stopPropagation(); handleSuspend(row.id); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSuspend(row.id);
+                }}
                 className="px-2.5 py-1 text-xs rounded-lg bg-feedback-error/10 text-feedback-error hover:bg-feedback-error/20 transition-all font-medium"
                 aria-label={`Suspend ${row.full_name}`}
               >
@@ -312,7 +398,10 @@ export default function AdminUsersPage() {
             )}
             {row.status === "suspended" && (
               <button
-                onClick={(e) => { e.stopPropagation(); handleReactivate(row.id); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleReactivate(row.id);
+                }}
                 className="px-2.5 py-1 text-xs rounded-lg bg-feedback-success/10 text-feedback-success hover:bg-feedback-success/20 transition-all font-medium"
                 aria-label={`Reactivate ${row.full_name}`}
               >
@@ -322,8 +411,15 @@ export default function AdminUsersPage() {
             <select
               onClick={(e) => e.stopPropagation()}
               value={row.platform_role}
-              onChange={(e) => handleRoleChange(row.id, e.target.value, row.platform_role as string, row.full_name)}
-              className="appearance-none bg-surface-container-lowest border border-white/[0.06] rounded-lg px-2 py-1 text-xs text-on-surface cursor-pointer [&_option]:bg-[var(--surface-container-lowest)] [&_option]:text-[var(--on-surface)]"
+              onChange={(e) =>
+                handleRoleChange(
+                  row.id,
+                  e.target.value,
+                  row.platform_role as string,
+                  row.full_name,
+                )
+              }
+              className="appearance-none bg-surface-container-lowest border border-text-media/10 rounded-lg px-2 py-1 text-xs text-on-surface cursor-pointer [&_option]:bg-[var(--surface-container-lowest)] [&_option]:text-[var(--on-surface)]"
               aria-label={`Change role for ${row.full_name}`}
             >
               <option value="photographer">Photographer</option>
@@ -337,8 +433,15 @@ export default function AdminUsersPage() {
               <select
                 onClick={(e) => e.stopPropagation()}
                 value={row.tier_slug}
-                onChange={(e) => handleTierChange(row.id, e.target.value, row.tier_slug as string, row.full_name)}
-                className="appearance-none bg-surface-container-lowest border border-white/[0.06] rounded-lg px-2 py-1 text-xs text-primary cursor-pointer [&_option]:bg-[var(--surface-container-lowest)] [&_option]:text-[var(--on-surface)]"
+                onChange={(e) =>
+                  handleTierChange(
+                    row.id,
+                    e.target.value,
+                    row.tier_slug as string,
+                    row.full_name,
+                  )
+                }
+                className="appearance-none bg-surface-container-lowest border border-text-media/10 rounded-lg px-2 py-1 text-xs text-primary cursor-pointer [&_option]:bg-[var(--surface-container-lowest)] [&_option]:text-[var(--on-surface)]"
                 aria-label={`Change tier for ${row.full_name}`}
                 title="Change subscription tier"
               >
@@ -365,7 +468,10 @@ export default function AdminUsersPage() {
               Reset pw
             </button>
             <button
-              onClick={(e) => { e.stopPropagation(); handleDelete(row.id, row.full_name); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDelete(row.id, row.full_name);
+              }}
               className="px-2.5 py-1 text-xs rounded-lg text-text-tertiary hover:bg-feedback-error/10 hover:text-feedback-error transition-all"
               aria-label={`Delete ${row.full_name}`}
               title="Delete user"
@@ -393,11 +499,13 @@ export default function AdminUsersPage() {
         <div>
           <h2 className="font-headline text-4xl font-extrabold tracking-tight text-on-surface flex items-center gap-4">
             User Management
-            <span className="text-xs font-label uppercase tracking-[0.15em] bg-surface-container-high px-3 py-1 rounded-full text-primary border border-white/5">
+            <span className="text-xs font-label uppercase tracking-[0.15em] bg-surface-container-high px-3 py-1 rounded-full text-primary border border-text-media/5">
               {total} users
             </span>
           </h2>
-          <p className="text-text-secondary mt-2 font-body text-sm">Manage photographers, studio accounts, and subscription tiers.</p>
+          <p className="text-text-secondary mt-2 font-body text-sm">
+            Manage photographers, studio accounts, and subscription tiers.
+          </p>
         </div>
       </div>
 
@@ -430,7 +538,7 @@ export default function AdminUsersPage() {
             </button>
             <button
               onClick={handleExport}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-outline-variant/30 text-on-surface hover:bg-white/5 transition-all text-sm font-medium"
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-outline-variant/30 text-on-surface hover:bg-surface-overlay/5 transition-all text-sm font-medium"
               aria-label="Export CSV"
             >
               <Download className="h-4 w-4" />

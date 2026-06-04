@@ -81,7 +81,9 @@ describe("Pricing Page", () => {
 
   it("does not render streaming packs (hidden)", () => {
     render(<PricingContent />);
-    expect(screen.queryByText("Streaming Session Packs")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Streaming Session Packs"),
+    ).not.toBeInTheDocument();
   });
 
   it("renders FAQ section with 8 items", () => {
@@ -93,6 +95,8 @@ describe("Pricing Page", () => {
 
   it("renders coupon code input", () => {
     render(<PricingContent />);
-    expect(screen.getByPlaceholderText("Enter coupon code")).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText("Enter coupon code"),
+    ).toBeInTheDocument();
   });
 });

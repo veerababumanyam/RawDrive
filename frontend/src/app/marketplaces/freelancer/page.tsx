@@ -16,7 +16,14 @@ export default function FreelancerMarketplacePage() {
       previewAlt="RawDrive freelancer marketplace preview"
       primaryCta={{ href: "/register", label: "Create your profile" }}
       secondaryCta={{ href: "/contact", label: "Talk to our team" }}
-      filters={["Mumbai", "Wedding", "Portrait", "Drone", "Retouching", "Top rated"]}
+      filters={[
+        "Mumbai",
+        "Wedding",
+        "Portrait",
+        "Drone",
+        "Retouching",
+        "Top rated",
+      ]}
       answer="RawDrive's freelancer marketplace is best for studios that need trusted second shooters, editors, drone operators, and specialists for Indian wedding, event, portrait, and commercial photography projects."
       cards={[
         {

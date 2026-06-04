@@ -30,7 +30,13 @@ export function ActivateForm() {
     return (
       <div className="text-center text-sm text-text-secondary">
         Invalid session. Please return to the{" "}
-        <a href="/login" className="text-accent underline text-bold hover:text-accent-hover">login page</a>.
+        <a
+          href="/login"
+          className="text-accent underline text-bold hover:text-accent-hover"
+        >
+          login page
+        </a>
+        .
       </div>
     );
   }
@@ -122,7 +128,8 @@ export function ActivateForm() {
       ) : null}
 
       <div className="text-center text-sm text-text-secondary">
-        We sent an activation code to <strong className="text-text-primary">{email}</strong>.
+        We sent an activation code to{" "}
+        <strong className="text-text-primary">{email}</strong>.
       </div>
 
       <div className="space-y-4">
@@ -138,7 +145,9 @@ export function ActivateForm() {
           inputMode="numeric"
           maxLength={6}
           value={otpCode}
-          onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, ""))}
+          onChange={(event) =>
+            setOtpCode(event.target.value.replace(/\D/g, ""))
+          }
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               void handleVerifyOtp();

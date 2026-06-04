@@ -147,7 +147,9 @@ export function MFAVerifyForm() {
               autoComplete="one-time-code"
               maxLength={6}
               value={code}
-              onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
+              onChange={(event) =>
+                setCode(event.target.value.replace(/\D/g, ""))
+              }
               placeholder="000000"
               className="input-base w-full pr-12 text-center font-mono text-2xl tracking-[0.5em]"
               required

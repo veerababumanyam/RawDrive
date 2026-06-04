@@ -115,6 +115,12 @@ jobs:
       - name: Lint frontend
         working-directory: frontend
         run: pnpm lint
+      - name: Design-token guard (no raw palette / backdrop-blur / arbitrary colors)
+        working-directory: frontend
+        run: pnpm lint:tokens
+      - name: Design-token drift (design-tokens.json ↔ globals.css ↔ tokens.ts)
+        working-directory: frontend
+        run: node scripts/check-token-drift.mjs
       - name: Test frontend
         working-directory: frontend
         run: pnpm test

@@ -7,7 +7,7 @@ const sections = [
   {
     title: "1. Acceptance of Terms",
     content:
-      "By accessing or using RawDrive (\"the Platform\"), you agree to be bound by these Terms of Service (\"Terms\"). If you do not agree, do not use the Platform. These Terms constitute a legally binding agreement between you and RawDrive.",
+      'By accessing or using RawDrive ("the Platform"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree, do not use the Platform. These Terms constitute a legally binding agreement between you and RawDrive.',
   },
   {
     title: "2. Eligibility",
@@ -75,14 +75,18 @@ export default function TermsPage() {
   return (
     <div className="bg-surface px-4 py-16 lg:px-8">
       <div className="mx-auto max-w-3xl">
-        <h1 className="text-3xl font-bold text-text-primary">Terms of Service</h1>
+        <h1 className="text-3xl font-bold text-text-primary">
+          Terms of Service
+        </h1>
         <p className="mt-2 text-sm text-text-tertiary">
           Last updated: April 2026 | Effective: April 2026
         </p>
         <div className="mt-10 space-y-8">
           {sections.map((section) => (
             <section key={section.title}>
-              <h2 className="text-xl font-semibold text-text-primary">{section.title}</h2>
+              <h2 className="text-xl font-semibold text-text-primary">
+                {section.title}
+              </h2>
               <p className="mt-3 text-sm leading-relaxed text-text-secondary">
                 {section.content}
               </p>
@@ -92,7 +96,10 @@ export default function TermsPage() {
         <div className="mt-12 rounded-xl border border-border bg-surface-elevated p-6">
           <p className="text-sm text-text-secondary">
             Questions about these terms? Contact us at{" "}
-            <a href="mailto:contactus@rawdrive.in" className="text-accent hover:text-accent-hover">
+            <a
+              href="mailto:contactus@rawdrive.in"
+              className="text-accent hover:text-accent-hover"
+            >
               contactus@rawdrive.in
             </a>
           </p>

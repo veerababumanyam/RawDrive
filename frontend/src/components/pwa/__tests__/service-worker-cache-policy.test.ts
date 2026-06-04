@@ -51,7 +51,10 @@ function extractFunctionBodyOnly(src: string, name: string): string {
 }
 
 describe("service worker cache policy", () => {
-  const source = readFileSync(join(process.cwd(), "public/service-worker.js"), "utf8");
+  const source = readFileSync(
+    join(process.cwd(), "public/service-worker.js"),
+    "utf8",
+  );
 
   it("bypasses cache for security-critical worker scripts", () => {
     expect(source).toContain("isSecurityCriticalWorker(url)");
@@ -68,7 +71,9 @@ describe("service worker cache policy", () => {
   });
 
   it("does not cache opaque image responses for CORS fetches", () => {
-    expect(source).toContain('cached?.type === "opaque" && request.mode !== "no-cors"');
+    expect(source).toContain(
+      'cached?.type === "opaque" && request.mode !== "no-cors"',
+    );
     expect(source).toContain('response.ok && response.type !== "opaque"');
     expect(source).not.toContain('response.ok || response.type === "opaque"');
   });

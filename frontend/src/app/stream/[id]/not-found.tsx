@@ -17,11 +17,16 @@ export default function NotFound() {
         className="mx-auto flex w-full max-w-xl flex-col items-center gap-3 rounded-2xl glass-card p-8 text-center"
         aria-label="Stream not found"
       >
-        <h1 className="text-2xl font-semibold text-text-primary">Stream not found</h1>
+        <h1 className="text-2xl font-semibold text-text-primary">
+          Stream not found
+        </h1>
         <p className="text-sm text-text-secondary">
           This stream link is invalid or the stream is no longer available.
         </p>
-        <Link href="/" className="text-sm font-medium text-accent hover:text-accent-hover">
+        <Link
+          href="/"
+          className="text-sm font-medium text-accent hover:text-accent-hover"
+        >
           Return home
         </Link>
       </section>

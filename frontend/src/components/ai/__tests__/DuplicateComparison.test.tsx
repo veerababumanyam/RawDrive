@@ -8,8 +8,30 @@ const mockGroup: DuplicateGroup = {
   workspace_id: "ws1",
   status: "pending",
   members: [
-    { id: "m1", asset_id: "a1", similarity_score: 1.0, is_representative: true, quality: { sharpness: 0.9, exposure: 0.85, composition: 0.8, overall: 0.85 } },
-    { id: "m2", asset_id: "a2", similarity_score: 0.95, is_representative: false, quality: { sharpness: 0.7, exposure: 0.75, composition: 0.6, overall: 0.68 } },
+    {
+      id: "m1",
+      asset_id: "a1",
+      similarity_score: 1.0,
+      is_representative: true,
+      quality: {
+        sharpness: 0.9,
+        exposure: 0.85,
+        composition: 0.8,
+        overall: 0.85,
+      },
+    },
+    {
+      id: "m2",
+      asset_id: "a2",
+      similarity_score: 0.95,
+      is_representative: false,
+      quality: {
+        sharpness: 0.7,
+        exposure: 0.75,
+        composition: 0.6,
+        overall: 0.68,
+      },
+    },
   ],
   created_at: "2026-04-08T10:00:00Z",
 };
@@ -51,7 +73,11 @@ describe("DuplicateComparison", () => {
     expect(screen.getByText(/Keep selected \(1\)/)).toBeTruthy();
 
     // Click the second member (Photo button)
-    const buttons = screen.getAllByRole("button").filter((b) => b.textContent?.includes("Photo") || b.querySelector("span"));
+    const buttons = screen
+      .getAllByRole("button")
+      .filter(
+        (b) => b.textContent?.includes("Photo") || b.querySelector("span"),
+      );
     // Click on a member to select it
     if (buttons.length >= 2) {
       fireEvent.click(buttons[1]);

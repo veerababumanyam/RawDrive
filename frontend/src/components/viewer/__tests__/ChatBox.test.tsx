@@ -7,15 +7,33 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { ChatBox } from "../ChatBox";
 
 const sampleMessages = [
-  { id: "m1", viewer_id: "v1", viewer_name: "Aki", body: "hello", created_at: "x" },
-  { id: "m2", viewer_id: "v2", viewer_name: "Bo", body: "hi back", created_at: "x" },
+  {
+    id: "m1",
+    viewer_id: "v1",
+    viewer_name: "Aki",
+    body: "hello",
+    created_at: "x",
+  },
+  {
+    id: "m2",
+    viewer_id: "v2",
+    viewer_name: "Bo",
+    body: "hi back",
+    created_at: "x",
+  },
 ];
 
 beforeEach(() => {
   sessionStorage.clear();
   sessionStorage.setItem(
     "rd:viewer:s1",
-    JSON.stringify({ access_token: "tok", refresh_token: "r", expires_in: 900, token_type: "Bearer", saved_at: Date.now() }),
+    JSON.stringify({
+      access_token: "tok",
+      refresh_token: "r",
+      expires_in: 900,
+      token_type: "Bearer",
+      saved_at: Date.now(),
+    }),
   );
 });
 afterEach(() => {
@@ -41,15 +59,26 @@ describe("ChatBox", () => {
 
   it("POSTs to the backend on submit and clears input", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ id: "new", body: "yo", viewer_id: "v", viewer_name: "n", created_at: "x" }), {
-        status: 201,
-        headers: { "content-type": "application/json" },
-      }),
+      new Response(
+        JSON.stringify({
+          id: "new",
+          body: "yo",
+          viewer_id: "v",
+          viewer_name: "n",
+          created_at: "x",
+        }),
+        {
+          status: 201,
+          headers: { "content-type": "application/json" },
+        },
+      ),
     );
     vi.stubGlobal("fetch", fetchMock);
 
     render(<ChatBox streamId="s1" messages={[]} />);
-    fireEvent.change(screen.getByTestId("chat-input"), { target: { value: "yo" } });
+    fireEvent.change(screen.getByTestId("chat-input"), {
+      target: { value: "yo" },
+    });
     fireEvent.click(screen.getByTestId("chat-submit"));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
@@ -57,9 +86,13 @@ describe("ChatBox", () => {
     expect(url).toMatch(/\/api\/v1\/public\/streams\/s1\/chat$/);
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual({ body: "yo" });
-    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer tok");
+    expect((init.headers as Record<string, string>).Authorization).toBe(
+      "Bearer tok",
+    );
     await waitFor(() =>
-      expect((screen.getByTestId("chat-input") as HTMLTextAreaElement).value).toBe(""),
+      expect(
+        (screen.getByTestId("chat-input") as HTMLTextAreaElement).value,
+      ).toBe(""),
     );
   });
 
@@ -73,11 +106,17 @@ describe("ChatBox", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<ChatBox streamId="s1" messages={[]} />);
-    fireEvent.change(screen.getByTestId("chat-input"), { target: { value: "spammy" } });
+    fireEvent.change(screen.getByTestId("chat-input"), {
+      target: { value: "spammy" },
+    });
     fireEvent.click(screen.getByTestId("chat-submit"));
 
-    await waitFor(() => expect(screen.getByTestId("chat-slowmode").textContent).toMatch(/5/));
-    expect((screen.getByTestId("chat-submit") as HTMLButtonElement).disabled).toBe(true);
+    await waitFor(() =>
+      expect(screen.getByTestId("chat-slowmode").textContent).toMatch(/5/),
+    );
+    expect(
+      (screen.getByTestId("chat-submit") as HTMLButtonElement).disabled,
+    ).toBe(true);
 
     // Real-timer countdown — wait ~2.5s and confirm it ticked down.
     await waitFor(
@@ -95,7 +134,9 @@ describe("ChatBox", () => {
       <ChatBox streamId="s1" messages={[]} connectionState="open" />,
     );
     expect(queryByTestId("chat-reconnecting")).toBeNull();
-    rerender(<ChatBox streamId="s1" messages={[]} connectionState="reconnecting" />);
+    rerender(
+      <ChatBox streamId="s1" messages={[]} connectionState="reconnecting" />,
+    );
     expect(queryByTestId("chat-reconnecting")).not.toBeNull();
     rerender(<ChatBox streamId="s1" messages={[]} connectionState="open" />);
     expect(queryByTestId("chat-reconnecting")).toBeNull();
@@ -111,11 +152,17 @@ describe("ChatBox", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<ChatBox streamId="s1" messages={[]} />);
-    fireEvent.change(screen.getByTestId("chat-input"), { target: { value: "hi" } });
+    fireEvent.change(screen.getByTestId("chat-input"), {
+      target: { value: "hi" },
+    });
     fireEvent.click(screen.getByTestId("chat-submit"));
 
     await waitFor(() => expect(screen.getByTestId("chat-banned")).toBeTruthy());
-    expect((screen.getByTestId("chat-submit") as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByTestId("chat-input") as HTMLTextAreaElement).disabled).toBe(true);
+    expect(
+      (screen.getByTestId("chat-submit") as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByTestId("chat-input") as HTMLTextAreaElement).disabled,
+    ).toBe(true);
   });
 });

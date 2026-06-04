@@ -21,81 +21,81 @@ function buildColumns(
   onGrant: (row: WorkspaceRow) => void,
 ): ColumnDef<WorkspaceRow>[] {
   return [
-  {
-    key: "name",
-    label: "Name",
-    sortable: true,
-    className: "font-semibold text-on-surface",
-  },
-  {
-    key: "owner_name",
-    label: "Owner",
-    sortable: true,
-    className: "text-text-tertiary",
-  },
-  {
-    key: "state_name",
-    label: "State",
-    sortable: true,
-    className: "text-text-tertiary",
-    render: (value) => (value as string) || "—",
-  },
-  {
-    key: "storage_used_bytes",
-    label: "Storage",
-    sortable: true,
-    className: "text-secondary font-medium",
-    render: (_value, row) => formatBytes(row.storage_used_bytes),
-  },
-  {
-    key: "asset_count",
-    label: "Assets",
-    sortable: true,
-    className: "text-text-tertiary",
-  },
-  {
-    key: "subscription_tier",
-    label: "Tier",
-    sortable: true,
-    // QA #69: filterOptions previously advertised Free/Standard/Pro/Enterprise
-    // but the subscriptions integration is not wired — every workspace
-    // returns null (rendered as "Free"). Selecting any non-Free option
-    // returned zero rows, which read as "filter broken". Disabling the
-    // filter until workspace_subscriptions has real data. Sorting still
-    // works for debugging.
-    filterable: false,
-    className: "font-medium text-primary",
-    render: (value) => (value as string) || "Free",
-  },
-  {
-    key: "created_at",
-    label: "Created",
-    sortable: true,
-    className: "text-xs text-text-secondary font-label",
-    render: (value) => new Date(value as string).toLocaleDateString(),
-  },
-  {
-    // M41 FR-UCRT-03: admin upload-credit grants. Each row exposes a
-    // "Grant credits" button that opens GrantUploadCreditsDialog scoped
-    // to the specific workspace. Idempotency is handled per-submit so
-    // this is safe under accidental double-clicks.
-    key: "_actions",
-    label: "Actions",
-    align: "right",
-    render: (_value, row) => (
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onGrant(row);
-        }}
-        data-testid={`grant-upload-credits-action-${row.id}`}
-        className="rounded-md border border-border-subtle px-3 py-1.5 text-xs font-medium text-text-primary transition-colors hover:bg-surface-container-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-      >
-        Grant credits
-      </button>
-    ),
-  },
+    {
+      key: "name",
+      label: "Name",
+      sortable: true,
+      className: "font-semibold text-on-surface",
+    },
+    {
+      key: "owner_name",
+      label: "Owner",
+      sortable: true,
+      className: "text-text-tertiary",
+    },
+    {
+      key: "state_name",
+      label: "State",
+      sortable: true,
+      className: "text-text-tertiary",
+      render: (value) => (value as string) || "—",
+    },
+    {
+      key: "storage_used_bytes",
+      label: "Storage",
+      sortable: true,
+      className: "text-secondary font-medium",
+      render: (_value, row) => formatBytes(row.storage_used_bytes),
+    },
+    {
+      key: "asset_count",
+      label: "Assets",
+      sortable: true,
+      className: "text-text-tertiary",
+    },
+    {
+      key: "subscription_tier",
+      label: "Tier",
+      sortable: true,
+      // QA #69: filterOptions previously advertised Free/Standard/Pro/Enterprise
+      // but the subscriptions integration is not wired — every workspace
+      // returns null (rendered as "Free"). Selecting any non-Free option
+      // returned zero rows, which read as "filter broken". Disabling the
+      // filter until workspace_subscriptions has real data. Sorting still
+      // works for debugging.
+      filterable: false,
+      className: "font-medium text-primary",
+      render: (value) => (value as string) || "Free",
+    },
+    {
+      key: "created_at",
+      label: "Created",
+      sortable: true,
+      className: "text-xs text-text-secondary font-label",
+      render: (value) => new Date(value as string).toLocaleDateString(),
+    },
+    {
+      // M41 FR-UCRT-03: admin upload-credit grants. Each row exposes a
+      // "Grant credits" button that opens GrantUploadCreditsDialog scoped
+      // to the specific workspace. Idempotency is handled per-submit so
+      // this is safe under accidental double-clicks.
+      key: "_actions",
+      label: "Actions",
+      align: "right",
+      render: (_value, row) => (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onGrant(row);
+          }}
+          data-testid={`grant-upload-credits-action-${row.id}`}
+          className="rounded-md border border-border-subtle px-3 py-1.5 text-xs font-medium text-text-primary transition-colors hover:bg-surface-container-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        >
+          Grant credits
+        </button>
+      ),
+    },
   ];
 }
 
@@ -121,7 +121,11 @@ export default function AdminWorkspacesPage() {
         const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
         token = await refreshAuthSession(API_BASE);
       }
-      if (!token) { setError("Session expired"); setLoading(false); return; }
+      if (!token) {
+        setError("Session expired");
+        setLoading(false);
+        return;
+      }
       try {
         const res = await listWorkspaces(token);
         setWorkspaces(res.items as WorkspaceRow[]);
@@ -136,18 +140,25 @@ export default function AdminWorkspacesPage() {
     load();
   }, []);
 
-  if (error) return <div className="max-w-7xl mx-auto space-y-8 p-8"><p className="text-feedback-error">{error}</p></div>;
+  if (error)
+    return (
+      <div className="max-w-7xl mx-auto space-y-8 p-8">
+        <p className="text-feedback-error">{error}</p>
+      </div>
+    );
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       <div>
         <h2 className="font-headline text-4xl font-extrabold tracking-tight text-on-surface flex items-center gap-4">
           Workspace Oversight
-          <span className="text-xs font-label uppercase tracking-[0.15em] bg-surface-container-high px-3 py-1 rounded-full text-primary border border-white/5">
+          <span className="text-xs font-label uppercase tracking-[0.15em] bg-surface-container-high px-3 py-1 rounded-full text-primary border border-text-media/5">
             {total} workspaces
           </span>
         </h2>
-        <p className="text-text-secondary mt-2 font-body text-sm">Storage, subscriptions, and state metrics per workspace.</p>
+        <p className="text-text-secondary mt-2 font-body text-sm">
+          Storage, subscriptions, and state metrics per workspace.
+        </p>
       </div>
 
       <DataTable<WorkspaceRow>

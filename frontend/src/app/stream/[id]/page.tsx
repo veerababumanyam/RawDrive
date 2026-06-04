@@ -21,7 +21,10 @@ import {
   ViewerApiError,
   type InitialStateSnapshot,
 } from "@/lib/viewer/api";
-import { StreamViewerShell, type ViewerState } from "@/components/viewer/StreamViewerShell";
+import {
+  StreamViewerShell,
+  type ViewerState,
+} from "@/components/viewer/StreamViewerShell";
 import { StreamUnavailableView } from "@/components/viewer/StreamUnavailableView";
 import { createNoIndexMetadata } from "@/lib/seo";
 

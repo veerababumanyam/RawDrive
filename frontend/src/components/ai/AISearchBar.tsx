@@ -37,7 +37,7 @@ export function AISearchBar({ token, galleryId, onResults }: AISearchBarProps) {
         setLoading(false);
       }
     },
-    [token, galleryId, onResults]
+    [token, galleryId, onResults],
   );
 
   useEffect(() => {
@@ -56,8 +56,18 @@ export function AISearchBar({ token, galleryId, onResults }: AISearchBarProps) {
           placeholder="Search photos with natural language..."
           className="w-full rounded-xl border border-border-default bg-surface-raised px-4 py-3 pl-10 text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent min-h-[44px]"
         />
-        <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-text-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        <svg
+          className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-text-tertiary"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          />
         </svg>
         {loading && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 animate-spin rounded-full border-2 border-border-default border-t-accent" />
@@ -65,13 +75,18 @@ export function AISearchBar({ token, galleryId, onResults }: AISearchBarProps) {
       </div>
 
       {hasSearched && results.length === 0 && !loading && (
-        <p className="text-center text-text-tertiary text-sm py-8">No results found for &ldquo;{query}&rdquo;</p>
+        <p className="text-center text-text-tertiary text-sm py-8">
+          No results found for &ldquo;{query}&rdquo;
+        </p>
       )}
 
       {results.length > 0 && (
         <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4">
           {results.map((result) => (
-            <div key={result.asset_id} className="break-inside-avoid rounded-xl overflow-hidden bg-surface-sunken group relative">
+            <div
+              key={result.asset_id}
+              className="break-inside-avoid rounded-xl overflow-hidden bg-surface-sunken group relative"
+            >
               <img
                 src={getAssetPreviewUrl(result, token)}
                 alt={result.ai_caption || result.filename}
@@ -79,8 +94,10 @@ export function AISearchBar({ token, galleryId, onResults }: AISearchBarProps) {
                 loading="lazy"
                 decoding="async"
               />
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                <span className="text-white text-xs font-medium">{Math.round(result.similarity * 100)}% match</span>
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-surface-scrim-strong/60 to-transparent p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="text-text-media text-xs font-medium">
+                  {Math.round(result.similarity * 100)}% match
+                </span>
               </div>
             </div>
           ))}

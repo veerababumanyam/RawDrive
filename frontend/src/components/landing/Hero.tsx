@@ -70,18 +70,21 @@ export function Hero() {
           <div className="landing-hero__ctas mt-10 flex flex-wrap items-center gap-4">
             <Link
               href="/register"
-              className="btn-primary px-8 text-base font-semibold"
-              style={{ minHeight: "var(--touch-target-min)", paddingTop: "0.9rem", paddingBottom: "0.9rem" }}
+              className="btn-primary touch-min px-8 py-3 text-base font-semibold"
             >
               Start free trial
             </Link>
             <Link
               href="/pricing"
-              className="landing-hero__secondary inline-flex items-center gap-2 px-6 text-base font-semibold text-text-primary transition-opacity hover:opacity-80"
-              style={{ minHeight: "var(--touch-target-min)" }}
+              className="landing-hero__secondary px-6 text-base"
             >
               See pricing
-              <span aria-hidden="true" className="inline-block text-xl leading-none">→</span>
+              <span
+                aria-hidden="true"
+                className="inline-block text-xl leading-none"
+              >
+                →
+              </span>
             </Link>
           </div>
         </div>

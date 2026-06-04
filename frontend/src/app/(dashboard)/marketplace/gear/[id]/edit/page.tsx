@@ -14,7 +14,11 @@ const CATEGORY_OPTIONS = [
   { value: "accessory", label: "Accessory" },
 ];
 
-export default function GearEditPage({ params }: { params: Promise<{ id: string }> }) {
+export default function GearEditPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = use(params);
   const router = useRouter();
 
@@ -76,7 +80,11 @@ export default function GearEditPage({ params }: { params: Promise<{ id: string 
       });
       router.push("/marketplace/camera-rentals");
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Failed to save listing.");
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Failed to save listing.",
+      );
       setSaving(false);
     }
   };
@@ -85,7 +93,10 @@ export default function GearEditPage({ params }: { params: Promise<{ id: string 
     return (
       <div className="mx-auto max-w-4xl px-4 py-8 space-y-4">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-12 rounded-xl bg-surface-sunken animate-pulse" />
+          <div
+            key={i}
+            className="h-12 rounded-xl bg-surface-sunken animate-pulse"
+          />
         ))}
       </div>
     );
@@ -95,8 +106,12 @@ export default function GearEditPage({ params }: { params: Promise<{ id: string 
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
       <BackButton href={`/marketplace/gear/${id}`} label="Back to listing" />
       <div className="space-y-2">
-        <h1 className="text-2xl font-semibold text-text-primary">Edit Listing</h1>
-        <p className="text-sm text-text-secondary">Update your gear listing details.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">
+          Edit Listing
+        </h1>
+        <p className="text-sm text-text-secondary">
+          Update your gear listing details.
+        </p>
       </div>
 
       {error && (
@@ -108,7 +123,9 @@ export default function GearEditPage({ params }: { params: Promise<{ id: string 
       <form onSubmit={handleSubmit} className="surface-panel space-y-6 p-6">
         <div className="grid gap-5 md:grid-cols-2">
           <label className="space-y-2">
-            <span className="text-sm font-medium text-text-primary">Listing type</span>
+            <span className="text-sm font-medium text-text-primary">
+              Listing type
+            </span>
             <select
               value={listingType}
               onChange={(e) => setListingType(e.target.value)}
@@ -120,7 +137,9 @@ export default function GearEditPage({ params }: { params: Promise<{ id: string 
           </label>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-text-primary">Category</span>
+            <span className="text-sm font-medium text-text-primary">
+              Category
+            </span>
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
@@ -168,7 +187,9 @@ export default function GearEditPage({ params }: { params: Promise<{ id: string 
           </label>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-text-primary">Condition</span>
+            <span className="text-sm font-medium text-text-primary">
+              Condition
+            </span>
             <select
               value={condition}
               onChange={(e) => setCondition(e.target.value)}
@@ -210,7 +231,9 @@ export default function GearEditPage({ params }: { params: Promise<{ id: string 
           </label>
 
           <label className="space-y-2 md:col-span-2">
-            <span className="text-sm font-medium text-text-primary">Description</span>
+            <span className="text-sm font-medium text-text-primary">
+              Description
+            </span>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -231,7 +254,11 @@ export default function GearEditPage({ params }: { params: Promise<{ id: string 
         </label>
 
         <div className="flex flex-wrap gap-3">
-          <button type="submit" disabled={saving} className="btn-primary px-4 py-2.5 text-sm">
+          <button
+            type="submit"
+            disabled={saving}
+            className="btn-primary px-4 py-2.5 text-sm"
+          >
             {saving ? "Saving…" : "Save changes"}
           </button>
           <button

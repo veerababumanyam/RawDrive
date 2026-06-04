@@ -23,7 +23,7 @@ export default function DesktopPage() {
     fetch(`${API_BASE}/api/v1/desktop/sessions`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then((res) => res.ok ? res.json() : [])
+      .then((res) => (res.ok ? res.json() : []))
       // Backend returns `null` for an empty collection, which would
       // crash `sessions.length` on the next render. Coerce to an
       // array and accept either a bare array or the wrapped
@@ -45,14 +45,26 @@ export default function DesktopPage() {
       {/* Hero Section */}
       <div className="glass-card rounded-2xl p-8 text-center">
         <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-accent/10 flex items-center justify-center">
-          <svg className="w-10 h-10 text-accent" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25A2.25 2.25 0 0 1 5.25 3h13.5A2.25 2.25 0 0 1 21 5.25Z" />
+          <svg
+            className="w-10 h-10 text-accent"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={1.5}
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25A2.25 2.25 0 0 1 5.25 3h13.5A2.25 2.25 0 0 1 21 5.25Z"
+            />
           </svg>
         </div>
-        <h1 className="text-2xl font-semibold text-text-primary mb-2">RawDrive Desktop</h1>
+        <h1 className="text-2xl font-semibold text-text-primary mb-2">
+          RawDrive Desktop
+        </h1>
         <p className="text-text-secondary max-w-lg mx-auto mb-6">
-          Upload thousands of photos with drag-and-drop, auto-sync from your camera via tethered shooting,
-          and work offline with automatic resume.
+          Upload thousands of photos with drag-and-drop, auto-sync from your
+          camera via tethered shooting, and work offline with automatic resume.
         </p>
 
         {/* QA #32: desktop binaries are not yet published to
@@ -65,7 +77,7 @@ export default function DesktopPage() {
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <a
               href={`${process.env.NEXT_PUBLIC_DESKTOP_RELEASE_URL}/RawDrive-Setup.exe`}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-medium text-white hover:bg-accent/90 transition-colors min-h-[44px]"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-medium text-text-inverse hover:bg-accent/90 transition-colors min-h-[44px]"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
@@ -84,10 +96,15 @@ export default function DesktopPage() {
           </div>
         ) : (
           <div className="rounded-xl border border-border-primary bg-surface-raised/50 p-6 max-w-md mx-auto">
-            <p className="text-sm text-text-primary font-medium mb-1">Beta — early access coming soon</p>
+            <p className="text-sm text-text-primary font-medium mb-1">
+              Beta — early access coming soon
+            </p>
             <p className="text-xs text-text-secondary">
               RawDrive Desktop binaries are in private beta. Contact{" "}
-              <a href="mailto:desktop@rawdrive.app" className="text-accent hover:underline">
+              <a
+                href="mailto:desktop@rawdrive.app"
+                className="text-accent hover:underline"
+              >
                 desktop@rawdrive.app
               </a>{" "}
               for early access.
@@ -122,8 +139,18 @@ export default function DesktopPage() {
         ].map((feat) => (
           <div key={feat.title} className="glass-card rounded-2xl p-5">
             <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center mb-3">
-              <svg className="w-5 h-5 text-accent" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d={feat.icon} />
+              <svg
+                className="w-5 h-5 text-accent"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d={feat.icon}
+                />
               </svg>
             </div>
             <h3 className="font-medium text-text-primary mb-1">{feat.title}</h3>
@@ -135,22 +162,36 @@ export default function DesktopPage() {
       {/* Active Sessions */}
       {!loading && sessions.length > 0 && (
         <div>
-          <h2 className="text-lg font-semibold text-text-primary mb-3">Active Sessions</h2>
+          <h2 className="text-lg font-semibold text-text-primary mb-3">
+            Active Sessions
+          </h2>
           <div className="space-y-2">
             {sessions.map((session) => (
-              <div key={session.id} className="glass-card rounded-xl p-4 flex items-center gap-4">
+              <div
+                key={session.id}
+                className="glass-card rounded-xl p-4 flex items-center gap-4"
+              >
                 <div className="w-10 h-10 rounded-lg bg-surface-sunken flex items-center justify-center">
                   <span className="text-lg">
-                    {session.os === "macos" ? "🍎" : session.os === "windows" ? "🪟" : "🐧"}
+                    {session.os === "macos"
+                      ? "🍎"
+                      : session.os === "windows"
+                        ? "🪟"
+                        : "🐧"}
                   </span>
                 </div>
                 <div className="flex-1">
-                  <p className="font-medium text-text-primary text-sm">{session.device_name}</p>
+                  <p className="font-medium text-text-primary text-sm">
+                    {session.device_name}
+                  </p>
                   <p className="text-xs text-text-tertiary">
-                    v{session.app_version} · Last seen {new Date(session.last_seen_at).toLocaleDateString()}
+                    v{session.app_version} · Last seen{" "}
+                    {new Date(session.last_seen_at).toLocaleDateString()}
                   </p>
                 </div>
-                <span className={`w-2 h-2 rounded-full ${session.is_active ? "bg-success" : "bg-text-tertiary"}`} />
+                <span
+                  className={`w-2 h-2 rounded-full ${session.is_active ? "bg-success" : "bg-text-tertiary"}`}
+                />
               </div>
             ))}
           </div>

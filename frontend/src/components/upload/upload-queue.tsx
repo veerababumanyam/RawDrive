@@ -36,32 +36,33 @@ export function UploadQueue({
         {completed > 0 && (
           <span className="text-success">{completed} done</span>
         )}
-        {failed > 0 && (
-          <span className="text-error">{failed} failed</span>
-        )}
+        {failed > 0 && <span className="text-error">{failed} failed</span>}
       </div>
 
       <div className="flex items-center gap-2">
         {isPaused && onResumeAll && (
           <button
+            type="button"
             onClick={onResumeAll}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-white hover:bg-accent/90 transition-colors"
+            className="min-h-[var(--touch-target-min)] rounded-lg bg-accent px-3 text-xs font-medium text-text-inverse transition-colors hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
           >
             Resume All
           </button>
         )}
         {!isPaused && onPauseAll && uploading > 0 && (
           <button
+            type="button"
             onClick={onPauseAll}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg border border-border-default text-text-secondary hover:bg-surface-sunken transition-colors"
+            className="min-h-[var(--touch-target-min)] rounded-lg border border-border-default px-3 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
           >
             Pause All
           </button>
         )}
         {onCancelAll && (uploading > 0 || pending > 0) && (
           <button
+            type="button"
             onClick={onCancelAll}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg border border-error/30 text-error hover:bg-error/5 transition-colors"
+            className="min-h-[var(--touch-target-min)] rounded-lg border border-error/30 px-3 text-xs font-medium text-error transition-colors hover:bg-error/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
           >
             Cancel All
           </button>

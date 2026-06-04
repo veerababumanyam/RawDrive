@@ -72,7 +72,11 @@ function ForgotPasswordForm() {
       setResendCooldown(RESEND_COOLDOWN_SECONDS);
       setResendNotice("New code sent. Check your inbox.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't resend the code. Try again in a moment.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Couldn't resend the code. Try again in a moment.",
+      );
     } finally {
       setBusy(false);
     }
@@ -85,12 +89,16 @@ function ForgotPasswordForm() {
           <>
             <h1 className="text-2xl font-semibold mb-2">Check your inbox</h1>
             <p className="text-sm text-text-secondary mb-4">
-              We sent a 6-digit code to <strong className="text-text-primary">{email}</strong>.
-              Enter it on the next page to choose a new password.
+              We sent a 6-digit code to{" "}
+              <strong className="text-text-primary">{email}</strong>. Enter it
+              on the next page to choose a new password.
             </p>
             <ul className="mb-6 space-y-1.5 text-xs text-text-secondary">
               <li>• The code expires in {OTP_EXPIRY_MINUTES} minutes.</li>
-              <li>• Check your spam or promotions folder if you don&apos;t see it within a minute.</li>
+              <li>
+                • Check your spam or promotions folder if you don&apos;t see it
+                within a minute.
+              </li>
               <li>• For your security, never share the code with anyone.</li>
             </ul>
             <button
@@ -140,13 +148,18 @@ function ForgotPasswordForm() {
           </>
         ) : (
           <>
-            <h1 className="text-2xl font-semibold mb-2">Forgot your password?</h1>
+            <h1 className="text-2xl font-semibold mb-2">
+              Forgot your password?
+            </h1>
             <p className="text-sm text-text-secondary mb-6">
-              Enter the email on file. If it matches an account we&apos;ll send a 6-digit reset code.
+              Enter the email on file. If it matches an account we&apos;ll send
+              a 6-digit reset code.
             </p>
             <form onSubmit={onSubmit}>
               <label className="block mb-4">
-                <span className="block text-sm text-text-secondary mb-1">Email</span>
+                <span className="block text-sm text-text-secondary mb-1">
+                  Email
+                </span>
                 <input
                   type="email"
                   required

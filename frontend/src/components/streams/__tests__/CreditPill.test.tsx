@@ -3,7 +3,13 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 import { CreditPill } from "../CreditPill";
 
-function mockBalance(partial: Partial<{ balance_minutes: number; balance_paise: number; low_balance: boolean }> = {}) {
+function mockBalance(
+  partial: Partial<{
+    balance_minutes: number;
+    balance_paise: number;
+    low_balance: boolean;
+  }> = {},
+) {
   return {
     workspace_id: "ws-1",
     balance_paise: 100000,
@@ -20,39 +26,68 @@ describe("CreditPill", () => {
   });
 
   it("renders balance minutes once fetched", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => mockBalance({ balance_minutes: 120 }),
-    }) as unknown as Response));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          ({
+            ok: true,
+            status: 200,
+            json: async () => mockBalance({ balance_minutes: 120 }),
+          }) as unknown as Response,
+      ),
+    );
 
     render(<CreditPill />);
     await waitFor(() => {
-      expect(screen.getByTestId("credit-pill-minutes").textContent).toMatch(/120/);
+      expect(screen.getByTestId("credit-pill-minutes").textContent).toMatch(
+        /120/,
+      );
     });
   });
 
   it("applies low-balance warning variant when low_balance=true", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => mockBalance({ balance_minutes: 10, low_balance: true }),
-    }) as unknown as Response));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          ({
+            ok: true,
+            status: 200,
+            json: async () =>
+              mockBalance({ balance_minutes: 10, low_balance: true }),
+          }) as unknown as Response,
+      ),
+    );
 
     render(<CreditPill />);
     await waitFor(() => {
-      expect(screen.getByTestId("credit-pill")).toHaveAttribute("data-low-balance", "true");
+      expect(screen.getByTestId("credit-pill")).toHaveAttribute(
+        "data-low-balance",
+        "true",
+      );
     });
   });
 
   it("opens RechargeModal when pill is clicked", async () => {
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo) => {
-      const url = typeof input === "string" ? input : (input as Request).url;
-      if (url.includes("/public/streaming/packages")) {
-        return { ok: true, status: 200, json: async () => ({ packages: [] }) } as unknown as Response;
-      }
-      return { ok: true, status: 200, json: async () => mockBalance() } as unknown as Response;
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo) => {
+        const url = typeof input === "string" ? input : (input as Request).url;
+        if (url.includes("/public/streaming/packages")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ packages: [] }),
+          } as unknown as Response;
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => mockBalance(),
+        } as unknown as Response;
+      }),
+    );
 
     render(<CreditPill />);
     await waitFor(() => screen.getByTestId("credit-pill-button"));

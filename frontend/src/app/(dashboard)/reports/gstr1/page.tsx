@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { downloadGSTR1CSV, formatPaisa, getGSTR1Report, type GSTR1Report } from "@/lib/api/billing";
+import {
+  downloadGSTR1CSV,
+  formatPaisa,
+  getGSTR1Report,
+  type GSTR1Report,
+} from "@/lib/api/billing";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { CRMSecondaryNav } from "@/components/crm/crm-secondary-nav";
@@ -35,7 +40,9 @@ export default function GSTR1ReportPage() {
       })
       .catch((err) => {
         if (!ignore) {
-          setError(err instanceof Error ? err.message : "Failed to load GSTR-1");
+          setError(
+            err instanceof Error ? err.message : "Failed to load GSTR-1",
+          );
           setReport(null);
         }
       })
@@ -54,7 +61,10 @@ export default function GSTR1ReportPage() {
   }, [activeTab, report]);
 
   const pageCount = Math.ceil(entries.length / GSTR_PAGE_SIZE);
-  const pageEntries = entries.slice(page * GSTR_PAGE_SIZE, (page + 1) * GSTR_PAGE_SIZE);
+  const pageEntries = entries.slice(
+    page * GSTR_PAGE_SIZE,
+    (page + 1) * GSTR_PAGE_SIZE,
+  );
 
   const handleDownload = async () => {
     try {
@@ -77,15 +87,22 @@ export default function GSTR1ReportPage() {
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-text-primary">GSTR-1 Export</h1>
-          <p className="mt-1 text-sm text-text-secondary">Outward supply data for your CA, grouped by financial year.</p>
+          <h1 className="text-2xl font-semibold text-text-primary">
+            GSTR-1 Export
+          </h1>
+          <p className="mt-1 text-sm text-text-secondary">
+            Outward supply data for your CA, grouped by financial year.
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <label className="flex flex-col gap-1 text-xs text-text-secondary">
             Financial year
             <input
               value={fy}
-              onChange={(e) => { setFy(e.target.value); setPage(0); }}
+              onChange={(e) => {
+                setFy(e.target.value);
+                setPage(0);
+              }}
               className="input-field"
               placeholder="2026-27"
             />
@@ -93,7 +110,7 @@ export default function GSTR1ReportPage() {
           <button
             type="button"
             onClick={handleDownload}
-            className="self-end rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px]"
+            className="self-end rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-text-inverse hover:bg-accent-primary/90 min-h-[44px]"
           >
             Download CSV
           </button>
@@ -113,19 +130,27 @@ export default function GSTR1ReportPage() {
           <section className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <div className="rounded-2xl border border-border-default bg-surface-raised p-4">
               <p className="text-xs text-text-tertiary">Taxable value</p>
-              <p className="mt-1 text-lg font-semibold text-text-primary">{formatPaisa(report.total_taxable_paisa)}</p>
+              <p className="mt-1 text-lg font-semibold text-text-primary">
+                {formatPaisa(report.total_taxable_paisa)}
+              </p>
             </div>
             <div className="rounded-2xl border border-border-default bg-surface-raised p-4">
               <p className="text-xs text-text-tertiary">CGST + SGST</p>
-              <p className="mt-1 text-lg font-semibold text-text-primary">{formatPaisa(report.total_cgst_paisa + report.total_sgst_paisa)}</p>
+              <p className="mt-1 text-lg font-semibold text-text-primary">
+                {formatPaisa(report.total_cgst_paisa + report.total_sgst_paisa)}
+              </p>
             </div>
             <div className="rounded-2xl border border-border-default bg-surface-raised p-4">
               <p className="text-xs text-text-tertiary">IGST</p>
-              <p className="mt-1 text-lg font-semibold text-text-primary">{formatPaisa(report.total_igst_paisa)}</p>
+              <p className="mt-1 text-lg font-semibold text-text-primary">
+                {formatPaisa(report.total_igst_paisa)}
+              </p>
             </div>
             <div className="rounded-2xl border border-border-default bg-surface-raised p-4">
               <p className="text-xs text-text-tertiary">B2B / B2C</p>
-              <p className="mt-1 text-lg font-semibold text-text-primary">{report.b2b_count} / {report.b2c_count}</p>
+              <p className="mt-1 text-lg font-semibold text-text-primary">
+                {report.b2b_count} / {report.b2c_count}
+              </p>
             </div>
           </section>
 
@@ -134,10 +159,15 @@ export default function GSTR1ReportPage() {
               <button
                 key={tab}
                 type="button"
-                onClick={() => { setActiveTab(tab); setPage(0); }}
+                onClick={() => {
+                  setActiveTab(tab);
+                  setPage(0);
+                }}
                 className={cn(
                   "segmented-control-button text-sm",
-                  activeTab === tab ? "segmented-control-button--active" : "segmented-control-button--inactive",
+                  activeTab === tab
+                    ? "segmented-control-button--active"
+                    : "segmented-control-button--inactive",
                 )}
               >
                 {tab}
@@ -147,7 +177,9 @@ export default function GSTR1ReportPage() {
 
           <section className="overflow-hidden rounded-2xl border border-border-default bg-surface-raised">
             {entries.length === 0 ? (
-              <div className="p-10 text-center text-sm text-text-secondary">No filing rows for this period.</div>
+              <div className="p-10 text-center text-sm text-text-secondary">
+                No filing rows for this period.
+              </div>
             ) : (
               <>
                 <div className="overflow-x-auto">
@@ -164,24 +196,43 @@ export default function GSTR1ReportPage() {
                     </thead>
                     <tbody>
                       {pageEntries.map((entry) => (
-                        <tr key={`${entry.invoice_number}-${entry.invoice_date}`} className="border-t border-border-default">
+                        <tr
+                          key={`${entry.invoice_number}-${entry.invoice_date}`}
+                          className="border-t border-border-default"
+                        >
                           <td className="px-4 py-3 font-mono text-xs text-text-primary">
                             {entry.invoice_number}
-                            <span className="block pt-1 font-sans text-text-tertiary">{entry.invoice_date}</span>
+                            <span className="block pt-1 font-sans text-text-tertiary">
+                              {entry.invoice_date}
+                            </span>
                           </td>
                           <td className="px-4 py-3 text-text-secondary">
                             {entry.client_name || "Client"}
-                            {entry.client_gstin ? <span className="block pt-1 text-xs text-text-tertiary">{entry.client_gstin}</span> : null}
+                            {entry.client_gstin ? (
+                              <span className="block pt-1 text-xs text-text-tertiary">
+                                {entry.client_gstin}
+                              </span>
+                            ) : null}
                           </td>
                           <td className="px-4 py-3 text-text-secondary">
                             {entry.supply_type}
-                            <span className="block pt-1 text-xs text-text-tertiary">SAC {entry.sac_code}</span>
+                            <span className="block pt-1 text-xs text-text-tertiary">
+                              SAC {entry.sac_code}
+                            </span>
                           </td>
-                          <td className="px-4 py-3 text-right text-text-primary">{formatPaisa(entry.taxable_value_paisa)}</td>
+                          <td className="px-4 py-3 text-right text-text-primary">
+                            {formatPaisa(entry.taxable_value_paisa)}
+                          </td>
                           <td className="px-4 py-3 text-right text-text-secondary">
-                            {formatPaisa(entry.cgst_paisa + entry.sgst_paisa + entry.igst_paisa)}
+                            {formatPaisa(
+                              entry.cgst_paisa +
+                                entry.sgst_paisa +
+                                entry.igst_paisa,
+                            )}
                           </td>
-                          <td className="px-4 py-3 text-right font-semibold text-text-primary">{formatPaisa(entry.total_paisa)}</td>
+                          <td className="px-4 py-3 text-right font-semibold text-text-primary">
+                            {formatPaisa(entry.total_paisa)}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -189,7 +240,9 @@ export default function GSTR1ReportPage() {
                 </div>
                 {pageCount > 1 && (
                   <div className="flex items-center justify-between border-t border-border-default bg-surface-raised px-4 py-3 text-sm text-text-secondary">
-                    <span>Page {page + 1} of {pageCount} ({entries.length} entries)</span>
+                    <span>
+                      Page {page + 1} of {pageCount} ({entries.length} entries)
+                    </span>
                     <div className="flex gap-2">
                       <button
                         type="button"

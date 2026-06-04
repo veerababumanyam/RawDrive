@@ -89,6 +89,20 @@ type Gallery struct {
 	// CoverThumbnails is populated by List() via a LEFT JOIN on assets.
 	// Not a database column — only present in list responses.
 	CoverThumbnails map[string]string `json:"cover_thumbnails,omitempty"`
+	// CoverAsset is a lightweight copy of the effective cover row from List().
+	// It prevents dashboard/list cards from fetching one asset per gallery just
+	// to render the already-joined thumbnail and encryption metadata.
+	CoverAsset *GalleryCoverAsset `json:"cover_asset,omitempty"`
+}
+
+type GalleryCoverAsset struct {
+	ID              uuid.UUID              `json:"id"`
+	Filename        string                 `json:"filename,omitempty"`
+	ContentType     string                 `json:"content_type,omitempty"`
+	Status          string                 `json:"status,omitempty"`
+	ThumbnailURLs   map[string]string      `json:"thumbnail_urls,omitempty"`
+	IsEncrypted     bool                   `json:"is_encrypted,omitempty"`
+	MediaEncryption map[string]interface{} `json:"media_encryption,omitempty"`
 }
 
 // GalleryFilter contains filters for listing galleries.
@@ -304,16 +318,17 @@ func (r *GalleryRepo) Duplicate(ctx context.Context, sourceID uuid.UUID, newTitl
 // GetByID retrieves a gallery by ID.
 func (r *GalleryRepo) GetByID(ctx context.Context, id uuid.UUID) (*Gallery, error) {
 	g := &Gallery{}
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, workspace_id, contact_id, primary_contact_id, project_id, event_id, deal_id, invoice_id,
-		 title, slug, description, cover_asset_id, gallery_type,
-		 settings, password_hash, watermark_config, is_published, max_selections, status,
-		 created_by, created_at, updated_at, published_at, archived_at, deleted_at,
-		 cover_template, cover_config, expires_at, download_enabled, COALESCE(download_quality, 'webp'), sort_preference, whatsapp_template,
-		 faceid_enabled, face_detection_enabled, COALESCE(access_mode, 'private'),
-		 tethering_enabled, tether_directory, music_asset_id, email_automation_enabled
-		 FROM galleries WHERE id = $1 AND deleted_at IS NULL`, id,
-	).Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
+	query := `SELECT g.id, g.workspace_id, g.contact_id, g.primary_contact_id, g.project_id, g.event_id, g.deal_id, g.invoice_id,
+		g.title, g.slug, g.description, cover_asset.id AS effective_cover_asset_id, g.gallery_type,
+		g.settings, g.password_hash, g.watermark_config, g.is_published, g.max_selections, g.status,
+		g.created_by, g.created_at, g.updated_at, g.published_at, g.archived_at, g.deleted_at,
+		g.cover_template, g.cover_config, g.expires_at, g.download_enabled, COALESCE(g.download_quality, 'webp'), g.sort_preference, g.whatsapp_template,
+		g.faceid_enabled, g.face_detection_enabled, COALESCE(g.access_mode, 'private'),
+		g.tethering_enabled, g.tether_directory, g.music_asset_id, g.email_automation_enabled
+		FROM galleries g
+		` + galleryEffectiveCoverJoinSQL + `
+		WHERE g.id = $1 AND g.deleted_at IS NULL`
+	err := r.pool.QueryRow(ctx, query, id).Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
 		&g.Title, &g.Slug, &g.Description, &g.CoverAssetID,
 		&g.GalleryType, &g.Settings, &g.PasswordHash, &g.WatermarkConfig, &g.IsPublished,
 		&g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt, &g.PublishedAt, &g.ArchivedAt, &g.DeletedAt,
@@ -334,16 +349,17 @@ func (r *GalleryRepo) GetByID(ctx context.Context, id uuid.UUID) (*Gallery, erro
 // GetBySlug retrieves a gallery by slug (for public access).
 func (r *GalleryRepo) GetBySlug(ctx context.Context, slug string) (*Gallery, error) {
 	g := &Gallery{}
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, workspace_id, contact_id, primary_contact_id, project_id, event_id, deal_id, invoice_id,
-		 title, slug, description, cover_asset_id, gallery_type,
-		 settings, password_hash, watermark_config, is_published, max_selections, status,
-		 created_by, created_at, updated_at, published_at, archived_at, deleted_at,
-		 cover_template, cover_config, expires_at, download_enabled, COALESCE(download_quality, 'webp'), sort_preference, whatsapp_template,
-		 faceid_enabled, face_detection_enabled, COALESCE(access_mode, 'private'),
-		 tethering_enabled, tether_directory, music_asset_id, email_automation_enabled
-		 FROM galleries WHERE slug = $1 AND deleted_at IS NULL`, slug,
-	).Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
+	query := `SELECT g.id, g.workspace_id, g.contact_id, g.primary_contact_id, g.project_id, g.event_id, g.deal_id, g.invoice_id,
+		g.title, g.slug, g.description, cover_asset.id AS effective_cover_asset_id, g.gallery_type,
+		g.settings, g.password_hash, g.watermark_config, g.is_published, g.max_selections, g.status,
+		g.created_by, g.created_at, g.updated_at, g.published_at, g.archived_at, g.deleted_at,
+		g.cover_template, g.cover_config, g.expires_at, g.download_enabled, COALESCE(g.download_quality, 'webp'), g.sort_preference, g.whatsapp_template,
+		g.faceid_enabled, g.face_detection_enabled, COALESCE(g.access_mode, 'private'),
+		g.tethering_enabled, g.tether_directory, g.music_asset_id, g.email_automation_enabled
+		FROM galleries g
+		` + galleryEffectiveCoverJoinSQL + `
+		WHERE g.slug = $1 AND g.deleted_at IS NULL`
+	err := r.pool.QueryRow(ctx, query, slug).Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
 		&g.Title, &g.Slug, &g.Description, &g.CoverAssetID,
 		&g.GalleryType, &g.Settings, &g.PasswordHash, &g.WatermarkConfig, &g.IsPublished,
 		&g.MaxSelections, &g.Status, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt, &g.PublishedAt, &g.ArchivedAt, &g.DeletedAt,
@@ -361,38 +377,46 @@ func (r *GalleryRepo) GetBySlug(ctx context.Context, slug string) (*Gallery, err
 	return g, nil
 }
 
-// List retrieves galleries matching the filter. Uses a LEFT JOIN on assets
-// to include cover_thumbnails in one query — no N+1 fetching.
-func (r *GalleryRepo) List(ctx context.Context, f GalleryFilter) ([]Gallery, error) {
-	limit := f.Limit
-	if limit <= 0 {
-		limit = 50
-	}
-
-	query := `SELECT g.id, g.workspace_id, g.contact_id, g.primary_contact_id, g.project_id, g.event_id, g.deal_id, g.invoice_id,
-		g.title, g.slug, g.description, g.cover_asset_id,
-		g.gallery_type, g.settings, g.password_hash, g.watermark_config, g.is_published,
-		g.max_selections, g.status, g.created_by, g.created_at, g.updated_at, g.deleted_at,
-		g.published_at, g.archived_at, g.cover_template, g.cover_config, g.expires_at,
-		g.download_enabled, COALESCE(g.download_quality, 'webp'), g.sort_preference, g.whatsapp_template,
-		g.faceid_enabled, g.face_detection_enabled,
-		g.tethering_enabled, g.tether_directory,
-		cover_asset.thumbnail_urls
-		FROM galleries g
-		LEFT JOIN LATERAL (
-			SELECT a.thumbnail_urls
+const galleryEffectiveCoverJoinSQL = `LEFT JOIN LATERAL (
+			SELECT a.id, a.filename, a.content_type, a.status, a.is_encrypted,
+			       a.media_encryption, a.thumbnail_urls
 			FROM gallery_assets ga
 			INNER JOIN assets a ON a.id = ga.asset_id
 			WHERE ga.gallery_id = g.id
 			  AND a.deleted_at IS NULL
 			ORDER BY
 				CASE WHEN g.cover_asset_id IS NOT NULL AND a.id = g.cover_asset_id THEN 0 ELSE 1 END,
-				ga.is_hero DESC,
 				ga.sort_order ASC,
 				ga.added_at ASC
 			LIMIT 1
-		) cover_asset ON true
+		) cover_asset ON true`
+
+const galleryListBaseQuery = `SELECT g.id, g.workspace_id, g.contact_id, g.primary_contact_id, g.project_id, g.event_id, g.deal_id, g.invoice_id,
+		g.title, g.slug, g.description, cover_asset.id AS effective_cover_asset_id,
+		g.gallery_type, g.settings, g.password_hash, g.watermark_config, g.is_published,
+		g.max_selections, g.status, g.created_by, g.created_at, g.updated_at, g.deleted_at,
+		g.published_at, g.archived_at, g.cover_template, g.cover_config, g.expires_at,
+		g.download_enabled, COALESCE(g.download_quality, 'webp'), g.sort_preference, g.whatsapp_template,
+		g.faceid_enabled, g.face_detection_enabled,
+		g.tethering_enabled, g.tether_directory,
+		cover_asset.thumbnail_urls,
+		cover_asset.filename, cover_asset.content_type, cover_asset.status,
+		cover_asset.is_encrypted, cover_asset.media_encryption
+		FROM galleries g
+		` + galleryEffectiveCoverJoinSQL + `
 		WHERE g.workspace_id = $1 AND g.deleted_at IS NULL`
+
+// List retrieves galleries matching the filter. Uses a LEFT JOIN on assets
+// to include the effective cover asset and cover_thumbnails in one query — no
+// N+1 fetching. If a photographer has not selected a cover, the first uploaded
+// gallery asset becomes the effective cover for list/dashboard surfaces.
+func (r *GalleryRepo) List(ctx context.Context, f GalleryFilter) ([]Gallery, error) {
+	limit := f.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+
+	query := galleryListBaseQuery
 	args := []interface{}{f.WorkspaceID}
 	argIdx := 2
 
@@ -425,6 +449,11 @@ func (r *GalleryRepo) List(ctx context.Context, f GalleryFilter) ([]Gallery, err
 	for rows.Next() {
 		var g Gallery
 		var coverThumbs *map[string]string
+		var coverFilename *string
+		var coverContentType *string
+		var coverStatus *string
+		var coverIsEncrypted *bool
+		var coverMediaEncryption *map[string]interface{}
 		if err := rows.Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
 			&g.Title, &g.Slug, &g.Description,
 			&g.CoverAssetID, &g.GalleryType, &g.Settings, &g.PasswordHash, &g.WatermarkConfig,
@@ -434,12 +463,36 @@ func (r *GalleryRepo) List(ctx context.Context, f GalleryFilter) ([]Gallery, err
 			&g.FaceIDEnabled, &g.FaceDetectionEnabled,
 			&g.TetheringEnabled, &g.TetherDirectory,
 			&coverThumbs,
+			&coverFilename, &coverContentType, &coverStatus,
+			&coverIsEncrypted, &coverMediaEncryption,
 		); err != nil {
 			return nil, fmt.Errorf("gallery repo list scan: %w", err)
 		}
 		g.normalizeWorkspaceLinks()
 		if coverThumbs != nil {
 			g.CoverThumbnails = *coverThumbs
+		}
+		if g.CoverAssetID != nil {
+			coverAsset := &GalleryCoverAsset{ID: *g.CoverAssetID}
+			if coverFilename != nil {
+				coverAsset.Filename = *coverFilename
+			}
+			if coverContentType != nil {
+				coverAsset.ContentType = *coverContentType
+			}
+			if coverStatus != nil {
+				coverAsset.Status = *coverStatus
+			}
+			if coverThumbs != nil {
+				coverAsset.ThumbnailURLs = *coverThumbs
+			}
+			if coverIsEncrypted != nil {
+				coverAsset.IsEncrypted = *coverIsEncrypted
+			}
+			if coverMediaEncryption != nil {
+				coverAsset.MediaEncryption = *coverMediaEncryption
+			}
+			g.CoverAsset = coverAsset
 		}
 		galleries = append(galleries, g)
 	}

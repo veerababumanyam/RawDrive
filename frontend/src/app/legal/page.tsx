@@ -12,7 +12,7 @@ const legalDetails = [
 ];
 
 const contactChannels = [
-  { label: "Product information", email: "infor@rawdrive.in" },
+  { label: "Product information", email: "info@rawdrive.in" },
   { label: "Support", email: "support@rawdrive.in" },
   { label: "General contact", email: "contactus@rawdrive.in" },
 ];
@@ -31,8 +31,9 @@ export default function LegalPage() {
                 RawDrive legal operator details
               </h1>
               <p className="mt-5 text-base leading-8 text-text-secondary">
-                RawDrive is the product and service brand. Legal notices, business identity, and
-                operator details for the platform are listed here for compliance and reference.
+                RawDrive is the product and service brand. Legal notices,
+                business identity, and operator details for the platform are
+                listed here for compliance and reference.
               </p>
             </div>
 
@@ -49,18 +50,25 @@ export default function LegalPage() {
 
           <div className="mt-10 grid gap-4 sm:grid-cols-2">
             {legalDetails.map((detail) => (
-              <div key={detail.label} className="rounded-2xl border border-border bg-surface p-5">
+              <div
+                key={detail.label}
+                className="rounded-2xl border border-border bg-surface p-5"
+              >
                 <p className="text-xs font-bold uppercase tracking-wider text-text-tertiary">
                   {detail.label}
                 </p>
-                <p className="mt-2 text-base font-semibold text-text-primary">{detail.value}</p>
+                <p className="mt-2 text-base font-semibold text-text-primary">
+                  {detail.value}
+                </p>
               </div>
             ))}
           </div>
         </div>
 
         <section className="mt-8 rounded-2xl border border-border bg-surface-elevated p-8">
-          <h2 className="font-headline text-2xl font-bold text-text-primary">Official Contacts</h2>
+          <h2 className="font-headline text-2xl font-bold text-text-primary">
+            Official Contacts
+          </h2>
           <div className="mt-5 grid gap-4 md:grid-cols-3">
             {contactChannels.map((channel) => (
               <a

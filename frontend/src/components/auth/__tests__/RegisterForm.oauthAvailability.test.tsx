@@ -52,7 +52,9 @@ describe("RegisterForm OAuth availability", () => {
     const button = getByRole("button", { name: /continue with google/i });
     expect(button).toBeInTheDocument();
     expect(button).not.toHaveAttribute("aria-disabled", "true");
-    expect(queryByText(/google sign-up is temporarily unavailable/i)).not.toBeInTheDocument();
+    expect(
+      queryByText(/google sign-up is temporarily unavailable/i),
+    ).not.toBeInTheDocument();
     expect(getByText(/or sign up with email/i)).toBeInTheDocument();
 
     fireEvent.click(button);
@@ -80,7 +82,9 @@ describe("RegisterForm OAuth availability", () => {
     fireEvent.click(getByRole("button", { name: /continue with google/i }));
 
     expect(assign).not.toHaveBeenCalled();
-    expect(getByRole("alert").textContent).toContain("RawDrive couldn't be reached");
+    expect(getByRole("alert").textContent).toContain(
+      "RawDrive couldn't be reached",
+    );
   });
 
   it("surfaces duplicate registration errors from the API", async () => {
@@ -112,7 +116,9 @@ describe("RegisterForm OAuth availability", () => {
     fireEvent.click(getByRole("button", { name: /create account/i }));
 
     await waitFor(() => {
-      expect(getByRole("alert").textContent).toContain("email already registered");
+      expect(getByRole("alert").textContent).toContain(
+        "email already registered",
+      );
     });
     expect(getByRole("link", { name: /activate account/i })).toHaveAttribute(
       "href",

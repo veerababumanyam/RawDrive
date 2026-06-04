@@ -6,7 +6,11 @@ import { render, screen, waitFor } from "@testing-library/react";
 // "invariant expected app router to be mounted" on every render. Mock only the
 // hook the page imports — useRouter — mirroring the pattern in
 // src/components/auth/__tests__/LoginForm.oauth.test.tsx.
-const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }));
+const nav = vi.hoisted(() => ({
+  push: vi.fn(),
+  replace: vi.fn(),
+  refresh: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: nav.push,
@@ -27,7 +31,11 @@ vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: vi.fn(() => "test-token"),
 }));
 
-import { getRevenueDashboard, getRevenueTimeSeries, getRevenueStateBreakdown } from "@/lib/api/admin";
+import {
+  getRevenueDashboard,
+  getRevenueTimeSeries,
+  getRevenueStateBreakdown,
+} from "@/lib/api/admin";
 import AdminRevenuePage from "../revenue/page";
 
 const mockRevenue = vi.mocked(getRevenueDashboard);
@@ -41,7 +49,11 @@ const sampleRevenue = {
   total_subscribers: 450,
   state_breakdown: [
     { state_name: "Karnataka", revenue_paisa: 2000000, subscriber_count: 150 },
-    { state_name: "Maharashtra", revenue_paisa: 1500000, subscriber_count: 120 },
+    {
+      state_name: "Maharashtra",
+      revenue_paisa: 1500000,
+      subscriber_count: 120,
+    },
   ],
 };
 
@@ -140,7 +152,10 @@ describe("AdminRevenuePage", () => {
   it("fetches time series data", async () => {
     render(<AdminRevenuePage />);
     await waitFor(() => {
-      expect(mockTimeSeries).toHaveBeenCalledWith("test-token", expect.any(Object));
+      expect(mockTimeSeries).toHaveBeenCalledWith(
+        "test-token",
+        expect.any(Object),
+      );
     });
   });
 });

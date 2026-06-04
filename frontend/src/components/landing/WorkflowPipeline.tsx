@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   MessageSquare,
   Camera,
@@ -45,12 +51,24 @@ type PipelineStep = {
 };
 
 const STEPS: PipelineStep[] = [
-  { icon: MessageSquare, label: "Inquiry", tagline: "Lead captured and qualified" },
+  {
+    icon: MessageSquare,
+    label: "Inquiry",
+    tagline: "Lead captured and qualified",
+  },
   { icon: Camera, label: "Shoot", tagline: "Calendar, crew, advance tracked" },
-  { icon: UploadCloud, label: "Upload", tagline: "High-speed ingest with auto folders" },
+  {
+    icon: UploadCloud,
+    label: "Upload",
+    tagline: "High-speed ingest with auto folders",
+  },
   { icon: Sparkles, label: "Cull", tagline: "AI ranks every frame on quality" },
   { icon: Heart, label: "Proof", tagline: "Clients favorite from any device" },
-  { icon: ReceiptText, label: "Invoice", tagline: "GST-ready billing in a click" },
+  {
+    icon: ReceiptText,
+    label: "Invoice",
+    tagline: "GST-ready billing in a click",
+  },
   { icon: Send, label: "Deliver", tagline: "R2-backed secure download" },
 ];
 
@@ -93,10 +111,7 @@ export function WorkflowPipeline() {
     // traveled distance so the pipeline finishes activating *before*
     // the section scrolls off.
     const travel = Math.max(1, section.offsetHeight - viewportH * 0.6);
-    const scrolled = Math.min(
-      travel,
-      Math.max(0, -rect.top + viewportH * 0.2),
-    );
+    const scrolled = Math.min(travel, Math.max(0, -rect.top + viewportH * 0.2));
     const ratio = scrolled / travel;
     setProgress(Math.min(1, Math.max(0, ratio)));
   }, []);
@@ -137,7 +152,10 @@ export function WorkflowPipeline() {
   // with a small head-start so step 1 is lit immediately on entry.
   const activeCount = reducedMotion
     ? STEPS.length
-    : Math.min(STEPS.length, Math.max(1, Math.ceil(progress * STEPS.length + 0.3)));
+    : Math.min(
+        STEPS.length,
+        Math.max(1, Math.ceil(progress * STEPS.length + 0.3)),
+      );
 
   return (
     <section
@@ -174,13 +192,18 @@ export function WorkflowPipeline() {
                   data-active={isActive ? "true" : "false"}
                   className="landing-pipeline__step"
                 >
-                  <div className="landing-pipeline__step-icon" aria-hidden="true">
+                  <div
+                    className="landing-pipeline__step-icon"
+                    aria-hidden="true"
+                  >
                     <Icon className="h-5 w-5" />
                   </div>
                   <div className="landing-pipeline__step-label">
                     {index + 1}. {step.label}
                   </div>
-                  <div className="landing-pipeline__step-tagline">{step.tagline}</div>
+                  <div className="landing-pipeline__step-tagline">
+                    {step.tagline}
+                  </div>
                 </div>
                 {index < STEPS.length - 1 ? (
                   <div

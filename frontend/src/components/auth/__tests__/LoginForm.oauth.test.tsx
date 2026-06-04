@@ -54,7 +54,9 @@ describe("LoginForm Google OAuth callback handling", () => {
   });
 
   it("routes OAuth MFA challenge to TOTP verification without storing URL tokens", async () => {
-    nav.params = new URLSearchParams("mfa_required=1&mfa_token=legacy-url-token");
+    nav.params = new URLSearchParams(
+      "mfa_required=1&mfa_token=legacy-url-token",
+    );
     window.sessionStorage.setItem("rawdrive_mfa_token", "stale-token");
 
     render(<LoginForm />);
@@ -63,13 +65,18 @@ describe("LoginForm Google OAuth callback handling", () => {
       expect(nav.replace).toHaveBeenCalledWith("/login/mfa");
     });
     expect(window.sessionStorage.getItem("rawdrive_mfa_token")).toBeNull();
-    expect(window.sessionStorage.getItem("rawdrive_mfa_token")).not.toBe("legacy-url-token");
+    expect(window.sessionStorage.getItem("rawdrive_mfa_token")).not.toBe(
+      "legacy-url-token",
+    );
     expect(auth.refreshAuthSessionResult).not.toHaveBeenCalled();
   });
 
   it("refreshes the cookie-backed OAuth session before entering the app", async () => {
     nav.params = new URLSearchParams("authenticated=1");
-    auth.refreshAuthSessionResult.mockResolvedValue({ ok: true, accessToken: "access-token" });
+    auth.refreshAuthSessionResult.mockResolvedValue({
+      ok: true,
+      accessToken: "access-token",
+    });
 
     render(<LoginForm />);
 
@@ -81,12 +88,17 @@ describe("LoginForm Google OAuth callback handling", () => {
 
   it("shows a safe error when OAuth session refresh fails", async () => {
     nav.params = new URLSearchParams("authenticated=1");
-    auth.refreshAuthSessionResult.mockResolvedValue({ ok: false, reason: "network_error" });
+    auth.refreshAuthSessionResult.mockResolvedValue({
+      ok: false,
+      reason: "network_error",
+    });
 
     const { getByRole } = render(<LoginForm />);
 
     await waitFor(() => {
-      expect(getByRole("alert").textContent).toContain("RawDrive couldn't reach the server");
+      expect(getByRole("alert").textContent).toContain(
+        "RawDrive couldn't reach the server",
+      );
       expect(nav.replace).toHaveBeenCalledWith(
         "/login?error=oauth_refresh_failed&reason=network_error",
       );
@@ -94,11 +106,15 @@ describe("LoginForm Google OAuth callback handling", () => {
   });
 
   it("uses reason-specific recovery copy for a failed OAuth refresh redirect", () => {
-    nav.params = new URLSearchParams("error=oauth_refresh_failed&reason=no_session");
+    nav.params = new URLSearchParams(
+      "error=oauth_refresh_failed&reason=no_session",
+    );
 
     const { getByRole } = render(<LoginForm />);
 
-    expect(getByRole("alert").textContent).toContain("session cookie was not available");
+    expect(getByRole("alert").textContent).toContain(
+      "session cookie was not available",
+    );
     expect(getByRole("alert").textContent).toContain("allow cookies");
   });
 
@@ -114,14 +130,18 @@ describe("LoginForm Google OAuth callback handling", () => {
   });
 
   it("explains when Google sign-in hits an unactivated RawDrive account", () => {
-    nav.params = new URLSearchParams("error=oauth_account_not_activated&email=photo%40rawdrive.test");
+    nav.params = new URLSearchParams(
+      "error=oauth_account_not_activated&email=photo%40rawdrive.test",
+    );
 
     const { getByRole } = render(<LoginForm />);
 
-    expect(getByRole("alert").textContent).toContain("registered but not activated");
-    expect(getByRole("link", { name: /activate account/i }).getAttribute("href")).toBe(
-      "/activate?email=photo%40rawdrive.test",
+    expect(getByRole("alert").textContent).toContain(
+      "registered but not activated",
     );
+    expect(
+      getByRole("link", { name: /activate account/i }).getAttribute("href"),
+    ).toBe("/activate?email=photo%40rawdrive.test");
   });
 
   it("keeps the existing message when the Google account belongs to another RawDrive account", () => {
@@ -146,7 +166,9 @@ describe("LoginForm Google OAuth callback handling", () => {
   });
 
   it("renders a friendly expired-state message without refreshing", async () => {
-    nav.params = new URLSearchParams("error=oauth_state_expired&state=sensitive");
+    nav.params = new URLSearchParams(
+      "error=oauth_state_expired&state=sensitive",
+    );
 
     const { getByRole } = render(<LoginForm />);
 
@@ -180,7 +202,9 @@ describe("LoginForm Google OAuth callback handling", () => {
     fireEvent.click(getByRole("button", { name: /sign in with google/i }));
 
     expect(assign).toHaveBeenCalledWith("/auth/oauth/google");
-    expect(getByRole("button", { name: /redirecting to google/i })).toBeDisabled();
+    expect(
+      getByRole("button", { name: /redirecting to google/i }),
+    ).toBeDisabled();
   });
 
   it("keeps Google sign-in on the form when the browser is offline", () => {
@@ -200,7 +224,9 @@ describe("LoginForm Google OAuth callback handling", () => {
     fireEvent.click(getByRole("button", { name: /sign in with google/i }));
 
     expect(assign).not.toHaveBeenCalled();
-    expect(getByRole("alert").textContent).toContain("RawDrive couldn't be reached");
+    expect(getByRole("alert").textContent).toContain(
+      "RawDrive couldn't be reached",
+    );
   });
 
   it("uses customer-facing copy for password network failures", async () => {
@@ -217,7 +243,9 @@ describe("LoginForm Google OAuth callback handling", () => {
     fireEvent.click(getByRole("button", { name: "Sign In" }));
 
     await waitFor(() => {
-      expect(getByRole("alert").textContent).toContain("RawDrive couldn't be reached");
+      expect(getByRole("alert").textContent).toContain(
+        "RawDrive couldn't be reached",
+      );
     });
   });
 
@@ -263,9 +291,8 @@ describe("LoginForm Google OAuth callback handling", () => {
 
     const recovery = getByRole("status");
     expect(recovery.textContent).toContain("Google sign-in requires Chrome");
-    expect(getByRole("button", { name: /sign in with google/i })).toHaveAttribute(
-      "aria-describedby",
-      "google-webview-recovery",
-    );
+    expect(
+      getByRole("button", { name: /sign in with google/i }),
+    ).toHaveAttribute("aria-describedby", "google-webview-recovery");
   });
 });

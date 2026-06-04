@@ -7,7 +7,7 @@ const sections = [
   {
     title: "1. Introduction",
     content:
-      "RawDrive (\"we\", \"our\", \"us\") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our platform at rawdrive.in. This policy complies with the Digital Personal Data Protection Act, 2023 (DPDPA) of India and the General Data Protection Regulation (GDPR) of the European Union.",
+      'RawDrive ("we", "our", "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our platform at rawdrive.in. This policy complies with the Digital Personal Data Protection Act, 2023 (DPDPA) of India and the General Data Protection Regulation (GDPR) of the European Union.',
   },
   {
     title: "2. Information We Collect",
@@ -77,7 +77,9 @@ export default function PrivacyPage() {
         <div className="mt-10 space-y-8">
           {sections.map((section) => (
             <section key={section.title}>
-              <h2 className="text-xl font-semibold text-text-primary">{section.title}</h2>
+              <h2 className="text-xl font-semibold text-text-primary">
+                {section.title}
+              </h2>
               <p className="mt-3 text-sm leading-relaxed text-text-secondary">
                 {section.content}
               </p>
@@ -85,10 +87,15 @@ export default function PrivacyPage() {
           ))}
         </div>
         <div className="mt-12 rounded-xl border border-border bg-surface-elevated p-6">
-          <h2 className="text-lg font-semibold text-text-primary">Data Protection Officer</h2>
+          <h2 className="text-lg font-semibold text-text-primary">
+            Data Protection Officer
+          </h2>
           <p className="mt-2 text-sm text-text-secondary">
             For any privacy-related inquiries, contact our DPO at{" "}
-            <a href="mailto:contactus@rawdrive.in" className="text-accent hover:text-accent-hover">
+            <a
+              href="mailto:contactus@rawdrive.in"
+              className="text-accent hover:text-accent-hover"
+            >
               contactus@rawdrive.in
             </a>
           </p>

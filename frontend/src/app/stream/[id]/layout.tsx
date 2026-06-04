@@ -14,6 +14,10 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function PublicStreamLayout({ children }: { children: ReactNode }) {
+export default function PublicStreamLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
   return <div className="min-h-screen w-full">{children}</div>;
 }

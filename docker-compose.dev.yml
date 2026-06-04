@@ -1,7 +1,6 @@
 name: rawdrive-dev
 
 services:
-
   # ── Infrastructure ────────────────────────────────────────────────
   postgres:
     image: pgvector/pgvector:pg17
@@ -78,7 +77,11 @@ services:
       # Persist the ~280 MB buffalo_l model download across container restarts.
       - face_svc_models:/home/facesvc/.insightface
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/healthz | grep -q '\"ready\":true'"]
+      test:
+        [
+          "CMD-SHELL",
+          'curl -fsS http://127.0.0.1:8000/healthz | grep -q ''"ready":true''',
+        ]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -142,18 +145,33 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: dev
       args:
-        # Baked into the JS bundle at build time — points browser fetch calls
-        # at the backend exposed on the host's port 8080.
+        # Browser-side fetch calls target the backend exposed on the host.
         NEXT_PUBLIC_API_URL: http://localhost:8080
-        # Baked into Next.js rewrites — this runs inside the frontend
-        # container, where localhost is the frontend container itself.
+        # Server-side rewrites run inside the frontend container, where
+        # localhost is the frontend container itself.
         INTERNAL_API_BASE_URL: http://backend:8080
+    command:
+      [
+        "sh",
+        "-lc",
+        "pnpm config set store-dir /pnpm/store && CI=true pnpm install --frozen-lockfile && pnpm dev --hostname 0.0.0.0 --port 3000",
+      ]
     environment:
       # Browser-visible API origin; host browsers can reach this port.
       NEXT_PUBLIC_API_URL: http://localhost:8080
       # Server-side rewrites use Compose DNS from inside the container.
       INTERNAL_API_BASE_URL: http://backend:8080
+      NEXT_TELEMETRY_DISABLED: "1"
+      WATCHPACK_POLLING: "true"
+    volumes:
+      # Bind-mount the local repo so localhost:3000 serves current source.
+      - ./frontend:/app
+      # Keep container-owned generated files out of the host worktree.
+      - frontend_node_modules:/app/node_modules
+      - frontend_next:/app/.next
+      - frontend_pnpm_store:/pnpm/store
     ports:
       - "3000:3000"
     depends_on:
@@ -164,3 +182,6 @@ volumes:
   postgres_data:
   valkey_data:
   face_svc_models:
+  frontend_node_modules:
+  frontend_next:
+  frontend_pnpm_store:

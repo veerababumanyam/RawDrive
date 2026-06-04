@@ -15,7 +15,11 @@ export interface LivePlayerViewProps {
   onError?: (e: Error) => void;
 }
 
-export function LivePlayerView({ playbackUrl, poster, onError }: LivePlayerViewProps) {
+export function LivePlayerView({
+  playbackUrl,
+  poster,
+  onError,
+}: LivePlayerViewProps) {
   return (
     <section
       data-testid="viewer-live-player"

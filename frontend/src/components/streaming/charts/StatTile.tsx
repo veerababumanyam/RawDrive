@@ -54,7 +54,10 @@ export function StatTile({
       </div>
       <div
         id={valueId}
-        className={["text-2xl font-semibold tabular-nums", toneClass[tone]].join(" ")}
+        className={[
+          "text-2xl font-semibold tabular-nums",
+          toneClass[tone],
+        ].join(" ")}
       >
         {value}
       </div>

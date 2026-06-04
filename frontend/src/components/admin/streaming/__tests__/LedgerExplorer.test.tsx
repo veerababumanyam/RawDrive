@@ -58,7 +58,10 @@ const samplePage = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockFetch.mockResolvedValue(samplePage);
-  mockExport.mockResolvedValue({ truncated: false, filename: "streaming_ledger.csv" });
+  mockExport.mockResolvedValue({
+    truncated: false,
+    filename: "streaming_ledger.csv",
+  });
 });
 
 describe("LedgerExplorer", () => {
@@ -68,8 +71,12 @@ describe("LedgerExplorer", () => {
       expect(screen.getByText("ws-aaaa")).toBeTruthy();
       expect(screen.getByText("ws-bbbb")).toBeTruthy();
       // entry type appears once in the dropdown <option> and once per row
-      expect(screen.getAllByText("credit_topup").length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByText("debit_reservation").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("credit_topup").length).toBeGreaterThanOrEqual(
+        1,
+      );
+      expect(
+        screen.getAllByText("debit_reservation").length,
+      ).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -78,9 +85,13 @@ describe("LedgerExplorer", () => {
     await waitFor(() => {
       expect(screen.getByText(/created at/i)).toBeTruthy();
       // "Workspace" label exists (filter field + table header)
-      expect(screen.getAllByText(/workspace/i).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/workspace/i).length).toBeGreaterThanOrEqual(
+        1,
+      );
       expect(screen.getAllByText(/actor/i).length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByText(/entry type/i).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/entry type/i).length).toBeGreaterThanOrEqual(
+        1,
+      );
       expect(screen.getByText(/Δ minutes/i)).toBeTruthy();
     });
   });
@@ -95,7 +106,9 @@ describe("LedgerExplorer", () => {
     const fromInput = screen.getByLabelText(/from/i) as HTMLInputElement;
     fireEvent.change(fromInput, { target: { value: "2026-04-01T00:00" } });
 
-    const typeSelect = screen.getByLabelText(/entry type/i) as HTMLSelectElement;
+    const typeSelect = screen.getByLabelText(
+      /entry type/i,
+    ) as HTMLSelectElement;
     fireEvent.change(typeSelect, { target: { value: "credit_topup" } });
 
     const apply = screen.getByRole("button", { name: /apply filter/i });
@@ -143,7 +156,10 @@ describe("LedgerExplorer", () => {
   });
 
   it("warns the user when the CSV export was truncated", async () => {
-    mockExport.mockResolvedValueOnce({ truncated: true, filename: "streaming_ledger.csv" });
+    mockExport.mockResolvedValueOnce({
+      truncated: true,
+      filename: "streaming_ledger.csv",
+    });
     render(<LedgerExplorer />);
     await waitFor(() => screen.getByText("ws-aaaa"));
 

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { CalendarDays, Clock3, MapPinned, Users } from "lucide-react";
+import { CalendarDays, Clock3, MapPinned, Users } from "@/components/icons";
 import { SolutionShowcasePage } from "@/components/marketing/SolutionShowcasePage";
 import { createPageMetadata } from "@/lib/seo";
 

@@ -20,7 +20,11 @@ import type { ChatMessage } from "@/components/streams/live/ChatModeratorPanel";
 
 const MAX_BODY = 500;
 
-export type ChatConnectionState = "connecting" | "open" | "reconnecting" | "closed";
+export type ChatConnectionState =
+  | "connecting"
+  | "open"
+  | "reconnecting"
+  | "closed";
 
 export interface ChatBoxProps {
   streamId: string;
@@ -33,7 +37,12 @@ export interface ChatBoxProps {
   connectionState?: ChatConnectionState;
 }
 
-export function ChatBox({ streamId, messages, disabled, connectionState }: ChatBoxProps) {
+export function ChatBox({
+  streamId,
+  messages,
+  disabled,
+  connectionState,
+}: ChatBoxProps) {
   const [text, setText] = useState("");
   const [posting, setPosting] = useState(false);
   const [retryAfter, setRetryAfter] = useState(0);
@@ -53,7 +62,13 @@ export function ChatBox({ streamId, messages, disabled, connectionState }: ChatB
   }, [retryAfter]);
 
   const overLimit = text.length > MAX_BODY;
-  const canPost = !banned && !disabled && !posting && retryAfter === 0 && text.trim().length > 0 && !overLimit;
+  const canPost =
+    !banned &&
+    !disabled &&
+    !posting &&
+    retryAfter === 0 &&
+    text.trim().length > 0 &&
+    !overLimit;
 
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
@@ -62,14 +77,17 @@ export function ChatBox({ streamId, messages, disabled, connectionState }: ChatB
     setError(null);
     try {
       const token = loadViewerSession(streamId)?.access_token;
-      const res = await fetch(`/api/v1/public/streams/${encodeURIComponent(streamId)}/chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      const res = await fetch(
+        `/api/v1/public/streams/${encodeURIComponent(streamId)}/chat`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ body: text.trim() }),
         },
-        body: JSON.stringify({ body: text.trim() }),
-      });
+      );
       if (res.status === 429) {
         const headerRA = parseInt(res.headers.get("Retry-After") ?? "0", 10);
         let bodyRA = 0;
@@ -106,7 +124,12 @@ export function ChatBox({ streamId, messages, disabled, connectionState }: ChatB
 
   const composerDisabled = banned || disabled;
   const charCountClass = useMemo(
-    () => (overLimit ? "text-feedback-error" : text.length > MAX_BODY * 0.9 ? "text-feedback-warning" : "text-white/50"),
+    () =>
+      overLimit
+        ? "text-feedback-error"
+        : text.length > MAX_BODY * 0.9
+          ? "text-feedback-warning"
+          : "text-text-media/50",
     [text.length, overLimit],
   );
 
@@ -114,22 +137,24 @@ export function ChatBox({ streamId, messages, disabled, connectionState }: ChatB
     <section
       data-testid="chat-box"
       aria-label="Live chat"
-      className="flex h-full flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-4"
+      className="flex h-full flex-col gap-3 rounded-2xl border border-text-media/10 bg-surface-overlay/5 p-4"
     >
       <ul
         data-testid="chat-messages"
         className="flex-1 space-y-2 overflow-y-auto pr-1"
         aria-live="polite"
       >
-        {messages.length === 0 && <li className="text-sm text-white/50">No messages yet — say hi.</li>}
+        {messages.length === 0 && (
+          <li className="text-sm text-text-media/50">No messages yet — say hi.</li>
+        )}
         {messages.map((m) => (
           <li
             key={m.id}
             data-testid={`chat-msg-${m.id}`}
-            className="rounded-lg border border-white/5 bg-white/[0.04] px-3 py-2"
+            className="rounded-lg border border-text-media/5 bg-surface-overlay/5 px-3 py-2"
           >
-            <div className="text-xs text-white/60">{m.viewer_name}</div>
-            <div className="break-words text-sm text-white/90">{m.body}</div>
+            <div className="text-xs text-text-media/60">{m.viewer_name}</div>
+            <div className="break-words text-sm text-text-media/90">{m.body}</div>
           </li>
         ))}
       </ul>
@@ -166,8 +191,14 @@ export function ChatBox({ streamId, messages, disabled, connectionState }: ChatB
       )}
 
       {error && error !== "slow_mode" && error !== "viewer_banned" && (
-        <div role="alert" data-testid="chat-error" className="text-xs text-feedback-error">
-          {error === "stream_ended" ? "Chat is closed — the stream has ended." : "Could not send your message."}
+        <div
+          role="alert"
+          data-testid="chat-error"
+          className="text-xs text-feedback-error"
+        >
+          {error === "stream_ended"
+            ? "Chat is closed — the stream has ended."
+            : "Could not send your message."}
         </div>
       )}
 
@@ -178,7 +209,10 @@ export function ChatBox({ streamId, messages, disabled, connectionState }: ChatB
             aria-label="Chat message"
             disabled={composerDisabled}
             value={text}
-            maxLength={MAX_BODY * 2 /* allow paste-overflow detection rather than truncating silently */}
+            maxLength={
+              MAX_BODY *
+              2 /* allow paste-overflow detection rather than truncating silently */
+            }
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -188,7 +222,7 @@ export function ChatBox({ streamId, messages, disabled, connectionState }: ChatB
             }}
             placeholder="Say something nice…"
             rows={2}
-            className="w-full resize-none rounded-lg border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-white/90 placeholder:text-white/40 focus:border-white/30 focus:outline-none disabled:opacity-50"
+            className="w-full resize-none rounded-lg border border-text-media/15 bg-surface-overlay/5 px-3 py-2 text-sm text-text-media/90 placeholder:text-text-media/40 focus:border-text-media/30 focus:outline-none disabled:opacity-50"
           />
           <div className="mt-1 flex justify-between text-[11px]">
             <span data-testid="chat-charcount" className={charCountClass}>

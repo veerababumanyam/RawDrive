@@ -5,13 +5,24 @@ import { PreflightPanel } from "../PreflightPanel";
 
 type FetchCall = { url: string; init?: RequestInit };
 
-function buildFetcher(handlers: Record<string, (init?: RequestInit) => Response | Promise<Response>>) {
+function buildFetcher(
+  handlers: Record<
+    string,
+    (init?: RequestInit) => Response | Promise<Response>
+  >,
+) {
   const calls: FetchCall[] = [];
   const fn = vi.fn(async (url: string, init?: RequestInit) => {
     calls.push({ url, init });
     const match = Object.keys(handlers).find((k) => url.includes(k));
     if (!match) {
-      return { ok: false, status: 404, json: async () => ({}), blob: async () => new Blob([]), headers: new Headers() } as unknown as Response;
+      return {
+        ok: false,
+        status: 404,
+        json: async () => ({}),
+        blob: async () => new Blob([]),
+        headers: new Headers(),
+      } as unknown as Response;
     }
     return handlers[match](init);
   });
@@ -39,10 +50,13 @@ describe("PreflightPanel", () => {
   beforeEach(() => {
     // Mock URL.createObjectURL for blob download path in jsdom.
     if (!("createObjectURL" in URL)) {
-      (URL as unknown as { createObjectURL: () => string }).createObjectURL = () => "blob:mock";
+      (URL as unknown as { createObjectURL: () => string }).createObjectURL =
+        () => "blob:mock";
     }
-    (URL as unknown as { createObjectURL: () => string }).createObjectURL = vi.fn(() => "blob:mock");
-    (URL as unknown as { revokeObjectURL: () => void }).revokeObjectURL = vi.fn();
+    (URL as unknown as { createObjectURL: () => string }).createObjectURL =
+      vi.fn(() => "blob:mock");
+    (URL as unknown as { revokeObjectURL: () => void }).revokeObjectURL =
+      vi.fn();
   });
 
   it("renders the Start Preflight button initially", () => {
@@ -88,21 +102,29 @@ describe("PreflightPanel", () => {
     );
     fireEvent.click(screen.getByTestId("preflight-start"));
     await waitFor(() => {
-      expect(screen.getByTestId("verdict-chip").textContent?.toLowerCase()).toContain("poor");
+      expect(
+        screen.getByTestId("verdict-chip").textContent?.toLowerCase(),
+      ).toContain("poor");
     });
-    expect(screen.getByTestId("recommendations").textContent?.toLowerCase())
-      .toMatch(/below 3 mbps|upgrade|downgrade/);
+    expect(
+      screen.getByTestId("recommendations").textContent?.toLowerCase(),
+    ).toMatch(/below 3 mbps|upgrade|downgrade/);
   });
 
   it("clicking Download OBS Profile hits /obs-profile and triggers download", async () => {
     const transport = { uploadProbe: async () => 500 };
-    const blobBody = new Blob(["[OBS profile contents]"], { type: "text/plain" });
+    const blobBody = new Blob(["[OBS profile contents]"], {
+      type: "text/plain",
+    });
     const obsRes = {
       ok: true,
       status: 200,
       blob: async () => blobBody,
       json: async () => ({}),
-      headers: new Headers({ "content-disposition": 'attachment; filename="rawdrive-obs-1080p60.ini"' }),
+      headers: new Headers({
+        "content-disposition":
+          'attachment; filename="rawdrive-obs-1080p60.ini"',
+      }),
     } as unknown as Response;
     const { fn } = buildFetcher({
       "/preflight/start": () => jsonRes(200, startBody),
@@ -128,7 +150,8 @@ describe("PreflightPanel", () => {
     const { fn, calls } = buildFetcher({
       "/preflight/start": () => jsonRes(200, startBody),
       "/bandwidth": () => jsonRes(200, { accepted: true }),
-      "/test-broadcast/start": () => jsonRes(200, { status: "active", expiresAt: startBody.expiresAt }),
+      "/test-broadcast/start": () =>
+        jsonRes(200, { status: "active", expiresAt: startBody.expiresAt }),
       "/test-broadcast/stop": () => jsonRes(200, { status: "stopped" }),
     });
     render(

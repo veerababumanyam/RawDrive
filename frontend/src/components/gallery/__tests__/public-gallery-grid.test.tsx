@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { PublicGalleryGrid } from "../public-gallery-grid";
 import type { PublicAsset } from "@/lib/api/galleries";
 
@@ -61,7 +67,9 @@ describe("PublicGalleryGrid", () => {
   });
 
   it("keeps public download controls available on touch screens", () => {
-    render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
+    render(
+      <PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />,
+    );
 
     // 2026-05-18 visibility revision: per-tile actions moved inside a
     // "Photo options" overflow menu. Download is no longer a hover-reveal
@@ -71,7 +79,9 @@ describe("PublicGalleryGrid", () => {
     fireEvent.click(screen.getByRole("button", { name: "Photo options" }));
 
     const menu = screen.getByRole("menu");
-    const downloadItem = within(menu).getByRole("menuitem", { name: "Download WebP" });
+    const downloadItem = within(menu).getByRole("menuitem", {
+      name: "Download WebP",
+    });
     expect(downloadItem).toBeInTheDocument();
     // The menuitem itself is full-width and never carries hover-only
     // opacity gating, so it stays reachable on touch (no pointer hover).
@@ -80,53 +90,103 @@ describe("PublicGalleryGrid", () => {
   });
 
   it("uses a WebP-only download action when the gallery policy allows only WebP", () => {
-    render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} downloadQuality="webp" />);
+    render(
+      <PublicGalleryGrid
+        slug="wedding-gallery"
+        assets={[galleryAsset()]}
+        downloadQuality="webp"
+      />,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Photo options" }));
 
     const menu = screen.getByRole("menu");
-    expect(within(menu).getByRole("menuitem", { name: "Download WebP" })).toBeInTheDocument();
-    expect(within(menu).queryByRole("menuitem", { name: "Download thumbnail" })).toBeNull();
-    expect(within(menu).queryByRole("menuitem", { name: "Download original" })).toBeNull();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Download WebP" }),
+    ).toBeInTheDocument();
+    expect(
+      within(menu).queryByRole("menuitem", { name: "Download thumbnail" }),
+    ).toBeNull();
+    expect(
+      within(menu).queryByRole("menuitem", { name: "Download original" }),
+    ).toBeNull();
   });
 
   it("uses the thumbnail download action when the gallery policy allows thumbnails", () => {
-    render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} downloadQuality="thumbnail" />);
+    render(
+      <PublicGalleryGrid
+        slug="wedding-gallery"
+        assets={[galleryAsset()]}
+        downloadQuality="thumbnail"
+      />,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Photo options" }));
 
     const menu = screen.getByRole("menu");
-    expect(within(menu).getByRole("menuitem", { name: "Download thumbnail" })).toBeInTheDocument();
-    expect(within(menu).queryByRole("menuitem", { name: "Download WebP" })).toBeNull();
-    expect(within(menu).queryByRole("menuitem", { name: "Download original" })).toBeNull();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Download thumbnail" }),
+    ).toBeInTheDocument();
+    expect(
+      within(menu).queryByRole("menuitem", { name: "Download WebP" }),
+    ).toBeNull();
+    expect(
+      within(menu).queryByRole("menuitem", { name: "Download original" }),
+    ).toBeNull();
   });
 
   it("uses the original download action when the gallery policy allows source files", () => {
-    render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} downloadQuality="original" />);
+    render(
+      <PublicGalleryGrid
+        slug="wedding-gallery"
+        assets={[galleryAsset()]}
+        downloadQuality="original"
+      />,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Photo options" }));
 
     const menu = screen.getByRole("menu");
-    expect(within(menu).getByRole("menuitem", { name: "Download original" })).toBeInTheDocument();
-    expect(within(menu).queryByRole("menuitem", { name: "Download WebP" })).toBeNull();
-    expect(within(menu).queryByRole("menuitem", { name: "Download thumbnail" })).toBeNull();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Download original" }),
+    ).toBeInTheDocument();
+    expect(
+      within(menu).queryByRole("menuitem", { name: "Download WebP" }),
+    ).toBeNull();
+    expect(
+      within(menu).queryByRole("menuitem", { name: "Download thumbnail" }),
+    ).toBeNull();
   });
 
   it("keeps old both-format policies WebP-only", () => {
-    render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} downloadQuality="both" />);
+    render(
+      <PublicGalleryGrid
+        slug="wedding-gallery"
+        assets={[galleryAsset()]}
+        downloadQuality="both"
+      />,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Photo options" }));
 
     const menu = screen.getByRole("menu");
-    expect(within(menu).getByRole("menuitem", { name: "Download WebP" })).toBeInTheDocument();
-    expect(within(menu).queryByRole("menuitem", { name: "Download original" })).toBeNull();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Download WebP" }),
+    ).toBeInTheDocument();
+    expect(
+      within(menu).queryByRole("menuitem", { name: "Download original" }),
+    ).toBeNull();
   });
 
   it("renders a per-tile favorite toggle alongside the download button", async () => {
     // localStorage clean so the favorites hook starts empty — otherwise a
     // prior test's leak could pre-favorite this asset and the assertions
     // about the "Add to favorites" label would flip.
-    try { localStorage.removeItem("rawdrive-favorites-wedding-gallery"); } catch { /* noop */ }
+    try {
+      localStorage.removeItem("rawdrive-favorites-wedding-gallery");
+    } catch {
+      /* noop */
+    }
     Object.defineProperty(window, "location", {
       value: { origin: "https://app.rawdrive.test", search: "" },
       writable: true,
@@ -139,7 +199,9 @@ describe("PublicGalleryGrid", () => {
     // optimistic add and silently wipes it.
     mockedList.mockClear().mockResolvedValue([]);
 
-    render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
+    render(
+      <PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />,
+    );
 
     // Let the mount-time server hydration complete first so its setFavorites([])
     // can't overwrite the optimistic toggle we perform next.
@@ -161,8 +223,12 @@ describe("PublicGalleryGrid", () => {
     // favorite" (NOT "Remove from favorites" — that's the lightbox label).
     // The favorite is a checkable menu item → role="menuitemcheckbox" with
     // aria-checked (valid ARIA; menuitem does not support aria-pressed).
-    const favoriteItem = within(menu).getByRole("menuitemcheckbox", { name: /add to favorites/i });
-    const downloadItem = within(menu).getByRole("menuitem", { name: "Download WebP" });
+    const favoriteItem = within(menu).getByRole("menuitemcheckbox", {
+      name: /add to favorites/i,
+    });
+    const downloadItem = within(menu).getByRole("menuitem", {
+      name: "Download WebP",
+    });
     expect(favoriteItem).toBeInTheDocument();
     expect(downloadItem).toBeInTheDocument();
     // Default (unfavorited) state exposes the unchecked affordance.
@@ -187,21 +253,29 @@ describe("PublicGalleryGrid", () => {
     // reports aria-checked=true, proving the toggle flipped the visible state.
     fireEvent.click(screen.getByRole("button", { name: "Photo options" }));
     const reopenedMenu = screen.getByRole("menu");
-    const removeItem = within(reopenedMenu).getByRole("menuitemcheckbox", { name: /remove favorite/i });
+    const removeItem = within(reopenedMenu).getByRole("menuitemcheckbox", {
+      name: /remove favorite/i,
+    });
     expect(removeItem).toBeInTheDocument();
     expect(removeItem).toHaveAttribute("aria-checked", "true");
   });
 
   it("lets fullscreen lightbox images fill the viewport while preserving aspect ratio", () => {
-    render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
+    render(
+      <PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />,
+    );
 
     const gridImage = screen.getByAltText("Wedding (42).jpg");
     const gridButton = gridImage.closest('[role="button"]');
     expect(gridButton).not.toBeNull();
     fireEvent.click(gridButton as Element);
 
-    const dialog = screen.getByRole("dialog", { name: /photo: wedding \(42\)\.jpg/i });
-    const lightboxImage = within(dialog).getByRole("img", { name: "Wedding (42).jpg" });
+    const dialog = screen.getByRole("dialog", {
+      name: /photo: wedding \(42\)\.jpg/i,
+    });
+    const lightboxImage = within(dialog).getByRole("img", {
+      name: "Wedding (42).jpg",
+    });
 
     // The <img> fills its box and preserves aspect ratio via object-contain.
     expect(lightboxImage).toHaveClass("h-full", "w-full", "object-contain");
@@ -209,7 +283,11 @@ describe("PublicGalleryGrid", () => {
     // watermark overlay track the zoom transform. That wrapper sits inside
     // the centered lightbox viewport, so the image expands to fill the
     // available surface while staying centered.
-    expect(lightboxImage.parentElement).toHaveClass("relative", "h-full", "w-full");
+    expect(lightboxImage.parentElement).toHaveClass(
+      "relative",
+      "h-full",
+      "w-full",
+    );
     expect(lightboxImage.parentElement?.parentElement).toHaveClass(
       "relative",
       "flex-1",
@@ -238,7 +316,11 @@ describe("PublicGalleryGrid", () => {
     const FAV_KEY = "rawdrive-favorites-wedding-gallery";
 
     beforeEach(() => {
-      try { localStorage.removeItem(FAV_KEY); } catch { /* noop */ }
+      try {
+        localStorage.removeItem(FAV_KEY);
+      } catch {
+        /* noop */
+      }
       Object.defineProperty(window, "location", {
         value: { origin: "https://app.rawdrive.test", search: "" },
         writable: true,
@@ -252,26 +334,40 @@ describe("PublicGalleryGrid", () => {
 
     afterEach(() => {
       vi.restoreAllMocks();
-      try { localStorage.removeItem(FAV_KEY); } catch { /* noop */ }
+      try {
+        localStorage.removeItem(FAV_KEY);
+      } catch {
+        /* noop */
+      }
     });
 
     function openLightbox() {
       const gridImage = screen.getByAltText("Wedding (42).jpg");
       const gridButton = gridImage.closest('[role="button"]');
       fireEvent.click(gridButton as Element);
-      return screen.getByRole("dialog", { name: /photo: wedding \(42\)\.jpg/i });
+      return screen.getByRole("dialog", {
+        name: /photo: wedding \(42\)\.jpg/i,
+      });
     }
 
     it("renders Favorite, Download, and Share buttons in the lightbox toolbar", () => {
-      render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
+      render(
+        <PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />,
+      );
       const dialog = openLightbox();
 
       // Lightbox GlassIconButtons expose accessible names via their `label`
       // prop: favorite = "Add to favorites", download = "Download WebP",
       // share = "Share photo" (default; flips to "Share link copied" on copy).
-      expect(within(dialog).getByRole("button", { name: /add to favorites/i })).toBeInTheDocument();
-      expect(within(dialog).getByRole("button", { name: /download webp/i })).toBeInTheDocument();
-      expect(within(dialog).getByRole("button", { name: /share photo/i })).toBeInTheDocument();
+      expect(
+        within(dialog).getByRole("button", { name: /add to favorites/i }),
+      ).toBeInTheDocument();
+      expect(
+        within(dialog).getByRole("button", { name: /download webp/i }),
+      ).toBeInTheDocument();
+      expect(
+        within(dialog).getByRole("button", { name: /share photo/i }),
+      ).toBeInTheDocument();
     });
 
     it("hides Download when the gallery has downloads disabled", () => {
@@ -284,11 +380,19 @@ describe("PublicGalleryGrid", () => {
       );
       const dialog = openLightbox();
 
-      expect(within(dialog).queryByRole("button", { name: /download webp/i })).toBeNull();
-      expect(within(dialog).queryByRole("button", { name: /download original/i })).toBeNull();
+      expect(
+        within(dialog).queryByRole("button", { name: /download webp/i }),
+      ).toBeNull();
+      expect(
+        within(dialog).queryByRole("button", { name: /download original/i }),
+      ).toBeNull();
       // Star + Share still present (those don't depend on download permission).
-      expect(within(dialog).getByRole("button", { name: /add to favorites/i })).toBeInTheDocument();
-      expect(within(dialog).getByRole("button", { name: /share photo/i })).toBeInTheDocument();
+      expect(
+        within(dialog).getByRole("button", { name: /add to favorites/i }),
+      ).toBeInTheDocument();
+      expect(
+        within(dialog).getByRole("button", { name: /share photo/i }),
+      ).toBeInTheDocument();
     });
 
     it("toggles favorite state when the Star button is clicked", () => {
@@ -300,10 +404,14 @@ describe("PublicGalleryGrid", () => {
       // asserting on the storage entry directly is fragile. A real
       // browser run (manual + the deferred Playwright smoke) verifies
       // the storage round-trip end-to-end.
-      render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
+      render(
+        <PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />,
+      );
       const dialog = openLightbox();
 
-      const favButton = within(dialog).getByRole("button", { name: /add to favorites/i });
+      const favButton = within(dialog).getByRole("button", {
+        name: /add to favorites/i,
+      });
       fireEvent.click(favButton);
 
       expect(
@@ -311,7 +419,9 @@ describe("PublicGalleryGrid", () => {
       ).toBeInTheDocument();
 
       // Click again should toggle back off.
-      fireEvent.click(within(dialog).getByRole("button", { name: /remove from favorites/i }));
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: /remove from favorites/i }),
+      );
       expect(
         within(dialog).getByRole("button", { name: /add to favorites/i }),
       ).toBeInTheDocument();
@@ -327,10 +437,14 @@ describe("PublicGalleryGrid", () => {
       );
       const dialog = openLightbox();
 
-      fireEvent.click(within(dialog).getByRole("button", { name: /add to favorites/i }));
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: /add to favorites/i }),
+      );
 
       expect(
-        await screen.findByText("Favorites are disabled in owner preview and will not affect client counts."),
+        await screen.findByText(
+          "Favorites are disabled in owner preview and will not affect client counts.",
+        ),
       ).toBeInTheDocument();
       expect(
         within(dialog).getByRole("button", { name: /add to favorites/i }),
@@ -345,12 +459,16 @@ describe("PublicGalleryGrid", () => {
         configurable: true,
       });
 
-      render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
+      render(
+        <PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />,
+      );
       const dialog = openLightbox();
 
       // The lightbox Share control's default accessible name is "Share photo";
       // it copies the canonical single-photo deep link to the clipboard.
-      fireEvent.click(within(dialog).getByRole("button", { name: /share photo/i }));
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: /share photo/i }),
+      );
 
       await waitFor(() => {
         // 2026-05-18: share URLs now point at the dedicated single-photo
@@ -362,7 +480,9 @@ describe("PublicGalleryGrid", () => {
       // After the copy resolves the label flips to the copied state
       // ("Share link copied").
       expect(
-        await within(dialog).findByRole("button", { name: /share link copied/i }),
+        await within(dialog).findByRole("button", {
+          name: /share link copied/i,
+        }),
       ).toBeInTheDocument();
     });
 
@@ -375,13 +495,17 @@ describe("PublicGalleryGrid", () => {
         writable: true,
       });
 
-      render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
+      render(
+        <PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />,
+      );
 
       // No click needed — the deep-link auto-open runs in a post-mount
       // microtask (SSR-safe: the window.location read cannot happen during
       // render), so await the dialog rather than querying synchronously.
       expect(
-        await screen.findByRole("dialog", { name: /photo: wedding \(42\)\.jpg/i }),
+        await screen.findByRole("dialog", {
+          name: /photo: wedding \(42\)\.jpg/i,
+        }),
       ).toBeInTheDocument();
     });
 
@@ -393,7 +517,9 @@ describe("PublicGalleryGrid", () => {
       // after hydration, without any user interaction.
       mockedList.mockResolvedValueOnce(["asset-wide"]);
 
-      render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
+      render(
+        <PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />,
+      );
       const dialog = openLightbox();
 
       await waitFor(() => {
@@ -406,15 +532,21 @@ describe("PublicGalleryGrid", () => {
       // Server said this asset is already favorited → label should
       // show the "remove from favorites" state, not "add to".
       expect(
-        await within(dialog).findByRole("button", { name: /remove from favorites/i }),
+        await within(dialog).findByRole("button", {
+          name: /remove from favorites/i,
+        }),
       ).toBeInTheDocument();
     });
 
     it("POSTs to addPublicFavorite when the Star button toggles on", async () => {
-      render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
+      render(
+        <PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />,
+      );
       const dialog = openLightbox();
 
-      fireEvent.click(within(dialog).getByRole("button", { name: /add to favorites/i }));
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: /add to favorites/i }),
+      );
 
       await waitFor(() => {
         expect(mockedAdd).toHaveBeenCalledWith(
@@ -431,14 +563,15 @@ describe("PublicGalleryGrid", () => {
       // Start with the asset already favorited (server hydration).
       mockedList.mockResolvedValueOnce(["asset-wide"]);
 
-      render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
+      render(
+        <PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />,
+      );
       const dialog = openLightbox();
 
       // Wait for hydration to flip the label.
-      const offButton = await within(dialog).findByRole(
-        "button",
-        { name: /remove from favorites/i },
-      );
+      const offButton = await within(dialog).findByRole("button", {
+        name: /remove from favorites/i,
+      });
       fireEvent.click(offButton);
 
       await waitFor(() => {
@@ -455,15 +588,21 @@ describe("PublicGalleryGrid", () => {
       // intent stays expressed; next page mount re-syncs.
       mockedAdd.mockRejectedValueOnce(new Error("network"));
 
-      render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
+      render(
+        <PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />,
+      );
       const dialog = openLightbox();
 
-      fireEvent.click(within(dialog).getByRole("button", { name: /add to favorites/i }));
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: /add to favorites/i }),
+      );
 
       // Optimistic flip happened immediately and stays put even after
       // the rejected promise settles.
       expect(
-        await within(dialog).findByRole("button", { name: /remove from favorites/i }),
+        await within(dialog).findByRole("button", {
+          name: /remove from favorites/i,
+        }),
       ).toBeInTheDocument();
     });
   });

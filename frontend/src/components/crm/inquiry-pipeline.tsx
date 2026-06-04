@@ -6,7 +6,15 @@ import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { leadStageClasses } from "@/lib/dashboard-ui";
 
-const STAGES = ["new", "contacted", "qualified", "proposal", "negotiation", "won", "lost"] as const;
+const STAGES = [
+  "new",
+  "contacted",
+  "qualified",
+  "proposal",
+  "negotiation",
+  "won",
+  "lost",
+] as const;
 
 export function InquiryPipeline() {
   const [activeStage, setActiveStage] = useState<string | "">("");
@@ -99,7 +107,14 @@ export function InquiryPipeline() {
         stage: form.stage,
       });
       setShowCreate(false);
-      setForm({ name: "", email: "", phone: "", source: "website", event_type: "wedding", stage: "new" });
+      setForm({
+        name: "",
+        email: "",
+        phone: "",
+        source: "website",
+        event_type: "wedding",
+        stage: "new",
+      });
       setRefreshTick((n) => n + 1);
     } catch (err) {
       setRequestState((prev) => ({
@@ -126,7 +141,10 @@ export function InquiryPipeline() {
           <div className="h-8 w-48 bg-surface-sunken rounded" />
           <div className="flex gap-4 overflow-x-auto">
             {[1, 2, 3, 4].map((item) => (
-              <div key={item} className="min-w-[280px] h-96 bg-surface-sunken rounded-xl" />
+              <div
+                key={item}
+                className="min-w-[280px] h-96 bg-surface-sunken rounded-xl"
+              />
             ))}
           </div>
         </div>
@@ -143,14 +161,16 @@ export function InquiryPipeline() {
       )}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Inquiry Pipeline</h1>
+          <h1 className="text-2xl font-semibold text-text-primary">
+            Inquiry Pipeline
+          </h1>
           <p className="text-sm text-text-secondary mt-1">
             {leads.length} {leads.length === 1 ? "inquiry" : "inquiries"}
           </p>
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px]"
+          className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-text-media hover:bg-accent-primary/90 min-h-[44px]"
         >
           + New Inquiry
         </button>
@@ -158,23 +178,28 @@ export function InquiryPipeline() {
 
       {showCreate && (
         <div className="rounded-2xl border border-border-default bg-surface-raised p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-text-primary">New Inquiry</h2>
+          <h2 className="text-lg font-semibold text-text-primary">
+            New Inquiry
+          </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
-              type="text" placeholder="Name *"
+              type="text"
+              placeholder="Name *"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary focus:outline-none focus:border-accent-primary"
               autoFocus
             />
             <input
-              type="email" placeholder="Email"
+              type="email"
+              placeholder="Email"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary focus:outline-none focus:border-accent-primary"
             />
             <input
-              type="tel" placeholder="Phone"
+              type="tel"
+              placeholder="Phone"
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
               className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary focus:outline-none focus:border-accent-primary"
@@ -206,7 +231,11 @@ export function InquiryPipeline() {
               onChange={(e) => setForm({ ...form, stage: e.target.value })}
               className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary capitalize"
             >
-              {STAGES.map((s) => (<option key={s} value={s}>{s}</option>))}
+              {STAGES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
             </select>
           </div>
           <div className="flex gap-2 justify-end">
@@ -220,7 +249,7 @@ export function InquiryPipeline() {
             <button
               onClick={handleCreate}
               disabled={creating || !form.name.trim()}
-              className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 disabled:opacity-50 min-h-[44px]"
+              className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-text-media hover:bg-accent-primary/90 disabled:opacity-50 min-h-[44px]"
             >
               {creating ? "Creatingâ€¦" : "Save Inquiry"}
             </button>
@@ -261,7 +290,9 @@ export function InquiryPipeline() {
             onClick={() => setViewMode("list")}
             className={cn(
               "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-              viewMode === "list" ? "bg-accent-primary text-white" : "text-text-secondary hover:text-text-primary",
+              viewMode === "list"
+                ? "bg-accent-primary text-text-media"
+                : "text-text-secondary hover:text-text-primary",
             )}
           >
             List
@@ -270,7 +301,9 @@ export function InquiryPipeline() {
             onClick={() => setViewMode("kanban")}
             className={cn(
               "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-              viewMode === "kanban" ? "bg-accent-primary text-white" : "text-text-secondary hover:text-text-primary",
+              viewMode === "kanban"
+                ? "bg-accent-primary text-text-media"
+                : "text-text-secondary hover:text-text-primary",
             )}
           >
             Kanban
@@ -285,11 +318,12 @@ export function InquiryPipeline() {
         <div className="rounded-2xl border border-dashed border-border-default p-10 text-center">
           <p className="text-text-primary font-medium">No inquiries yet</p>
           <p className="text-sm text-text-secondary mt-1">
-            Capture enquiries from your website, Instagram, or WhatsApp and track them through the pipeline.
+            Capture enquiries from your website, Instagram, or WhatsApp and
+            track them through the pipeline.
           </p>
           <button
             onClick={() => setShowCreate(true)}
-            className="mt-4 rounded-xl bg-accent-primary px-5 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px]"
+            className="mt-4 rounded-xl bg-accent-primary px-5 py-2.5 text-sm font-medium text-text-media hover:bg-accent-primary/90 min-h-[44px]"
           >
             + Create your first inquiry
           </button>
@@ -298,7 +332,10 @@ export function InquiryPipeline() {
         /* List view â€” vertical scannable table. Stage is rendered as
            a badge column; source/event/budget fit on one row each. */
         <div className="rounded-2xl border border-border-default bg-surface-raised overflow-hidden">
-          {(activeStage ? leads.filter((l) => l.stage === activeStage) : leads).map((lead) => (
+          {(activeStage
+            ? leads.filter((l) => l.stage === activeStage)
+            : leads
+          ).map((lead) => (
             <div
               key={lead.id}
               onClick={() => setSelectedLead(lead)}
@@ -313,19 +350,28 @@ export function InquiryPipeline() {
               className="grid grid-cols-[1fr_auto] gap-3 px-4 py-3 border-b border-border-default last:border-b-0 hover:bg-surface-sunken/40 transition-colors cursor-pointer"
             >
               <div>
-                <p className="font-medium text-text-primary text-sm">{lead.name}</p>
+                <p className="font-medium text-text-primary text-sm">
+                  {lead.name}
+                </p>
                 <div className="flex items-center gap-3 mt-1 text-xs text-text-secondary">
-                  {lead.event_type && <span className="capitalize">{lead.event_type}</span>}
-                  {lead.source && <span className="capitalize">via {lead.source}</span>}
+                  {lead.event_type && (
+                    <span className="capitalize">{lead.event_type}</span>
+                  )}
+                  {lead.source && (
+                    <span className="capitalize">via {lead.source}</span>
+                  )}
                   {lead.budget_paisa ? (
-                    <span>â‚¹{(lead.budget_paisa / 100).toLocaleString("en-IN")}</span>
+                    <span>
+                      â‚¹{(lead.budget_paisa / 100).toLocaleString("en-IN")}
+                    </span>
                   ) : null}
                 </div>
               </div>
               <span
                 className={cn(
                   "self-center capitalize",
-                  leadStageClasses[lead.stage] || "status-badge status-badge--neutral",
+                  leadStageClasses[lead.stage] ||
+                    "status-badge status-badge--neutral",
                 )}
               >
                 {lead.stage}
@@ -338,56 +384,70 @@ export function InquiryPipeline() {
            min-w-[280px] column sizing because kanban intrinsically
            needs to be wide enough to show card content. */
         <div className="flex gap-4 overflow-x-auto pb-4">
-          {STAGES.filter((stage) => !activeStage || stage === activeStage).map((stage) => (
-            <div key={stage} className="min-w-[280px] flex-shrink-0">
-              <div className="flex items-center gap-2 mb-3">
-                <span
-                  className={cn(
-                    "capitalize",
-                    leadStageClasses[stage] || "status-badge status-badge--neutral",
-                  )}
-                >
-                  {stage}
-                </span>
-                <span className="text-xs text-text-tertiary">{groupedLeads[stage]?.length || 0}</span>
-              </div>
-              <div className="space-y-2">
-                {(groupedLeads[stage] || []).map((lead) => (
-                  <div
-                    key={lead.id}
-                    onClick={() => setSelectedLead(lead)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setSelectedLead(lead);
-                      }
-                    }}
-                    className="bg-surface-raised rounded-xl p-3 border border-border-default hover:border-accent/30 transition-colors cursor-pointer"
-                  >
-                    <p className="font-medium text-text-primary text-sm">{lead.name}</p>
-                    {lead.event_type && (
-                      <p className="text-xs text-text-secondary mt-1 capitalize">{lead.event_type}</p>
+          {STAGES.filter((stage) => !activeStage || stage === activeStage).map(
+            (stage) => (
+              <div key={stage} className="min-w-[280px] flex-shrink-0">
+                <div className="flex items-center gap-2 mb-3">
+                  <span
+                    className={cn(
+                      "capitalize",
+                      leadStageClasses[stage] ||
+                        "status-badge status-badge--neutral",
                     )}
-                    <div className="flex items-center gap-2 mt-2">
-                      {lead.source && (
-                        <span className="text-xs text-text-tertiary capitalize">{lead.source}</span>
+                  >
+                    {stage}
+                  </span>
+                  <span className="text-xs text-text-tertiary">
+                    {groupedLeads[stage]?.length || 0}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {(groupedLeads[stage] || []).map((lead) => (
+                    <div
+                      key={lead.id}
+                      onClick={() => setSelectedLead(lead)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelectedLead(lead);
+                        }
+                      }}
+                      className="bg-surface-raised rounded-xl p-3 border border-border-default hover:border-accent/30 transition-colors cursor-pointer"
+                    >
+                      <p className="font-medium text-text-primary text-sm">
+                        {lead.name}
+                      </p>
+                      {lead.event_type && (
+                        <p className="text-xs text-text-secondary mt-1 capitalize">
+                          {lead.event_type}
+                        </p>
                       )}
-                      {lead.budget_paisa && (
-                        <span className="text-xs text-text-tertiary">
-                          â‚¹{(lead.budget_paisa / 100).toLocaleString("en-IN")}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2 mt-2">
+                        {lead.source && (
+                          <span className="text-xs text-text-tertiary capitalize">
+                            {lead.source}
+                          </span>
+                        )}
+                        {lead.budget_paisa && (
+                          <span className="text-xs text-text-tertiary">
+                            â‚¹
+                            {(lead.budget_paisa / 100).toLocaleString("en-IN")}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {(groupedLeads[stage] || []).length === 0 && (
-                  <div className="text-center py-8 text-text-tertiary text-sm">No inquiries</div>
-                )}
+                  ))}
+                  {(groupedLeads[stage] || []).length === 0 && (
+                    <div className="text-center py-8 text-text-tertiary text-sm">
+                      No inquiries
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ),
+          )}
         </div>
       )}
 
@@ -403,7 +463,7 @@ export function InquiryPipeline() {
           aria-label="Inquiry detail"
         >
           <div
-            className="flex-1 bg-black/40 backdrop-blur-sm"
+            className="flex-1 bg-surface-scrim-strong/40 glass-blur-subtle"
             onClick={() => setSelectedLead(null)}
             aria-hidden
           />
@@ -423,7 +483,8 @@ export function InquiryPipeline() {
             <span
               className={cn(
                 "capitalize",
-                leadStageClasses[selectedLead.stage] || "status-badge status-badge--neutral",
+                leadStageClasses[selectedLead.stage] ||
+                  "status-badge status-badge--neutral",
               )}
             >
               {selectedLead.stage}
@@ -432,25 +493,33 @@ export function InquiryPipeline() {
               {selectedLead.email && (
                 <div>
                   <dt className="text-xs text-text-tertiary">Email</dt>
-                  <dd className="text-text-primary font-mono text-xs break-all">{selectedLead.email}</dd>
+                  <dd className="text-text-primary font-mono text-xs break-all">
+                    {selectedLead.email}
+                  </dd>
                 </div>
               )}
               {selectedLead.phone && (
                 <div>
                   <dt className="text-xs text-text-tertiary">Phone</dt>
-                  <dd className="text-text-primary font-mono text-xs">{selectedLead.phone}</dd>
+                  <dd className="text-text-primary font-mono text-xs">
+                    {selectedLead.phone}
+                  </dd>
                 </div>
               )}
               {selectedLead.event_type && (
                 <div>
                   <dt className="text-xs text-text-tertiary">Event type</dt>
-                  <dd className="text-text-primary capitalize">{selectedLead.event_type}</dd>
+                  <dd className="text-text-primary capitalize">
+                    {selectedLead.event_type}
+                  </dd>
                 </div>
               )}
               {selectedLead.source && (
                 <div>
                   <dt className="text-xs text-text-tertiary">Source</dt>
-                  <dd className="text-text-primary capitalize">{selectedLead.source}</dd>
+                  <dd className="text-text-primary capitalize">
+                    {selectedLead.source}
+                  </dd>
                 </div>
               )}
               {selectedLead.budget_paisa ? (
@@ -464,7 +533,9 @@ export function InquiryPipeline() {
               {selectedLead.notes && (
                 <div>
                   <dt className="text-xs text-text-tertiary">Notes</dt>
-                  <dd className="text-text-primary whitespace-pre-wrap">{selectedLead.notes}</dd>
+                  <dd className="text-text-primary whitespace-pre-wrap">
+                    {selectedLead.notes}
+                  </dd>
                 </div>
               )}
               {selectedLead.created_at && (
@@ -478,7 +549,7 @@ export function InquiryPipeline() {
             </dl>
             <a
               href={`/crm/projects?create=true&lead=${selectedLead.id}`}
-              className="block w-full text-center rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90"
+              className="block w-full text-center rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-text-media hover:bg-accent-primary/90"
             >
               Convert to project
             </a>
@@ -488,4 +559,3 @@ export function InquiryPipeline() {
     </div>
   );
 }
-

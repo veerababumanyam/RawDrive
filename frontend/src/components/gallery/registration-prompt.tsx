@@ -51,7 +51,10 @@ export function RegistrationPrompt({
   const dismiss = useCallback(() => {
     setVisible(false);
     if (typeof window !== "undefined") {
-      window.sessionStorage.setItem(`rawdrive:reg-prompt:${dismissKey}`, "dismissed");
+      window.sessionStorage.setItem(
+        `rawdrive:reg-prompt:${dismissKey}`,
+        "dismissed",
+      );
     }
   }, [dismissKey]);
 
@@ -82,7 +85,7 @@ export function RegistrationPrompt({
       role="dialog"
       aria-modal="true"
       aria-labelledby="reg-prompt-title"
-      className="fixed bottom-4 right-4 z-40 max-w-sm rounded-2xl bg-surface-raised/95 backdrop-blur-xl border border-border-subtle p-5 shadow-2xl"
+      className="fixed bottom-4 right-4 z-40 max-w-sm rounded-2xl bg-surface-raised/95 glass-blur-full border border-border-subtle p-5 shadow-2xl"
     >
       <button
         type="button"
@@ -92,7 +95,10 @@ export function RegistrationPrompt({
       >
         ×
       </button>
-      <h3 id="reg-prompt-title" className="text-base font-semibold text-text-primary pr-6">
+      <h3
+        id="reg-prompt-title"
+        className="text-base font-semibold text-text-primary pr-6"
+      >
         {title}
       </h3>
       <p className="mt-1.5 text-sm text-text-secondary">{body}</p>

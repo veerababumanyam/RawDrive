@@ -112,14 +112,24 @@ async function getExportedKeysForKeyId(keyId: string): Promise<string[]> {
   const add = (value: string | null) => {
     if (value && !out.includes(value)) out.push(value);
   };
+  const galleryId = galleryIdFromKeyId(keyId);
+  const requestedVersionedKey = isVersionedGalleryKeyId(keyId);
+  const addIfMatchesRequestedVersion = async (value: string | null) => {
+    if (!value) return;
+    if (!galleryId || !requestedVersionedKey) {
+      add(value);
+      return;
+    }
+    const candidateKeyId = await versionedGalleryKeyId(galleryId, value);
+    if (candidateKeyId === keyId) add(value);
+  };
 
   add(readStoredKey(keyId));
   if (typeof window !== "undefined") {
     const fragmentKey = readGalleryKeyFromHash(window.location.hash);
     if (fragmentKey) {
-      add(fragmentKey);
-      const galleryId = galleryIdFromKeyId(keyId);
-      if (galleryId) {
+      await addIfMatchesRequestedVersion(fragmentKey);
+      if (galleryId && (!requestedVersionedKey || await versionedGalleryKeyId(galleryId, fragmentKey) === keyId)) {
         await rememberGalleryMediaKey(galleryId, fragmentKey);
       }
     }
@@ -128,11 +138,11 @@ async function getExportedKeysForKeyId(keyId: string): Promise<string[]> {
   const baseKeyId = galleryBaseKeyId(keyId);
   if (baseKeyId) {
     const activeKeyId = readActiveKeyId(baseKeyId);
-    if (activeKeyId && activeKeyId !== keyId) add(readStoredKey(activeKeyId));
-    if (baseKeyId !== keyId) add(readStoredKey(baseKeyId));
+    if (activeKeyId && activeKeyId !== keyId) await addIfMatchesRequestedVersion(readStoredKey(activeKeyId));
+    if (baseKeyId !== keyId) await addIfMatchesRequestedVersion(readStoredKey(baseKeyId));
     for (const candidateKeyId of storedMediaKeyIds()) {
       if (candidateKeyId === baseKeyId || candidateKeyId.startsWith(`${baseKeyId}:`)) {
-        add(readStoredKey(candidateKeyId));
+        await addIfMatchesRequestedVersion(readStoredKey(candidateKeyId));
       }
     }
   }
@@ -240,6 +250,11 @@ function galleryIdFromKeyId(keyId: string): string | null {
   const parts = keyId.split(":");
   if (parts[0] !== "gallery" || !parts[1]) return null;
   return parts[1];
+}
+
+function isVersionedGalleryKeyId(keyId: string): boolean {
+  const parts = keyId.split(":");
+  return parts.length === 3 && parts[0] === "gallery" && Boolean(parts[1]) && /^[a-f0-9]{16}$/.test(parts[2]);
 }
 
 async function keyFingerprint(exportedKey: string): Promise<string> {

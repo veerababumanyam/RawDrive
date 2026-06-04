@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { Check, XMark } from "@/components/icons";
 import { getStoredAccessToken } from "@/lib/auth";
-import { formatINR, type PublicStreamingPackage } from "@/lib/streaming-packages";
+import {
+  formatINR,
+  type PublicStreamingPackage,
+} from "@/lib/streaming-packages";
 import { useUploadPackages, type UploadPackage } from "@/lib/upload-packages";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
@@ -33,7 +36,9 @@ type RazorpayRechargeOptions = {
   modal?: { ondismiss?: () => void };
 };
 
-type RazorpayConstructor = new (options: RazorpayRechargeOptions) => { open(): void };
+type RazorpayConstructor = new (options: RazorpayRechargeOptions) => {
+  open(): void;
+};
 
 export type RechargeModalProps = {
   open: boolean;
@@ -44,14 +49,21 @@ export type RechargeModalProps = {
   initialSurface?: RechargeSurface;
 };
 
-export function RechargeModal({ open, onClose, onRedirect, initialSurface = "streaming" }: RechargeModalProps) {
+export function RechargeModal({
+  open,
+  onClose,
+  onRedirect,
+  initialSurface = "streaming",
+}: RechargeModalProps) {
   // Reset to the caller-supplied tab whenever the modal re-opens. Prevents
   // a close-from-uploads-tab + re-open-from-streaming-context from showing
   // the wrong pane. Performed during render on the open→true transition
   // (React-recommended pattern for "reset state on prop change") instead of
   // a synchronous setState-in-effect.
   const [surface, setSurface] = useState<RechargeSurface>(initialSurface);
-  const [packages, setPackages] = useState<PublicStreamingPackage[] | null>(null);
+  const [packages, setPackages] = useState<PublicStreamingPackage[] | null>(
+    null,
+  );
   const [loadingPackages, setLoadingPackages] = useState(open);
   const [packagesError, setPackagesError] = useState<string | null>(null);
 
@@ -70,7 +82,9 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
 
   const uploadPackagesState = useUploadPackages(open && surface === "uploads");
 
-  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
+  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(
+    null,
+  );
   const [provider, setProvider] = useState<RechargeProvider>("phonepe");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -149,10 +163,17 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
         return;
       }
       if (provider === "razorpay" && url.startsWith("razorpay://checkout")) {
-        await openRazorpayRecharge(url, data.amount_paise || 0, data.currency || "INR", () => {
-          setCheckoutNotice("Payment received. Your streaming balance will update after provider confirmation.");
-          onClose();
-        });
+        await openRazorpayRecharge(
+          url,
+          data.amount_paise || 0,
+          data.currency || "INR",
+          () => {
+            setCheckoutNotice(
+              "Payment received. Your streaming balance will update after provider confirmation.",
+            );
+            onClose();
+          },
+        );
         return;
       }
       if (!url.startsWith("https:")) {
@@ -180,16 +201,18 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
         // stopPropagation below).
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-surface-scrim-strong/60 glass-blur-subtle p-4"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl rounded-2xl border border-white/10 bg-surface-base/95 shadow-xl p-6 space-y-5 text-content-primary"
+        className="w-full max-w-2xl rounded-2xl border border-text-media/10 bg-surface-base/95 shadow-xl p-6 space-y-5 text-content-primary"
       >
         <header className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold">
-              {surface === "streaming" ? "Recharge streaming credits" : "Buy upload credits"}
+              {surface === "streaming"
+                ? "Recharge streaming credits"
+                : "Buy upload credits"}
             </h2>
             <p className="text-sm text-content-secondary">
               {surface === "streaming"
@@ -214,7 +237,11 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
             credits. Uses role=tablist for keyboard-nav semantics so it
             meets the design system's A11Y baseline without GlassIconButton
             (which is icon-only). */}
-        <div role="tablist" aria-label="Recharge product" className="flex gap-2 border-b border-white/10">
+        <div
+          role="tablist"
+          aria-label="Recharge product"
+          className="flex gap-2 border-b border-text-media/10"
+        >
           <button
             role="tab"
             id="recharge-tab-streaming"
@@ -258,33 +285,45 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
             className="space-y-4"
           >
             {uploadPackagesState.loading && (
-              <div className="py-6 text-sm text-content-secondary">Loading upload packages…</div>
+              <div className="py-6 text-sm text-content-secondary">
+                Loading upload packages…
+              </div>
             )}
             {uploadPackagesState.error && (
               <div className="rounded-lg border border-feedback-error/30 bg-feedback-error/10 p-3 text-sm">
                 Failed to load upload packages: {uploadPackagesState.error}
               </div>
             )}
-            {!uploadPackagesState.loading && !uploadPackagesState.error && uploadPackagesState.packages.length > 0 && (
-              <div role="list" aria-label="Upload credit packages" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                {uploadPackagesState.packages.map((pkg: UploadPackage) => (
-                  <div
-                    key={pkg.code}
-                    role="listitem"
-                    data-testid={`upload-package-${pkg.code}`}
-                    className="rounded-xl border border-white/10 p-4"
-                  >
-                    <div className="flex items-baseline justify-between">
-                      <span className="font-semibold">{pkg.display_name}</span>
-                      <span className="text-sm">₹{formatINR(pkg.price_paise)}</span>
+            {!uploadPackagesState.loading &&
+              !uploadPackagesState.error &&
+              uploadPackagesState.packages.length > 0 && (
+                <div
+                  role="list"
+                  aria-label="Upload credit packages"
+                  className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+                >
+                  {uploadPackagesState.packages.map((pkg: UploadPackage) => (
+                    <div
+                      key={pkg.code}
+                      role="listitem"
+                      data-testid={`upload-package-${pkg.code}`}
+                      className="rounded-xl border border-text-media/10 p-4"
+                    >
+                      <div className="flex items-baseline justify-between">
+                        <span className="font-semibold">
+                          {pkg.display_name}
+                        </span>
+                        <span className="text-sm">
+                          ₹{formatINR(pkg.price_paise)}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs text-content-secondary">
+                        {pkg.credits.toLocaleString("en-IN")} credits
+                      </div>
                     </div>
-                    <div className="mt-1 text-xs text-content-secondary">
-                      {pkg.credits.toLocaleString("en-IN")} credits
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
             {/* Order-initiation endpoint pending — see RechargeSurface doc
                 above. Explicit notice keeps expectations honest until the
                 backend slice ships. */}
@@ -293,14 +332,17 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
               role="status"
               className="rounded-lg border border-border-subtle bg-surface-sunken p-3 text-xs text-text-secondary"
             >
-              Upload credit checkout is unavailable because the order endpoint is not live yet.
-              Admin-initiated grants are available today from Admin → Workspaces → Grant credits.
+              Upload credit checkout is unavailable because the order endpoint
+              is not live yet. Admin-initiated grants are available today from
+              Admin → Workspaces → Grant credits.
             </div>
           </div>
         )}
 
         {surface === "streaming" && loadingPackages && (
-          <div className="py-6 text-sm text-content-secondary">Loading packages…</div>
+          <div className="py-6 text-sm text-content-secondary">
+            Loading packages…
+          </div>
         )}
         {surface === "streaming" && packagesError && (
           <div className="rounded-lg border border-feedback-error/30 bg-feedback-error/10 p-3 text-sm">
@@ -309,7 +351,11 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
         )}
 
         {surface === "streaming" && packages && packages.length > 0 && (
-          <div role="radiogroup" aria-label="Streaming packages" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div
+            role="radiogroup"
+            aria-label="Streaming packages"
+            className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+          >
             {packages.map((pkg) => {
               const selected = selectedPackageId === pkg.id;
               return (
@@ -323,15 +369,18 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
                   className={`text-left rounded-xl border p-4 transition-colors ${
                     selected
                       ? "border-accent-secondary bg-accent-secondary/10"
-                      : "border-white/10 hover:border-white/20"
+                      : "border-text-media/10 hover:border-text-media/20"
                   }`}
                 >
                   <div className="flex items-baseline justify-between">
                     <span className="font-semibold">{pkg.name}</span>
-                    <span className="text-sm">₹{formatINR(pkg.price_paise)}</span>
+                    <span className="text-sm">
+                      ₹{formatINR(pkg.price_paise)}
+                    </span>
                   </div>
                   <div className="mt-1 text-xs text-content-secondary">
-                    {pkg.minutes} min · up to {pkg.max_concurrent_viewers} viewers
+                    {pkg.minutes} min · up to {pkg.max_concurrent_viewers}{" "}
+                    viewers
                   </div>
                 </button>
               );
@@ -368,12 +417,18 @@ export function RechargeModal({ open, onClose, onRedirect, initialSurface = "str
         )}
 
         {error && surface === "streaming" && (
-          <div data-testid="recharge-error" className="rounded-lg border border-feedback-error/30 bg-feedback-error/10 p-3 text-sm">
+          <div
+            data-testid="recharge-error"
+            className="rounded-lg border border-feedback-error/30 bg-feedback-error/10 p-3 text-sm"
+          >
             {error}
           </div>
         )}
         {checkoutNotice && surface === "streaming" && (
-          <div data-testid="recharge-notice" className="rounded-lg border border-feedback-success/30 bg-feedback-success/10 p-3 text-sm">
+          <div
+            data-testid="recharge-notice"
+            className="rounded-lg border border-feedback-success/30 bg-feedback-success/10 p-3 text-sm"
+          >
             {checkoutNotice}
           </div>
         )}
@@ -423,7 +478,9 @@ async function openRazorpayRecharge(
     throw new Error("Razorpay checkout details missing");
   }
   await loadRazorpayScript();
-  const Razorpay = (window as typeof window & { Razorpay?: RazorpayConstructor }).Razorpay;
+  const Razorpay = (
+    window as typeof window & { Razorpay?: RazorpayConstructor }
+  ).Razorpay;
   if (!Razorpay) {
     throw new Error("Razorpay checkout failed to load");
   }
@@ -441,7 +498,8 @@ async function openRazorpayRecharge(
 
 function loadRazorpayScript(): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
-  if ((window as typeof window & { Razorpay?: RazorpayConstructor }).Razorpay) return Promise.resolve();
+  if ((window as typeof window & { Razorpay?: RazorpayConstructor }).Razorpay)
+    return Promise.resolve();
   const existing = document.getElementById("razorpay-checkout-js");
   if (existing) {
     return waitForRazorpay();
@@ -461,7 +519,9 @@ function waitForRazorpay(): Promise<void> {
       reject(new Error("Razorpay script timeout"));
     }, 8000);
     const poll = window.setInterval(() => {
-      if ((window as typeof window & { Razorpay?: RazorpayConstructor }).Razorpay) {
+      if (
+        (window as typeof window & { Razorpay?: RazorpayConstructor }).Razorpay
+      ) {
         window.clearTimeout(deadline);
         window.clearInterval(poll);
         resolve();

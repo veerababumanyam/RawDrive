@@ -8,7 +8,7 @@ import {
   UserPlus,
   Users,
   Wallet,
-} from "lucide-react";
+} from "@/components/icons";
 import { SidebarShell, SidebarAvatar } from "./SidebarShell";
 import type { NavGroup } from "./SidebarShell";
 
@@ -40,7 +40,13 @@ interface DealerSidebarProps {
   onMobileClose?: () => void;
 }
 
-export function DealerSidebar({ userName, avatarUrl, territory, mobileOpen, onMobileClose }: DealerSidebarProps) {
+export function DealerSidebar({
+  userName,
+  avatarUrl,
+  territory,
+  mobileOpen,
+  onMobileClose,
+}: DealerSidebarProps) {
   return (
     <SidebarShell
       subtitle="Dealer Portal"

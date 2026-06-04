@@ -87,9 +87,7 @@ function MyProfileTab() {
         if (data) fetchAvailability(data.id);
       })
       .catch((err: unknown) =>
-        setError(
-          err instanceof Error ? err.message : "Failed to load profile",
-        ),
+        setError(err instanceof Error ? err.message : "Failed to load profile"),
       )
       .finally(() => setLoading(false));
   }, [token, fetchAvailability]);
@@ -166,7 +164,10 @@ function MyProfileTab() {
     return (
       <div className="space-y-4 pt-2">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-24 rounded-2xl bg-surface-sunken animate-pulse" />
+          <div
+            key={i}
+            className="h-24 rounded-2xl bg-surface-sunken animate-pulse"
+          />
         ))}
       </div>
     );
@@ -201,7 +202,9 @@ function MyProfileTab() {
 
       {!listing ? (
         <div className="rounded-2xl border border-dashed border-border-default p-10 text-center space-y-4">
-          <p className="font-medium text-text-primary">No freelance profile yet</p>
+          <p className="font-medium text-text-primary">
+            No freelance profile yet
+          </p>
           <p className="text-sm text-text-secondary">
             Create a profile so clients can find and contact you from the
             marketplace.
@@ -218,7 +221,7 @@ function MyProfileTab() {
           <div className="rounded-2xl border border-border-default bg-surface-raised p-5 space-y-3">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h3 className="text-base font-semibold text-on-surface truncate">
+                <h3 className="text-base font-semibold text-text-primary truncate">
                   {listing.title}
                 </h3>
                 {listing.city && (
@@ -256,7 +259,7 @@ function MyProfileTab() {
           <div className="rounded-2xl border border-border-default bg-surface-raised p-5">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h3 className="text-sm font-semibold text-on-surface">
+                <h3 className="text-sm font-semibold text-text-primary">
                   Available for bookings
                 </h3>
                 <p className="text-xs text-text-secondary mt-0.5">
@@ -273,12 +276,14 @@ function MyProfileTab() {
                 disabled={toggling}
                 className={cn(
                   "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 disabled:opacity-50",
-                  listing.is_published ? "bg-feedback-success" : "bg-surface-sunken",
+                  listing.is_published
+                    ? "bg-feedback-success"
+                    : "bg-surface-sunken",
                 )}
               >
                 <span
                   className={cn(
-                    "pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform duration-200",
+                    "pointer-events-none inline-block h-5 w-5 rounded-full bg-surface-elevated shadow ring-0 transition-transform duration-200",
                     listing.is_published ? "translate-x-5" : "translate-x-0",
                   )}
                 />
@@ -289,7 +294,7 @@ function MyProfileTab() {
           <div className="rounded-2xl border border-border-default bg-surface-raised p-5 space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-on-surface">
+                <h3 className="text-sm font-semibold text-text-primary">
                   Unavailable dates
                 </h3>
                 <p className="text-xs text-text-secondary mt-0.5">
@@ -366,7 +371,7 @@ function MyProfileTab() {
 
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-2xl border border-border-default bg-surface-raised p-4 text-center">
-              <p className="text-2xl font-bold text-on-surface">
+              <p className="text-2xl font-bold text-text-primary">
                 {listing.rating_avg?.toFixed(1) ?? "—"}
               </p>
               <p className="text-xs text-text-secondary mt-1">
@@ -374,12 +379,10 @@ function MyProfileTab() {
               </p>
             </div>
             <div className="rounded-2xl border border-border-default bg-surface-raised p-4 text-center">
-              <p className="text-2xl font-bold text-on-surface capitalize">
+              <p className="text-2xl font-bold text-text-primary capitalize">
                 {listing.is_published ? "Active" : "Hidden"}
               </p>
-              <p className="text-xs text-text-secondary mt-1">
-                Profile status
-              </p>
+              <p className="text-xs text-text-secondary mt-1">Profile status</p>
             </div>
           </div>
         </>
@@ -397,8 +400,7 @@ function PhotographersTab() {
     typeof window !== "undefined"
       ? (getStoredAccessTokenClaims()?.sub ?? "")
       : "";
-  const token =
-    typeof window !== "undefined" ? getStoredAccessToken() : null;
+  const token = typeof window !== "undefined" ? getStoredAccessToken() : null;
   const [hasProfile, setHasProfile] = useState(false);
   const [specialization, setSpecialization] = useState("");
   const [city, setCity] = useState("");
@@ -434,7 +436,9 @@ function PhotographersTab() {
     if (!token) return;
     getMyListing(token)
       .then((listing) => setHasProfile(listing !== null))
-      .catch(() => {/* non-fatal */});
+      .catch(() => {
+        /* non-fatal */
+      });
     fetch(`${API_BASE}/api/v1/users/profile`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -501,7 +505,7 @@ function PhotographersTab() {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
+        <div className="rounded-xl border border-feedback-error/20 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error">
           {error}
         </div>
       )}
@@ -509,7 +513,10 @@ function PhotographersTab() {
       <div className="flex flex-wrap gap-3">
         <select
           value={stateID}
-          onChange={(e) => { setStateID(e.target.value ? Number(e.target.value) : ""); setDistrict(""); }}
+          onChange={(e) => {
+            setStateID(e.target.value ? Number(e.target.value) : "");
+            setDistrict("");
+          }}
           className="input-base min-w-[160px]"
           aria-label="Filter by state"
         >
@@ -521,7 +528,8 @@ function PhotographersTab() {
           ))}
         </select>
         {(() => {
-          const selectedStateName = states.find((s) => s.id === stateID)?.name ?? "";
+          const selectedStateName =
+            states.find((s) => s.id === stateID)?.name ?? "";
           const districts = getDistrictsForState(selectedStateName);
           return (
             <select
@@ -531,9 +539,13 @@ function PhotographersTab() {
               className="input-base min-w-[160px] disabled:opacity-50"
               aria-label="Filter by district"
             >
-              <option value="">{districts.length === 0 ? "All Districts" : "All Districts"}</option>
+              <option value="">
+                {districts.length === 0 ? "All Districts" : "All Districts"}
+              </option>
               {districts.map((d) => (
-                <option key={d} value={d}>{d}</option>
+                <option key={d} value={d}>
+                  {d}
+                </option>
               ))}
             </select>
           );
@@ -591,7 +603,10 @@ function PhotographersTab() {
               )}
               <div className="flex flex-wrap gap-1.5 mt-3">
                 {freelancer.specializations.map((entry) => (
-                  <span key={entry} className="status-badge status-badge--accent">
+                  <span
+                    key={entry}
+                    className="status-badge status-badge--accent"
+                  >
                     {entry}
                   </span>
                 ))}

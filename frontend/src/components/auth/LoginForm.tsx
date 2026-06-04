@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Mail, KeyRound } from "lucide-react";
+import { Envelope, GoogleMark, Key } from "@/components/icons";
+import { GlassButton } from "@/components/ui/glass-button";
 import {
   type RefreshAuthFailureReason,
   getGoogleOAuthStartUrl,
@@ -19,7 +20,9 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 const LOGIN_NETWORK_ERROR =
   "RawDrive couldn't be reached. Check your connection and try again.";
 
-function friendlyOAuthRefreshFailure(reason: RefreshAuthFailureReason | string | null) {
+function friendlyOAuthRefreshFailure(
+  reason: RefreshAuthFailureReason | string | null,
+) {
   switch (reason) {
     case "network_error":
       return "Google verified you, but RawDrive couldn't reach the server. Check your connection and try again.";
@@ -82,7 +85,9 @@ const MFA_STORAGE_BLOCKED_ERROR =
 // error. Runtime handlers (login, Google button, OAuth-finish) still set these
 // imperatively afterwards.
 function initialLoginNotice(params: URLSearchParams): string {
-  return params.get("registered") === "1" ? "Account created. Please login below." : "";
+  return params.get("registered") === "1"
+    ? "Account created. Please login below."
+    : "";
 }
 
 function initialLoginError(params: URLSearchParams): string {
@@ -92,7 +97,9 @@ function initialLoginError(params: URLSearchParams): string {
   if (params.get("mfa_storage_blocked") === "1") {
     return MFA_STORAGE_BLOCKED_ERROR;
   }
-  const sessionMessage = friendlySessionExpired(params.get("session_expired") === "1");
+  const sessionMessage = friendlySessionExpired(
+    params.get("session_expired") === "1",
+  );
   if (sessionMessage) {
     return sessionMessage;
   }
@@ -130,7 +137,8 @@ export function LoginForm() {
     searchParams.get("error"),
     searchParams.get("reason"),
   ].join("|");
-  const [noticeErrorSnapshot, setNoticeErrorSnapshot] = useState(noticeErrorKey);
+  const [noticeErrorSnapshot, setNoticeErrorSnapshot] =
+    useState(noticeErrorKey);
   if (noticeErrorSnapshot !== noticeErrorKey) {
     setNoticeErrorSnapshot(noticeErrorKey);
     setNotice(initialLoginNotice(searchParams));
@@ -141,7 +149,8 @@ export function LoginForm() {
   const oauthMfaRequired = searchParams.get("mfa_required") === "1";
   const oauthError = searchParams.get("error");
   const prefilledEmail = searchParams.get("email") || "";
-  const activationEmail = oauthError === "oauth_account_not_activated" ? prefilledEmail : "";
+  const activationEmail =
+    oauthError === "oauth_account_not_activated" ? prefilledEmail : "";
 
   const googleStartUrl = useMemo(() => getGoogleOAuthStartUrl(API_BASE), []);
 
@@ -192,7 +201,9 @@ export function LoginForm() {
         setOAuthFinishing(false);
         setNotice("");
         setError(friendlyOAuthError("oauth_refresh_failed", result.reason));
-        router.replace(`/login?error=oauth_refresh_failed&reason=${encodeURIComponent(result.reason)}`);
+        router.replace(
+          `/login?error=oauth_refresh_failed&reason=${encodeURIComponent(result.reason)}`,
+        );
         return;
       }
       router.replace(getPostLoginPath());
@@ -223,8 +234,11 @@ export function LoginForm() {
       });
 
       const payload = await response.json().catch(() => ({}));
-      
-      if (response.status === 403 && payload.error === "account not activated") {
+
+      if (
+        response.status === 403 &&
+        payload.error === "account not activated"
+      ) {
         router.push(`/activate?email=${encodeURIComponent(email.trim())}`);
         return;
       }
@@ -236,16 +250,25 @@ export function LoginForm() {
       // TOTP check. The mfa_token is a 5-minute JWT with purpose=mfa_challenge
       // that the backend's /auth/verify-totp endpoint accepts as its own
       // credential.
-      if (response.status === 401 && payload.mfa_required && payload.mfa_token) {
+      if (
+        response.status === 401 &&
+        payload.mfa_required &&
+        payload.mfa_token
+      ) {
         if (typeof window !== "undefined") {
-          window.sessionStorage.setItem("rawdrive_mfa_token", payload.mfa_token);
+          window.sessionStorage.setItem(
+            "rawdrive_mfa_token",
+            payload.mfa_token,
+          );
         }
         router.push("/login/mfa");
         return;
       }
 
       if (!response.ok) {
-        setError(payload.error || "Login failed. Please check your credentials.");
+        setError(
+          payload.error || "Login failed. Please check your credentials.",
+        );
         setLoading(false);
         return;
       }
@@ -292,14 +315,19 @@ export function LoginForm() {
 
       {oauthEnabled && (
         <>
-          <button
+          <GlassButton
             type="button"
             disabled={loading || oauthFinishing || googleLoading}
-            aria-describedby={webviewNotice ? "google-webview-recovery" : undefined}
+            aria-describedby={
+              webviewNotice ? "google-webview-recovery" : undefined
+            }
             onClick={() => {
               if (isAndroidWebView()) {
                 setWebviewNotice(true);
-              } else if (typeof navigator !== "undefined" && navigator.onLine === false) {
+              } else if (
+                typeof navigator !== "undefined" &&
+                navigator.onLine === false
+              ) {
                 setNotice("");
                 setError(LOGIN_NETWORK_ERROR);
               } else {
@@ -309,28 +337,13 @@ export function LoginForm() {
                 window.location.assign(googleStartUrl);
               }
             }}
-            className="inline-flex w-full items-center justify-center gap-3 rounded-xl bg-surface-container-low px-4 py-4 font-medium text-text-primary transition-colors hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-60"
+            variant="surface"
+            size="lg"
+            className="w-full"
+            icon={<GoogleMark className="brand-google-mark" />}
           >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                fill="#4285F4"
-              />
-              <path
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                fill="#34A853"
-              />
-              <path
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
-                fill="#FBBC05"
-              />
-              <path
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                fill="#EA4335"
-              />
-            </svg>
-            <span>{googleLoading ? "Redirecting to Google..." : "Sign in with Google"}</span>
-          </button>
+            {googleLoading ? "Redirecting to Google..." : "Sign in with Google"}
+          </GlassButton>
 
           {webviewNotice ? (
             <div
@@ -343,36 +356,38 @@ export function LoginForm() {
                 Google sign-in requires Chrome
               </p>
               <p className="mt-1">
-                This browser can&apos;t open Google&apos;s sign-in page. Open RawDrive in
-                Chrome to continue.
+                This browser can&apos;t open Google&apos;s sign-in page. Open
+                RawDrive in Chrome to continue.
               </p>
-              <button
+              <GlassButton
                 type="button"
                 onClick={() => openPageInChrome(window.location.href)}
-                className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                variant="primary"
+                className="mt-3 w-full"
               >
                 Open in Chrome
-              </button>
+              </GlassButton>
             </div>
           ) : null}
 
           <div className="relative flex items-center py-2">
             <div className="soft-divider flex-grow" />
-            <span className="mx-4 text-xs font-bold tracking-[0.24em] text-text-tertiary">OR</span>
+            <span className="text-micro mx-4 font-bold text-text-tertiary">
+              OR
+            </span>
             <div className="soft-divider flex-grow" />
           </div>
         </>
       )}
 
-      <p className="text-sm text-text-secondary">Enter your details to access your studio</p>
+      <p className="text-sm text-text-secondary">
+        Enter your details to access your studio
+      </p>
 
       <form onSubmit={handleLogin} className="space-y-6">
         <div className="space-y-4">
           <div className="space-y-2">
-            <label
-              htmlFor="login-email"
-              className="block pl-1 text-xs font-semibold uppercase tracking-[0.24em] text-text-tertiary"
-            >
+            <label htmlFor="login-email" className="form-label block pl-1">
               Email Address
             </label>
             <div className="group relative">
@@ -387,15 +402,12 @@ export function LoginForm() {
                 autoComplete="email"
                 required
               />
-              <Mail className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-tertiary transition-colors group-focus-within:text-accent" />
+              <Envelope className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-tertiary transition-colors group-focus-within:text-accent" />
             </div>
           </div>
 
           <div className="space-y-2">
-            <label
-              htmlFor="login-password"
-              className="block pl-1 text-xs font-semibold uppercase tracking-[0.24em] text-text-tertiary"
-            >
+            <label htmlFor="login-password" className="form-label block pl-1">
               Password
             </label>
             <div className="group relative">
@@ -410,7 +422,7 @@ export function LoginForm() {
                 autoComplete="current-password"
                 required
               />
-              <KeyRound className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-tertiary transition-colors group-focus-within:text-accent" />
+              <Key className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-text-tertiary transition-colors group-focus-within:text-accent" />
             </div>
           </div>
         </div>
@@ -424,13 +436,21 @@ export function LoginForm() {
           </Link>
         </div>
 
-        <button
+        <GlassButton
           type="submit"
-          disabled={loading || oauthFinishing || googleLoading || !email.trim() || !password}
-          className="btn-primary w-full py-4 font-headline text-base disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={
+            loading ||
+            oauthFinishing ||
+            googleLoading ||
+            !email.trim() ||
+            !password
+          }
+          variant="primary"
+          size="lg"
+          className="w-full font-headline"
         >
           {loading ? "Signing in..." : "Sign In"}
-        </button>
+        </GlassButton>
       </form>
 
       <div className="text-center">

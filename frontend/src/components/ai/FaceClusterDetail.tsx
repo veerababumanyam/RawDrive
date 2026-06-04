@@ -10,7 +10,11 @@ interface FaceClusterDetailProps {
   clusterName: string;
 }
 
-export function FaceClusterDetail({ token, clusterLabel, clusterName }: FaceClusterDetailProps) {
+export function FaceClusterDetail({
+  token,
+  clusterLabel,
+  clusterName,
+}: FaceClusterDetailProps) {
   const requestKey = clusterLabel;
   const [requestState, setRequestState] = useState<{
     key: string;
@@ -52,7 +56,9 @@ export function FaceClusterDetail({ token, clusterLabel, clusterName }: FaceClus
 
   return (
     <div>
-      <h2 className="text-2xl font-semibold text-text-primary mb-1">{clusterName || "Unknown Person"}</h2>
+      <h2 className="text-2xl font-semibold text-text-primary mb-1">
+        {clusterName || "Unknown Person"}
+      </h2>
       <p className="text-sm text-text-secondary mb-6">{assets.length} photos</p>
 
       {loading ? (
@@ -62,7 +68,10 @@ export function FaceClusterDetail({ token, clusterLabel, clusterName }: FaceClus
       ) : (
         <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4">
           {assets.map((asset) => (
-            <div key={asset.asset_id} className="break-inside-avoid rounded-xl overflow-hidden bg-surface-sunken">
+            <div
+              key={asset.asset_id}
+              className="break-inside-avoid rounded-xl overflow-hidden bg-surface-sunken"
+            >
               <img
                 src={getAssetPreviewUrl(asset, token)}
                 alt={asset.ai_caption || asset.filename}

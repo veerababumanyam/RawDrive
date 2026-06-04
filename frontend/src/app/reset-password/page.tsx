@@ -49,7 +49,9 @@ function ResetPasswordInner() {
 
         <form onSubmit={onSubmit}>
           <label className="block mb-3">
-            <span className="block text-sm text-text-secondary mb-1">Email</span>
+            <span className="block text-sm text-text-secondary mb-1">
+              Email
+            </span>
             <input
               type="email"
               required
@@ -59,7 +61,9 @@ function ResetPasswordInner() {
             />
           </label>
           <label className="block mb-3">
-            <span className="block text-sm text-text-secondary mb-1">Reset code</span>
+            <span className="block text-sm text-text-secondary mb-1">
+              Reset code
+            </span>
             <input
               type="text"
               required
@@ -71,7 +75,9 @@ function ResetPasswordInner() {
             />
           </label>
           <label className="block mb-3">
-            <span className="block text-sm text-text-secondary mb-1">New password</span>
+            <span className="block text-sm text-text-secondary mb-1">
+              New password
+            </span>
             <input
               type="password"
               required
@@ -82,7 +88,9 @@ function ResetPasswordInner() {
             />
           </label>
           <label className="block mb-4">
-            <span className="block text-sm text-text-secondary mb-1">Confirm password</span>
+            <span className="block text-sm text-text-secondary mb-1">
+              Confirm password
+            </span>
             <input
               type="password"
               required

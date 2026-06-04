@@ -1,9 +1,10 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Moon, Sun } from "@/components/icons";
 import { useTheme } from "@/components/theme/ThemeProvider";
+import { GlassIconButton } from "@/components/ui/glass-icon-button";
 
 /**
  * Theme toggle button.
@@ -42,30 +43,25 @@ export function ThemeToggleButton({ className }: { className?: string }) {
   // screen readers quiet for the brief pre-hydration window.
   if (!mounted) {
     return (
-      <button
-        type="button"
+      <span
         className={cn(
-          "inline-flex h-11 w-11 items-center justify-center rounded-full",
+          "glass-icon-button glass-icon-button--md glass-icon-button--ghost",
           className,
         )}
         aria-hidden="true"
-        tabIndex={-1}
       />
     );
   }
 
   return (
-    <button
+    <GlassIconButton
       type="button"
       onClick={toggleTheme}
-      className={cn(
-        "inline-flex h-11 w-11 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-surface-container-high hover:text-accent",
-        className,
-      )}
-      aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
-      title={isDark ? "Switch to light theme" : "Switch to dark theme"}
+      variant="ghost"
+      label={isDark ? "Switch to light theme" : "Switch to dark theme"}
+      className={className}
     >
       {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-    </button>
+    </GlassIconButton>
   );
 }

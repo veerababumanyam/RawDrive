@@ -24,7 +24,7 @@ export default function InquiriesPage() {
             className={cn(
               "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
               tab === "pipeline"
-                ? "bg-surface-raised text-on-surface shadow-sm"
+                ? "bg-surface-raised text-text-primary shadow-sm"
                 : "text-text-secondary hover:text-text-primary",
             )}
           >
@@ -35,7 +35,7 @@ export default function InquiriesPage() {
             className={cn(
               "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
               tab === "marketplace"
-                ? "bg-surface-raised text-on-surface shadow-sm"
+                ? "bg-surface-raised text-text-primary shadow-sm"
                 : "text-text-secondary hover:text-text-primary",
             )}
           >

@@ -3,9 +3,13 @@ import { describe, expect, it } from "vitest";
 import { GalleryExpiryBanner } from "../gallery-expiry-banner";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const iso = (msFromNow: number) => new Date(Date.now() + msFromNow).toISOString();
+const iso = (msFromNow: number) =>
+  new Date(Date.now() + msFromNow).toISOString();
 
-async function renderBanner(props: { expiresAt?: string | null; thresholdDays?: number }) {
+async function renderBanner(props: {
+  expiresAt?: string | null;
+  thresholdDays?: number;
+}) {
   let container!: HTMLElement;
   await act(async () => {
     ({ container } = render(<GalleryExpiryBanner {...props} />));
@@ -27,7 +31,10 @@ describe("GalleryExpiryBanner", () => {
   });
 
   it("renders nothing when expiry is far beyond the threshold", async () => {
-    const container = await renderBanner({ expiresAt: iso(60 * DAY_MS), thresholdDays: 14 });
+    const container = await renderBanner({
+      expiresAt: iso(60 * DAY_MS),
+      thresholdDays: 14,
+    });
     expect(container.textContent).toBe("");
   });
 

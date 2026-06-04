@@ -12,7 +12,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("next/link", () => ({
-  default: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
+  default: ({
+    href,
+    children,
+    ...props
+  }: {
+    href: string;
+    children: React.ReactNode;
+  }) => (
     <a href={href} {...props}>
       {children}
     </a>
@@ -57,7 +64,10 @@ vi.mock("@/lib/api/galleries", () => ({
   createGalleryShareLink: mocks.createGalleryShareLink,
   deleteGallery: vi.fn(),
   updateGallery: mocks.updateGallery,
-  galleryPublicUrl: vi.fn((gallery: { slug: string }) => `https://app.rawdrive.test/g/${gallery.slug}`),
+  galleryPublicUrl: vi.fn(
+    (gallery: { slug: string }) =>
+      `https://app.rawdrive.test/g/${gallery.slug}`,
+  ),
 }));
 
 vi.mock("@/lib/media-encryption/use-decrypted-asset-url", () => ({
@@ -88,6 +98,43 @@ function galleryWithDesignCover() {
   };
 }
 
+function galleryWithJoinedCover() {
+  return {
+    id: "gallery-1",
+    workspace_id: "workspace-1",
+    title: "UAT Test Gallery",
+    slug: "uat-test-gallery",
+    description: "",
+    cover_asset_id: "first-upload",
+    gallery_type: "delivery",
+    is_published: false,
+    max_selections: 0,
+    status: "active",
+    settings: {},
+    cover_thumbnails: {
+      thumb_md_webp: "thumbnails/first-upload/thumb_md_webp.webp.enc",
+    },
+    cover_asset: {
+      id: "first-upload",
+      filename: "first-upload.jpg",
+      content_type: "image/jpeg",
+      status: "ready",
+      thumbnail_urls: {
+        thumb_md_webp: "thumbnails/first-upload/thumb_md_webp.webp.enc",
+      },
+      is_encrypted: true,
+      media_encryption: {
+        scheme: "rawdrive-e2ee-v1",
+        variants: {
+          thumb_md_webp: { scheme: "rawdrive-e2ee-v1" },
+        },
+      },
+    },
+    created_at: "2026-06-02T00:00:00Z",
+    updated_at: "2026-06-02T00:00:00Z",
+  };
+}
+
 describe("GalleriesPage cover previews", () => {
   beforeEach(() => {
     mocks.authFetch.mockReset();
@@ -96,7 +143,11 @@ describe("GalleriesPage cover previews", () => {
     mocks.getAsset.mockReset();
     mocks.updateGallery.mockReset();
     mocks.useDecryptedAssetUrl.mockReset();
-    mocks.useDecryptedAssetUrl.mockReturnValue({ src: "", loading: false, error: null });
+    mocks.useDecryptedAssetUrl.mockReturnValue({
+      src: "",
+      loading: false,
+      error: null,
+    });
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: {
@@ -129,7 +180,10 @@ describe("GalleriesPage cover previews", () => {
       },
     });
     mocks.useDecryptedAssetUrl.mockImplementation((asset) => ({
-      src: asset?.id === "design-cover" && asset?.media_encryption ? "blob:design-cover" : "",
+      src:
+        asset?.id === "design-cover" && asset?.media_encryption
+          ? "blob:design-cover"
+          : "",
       loading: false,
       error: null,
     }));
@@ -140,10 +194,55 @@ describe("GalleriesPage cover previews", () => {
       expect(mocks.getAsset).toHaveBeenCalledWith("token-1", "design-cover");
     });
 
-    expect(await screen.findByRole("img", { name: "UAT Test Gallery cover" })).toHaveAttribute(
-      "src",
-      "blob:design-cover",
+    expect(
+      await screen.findByRole("img", { name: "UAT Test Gallery cover" }),
+    ).toHaveAttribute("src", "blob:design-cover");
+  });
+
+  it("renders the joined effective cover asset without a per-card asset fetch", async () => {
+    mocks.authFetch.mockResolvedValue(
+      new Response(JSON.stringify({ galleries: [galleryWithJoinedCover()] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
     );
+    mocks.useDecryptedAssetUrl.mockImplementation((asset) => ({
+      src:
+        asset?.id === "first-upload" && asset?.media_encryption
+          ? "blob:first-upload"
+          : "",
+      loading: false,
+      error: null,
+    }));
+
+    render(<GalleriesPage />);
+
+    expect(
+      await screen.findByRole("img", { name: "UAT Test Gallery cover" }),
+    ).toHaveAttribute("src", "blob:first-upload");
+    expect(mocks.getAsset).not.toHaveBeenCalled();
+  });
+
+  it("shows an encrypted-cover locked state when the gallery key is unavailable", async () => {
+    mocks.authFetch.mockResolvedValue(
+      new Response(JSON.stringify({ galleries: [galleryWithJoinedCover()] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    mocks.useDecryptedAssetUrl.mockReturnValue({
+      src: "",
+      loading: false,
+      error:
+        "Photo key unavailable. Reopen with the gallery key or reupload this photo.",
+    });
+
+    render(<GalleriesPage />);
+
+    expect(
+      await screen.findByText("Encrypted cover key unavailable"),
+    ).toBeInTheDocument();
+    expect(mocks.getAsset).not.toHaveBeenCalled();
   });
 
   it("clears stale create-gallery errors when the create form is cancelled", async () => {
@@ -153,29 +252,42 @@ describe("GalleriesPage cover previews", () => {
         headers: { "Content-Type": "application/json" },
       }),
     );
-    mocks.createGallery.mockRejectedValue(new Error("Failed to create gallery: create failed (500)"));
+    mocks.createGallery.mockRejectedValue(
+      new Error("Failed to create gallery: create failed (500)"),
+    );
 
     render(<GalleriesPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Create new gallery" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Create new gallery" }),
+    );
     fireEvent.change(screen.getByPlaceholderText("e.g. Sharma Wedding 2026"), {
       target: { value: "Reception" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Create Gallery" }));
 
-    expect(await screen.findByText("Failed to create gallery: create failed (500)")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Failed to create gallery: create failed (500)"),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
-    expect(screen.queryByText("Failed to create gallery: create failed (500)")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Failed to create gallery: create failed (500)"),
+    ).not.toBeInTheDocument();
   });
 
   it("creates a share token before copying the gallery card public link", async () => {
     mocks.authFetch.mockResolvedValue(
-      new Response(JSON.stringify({ galleries: [{ ...galleryWithDesignCover(), is_published: true }] }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
+      new Response(
+        JSON.stringify({
+          galleries: [{ ...galleryWithDesignCover(), is_published: true }],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
     );
     mocks.createGalleryShareLink.mockResolvedValue({
       id: "share-1",
@@ -189,15 +301,21 @@ describe("GalleriesPage cover previews", () => {
 
     render(<GalleriesPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Share UAT Test Gallery" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Share UAT Test Gallery" }),
+    );
     fireEvent.click(await screen.findByRole("menuitem", { name: "Copy link" }));
 
     await waitFor(() => {
-      expect(mocks.createGalleryShareLink).toHaveBeenCalledWith("token-1", "gallery-1", {
-        access_mode: "public",
-        download_allowed: true,
-        channel: "copy",
-      });
+      expect(mocks.createGalleryShareLink).toHaveBeenCalledWith(
+        "token-1",
+        "gallery-1",
+        {
+          access_mode: "public",
+          download_allowed: true,
+          channel: "copy",
+        },
+      );
     });
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
       "https://app.rawdrive.test/g/uat-test-gallery?share=share-token",
@@ -244,22 +362,31 @@ describe("GalleriesPage cover previews", () => {
     fireEvent.click(await screen.findByRole("menuitem", { name: "Copy link" }));
 
     await waitFor(() => {
-      expect(mocks.createGalleryShareLink).toHaveBeenCalledWith("token-1", "gallery-1", {
-        access_mode: "public",
-        download_allowed: true,
-        channel: "copy",
-        expiry_days: 30,
-      });
+      expect(mocks.createGalleryShareLink).toHaveBeenCalledWith(
+        "token-1",
+        "gallery-1",
+        {
+          access_mode: "public",
+          download_allowed: true,
+          channel: "copy",
+          expiry_days: 30,
+        },
+      );
     });
     expect(mocks.updateGallery).not.toHaveBeenCalled();
   });
 
   it("shows a friendly manual-copy fallback when the browser blocks clipboard writes", async () => {
     mocks.authFetch.mockResolvedValue(
-      new Response(JSON.stringify({ galleries: [{ ...galleryWithDesignCover(), is_published: true }] }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
+      new Response(
+        JSON.stringify({
+          galleries: [{ ...galleryWithDesignCover(), is_published: true }],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
     );
     mocks.createGalleryShareLink.mockResolvedValue({
       id: "share-1",
@@ -273,16 +400,22 @@ describe("GalleriesPage cover previews", () => {
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: {
-        writeText: vi.fn().mockRejectedValue(new DOMException("blocked", "NotAllowedError")),
+        writeText: vi
+          .fn()
+          .mockRejectedValue(new DOMException("blocked", "NotAllowedError")),
       },
     });
 
     render(<GalleriesPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Share UAT Test Gallery" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Share UAT Test Gallery" }),
+    );
     fireEvent.click(await screen.findByRole("menuitem", { name: "Copy link" }));
 
-    expect(await screen.findByText("Copy blocked by this browser")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Copy blocked by this browser"),
+    ).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Share link" })).toHaveValue(
       "https://app.rawdrive.test/g/uat-test-gallery?share=share-token",
     );

@@ -1,16 +1,20 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PublicGalleryHero } from "../public-gallery-hero";
-import type { Gallery, GalleryBranding, PublicAsset } from "@/lib/api/galleries";
+import type {
+  Gallery,
+  GalleryBranding,
+  PublicAsset,
+} from "@/lib/api/galleries";
 import type { PublicDesignConfig } from "@/lib/gallery-design-config";
 
 const mocks = vi.hoisted(() => ({
   useDecryptedAssetUrl: vi.fn(
-    (
-      asset: PublicAsset | null | undefined,
-      variants: readonly string[],
-    ) => ({
-      src: variants.map((variant) => asset?.thumbnail_urls?.[variant]).find(Boolean) || "",
+    (asset: PublicAsset | null | undefined, variants: readonly string[]) => ({
+      src:
+        variants
+          .map((variant) => asset?.thumbnail_urls?.[variant])
+          .find(Boolean) || "",
       loading: false,
       error: null,
     }),
@@ -75,15 +79,31 @@ describe("PublicGalleryHero", () => {
   });
 
   it("renders studio identity and cover photo on the public gallery hero", () => {
-    render(<PublicGalleryHero gallery={gallery} assets={[coverAsset]} branding={branding} />);
+    render(
+      <PublicGalleryHero
+        gallery={gallery}
+        assets={[coverAsset]}
+        branding={branding}
+      />,
+    );
 
     expect(screen.getByText("Kaveri Stories")).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Asha & Ravi" })).toHaveAttribute("src", weddingPhoto);
-    expect(screen.getByRole("img", { name: "Kaveri Stories logo" })).toHaveAttribute(
+    expect(screen.getByRole("img", { name: "Asha & Ravi" })).toHaveAttribute(
       "src",
-      expect.stringContaining("/api/v1/public/galleries/asha-ravi/branding/logo"),
+      weddingPhoto,
     );
-    expect(screen.getByRole("link", { name: /view gallery/i })).toHaveAttribute("href", "#gallery-grid");
+    expect(
+      screen.getByRole("img", { name: "Kaveri Stories logo" }),
+    ).toHaveAttribute(
+      "src",
+      expect.stringContaining(
+        "/api/v1/public/galleries/asha-ravi/branding/logo",
+      ),
+    );
+    expect(screen.getByRole("link", { name: /view gallery/i })).toHaveAttribute(
+      "href",
+      "#gallery-grid",
+    );
     expect(mocks.useDecryptedAssetUrl).toHaveBeenCalledWith(
       expect.objectContaining({ id: "asset-cover" }),
       expect.arrayContaining(["thumb_lg_webp", "display_webp"]),
@@ -109,7 +129,11 @@ describe("PublicGalleryHero", () => {
     };
 
     render(
-      <PublicGalleryHero gallery={gallery} assets={[dualVariant]} branding={branding} />,
+      <PublicGalleryHero
+        gallery={gallery}
+        assets={[dualVariant]}
+        branding={branding}
+      />,
     );
 
     const img = screen.getByRole("img", { name: "Asha & Ravi" });
@@ -133,7 +157,9 @@ describe("PublicGalleryHero", () => {
 
     expect(screen.queryByText("RawDrive")).not.toBeInTheDocument();
     expect(screen.queryByText("Kaveri Stories")).not.toBeInTheDocument();
-    expect(screen.queryByRole("img", { name: /logo$/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("img", { name: /logo$/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("honors the expanded cover experience settings on the public hero", () => {
@@ -185,18 +211,19 @@ describe("PublicGalleryHero", () => {
     expect(screen.getByTestId("gallery-cover-photo-grid")).toBeInTheDocument();
     expect(screen.getByTestId("gallery-cover-scrim")).toHaveStyle({
       background:
-        "radial-gradient(circle at 50% 45%, rgba(255, 196, 87, 0.18), rgba(0, 0, 0, 0.58) 72%)",
+        "radial-gradient(circle at 50% 45%, var(--cover-scrim-warm), var(--cover-scrim-soft-end) 72%)",
     });
     expect(screen.getByTestId("gallery-cover-title")).toHaveStyle({
-      background: "rgba(255, 255, 255, 0.16)",
+      background: "var(--cover-text-backdrop-glass-bg)",
     });
     expect(screen.getAllByText("AR").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByTestId("gallery-scene-headers")).toBeInTheDocument();
-    expect(screen.getByTestId("gallery-scene-header-haldi")).toHaveTextContent("Haldi");
-    expect(screen.getByRole("img", { name: "Haldi scene cover" })).toHaveAttribute(
-      "src",
-      "/tests/photos/Wedding (43).jpg",
+    expect(screen.getByTestId("gallery-scene-header-haldi")).toHaveTextContent(
+      "Haldi",
     );
+    expect(
+      screen.getByRole("img", { name: "Haldi scene cover" }),
+    ).toHaveAttribute("src", "/tests/photos/Wedding (43).jpg");
     expect(screen.queryByText("Mehendi")).not.toBeInTheDocument();
   });
 });

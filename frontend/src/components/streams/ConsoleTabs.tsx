@@ -14,7 +14,13 @@
  *  - aria-selected + keyboard arrow navigation for a11y
  */
 
-import { useCallback, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import {
   Broadcast,
@@ -90,8 +96,14 @@ interface TabDef {
   visible: boolean;
 }
 
-export function ConsoleTabs({ payload, activeTab, onTabChange }: ConsoleTabsProps) {
-  const [internalActive, setInternalActive] = useState<TabId>(activeTab ?? "overview");
+export function ConsoleTabs({
+  payload,
+  activeTab,
+  onTabChange,
+}: ConsoleTabsProps) {
+  const [internalActive, setInternalActive] = useState<TabId>(
+    activeTab ?? "overview",
+  );
   const current: TabId = activeTab ?? internalActive;
 
   const tabs = useMemo<TabDef[]>(
@@ -145,11 +157,10 @@ export function ConsoleTabs({ payload, activeTab, onTabChange }: ConsoleTabsProp
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold text-white/90">{payload.stream.title}</h1>
-        <span
-          data-testid="status-pill"
-          className="inline-flex w-fit items-center rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs uppercase tracking-wider text-white/70"
-        >
+        <h1 className="text-2xl font-semibold text-text-media">
+          {payload.stream.title}
+        </h1>
+        <span data-testid="status-pill" className="stream-pill">
           {payload.stream.status}
         </span>
       </header>
@@ -159,7 +170,7 @@ export function ConsoleTabs({ payload, activeTab, onTabChange }: ConsoleTabsProp
         role="tablist"
         aria-label="Stream console tabs"
         onKeyDown={onKeyDown}
-        className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-3"
+        className="stream-divider-border flex flex-wrap items-center gap-2 border-b pb-3"
       >
         {visibleTabs.map((t) => {
           const isActive = t.id === current;
@@ -179,7 +190,9 @@ export function ConsoleTabs({ payload, activeTab, onTabChange }: ConsoleTabsProp
               >
                 <t.Icon />
               </GlassIconButton>
-              <span className={`text-sm ${isActive ? "text-white/90" : "text-white/60"}`}>
+              <span
+                className={`text-sm ${isActive ? "text-text-media" : "text-text-media/60"}`}
+              >
                 {t.label}
               </span>
             </div>
@@ -200,20 +213,14 @@ export function ConsoleTabs({ payload, activeTab, onTabChange }: ConsoleTabsProp
   );
 }
 
-function Panel({
-  id,
-  children,
-}: {
-  id: TabId;
-  children: React.ReactNode;
-}) {
+function Panel({ id, children }: { id: TabId; children: React.ReactNode }) {
   return (
     <section
       role="tabpanel"
       id={`panel-${id}`}
       data-testid={`panel-${id}`}
       aria-labelledby={`tab-${id}`}
-      className="rounded-2xl border border-white/10 bg-white/5 p-6"
+      className="stream-panel p-6"
     >
       {children}
     </section>
@@ -223,9 +230,10 @@ function Panel({
 function OverviewPanel({ payload }: { payload: ConsolePayload }) {
   return (
     <Panel id="overview">
-      <h2 className="mb-3 text-lg font-medium text-white/90">Overview</h2>
-      <p className="text-sm text-white/70">
-        {payload.stream.description ?? "Summary widgets (balance, package, peak viewers) mount here."}
+      <h2 className="mb-3 text-lg font-medium text-text-media">Overview</h2>
+      <p className="text-sm text-text-media/70">
+        {payload.stream.description ??
+          "Summary widgets (balance, package, peak viewers) mount here."}
       </p>
     </Panel>
   );
@@ -241,19 +249,19 @@ function SetupPanel({ payload }: { payload: ConsolePayload }) {
             scheduledStartAt={payload.stream.scheduled_at}
           />
         ) : (
-          <p className="text-sm text-white/60">
+          <p className="text-sm text-text-media/60">
             Schedule this stream to unlock ingest credentials.
           </p>
         )}
         <div
           data-testid="setup-invite-slot"
-          className="rounded-xl border border-dashed border-white/15 p-4 text-sm text-white/50"
+          className="stream-empty-panel p-4 text-sm"
         >
           Invite QR widget mounts here (story 34-5).
         </div>
         <div
           data-testid="setup-preflight-slot"
-          className="rounded-xl border border-dashed border-white/15 p-4 text-sm text-white/50"
+          className="stream-empty-panel p-4 text-sm"
         >
           Desktop preflight panel mounts here (story 34-7).
         </div>
@@ -265,12 +273,12 @@ function SetupPanel({ payload }: { payload: ConsolePayload }) {
 function LivePanel() {
   return (
     <Panel id="live">
-      <h2 className="mb-3 text-lg font-medium text-white/90">Live</h2>
-      <p className="text-sm text-white/70">
-        Not live yet. Live widgets (health, viewers, moderation, waiting-room) will appear here
-        once the stream is broadcasting.
+      <h2 className="mb-3 text-lg font-medium text-text-media">Live</h2>
+      <p className="text-sm text-text-media/70">
+        Not live yet. Live widgets (health, viewers, moderation, waiting-room)
+        will appear here once the stream is broadcasting.
       </p>
-      <div className="mt-4 flex items-center gap-2 text-xs text-white/50">
+      <div className="mt-4 flex items-center gap-2 text-xs text-text-media/50">
         <ChatBubble width={16} height={16} />
         Coming soon — wired by story 34-6.
       </div>
@@ -281,9 +289,10 @@ function LivePanel() {
 function ReplayPanel() {
   return (
     <Panel id="replay">
-      <h2 className="mb-3 text-lg font-medium text-white/90">Replay</h2>
-      <p className="text-sm text-white/70">
-        Replay controls (enable, expiry, copy link) appear here after the stream ends.
+      <h2 className="mb-3 text-lg font-medium text-text-media">Replay</h2>
+      <p className="text-sm text-text-media/70">
+        Replay controls (enable, expiry, copy link) appear here after the stream
+        ends.
       </p>
     </Panel>
   );
@@ -295,29 +304,35 @@ function AuditPanel({ payload }: { payload: ConsolePayload }) {
   const empty = reveals.length === 0 && mods.length === 0;
   return (
     <Panel id="audit">
-      <h2 className="mb-3 text-lg font-medium text-white/90">Audit log</h2>
+      <h2 className="mb-3 text-lg font-medium text-text-media">Audit log</h2>
       {empty ? (
-        <p data-testid="audit-empty" className="text-sm text-white/60">
+        <p data-testid="audit-empty" className="text-sm text-text-media/60">
           No reveal or moderation events recorded yet.
         </p>
       ) : (
         <div className="flex flex-col gap-4">
           <section>
-            <h3 className="mb-2 text-sm font-medium text-white/80">Ingest reveals</h3>
-            <ul className="flex flex-col gap-1 text-sm text-white/70">
+            <h3 className="mb-2 text-sm font-medium text-text-media/80">
+              Ingest reveals
+            </h3>
+            <ul className="flex flex-col gap-1 text-sm text-text-media/70">
               {reveals.map((r, i) => (
                 <li key={i} className="font-mono text-xs">
-                  {new Date(r.revealed_at).toLocaleString()} — {r.user_email_domain} ({r.ip_hash})
+                  {new Date(r.revealed_at).toLocaleString()} —{" "}
+                  {r.user_email_domain} ({r.ip_hash})
                 </li>
               ))}
             </ul>
           </section>
           <section>
-            <h3 className="mb-2 text-sm font-medium text-white/80">Moderation actions</h3>
-            <ul className="flex flex-col gap-1 text-sm text-white/70">
+            <h3 className="mb-2 text-sm font-medium text-text-media/80">
+              Moderation actions
+            </h3>
+            <ul className="flex flex-col gap-1 text-sm text-text-media/70">
               {mods.map((r, i) => (
                 <li key={i} className="font-mono text-xs">
-                  {new Date(r.occurred_at).toLocaleString()} — {r.actor_email_domain} {r.action} ({r.ip_hash})
+                  {new Date(r.occurred_at).toLocaleString()} —{" "}
+                  {r.actor_email_domain} {r.action} ({r.ip_hash})
                 </li>
               ))}
             </ul>

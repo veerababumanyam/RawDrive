@@ -19,7 +19,9 @@ interface CullingViewProps {
 // returns thumb_*_webp / display_webp keys alongside the legacy sm/md/lg JPEG
 // keys, so prefer the smallest WebP first and only fall back to a legacy JPEG
 // when no WebP derivative exists.
-function pickThumbSrc(urls: CullingAsset["thumbnail_urls"]): string | undefined {
+function pickThumbSrc(
+  urls: CullingAsset["thumbnail_urls"],
+): string | undefined {
   if (!urls) return undefined;
   return (
     urls.thumb_sm_webp ||
@@ -32,17 +34,25 @@ function pickThumbSrc(urls: CullingAsset["thumbnail_urls"]): string | undefined 
   );
 }
 
-export function CullingView({ assets, topPercent = 20, onApply }: CullingViewProps) {
-  const sorted = [...assets].sort((a, b) => (b.quality?.overall || 0) - (a.quality?.overall || 0));
+export function CullingView({
+  assets,
+  topPercent = 20,
+  onApply,
+}: CullingViewProps) {
+  const sorted = [...assets].sort(
+    (a, b) => (b.quality?.overall || 0) - (a.quality?.overall || 0),
+  );
   const keepCount = Math.ceil(sorted.length * (topPercent / 100));
 
-  const [decisions, setDecisions] = useState<Record<string, "keep" | "review">>(() => {
-    const d: Record<string, "keep" | "review"> = {};
-    sorted.forEach((a, i) => {
-      d[a.asset_id] = i < keepCount ? "keep" : "review";
-    });
-    return d;
-  });
+  const [decisions, setDecisions] = useState<Record<string, "keep" | "review">>(
+    () => {
+      const d: Record<string, "keep" | "review"> = {};
+      sorted.forEach((a, i) => {
+        d[a.asset_id] = i < keepCount ? "keep" : "review";
+      });
+      return d;
+    },
+  );
 
   const toggleDecision = (assetId: string) => {
     setDecisions((prev) => ({
@@ -79,14 +89,19 @@ export function CullingView({ assets, topPercent = 20, onApply }: CullingViewPro
           >
             <div className="aspect-square bg-surface-sunken flex items-center justify-center">
               {pickThumbSrc(asset.thumbnail_urls) ? (
-                <img src={pickThumbSrc(asset.thumbnail_urls)} alt={asset.filename} className="w-full h-full object-cover" loading="lazy" />
+                <img
+                  src={pickThumbSrc(asset.thumbnail_urls)}
+                  alt={asset.filename}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
               ) : (
                 <span className="text-text-tertiary text-xs">Photo</span>
               )}
             </div>
 
             {asset.quality && (
-              <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-2 py-1 flex gap-2 text-[10px] text-white">
+              <div className="absolute bottom-0 left-0 right-0 bg-surface-scrim-strong/60 px-2 py-1 flex gap-2 text-[10px] text-text-media">
                 <span>S:{Math.round(asset.quality.sharpness * 100)}</span>
                 <span>E:{Math.round(asset.quality.exposure * 100)}</span>
                 <span>C:{Math.round(asset.quality.composition * 100)}</span>
@@ -95,8 +110,18 @@ export function CullingView({ assets, topPercent = 20, onApply }: CullingViewPro
 
             {decisions[asset.asset_id] === "keep" && (
               <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-accent flex items-center justify-center">
-                <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                <svg
+                  className="h-3 w-3 text-text-inverse"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={3}
+                    d="M5 13l4 4L19 7"
+                  />
                 </svg>
               </div>
             )}
@@ -107,7 +132,7 @@ export function CullingView({ assets, topPercent = 20, onApply }: CullingViewPro
       <div className="mt-6 flex justify-end">
         <button
           onClick={() => onApply?.(keepIds)}
-          className="rounded-lg bg-accent px-6 py-2.5 text-sm font-medium text-white hover:bg-accent/90 min-h-[44px]"
+          className="rounded-lg bg-accent px-6 py-2.5 text-sm font-medium text-text-inverse hover:bg-accent/90 min-h-[44px]"
         >
           Apply Selection ({keepIds.length} photos)
         </button>

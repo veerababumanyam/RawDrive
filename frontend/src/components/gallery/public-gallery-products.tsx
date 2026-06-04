@@ -65,7 +65,7 @@ export function PublicGalleryProducts({
           onChange={(e) => setClientEmail(e.target.value)}
           placeholder="you@example.com"
           autoComplete="email"
-          className="w-full min-h-[44px] rounded-xl px-4 py-2 bg-white/5 border border-white/10 text-text-primary placeholder-text-tertiary focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="w-full touch-min rounded-xl px-4 py-2 bg-surface-overlay/5 border border-text-media/10 text-text-primary placeholder-text-tertiary focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         />
       </label>
 

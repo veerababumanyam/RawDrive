@@ -16,7 +16,7 @@ describe("Legal Notice Page", () => {
 
   it("uses the approved public contact addresses", () => {
     render(<LegalPage />);
-    expect(screen.getByText("infor@rawdrive.in")).toBeInTheDocument();
+    expect(screen.getByText("info@rawdrive.in")).toBeInTheDocument();
     expect(screen.getByText("support@rawdrive.in")).toBeInTheDocument();
     expect(screen.getByText("contactus@rawdrive.in")).toBeInTheDocument();
   });
@@ -25,7 +25,9 @@ describe("Legal Notice Page", () => {
 describe("Contact Page", () => {
   it("shows the approved phone and WhatsApp contacts", () => {
     render(<ContactPage />);
-    expect(screen.getByText("contact:+91 928112993 ,+91 9010012299")).toBeInTheDocument();
+    expect(
+      screen.getByText("contact:+91 928112993 ,+91 9010012299"),
+    ).toBeInTheDocument();
   });
 });
 

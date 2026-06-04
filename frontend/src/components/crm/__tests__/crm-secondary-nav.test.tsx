@@ -10,8 +10,17 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("next/link", () => ({
-  default: ({ href, children, ...props }: { href: string; children: ReactNode } & AnchorHTMLAttributes<HTMLAnchorElement>) => (
-    <a href={href} {...props}>{children}</a>
+  default: ({
+    href,
+    children,
+    ...props
+  }: {
+    href: string;
+    children: ReactNode;
+  } & AnchorHTMLAttributes<HTMLAnchorElement>) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
   ),
 }));
 
@@ -23,14 +32,21 @@ describe("CRMSecondaryNav project route", () => {
   it("points Projects at the Studio Project board", () => {
     render(<CRMSecondaryNav />);
 
-    expect(screen.getByRole("link", { name: "Projects" })).toHaveAttribute("href", "/crm/projects");
-    expect(screen.getByRole("link", { name: "Projects" }).className).toContain("bg-accent-primary");
+    expect(screen.getByRole("link", { name: "Projects" })).toHaveAttribute(
+      "href",
+      "/crm/projects",
+    );
+    expect(screen.getByRole("link", { name: "Projects" }).className).toContain(
+      "bg-accent-primary",
+    );
   });
 
   it("keeps Projects active on project detail routes", () => {
     mockUsePathname.mockReturnValue("/crm/projects/project-1");
     render(<CRMSecondaryNav />);
 
-    expect(screen.getByRole("link", { name: "Projects" }).className).toContain("bg-accent-primary");
+    expect(screen.getByRole("link", { name: "Projects" }).className).toContain(
+      "bg-accent-primary",
+    );
   });
 });

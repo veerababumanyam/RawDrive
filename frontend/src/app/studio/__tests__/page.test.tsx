@@ -60,7 +60,8 @@ describe("/studio public subdomain landing page", () => {
           created_at: "2026-06-01T00:00:00Z",
           published_at: "2026-06-01T00:00:00Z",
           download_enabled: true,
-          public_url: "https://kaveri-stories-a1b2c3d4.rawdrive.in/wedding-veera",
+          public_url:
+            "https://kaveri-stories-a1b2c3d4.rawdrive.in/wedding-veera",
         },
       ],
       counts: { published_galleries: 1 },
@@ -71,13 +72,17 @@ describe("/studio public subdomain landing page", () => {
     });
     render(page);
 
-    expect(screen.getByRole("heading", { name: "Kaveri Stories" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Kaveri Stories" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("+91 928112993")).toBeInTheDocument();
     expect(screen.getByText("hello@kaveri.test")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Wedding Veera/ })).toHaveAttribute(
       "href",
       "https://kaveri-stories-a1b2c3d4.rawdrive.in/wedding-veera",
     );
-    expect(mocks.getPublicStudioLanding).toHaveBeenCalledWith("kaveri-stories-a1b2c3d4");
+    expect(mocks.getPublicStudioLanding).toHaveBeenCalledWith(
+      "kaveri-stories-a1b2c3d4",
+    );
   });
 });

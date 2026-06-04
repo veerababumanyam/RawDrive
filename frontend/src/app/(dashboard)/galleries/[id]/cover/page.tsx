@@ -36,7 +36,14 @@
  *   layout the design studio used.
  */
 
-import { useState, useRef, useCallback, useEffect, useMemo, useDeferredValue } from "react";
+import {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  useDeferredValue,
+} from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -47,9 +54,14 @@ import {
   type Gallery,
 } from "@/lib/api/galleries";
 import { getAsset, type Asset } from "@/lib/api/assets";
-import { FILMSTRIP_VARIANTS, GRID_VARIANTS, LIGHTBOX_VARIANTS } from "@/lib/media-encryption/asset-media";
+import {
+  FILMSTRIP_VARIANTS,
+  GRID_VARIANTS,
+  LIGHTBOX_VARIANTS,
+} from "@/lib/media-encryption/asset-media";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
+import { components as designComponents } from "@/lib/tokens";
 
 // ──────────────────────────── Data ────────────────────────────
 
@@ -67,14 +79,35 @@ type CoverPresetId =
   | "minimal-studio"
   | "story-cover"
   | "proofing-first";
-type CoverMediaMode = "single-photo" | "slideshow" | "short-video" | "photo-grid";
-type ScrimStyle = "none" | "soft-gradient" | "cinematic-dark" | "warm-vignette" | "blur-band" | "light-wash";
+type CoverMediaMode =
+  | "single-photo"
+  | "slideshow"
+  | "short-video"
+  | "photo-grid";
+type ScrimStyle =
+  | "none"
+  | "soft-gradient"
+  | "cinematic-dark"
+  | "warm-vignette"
+  | "blur-band"
+  | "light-wash";
 type TextBackdrop = "none" | "glass" | "dark" | "light";
-type LogoPlacement = "hidden" | "top-left" | "top-right" | "bottom-left" | "bottom-right";
+type LogoPlacement =
+  | "hidden"
+  | "top-left"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-right";
 type WatermarkStyle = "none" | "subtle-corner" | "center-mark" | "tiled";
 
-interface FocalPoint { x: number; y: number }
-interface TextPos { x: number; y: number }
+interface FocalPoint {
+  x: number;
+  y: number;
+}
+interface TextPos {
+  x: number;
+  y: number;
+}
 interface SceneHeaderConfig {
   id: string;
   label: string;
@@ -139,7 +172,10 @@ interface DesignConfig {
 // older "Font pairing" concept was removed 2026-05-18. Order groups
 // serif headlines first, sans-serif next, mono last so the dropdown
 // reads top-down by visual weight.
-const FONT_OPTIONS: { name: string; classification: "serif" | "sans" | "mono" }[] = [
+const FONT_OPTIONS: {
+  name: string;
+  classification: "serif" | "sans" | "mono";
+}[] = [
   { name: "Playfair Display", classification: "serif" },
   { name: "Cormorant Garamond", classification: "serif" },
   { name: "Lora", classification: "serif" },
@@ -188,6 +224,7 @@ const GRID_LAYOUTS: { id: GridLayout; label: string }[] = [
 // 8px is a tight-but-readable default that mirrors what the public
 // viewer renders with grid.gap=8 — typical wedding gallery spacing.
 const DEFAULT_GRID_GAP = 8;
+const COVER_COLORS = designComponents.mediaCover.presetColors;
 
 const COVER_PRESETS: Array<{
   id: CoverPresetId;
@@ -215,11 +252,16 @@ const COVER_PRESETS: Array<{
         scrimStyle: "soft-gradient",
         textBackdrop: "none",
         textShadow: true,
-        titleColor: "#ffffff",
-        subtitleColor: "#ffffff",
-        textColor: "#ffffff",
+        titleColor: COVER_COLORS.textMedia,
+        subtitleColor: COVER_COLORS.textMedia,
+        textColor: COVER_COLORS.textMedia,
       },
-      typography: { headingFont: "Playfair Display", bodyFont: "Inter", titleSize: 52, subtitleSize: 18 },
+      typography: {
+        headingFont: "Playfair Display",
+        bodyFont: "Inter",
+        titleSize: 52,
+        subtitleSize: 18,
+      },
       theme: { variant: "dark" },
       grid: { layout: "grid", columns: 3 },
     },
@@ -239,11 +281,16 @@ const COVER_PRESETS: Array<{
         scrimStyle: "blur-band",
         textBackdrop: "dark",
         textShadow: true,
-        titleColor: "#ffffff",
-        subtitleColor: "#ffffff",
-        textColor: "#ffffff",
+        titleColor: COVER_COLORS.textMedia,
+        subtitleColor: COVER_COLORS.textMedia,
+        textColor: COVER_COLORS.textMedia,
       },
-      typography: { headingFont: "Cormorant Garamond", bodyFont: "Manrope", titleSize: 58, subtitleSize: 18 },
+      typography: {
+        headingFont: "Cormorant Garamond",
+        bodyFont: "Manrope",
+        titleSize: 58,
+        subtitleSize: 18,
+      },
       theme: { variant: "dark" },
     },
   },
@@ -262,11 +309,16 @@ const COVER_PRESETS: Array<{
         scrimStyle: "cinematic-dark",
         textBackdrop: "glass",
         textShadow: true,
-        titleColor: "#fffaf0",
-        subtitleColor: "#e6c36a",
-        textColor: "#fffaf0",
+        titleColor: COVER_COLORS.warmTitle,
+        subtitleColor: COVER_COLORS.warmSubtitle,
+        textColor: COVER_COLORS.warmTitle,
       },
-      typography: { headingFont: "Cormorant Garamond", bodyFont: "Montserrat", titleSize: 60, subtitleSize: 17 },
+      typography: {
+        headingFont: "Cormorant Garamond",
+        bodyFont: "Montserrat",
+        titleSize: 60,
+        subtitleSize: 17,
+      },
       theme: { variant: "dark" },
     },
   },
@@ -285,12 +337,17 @@ const COVER_PRESETS: Array<{
         scrimStyle: "warm-vignette",
         textBackdrop: "glass",
         textShadow: true,
-        titleColor: "#fff8e7",
-        subtitleColor: "#f5c84b",
-        textColor: "#fff8e7",
+        titleColor: COVER_COLORS.haldiTitle,
+        subtitleColor: COVER_COLORS.haldiSubtitle,
+        textColor: COVER_COLORS.haldiTitle,
       },
-      typography: { headingFont: "Lora", bodyFont: "Manrope", titleSize: 54, subtitleSize: 18 },
-      theme: { variant: "dark", accentColor: "#B7791F" },
+      typography: {
+        headingFont: "Lora",
+        bodyFont: "Manrope",
+        titleSize: 54,
+        subtitleSize: 18,
+      },
+      theme: { variant: "dark", accentColor: COVER_COLORS.warmAccent },
       grid: { layout: "grid", columns: 4 },
     },
   },
@@ -309,11 +366,16 @@ const COVER_PRESETS: Array<{
         scrimStyle: "cinematic-dark",
         textBackdrop: "glass",
         textShadow: true,
-        titleColor: "#ffffff",
-        subtitleColor: "#dbeafe",
-        textColor: "#ffffff",
+        titleColor: COVER_COLORS.textMedia,
+        subtitleColor: COVER_COLORS.receptionSubtitle,
+        textColor: COVER_COLORS.textMedia,
       },
-      typography: { headingFont: "Montserrat", bodyFont: "DM Sans", titleSize: 50, subtitleSize: 16 },
+      typography: {
+        headingFont: "Montserrat",
+        bodyFont: "DM Sans",
+        titleSize: 50,
+        subtitleSize: 16,
+      },
       theme: { variant: "dark" },
     },
   },
@@ -332,11 +394,16 @@ const COVER_PRESETS: Array<{
         scrimStyle: "light-wash",
         textBackdrop: "light",
         textShadow: false,
-        titleColor: "#172033",
-        subtitleColor: "#344054",
-        textColor: "#172033",
+        titleColor: COVER_COLORS.editorialTitle,
+        subtitleColor: COVER_COLORS.editorialSubtitle,
+        textColor: COVER_COLORS.editorialTitle,
       },
-      typography: { headingFont: "Manrope", bodyFont: "Inter", titleSize: 46, subtitleSize: 16 },
+      typography: {
+        headingFont: "Manrope",
+        bodyFont: "Inter",
+        titleSize: 46,
+        subtitleSize: 16,
+      },
       theme: { variant: "light" },
     },
   },
@@ -356,11 +423,16 @@ const COVER_PRESETS: Array<{
         scrimStyle: "soft-gradient",
         textBackdrop: "none",
         textShadow: true,
-        titleColor: "#ffffff",
-        subtitleColor: "#ffffff",
-        textColor: "#ffffff",
+        titleColor: COVER_COLORS.textMedia,
+        subtitleColor: COVER_COLORS.textMedia,
+        textColor: COVER_COLORS.textMedia,
       },
-      typography: { headingFont: "Playfair Display", bodyFont: "Lato", titleSize: 56, subtitleSize: 18 },
+      typography: {
+        headingFont: "Playfair Display",
+        bodyFont: "Lato",
+        titleSize: 56,
+        subtitleSize: 18,
+      },
       theme: { variant: "dark" },
     },
   },
@@ -380,18 +452,27 @@ const COVER_PRESETS: Array<{
         scrimStyle: "cinematic-dark",
         textBackdrop: "dark",
         textShadow: true,
-        titleColor: "#ffffff",
-        subtitleColor: "#ffffff",
-        textColor: "#ffffff",
+        titleColor: COVER_COLORS.textMedia,
+        subtitleColor: COVER_COLORS.textMedia,
+        textColor: COVER_COLORS.textMedia,
       },
-      typography: { headingFont: "DM Sans", bodyFont: "Inter", titleSize: 44, subtitleSize: 16 },
+      typography: {
+        headingFont: "DM Sans",
+        bodyFont: "Inter",
+        titleSize: 44,
+        subtitleSize: 16,
+      },
       theme: { variant: "dark" },
       grid: { layout: "grid", columns: 5 },
     },
   },
 ];
 
-const MEDIA_MODES: Array<{ id: CoverMediaMode; label: string; detail: string }> = [
+const MEDIA_MODES: Array<{
+  id: CoverMediaMode;
+  label: string;
+  detail: string;
+}> = [
   { id: "single-photo", label: "Single Photo", detail: "Classic hero cover" },
   { id: "slideshow", label: "Slideshow", detail: "Rotating opener" },
   { id: "short-video", label: "Short Video", detail: "Motion-first cover" },
@@ -404,7 +485,12 @@ const DEFAULT_SCENE_HEADERS: SceneHeaderConfig[] = [
   { id: "wedding", label: "Wedding", enabled: false, assetId: null },
   { id: "reception", label: "Reception", enabled: false, assetId: null },
   { id: "family", label: "Family", enabled: false, assetId: null },
-  { id: "couple-portraits", label: "Couple Portraits", enabled: false, assetId: null },
+  {
+    id: "couple-portraits",
+    label: "Couple Portraits",
+    enabled: false,
+    assetId: null,
+  },
 ];
 
 const LOGO_PLACEMENTS: Array<{ id: LogoPlacement; label: string }> = [
@@ -437,9 +523,9 @@ const DEFAULT_CONFIG: DesignConfig = {
     titlePosition: { x: 50, y: 70 },
     subtitlePosition: { x: 50, y: 82 },
     textAlign: "center",
-    textColor: "#ffffff",
-    titleColor: "#ffffff",
-    subtitleColor: "#ffffff",
+    textColor: COVER_COLORS.textMedia,
+    titleColor: COVER_COLORS.textMedia,
+    subtitleColor: COVER_COLORS.textMedia,
     textShadow: true,
     scrimStyle: "soft-gradient",
     textBackdrop: "none",
@@ -488,13 +574,17 @@ function configFromGallery(gallery: Gallery): DesignConfig {
     if (theme) Object.assign(merged.theme, theme);
     const cover = raw.cover as Partial<DesignConfig["cover"]> | undefined;
     if (cover) Object.assign(merged.cover, cover);
-    const typo = raw.typography as Partial<DesignConfig["typography"]> | undefined;
+    const typo = raw.typography as
+      | Partial<DesignConfig["typography"]>
+      | undefined;
     if (typo) Object.assign(merged.typography, typo);
     const grid = raw.grid as Partial<DesignConfig["grid"]> | undefined;
     if (grid) Object.assign(merged.grid, grid);
     const sceneHeaders = raw.sceneHeaders as SceneHeaderConfig[] | undefined;
     if (Array.isArray(sceneHeaders)) {
-      const byId = new Map(DEFAULT_SCENE_HEADERS.map((scene) => [scene.id, { ...scene }]));
+      const byId = new Map(
+        DEFAULT_SCENE_HEADERS.map((scene) => [scene.id, { ...scene }]),
+      );
       for (const scene of sceneHeaders) {
         if (!scene || typeof scene !== "object") continue;
         const fallback = byId.get(scene.id);
@@ -503,7 +593,9 @@ function configFromGallery(gallery: Gallery): DesignConfig {
       }
       merged.sceneHeaders = Array.from(byId.values());
     }
-    const branding = raw.branding as Partial<DesignConfig["branding"]> | undefined;
+    const branding = raw.branding as
+      | Partial<DesignConfig["branding"]>
+      | undefined;
     if (branding) Object.assign(merged.branding, branding);
   }
 
@@ -537,12 +629,15 @@ function configFromGallery(gallery: Gallery): DesignConfig {
   // were set from Object.assign(cover) above if the saved JSON contained
   // them. For older galleries that only have textColor saved, the
   // Object.assign step doesn't write anything to titleColor/subtitleColor
-  // (DEFAULT_CONFIG defaults them to "#ffffff"), so we backfill them from
+  // (DEFAULT_CONFIG defaults them to the text-media preset), so we backfill them from
   // the legacy textColor here. The first user save will then persist all
   // three keys side-by-side.
-  const savedCover = (raw && typeof raw === "object"
-    ? (raw.cover as { titleColor?: string; subtitleColor?: string } | undefined)
-    : undefined) ?? {};
+  const savedCover =
+    (raw && typeof raw === "object"
+      ? (raw.cover as
+          | { titleColor?: string; subtitleColor?: string }
+          | undefined)
+      : undefined) ?? {};
   if (!savedCover.titleColor && merged.cover.textColor) {
     merged.cover.titleColor = merged.cover.textColor;
   }
@@ -553,7 +648,10 @@ function configFromGallery(gallery: Gallery): DesignConfig {
   return merged;
 }
 
-function applyCoverPreset(config: DesignConfig, presetId: CoverPresetId): DesignConfig {
+function applyCoverPreset(
+  config: DesignConfig,
+  presetId: CoverPresetId,
+): DesignConfig {
   const preset = COVER_PRESETS.find((p) => p.id === presetId);
   if (!preset) return config;
   return {
@@ -569,33 +667,60 @@ function applyCoverPreset(config: DesignConfig, presetId: CoverPresetId): Design
   };
 }
 
-function coverScrimStyle(style: ScrimStyle, variant: ThemeVariant): string | null {
+function coverScrimStyle(
+  style: ScrimStyle,
+  variant: ThemeVariant,
+): string | null {
   if (style === "none") return null;
-  if (style === "soft-gradient") return "linear-gradient(to bottom, rgba(0,0,0,0.04), rgba(0,0,0,0.52))";
-  if (style === "cinematic-dark") return "linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.68))";
-  if (style === "warm-vignette") return "radial-gradient(circle at 50% 45%, rgba(255,196,87,0.18), rgba(0,0,0,0.58) 72%)";
-  if (style === "blur-band") return "linear-gradient(to bottom, transparent 36%, rgba(0,0,0,0.64) 55%, transparent 76%)";
-  if (style === "light-wash") return "linear-gradient(to bottom, rgba(255,255,255,0.34), rgba(255,255,255,0.08))";
-  if (variant === "dark") return "rgba(0,0,0,0.35)";
-  if (variant === "auto") return "rgba(0,0,0,0.15)";
+  if (style === "soft-gradient")
+    return "linear-gradient(to bottom, var(--cover-scrim-soft-start), var(--cover-scrim-soft-end))";
+  if (style === "cinematic-dark")
+    return "linear-gradient(180deg, var(--cover-scrim-cinematic-start), var(--cover-scrim-cinematic-end))";
+  if (style === "warm-vignette")
+    return "radial-gradient(circle at 50% 45%, var(--cover-scrim-warm), var(--cover-scrim-soft-end) 72%)";
+  if (style === "blur-band")
+    return "linear-gradient(to bottom, transparent 36%, var(--cover-scrim-band) 55%, transparent 76%)";
+  if (style === "light-wash")
+    return "linear-gradient(to bottom, var(--cover-scrim-light-start), var(--cover-scrim-light-end))";
+  if (variant === "dark") return "var(--cover-scrim-dark)";
+  if (variant === "auto") return "var(--cover-scrim-auto)";
   return null;
 }
 
-function textBackdropStyle(style: TextBackdrop): React.CSSProperties | undefined {
+function textBackdropStyle(
+  style: TextBackdrop,
+): React.CSSProperties | undefined {
   if (style === "glass") {
     return {
-      background: "rgba(255,255,255,0.16)",
-      backdropFilter: "blur(14px) saturate(160%)",
-      border: "1px solid rgba(255,255,255,0.24)",
-      boxShadow: "0 8px 28px rgba(0,0,0,0.16)",
+      background: "var(--cover-text-backdrop-glass-bg)",
+      backdropFilter:
+        "blur(calc(var(--glass-blur) * 0.6)) saturate(var(--glass-saturation))",
+      border: "1px solid var(--cover-text-backdrop-glass-border)",
+      borderRadius: "var(--radius-xl)",
+      boxShadow: "var(--shadow-md)",
+      padding: "var(--cover-text-backdrop-padding)",
     };
   }
-  if (style === "dark") return { background: "rgba(0,0,0,0.42)" };
-  if (style === "light") return { background: "rgba(255,255,255,0.76)" };
+  if (style === "dark") {
+    return {
+      background: "var(--cover-text-backdrop-dark-bg)",
+      borderRadius: "var(--radius-xl)",
+      padding: "var(--cover-text-backdrop-padding)",
+    };
+  }
+  if (style === "light") {
+    return {
+      background: "var(--cover-text-backdrop-light-bg)",
+      borderRadius: "var(--radius-xl)",
+      padding: "var(--cover-text-backdrop-padding)",
+    };
+  }
   return undefined;
 }
 
-function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
+function clamp(v: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, v));
+}
 function pctFromEvent(e: { clientX: number; clientY: number }, rect: DOMRect) {
   return {
     x: clamp(((e.clientX - rect.left) / rect.width) * 100, 0, 100),
@@ -686,22 +811,23 @@ export default function CoverDesignPage() {
         setAssets(realAssets);
 
         const initial = configFromGallery(g);
+        const persistedSnapshot = JSON.stringify(initial);
         if (!initial.cover.assetId) {
           initial.cover.assetId = realAssets[0]?.id || null;
         }
         setConfig(initial);
-        // Capture the just-hydrated config as the initial saved snapshot so
-        // the dirty dot only lights up on actual user edits — not on first
-        // mount when the fetched state structurally differs from
-        // DEFAULT_CONFIG. Same serialisation as the save handler for an
-        // exact comparison.
-        setSavedSnapshot((prev) => (prev ? prev : JSON.stringify(initial)));
+        // If no photographer-set cover exists yet, keep the first asset visible
+        // as the working default while the saved snapshot stays at the persisted
+        // state. Saving then makes that default durable through Design Studio.
+        setSavedSnapshot((prev) => (prev ? prev : persistedSnapshot));
         setLoaded(true);
       } catch (err) {
         console.error("Failed to load Cover & Design data:", err);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [galleryId]);
 
   // Lazy-load the active font pairing so the live preview matches what
@@ -727,74 +853,120 @@ export default function CoverDesignPage() {
     const param = allFamilies
       .map((f) => `family=${encodeURIComponent(f)}:wght@400;500;600;700`)
       .join("&");
-    ensureFontsLoaded(`https://fonts.googleapis.com/css2?${param}&display=swap`);
+    ensureFontsLoaded(
+      `https://fonts.googleapis.com/css2?${param}&display=swap`,
+    );
   }, [loaded]);
 
   const token = useMemo(() => getStoredAccessToken(), []);
   const selectedAsset = assets.find((a) => a.id === config.cover.assetId);
-  const coverMedia = useDecryptedAssetUrl(selectedAsset, LIGHTBOX_VARIANTS, token);
+  const coverMedia = useDecryptedAssetUrl(
+    selectedAsset,
+    LIGHTBOX_VARIANTS,
+    token,
+  );
   const hasCoverPreview = Boolean(coverMedia.src);
 
   // ───────────── Drag handlers ─────────────
 
-  const onStagePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (!stageRef.current) return;
-    // What's being dragged is decided by data-handle on the target.
-    const target = e.target as HTMLElement;
-    const handle = target.closest<HTMLElement>("[data-handle]");
-    const kind = (handle?.dataset.handle as DragKind) || "focal";
-    dragKindRef.current = kind;
-    setDragKind(kind);
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* pen drivers */ }
-    e.preventDefault();
-  }, []);
+  const onStagePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!stageRef.current) return;
+      // What's being dragged is decided by data-handle on the target.
+      const target = e.target as HTMLElement;
+      const handle = target.closest<HTMLElement>("[data-handle]");
+      const kind = (handle?.dataset.handle as DragKind) || "focal";
+      dragKindRef.current = kind;
+      setDragKind(kind);
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* pen drivers */
+      }
+      e.preventDefault();
+    },
+    [],
+  );
 
-  const onStagePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const kind = dragKindRef.current;
-    if (!kind || !stageRef.current) return;
-    const rect = stageRef.current.getBoundingClientRect();
-    const { x, y } = pctFromEvent(e, rect);
-    setConfig((c) => {
-      if (kind === "focal") {
-        return {
-          ...c,
-          cover: {
-            ...c.cover,
-            [previewDevice === "phone" ? "mobileFocalPoint" : "focalPoint"]: { x: Math.round(x), y: Math.round(y) },
-          },
-        };
-      }
-      if (kind === "title") {
-        return { ...c, cover: { ...c.cover, titlePosition: { x: Math.round(x), y: Math.round(y) } } };
-      }
-      if (kind === "subtitle") {
-        return { ...c, cover: { ...c.cover, subtitlePosition: { x: Math.round(x), y: Math.round(y) } } };
-      }
-      return c;
-    });
-  }, [previewDevice]);
+  const onStagePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const kind = dragKindRef.current;
+      if (!kind || !stageRef.current) return;
+      const rect = stageRef.current.getBoundingClientRect();
+      const { x, y } = pctFromEvent(e, rect);
+      setConfig((c) => {
+        if (kind === "focal") {
+          return {
+            ...c,
+            cover: {
+              ...c.cover,
+              [previewDevice === "phone" ? "mobileFocalPoint" : "focalPoint"]: {
+                x: Math.round(x),
+                y: Math.round(y),
+              },
+            },
+          };
+        }
+        if (kind === "title") {
+          return {
+            ...c,
+            cover: {
+              ...c.cover,
+              titlePosition: { x: Math.round(x), y: Math.round(y) },
+            },
+          };
+        }
+        if (kind === "subtitle") {
+          return {
+            ...c,
+            cover: {
+              ...c.cover,
+              subtitlePosition: { x: Math.round(x), y: Math.round(y) },
+            },
+          };
+        }
+        return c;
+      });
+    },
+    [previewDevice],
+  );
 
-  const onStagePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    dragKindRef.current = null;
-    setDragKind(null);
-    try {
-      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-        e.currentTarget.releasePointerCapture(e.pointerId);
+  const onStagePointerUp = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      dragKindRef.current = null;
+      setDragKind(null);
+      try {
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        }
+      } catch {
+        /* ignore */
       }
-    } catch { /* ignore */ }
-  }, []);
+    },
+    [],
+  );
 
   // ───────────── Save ─────────────
 
   const handleSave = async () => {
-    if (!token) { setSaveError("Your session expired. Please log in again."); return; }
-    if (!config.cover.assetId) { setSaveError("Pick a cover photo before saving."); return; }
+    if (!token) {
+      setSaveError("Your session expired. Please log in again.");
+      return;
+    }
+    if (!config.cover.assetId) {
+      setSaveError("Pick a cover photo before saving.");
+      return;
+    }
     setSaving(true);
     setSaveError("");
     setSaveMessage("");
     setJustSaved(false);
     try {
-      await updateGalleryDesign(token, galleryId, config as unknown as Record<string, unknown>);
+      await updateGalleryDesign(
+        token,
+        galleryId,
+        config as unknown as Record<string, unknown>,
+      );
       // Capture the snapshot of what we just sent so the dirty-dot logic
       // recognises this state as "clean". Use JSON.stringify of the same
       // serialisation we sent over the wire so the comparison is exact.
@@ -802,7 +974,9 @@ export default function CoverDesignPage() {
       setSaveMessage("Cover & Design saved.");
       setJustSaved(true);
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Failed to save design.");
+      setSaveError(
+        err instanceof Error ? err.message : "Failed to save design.",
+      );
     } finally {
       setSaving(false);
     }
@@ -823,14 +997,19 @@ export default function CoverDesignPage() {
     };
   }, [justSaved]);
 
-  const isDirty = savedSnapshot !== "" && savedSnapshot !== JSON.stringify(config);
+  const isDirty =
+    savedSnapshot !== "" && savedSnapshot !== JSON.stringify(config);
 
   // ───────────── Derived preview state ─────────────
 
-  const activeScrim = coverScrimStyle(config.cover.scrimStyle, config.theme.variant);
-  const activeFocalPoint = previewDevice === "phone"
-    ? config.cover.mobileFocalPoint
-    : config.cover.focalPoint;
+  const activeScrim = coverScrimStyle(
+    config.cover.scrimStyle,
+    config.theme.variant,
+  );
+  const activeFocalPoint =
+    previewDevice === "phone"
+      ? config.cover.mobileFocalPoint
+      : config.cover.focalPoint;
   // Drag anchor is always the CENTER of the text bounding box, regardless
   // of textAlign. Earlier behavior used textAlign to pick the anchor edge
   // (left = left edge, right = right edge), which made dragging feel
@@ -841,7 +1020,7 @@ export default function CoverDesignPage() {
   // the box; it just no longer affects WHERE the box sits relative to the
   // saved position.
   const textShadowStyle = config.cover.textShadow
-    ? "0 2px 12px rgba(0,0,0,0.55), 0 1px 3px rgba(0,0,0,0.4)"
+    ? "var(--cover-text-shadow)"
     : undefined;
   const activeTextBackdropStyle = textBackdropStyle(config.cover.textBackdrop);
 
@@ -853,9 +1032,11 @@ export default function CoverDesignPage() {
         <GalleryWorkspaceNav galleryId={galleryId} />
       </div>
 
-      <header className="mt-3 flex flex-col gap-3 border-b border-white/5 px-4 py-3 sm:mt-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4 lg:px-8">
+      <header className="cover-editor-header mt-3 flex flex-col gap-3 px-4 py-3 sm:mt-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4 lg:px-8">
         <div className="min-w-0">
-          <h1 className="text-lg font-semibold font-headline sm:text-xl">Cover &amp; Design</h1>
+          <h1 className="text-lg font-semibold font-headline sm:text-xl">
+            Cover &amp; Design
+          </h1>
           <p className="truncate text-xs text-on-surface-variant">
             {gallery?.title || "Loading…"}
           </p>
@@ -874,7 +1055,7 @@ export default function CoverDesignPage() {
             id="cover-tab-select"
             value={tab}
             onChange={(e) => setTab(e.target.value as TabId)}
-            className="min-h-[40px] flex-1 cursor-pointer rounded-xl border border-white/10 bg-surface px-3 py-2 pr-8 text-sm capitalize focus:border-primary focus:outline-none sm:flex-none"
+            className="touch-min flex-1 cursor-pointer rounded-xl border border-border-subtle bg-surface px-3 py-2 pr-8 text-sm capitalize focus:border-primary focus:outline-none sm:flex-none"
           >
             <option value="cover">Cover</option>
             <option value="text">Text</option>
@@ -886,7 +1067,7 @@ export default function CoverDesignPage() {
           {gallery?.slug && (
             <Link
               href={`/galleries/${galleryId}/preview`}
-              className="min-h-[40px] flex-1 rounded-xl border border-white/10 px-4 py-2 text-center text-sm transition-colors hover:bg-white/5 sm:flex-none"
+              className="touch-min flex-1 rounded-xl border border-border-subtle px-4 py-2 text-center text-sm transition-colors hover:bg-accent-subtle sm:flex-none"
             >
               Preview
             </Link>
@@ -916,7 +1097,7 @@ export default function CoverDesignPage() {
                     ? "Save cover and design (unsaved changes)"
                     : "Save cover and design"
             }
-            className={`relative min-h-[40px] flex-1 overflow-hidden rounded-xl px-5 py-2 text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed sm:flex-none sm:px-6 ${
+            className={`touch-min relative flex-1 overflow-hidden rounded-xl px-5 py-2 text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed sm:flex-none sm:px-6 ${
               justSaved
                 ? "bg-success/85 text-on-primary shadow-lg shadow-success/30 scale-[1.02]"
                 : saving
@@ -967,7 +1148,11 @@ export default function CoverDesignPage() {
       </header>
 
       {(saveMessage || saveError) && (
-        <div className="px-4 pt-3 sm:px-6 lg:px-8" role="status" aria-live="polite">
+        <div
+          className="px-4 pt-3 sm:px-6 lg:px-8"
+          role="status"
+          aria-live="polite"
+        >
           {saveMessage && (
             <div className="inline-flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-3 py-1.5 text-xs font-medium text-success">
               <svg
@@ -1016,18 +1201,20 @@ export default function CoverDesignPage() {
         {/* ───────── LIVE PREVIEW ───────── */}
         <section>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <div className="inline-flex rounded-full border border-white/10 bg-surface-container p-1">
+            <div className="cover-editor-segmented inline-flex">
               {(["desktop", "phone"] as PreviewDevice[]).map((device) => (
                 <button
                   key={device}
                   type="button"
                   onClick={() => setPreviewDevice(device)}
                   aria-pressed={previewDevice === device}
-                  aria-label={device === "desktop" ? "Desktop preview" : "Phone preview"}
-                  className={`min-h-[40px] rounded-full px-4 text-sm font-medium transition-colors ${
+                  aria-label={
+                    device === "desktop" ? "Desktop preview" : "Phone preview"
+                  }
+                  className={`touch-min rounded-full px-4 text-sm font-medium transition-colors ${
                     previewDevice === device
                       ? "bg-primary text-on-primary"
-                      : "text-on-surface-variant hover:bg-white/5"
+                      : "text-on-surface-variant hover:bg-accent-subtle"
                   }`}
                 >
                   {device === "desktop" ? "Desktop" : "Phone"}
@@ -1046,12 +1233,22 @@ export default function CoverDesignPage() {
             onPointerMove={onStagePointerMove}
             onPointerUp={onStagePointerUp}
             onPointerCancel={onStagePointerUp}
-            className={`relative w-full select-none overflow-hidden rounded-2xl border border-white/10 bg-surface-container shadow-2xl shadow-black/20 ${
-              hasCoverPreview ? (dragKind ? "cursor-grabbing" : "cursor-grab") : "cursor-default"
+            className={`cover-editor-stage relative w-full select-none overflow-hidden ${
+              hasCoverPreview
+                ? dragKind
+                  ? "cursor-grabbing"
+                  : "cursor-grab"
+                : "cursor-default"
             } ${previewDevice === "phone" ? "mx-auto max-w-sm" : ""}`}
             style={{
-              aspectRatio: previewDevice === "phone" ? config.cover.mobileAspectRatio : config.cover.aspectRatio,
-              maxHeight: previewDevice === "phone" ? "min(78vh, 760px)" : "min(78vh, 820px)",
+              aspectRatio:
+                previewDevice === "phone"
+                  ? config.cover.mobileAspectRatio
+                  : config.cover.aspectRatio,
+              maxHeight:
+                previewDevice === "phone"
+                  ? "min(78vh, 760px)"
+                  : "min(78vh, 820px)",
               touchAction: "none",
             }}
             aria-label="Cover preview — drag photo to pan, drag title/subtitle to position"
@@ -1061,29 +1258,36 @@ export default function CoverDesignPage() {
                 src={coverMedia.src}
                 alt={selectedAsset?.filename || "Cover preview"}
                 className="absolute inset-0 h-full w-full object-cover"
-                style={{ objectPosition: `${activeFocalPoint.x}% ${activeFocalPoint.y}%` }}
+                style={{
+                  objectPosition: `${activeFocalPoint.x}% ${activeFocalPoint.y}%`,
+                }}
                 draggable={false}
               />
             ) : (
               <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-surface-container to-surface-container-high">
                 {selectedAsset && (
                   <span className="rounded-full bg-surface-overlay px-3 py-1 text-xs font-medium text-on-surface-variant">
-                    {coverMedia.loading ? "Decrypting cover preview..." : coverMedia.error || "Cover preview unavailable"}
+                    {coverMedia.loading
+                      ? "Decrypting cover preview..."
+                      : coverMedia.error || "Cover preview unavailable"}
                   </span>
                 )}
               </div>
             )}
 
             {activeScrim && (
-              <div className="pointer-events-none absolute inset-0" style={{ background: activeScrim }} />
+              <div
+                className="pointer-events-none absolute inset-0"
+                style={{ background: activeScrim }}
+              />
             )}
 
             {previewDevice === "phone" && (
               <div
-                className="pointer-events-none absolute inset-x-7 inset-y-12 z-10 rounded-xl border border-dashed border-white/55 bg-black/[0.03]"
+                className="cover-preview-safe-zone pointer-events-none absolute inset-x-7 inset-y-12 z-10 rounded-xl"
                 aria-label="Mobile safe zone"
               >
-                <span className="absolute left-3 top-3 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white">
+                <span className="cover-preview-safe-zone-label absolute left-3 top-3">
                   Safe zone
                 </span>
               </div>
@@ -1102,7 +1306,9 @@ export default function CoverDesignPage() {
               <h2
                 data-handle="title"
                 className={`absolute touch-none font-semibold tracking-tight transition-shadow ${
-                  activeText === "title" && tab === "text" ? "ring-2 ring-primary ring-offset-2 ring-offset-black/30" : ""
+                  activeText === "title" && tab === "text"
+                    ? "ring-2 ring-primary ring-offset-2 ring-offset-surface-scrim-strong/30"
+                    : ""
                 }`}
                 style={{
                   left: `${config.cover.titlePosition.x}%`,
@@ -1114,14 +1320,17 @@ export default function CoverDesignPage() {
                   textShadow: textShadowStyle,
                   textAlign: config.cover.textAlign,
                   cursor: "grab",
-                  padding: "4px 8px",
-                  borderRadius: "4px",
+                  padding: "var(--space-1) var(--space-2)",
+                  borderRadius: "var(--radius-sm)",
                   lineHeight: 1.1,
                   userSelect: "none",
                   whiteSpace: "pre",
                   ...activeTextBackdropStyle,
                 }}
-                onClick={() => { setActiveText("title"); setTab("text"); }}
+                onClick={() => {
+                  setActiveText("title");
+                  setTab("text");
+                }}
               >
                 {config.cover.title}
               </h2>
@@ -1132,7 +1341,9 @@ export default function CoverDesignPage() {
               <p
                 data-handle="subtitle"
                 className={`absolute touch-none transition-shadow ${
-                  activeText === "subtitle" && tab === "text" ? "ring-2 ring-primary ring-offset-2 ring-offset-black/30" : ""
+                  activeText === "subtitle" && tab === "text"
+                    ? "ring-2 ring-primary ring-offset-2 ring-offset-surface-scrim-strong/30"
+                    : ""
                 }`}
                 style={{
                   left: `${config.cover.subtitlePosition.x}%`,
@@ -1144,14 +1355,17 @@ export default function CoverDesignPage() {
                   textShadow: textShadowStyle,
                   textAlign: config.cover.textAlign,
                   cursor: "grab",
-                  padding: "4px 8px",
-                  borderRadius: "4px",
+                  padding: "var(--space-1) var(--space-2)",
+                  borderRadius: "var(--radius-sm)",
                   lineHeight: 1.3,
                   userSelect: "none",
                   whiteSpace: "pre",
                   ...activeTextBackdropStyle,
                 }}
-                onClick={() => { setActiveText("subtitle"); setTab("text"); }}
+                onClick={() => {
+                  setActiveText("subtitle");
+                  setTab("text");
+                }}
               >
                 {config.cover.subtitle}
               </p>
@@ -1159,27 +1373,33 @@ export default function CoverDesignPage() {
 
             {/* Drag-hint pill */}
             {hasCoverPreview && !dragKind && (
-              <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/55 px-3 py-1 text-[11px] font-medium text-white shadow-sm backdrop-blur-sm">
-                {tab === "text" ? "Drag title / subtitle to position" : "Drag photo to pan"}
+              <div className="cover-preview-drag-hint pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2">
+                {tab === "text"
+                  ? "Drag title / subtitle to position"
+                  : "Drag photo to pan"}
               </div>
             )}
 
-            {config.branding.logoPlacement !== "hidden" && config.branding.monogram && (
-              <div
-                className={`pointer-events-none absolute z-20 inline-flex h-10 min-w-10 items-center justify-center rounded-full border border-white/35 bg-black/30 px-2 text-sm font-semibold text-white backdrop-blur-md ${
-                  config.branding.logoPlacement === "top-right" ? "right-4 top-4"
-                  : config.branding.logoPlacement === "bottom-left" ? "bottom-4 left-4"
-                  : config.branding.logoPlacement === "bottom-right" ? "bottom-4 right-4"
-                  : "left-4 top-4"
-                }`}
-                style={{
-                  color: config.branding.brandColor || undefined,
-                  borderColor: config.branding.brandColor || undefined,
-                }}
-              >
-                {config.branding.monogram}
-              </div>
-            )}
+            {config.branding.logoPlacement !== "hidden" &&
+              config.branding.monogram && (
+                <div
+                  className={`cover-brand-mark pointer-events-none absolute z-20 inline-flex h-10 min-w-10 items-center justify-center rounded-full px-2 text-sm font-semibold ${
+                    config.branding.logoPlacement === "top-right"
+                      ? "right-4 top-4"
+                      : config.branding.logoPlacement === "bottom-left"
+                        ? "bottom-4 left-4"
+                        : config.branding.logoPlacement === "bottom-right"
+                          ? "bottom-4 right-4"
+                          : "left-4 top-4"
+                  }`}
+                  style={{
+                    color: config.branding.brandColor || undefined,
+                    borderColor: config.branding.brandColor || undefined,
+                  }}
+                >
+                  {config.branding.monogram}
+                </div>
+              )}
           </div>
         </section>
 
@@ -1188,7 +1408,7 @@ export default function CoverDesignPage() {
           {/* Section picker moved into the page header as a dropdown
               next to Preview/Save. The panel body renders the active
               section's controls without a tab bar above it. */}
-          <div className="rounded-2xl border border-white/10 bg-surface-container p-4 sm:p-6">
+          <div className="cover-editor-panel p-4 sm:p-6">
             {tab === "cover" && (
               <PanelCover
                 assets={assets}
@@ -1228,10 +1448,7 @@ export default function CoverDesignPage() {
               />
             )}
             {tab === "brand" && (
-              <PanelBrand
-                config={config}
-                setConfig={setConfig}
-              />
+              <PanelBrand config={config} setConfig={setConfig} />
             )}
           </div>
         </section>
@@ -1319,7 +1536,9 @@ function FontPicker({
         e.preventDefault();
         if (!listRef.current) return;
         const buttons = Array.from(
-          listRef.current.querySelectorAll<HTMLButtonElement>("[data-font-option]"),
+          listRef.current.querySelectorAll<HTMLButtonElement>(
+            "[data-font-option]",
+          ),
         );
         const currentIdx = buttons.findIndex(
           (b) => b === document.activeElement,
@@ -1346,11 +1565,7 @@ function FontPicker({
   }, [open, value]);
 
   return (
-    <div
-      ref={containerRef}
-      className="relative"
-      onKeyDown={handleKeyDown}
-    >
+    <div ref={containerRef} className="relative" onKeyDown={handleKeyDown}>
       <button
         id={id}
         type="button"
@@ -1358,7 +1573,7 @@ function FontPicker({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={ariaLabel || `Select font, current: ${value}`}
-        className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm transition-colors hover:border-white/20 focus:border-primary focus:outline-none"
+        className="flex w-full items-center justify-between rounded-lg border border-border-subtle bg-surface px-3 py-2 text-sm transition-colors hover:border-border-default focus:border-primary focus:outline-none"
       >
         <span
           className="truncate text-left"
@@ -1385,7 +1600,7 @@ function FontPicker({
           ref={listRef}
           role="listbox"
           aria-label={ariaLabel || "Font options"}
-          className="absolute left-0 right-0 top-[calc(100%+4px)] z-30 max-h-72 overflow-y-auto rounded-lg border border-white/10 bg-surface-container py-1 shadow-2xl shadow-black/40"
+          className="absolute left-0 right-0 top-[calc(100%+4px)] z-30 max-h-72 overflow-y-auto rounded-lg border border-border-subtle bg-surface-container py-1 shadow-2xl shadow-lg"
         >
           {FONT_OPTIONS.map((f) => {
             const selected = f.name === value;
@@ -1400,7 +1615,7 @@ function FontPicker({
                   onChange(f.name);
                   setOpen(false);
                 }}
-                className={`flex w-full items-baseline justify-between gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-white/5 focus:bg-white/5 focus:outline-none ${
+                className={`flex w-full items-baseline justify-between gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-accent-subtle focus:bg-accent-subtle focus:outline-none ${
                   selected ? "bg-primary/10 text-primary" : "text-on-surface"
                 }`}
                 style={{ fontFamily: fontFamilyFor(f.name) }}
@@ -1441,14 +1656,16 @@ function PanelCover({
         <div className="mb-2 flex items-center justify-between">
           <div>
             <h3 className="text-sm font-semibold">Design presets</h3>
-            <p className="text-xs text-on-surface-variant">One-tap cover direction for wedding galleries.</p>
+            <p className="text-xs text-on-surface-variant">
+              One-tap cover direction for wedding galleries.
+            </p>
           </div>
           <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-primary">
             {config.cover.layoutPreset.replace(/-/g, " ")}
           </span>
         </div>
         <div
-          className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-black/10 p-1 sm:grid-cols-2 sm:gap-2 sm:border-0 sm:bg-transparent sm:p-0 lg:grid-cols-4"
+          className="grid grid-cols-2 gap-1 rounded-xl border border-border-subtle bg-surface-sunken p-1 sm:grid-cols-2 sm:gap-2 sm:border-0 sm:bg-transparent sm:p-0 lg:grid-cols-4"
           role="group"
           aria-label="Cover design presets"
         >
@@ -1463,11 +1680,15 @@ function PanelCover({
                 className={`min-h-11 rounded-lg border px-2 py-2 text-center text-xs transition-colors sm:min-h-[72px] sm:rounded-xl sm:p-3 sm:text-left ${
                   active
                     ? "border-primary bg-primary/10 text-primary"
-                    : "border-transparent text-on-surface hover:bg-white/5 sm:border-white/10"
+                    : "border-transparent text-on-surface hover:bg-accent-subtle sm:border-border-subtle"
                 }`}
               >
-                <span className="block font-semibold sm:text-sm">{preset.name}</span>
-                <span className="mt-1 hidden text-xs text-on-surface-variant sm:block">{preset.mood}</span>
+                <span className="block font-semibold sm:text-sm">
+                  {preset.name}
+                </span>
+                <span className="mt-1 hidden text-xs text-on-surface-variant sm:block">
+                  {preset.mood}
+                </span>
               </button>
             );
           })}
@@ -1487,9 +1708,16 @@ function PanelCover({
             return (
               <button
                 key={a.id}
-                onClick={() => setConfig((c) => ({ ...c, cover: { ...c.cover, assetId: a.id } }))}
+                onClick={() =>
+                  setConfig((c) => ({
+                    ...c,
+                    cover: { ...c.cover, assetId: a.id },
+                  }))
+                }
                 className={`aspect-square overflow-hidden rounded-md transition-all ${
-                  active ? "ring-2 ring-primary" : "ring-1 ring-white/10 hover:ring-white/20"
+                  active
+                    ? "ring-2 ring-primary"
+                    : "ring-1 ring-border-subtle hover:ring-border-default"
                 }`}
                 aria-label={`Use ${a.filename} as cover`}
                 aria-pressed={active}
@@ -1512,19 +1740,23 @@ function PanelCover({
         )}
       </div>
 
-      <div className="border-t border-white/10 pt-4">
+      <div className="border-t border-border-subtle pt-4">
         <button
-          onClick={() => setConfig((c) => ({
-            ...c,
-            cover: {
-              ...c.cover,
-              focalPoint: { x: 50, y: 50 },
-              mobileFocalPoint: { x: 50, y: 50 },
-            },
-          }))}
-          className="min-h-[40px] w-full rounded-lg border border-white/10 px-4 py-2 text-sm transition-colors hover:bg-white/5"
+          onClick={() =>
+            setConfig((c) => ({
+              ...c,
+              cover: {
+                ...c.cover,
+                focalPoint: { x: 50, y: 50 },
+                mobileFocalPoint: { x: 50, y: 50 },
+              },
+            }))
+          }
+          className="min-h-[40px] w-full rounded-lg border border-border-subtle px-4 py-2 text-sm transition-colors hover:bg-accent-subtle"
         >
-          Reset focal points ({config.cover.focalPoint.x}%, {config.cover.focalPoint.y}% / phone {config.cover.mobileFocalPoint.x}%, {config.cover.mobileFocalPoint.y}%)
+          Reset focal points ({config.cover.focalPoint.x}%,{" "}
+          {config.cover.focalPoint.y}% / phone {config.cover.mobileFocalPoint.x}
+          %, {config.cover.mobileFocalPoint.y}%)
         </button>
       </div>
     </div>
@@ -1608,7 +1840,12 @@ function PanelText({
     (config.cover.scrimStyle !== "none" ? 1 : 0) +
     (config.cover.textBackdrop !== "none" ? 1 : 0) +
     (config.typography.titleSize >= 36 ? 1 : 0);
-  const readabilityLabel = readabilityPoints >= 3 ? "Strong" : readabilityPoints >= 2 ? "Good" : "Needs help";
+  const readabilityLabel =
+    readabilityPoints >= 3
+      ? "Strong"
+      : readabilityPoints >= 2
+        ? "Good"
+        : "Needs help";
 
   return (
     <div className="space-y-6">
@@ -1620,7 +1857,7 @@ function PanelText({
         className={`space-y-3 rounded-xl border p-3 transition-colors ${
           activeText === "title"
             ? "border-primary/40 bg-primary/[0.03]"
-            : "border-white/10"
+            : "border-border-subtle"
         }`}
       >
         <div className="flex items-baseline justify-between">
@@ -1629,7 +1866,9 @@ function PanelText({
           </h3>
           <span
             className={`rounded-full px-2 py-0.5 font-mono text-[10px] tabular-nums transition-colors ${
-              activeText === "title" ? "bg-primary/15 text-primary" : "text-on-surface-variant/70"
+              activeText === "title"
+                ? "bg-primary/15 text-primary"
+                : "text-on-surface-variant/70"
             }`}
             aria-label={`Title position ${config.cover.titlePosition.x}% horizontal, ${config.cover.titlePosition.y}% vertical`}
           >
@@ -1640,10 +1879,15 @@ function PanelText({
         <input
           id="cover-title-input"
           value={config.cover.title}
-          onChange={(e) => setConfig((c) => ({ ...c, cover: { ...c.cover, title: e.target.value } }))}
+          onChange={(e) =>
+            setConfig((c) => ({
+              ...c,
+              cover: { ...c.cover, title: e.target.value },
+            }))
+          }
           onFocus={() => setActiveText("title")}
           placeholder="Your gallery title"
-          className="w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm transition-colors hover:border-white/20 focus:border-primary focus:outline-none"
+          className="w-full rounded-lg border border-border-subtle bg-surface px-3 py-2 text-sm transition-colors hover:border-border-default focus:border-primary focus:outline-none"
         />
 
         {/* Per-element font picker — custom popover dropdown so each
@@ -1651,12 +1895,20 @@ function PanelText({
             doesn't honor per-option font-family in Chromium/Webkit).
             See FontPicker for keyboard nav + click-outside behavior. */}
         <div className="space-y-1.5">
-          <label htmlFor="cover-title-font" className="text-[11px] text-on-surface-variant">Font</label>
+          <label
+            htmlFor="cover-title-font"
+            className="text-[11px] text-on-surface-variant"
+          >
+            Font
+          </label>
           <FontPicker
             id="cover-title-font"
             value={config.typography.headingFont}
             onChange={(next) =>
-              setConfig((c) => ({ ...c, typography: { ...c.typography, headingFont: next } }))
+              setConfig((c) => ({
+                ...c,
+                typography: { ...c.typography, headingFont: next },
+              }))
             }
             onOpenChange={(opened) => {
               if (opened) setActiveText("title");
@@ -1668,8 +1920,15 @@ function PanelText({
         <div className="grid grid-cols-[1fr_auto] items-center gap-3">
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label htmlFor="cover-title-size" className="text-[11px] text-on-surface-variant">Size</label>
-              <span className="text-[11px] tabular-nums">{config.typography.titleSize}px</span>
+              <label
+                htmlFor="cover-title-size"
+                className="text-[11px] text-on-surface-variant"
+              >
+                Size
+              </label>
+              <span className="text-[11px] tabular-nums">
+                {config.typography.titleSize}px
+              </span>
             </div>
             <input
               id="cover-title-size"
@@ -1679,26 +1938,41 @@ function PanelText({
               step={1}
               value={config.typography.titleSize}
               onChange={(e) =>
-                setConfig((c) => ({ ...c, typography: { ...c.typography, titleSize: Number(e.target.value) } }))
+                setConfig((c) => ({
+                  ...c,
+                  typography: {
+                    ...c.typography,
+                    titleSize: Number(e.target.value),
+                  },
+                }))
               }
               onFocus={() => setActiveText("title")}
               className="w-full accent-primary"
             />
           </div>
           <div className="space-y-1.5">
-            <label htmlFor="cover-title-color" className="text-[11px] text-on-surface-variant">Color</label>
+            <label
+              htmlFor="cover-title-color"
+              className="text-[11px] text-on-surface-variant"
+            >
+              Color
+            </label>
             <input
               id="cover-title-color"
               type="color"
-              value={config.cover.titleColor || "#ffffff"}
+              value={config.cover.titleColor || COVER_COLORS.textMedia}
               onChange={(e) =>
                 setConfig((c) => ({
                   ...c,
-                  cover: { ...c.cover, titleColor: e.target.value, textColor: e.target.value },
+                  cover: {
+                    ...c.cover,
+                    titleColor: e.target.value,
+                    textColor: e.target.value,
+                  },
                 }))
               }
               onFocus={() => setActiveText("title")}
-              className="h-8 w-12 cursor-pointer rounded border border-white/10 bg-surface p-0"
+              className="h-8 w-12 cursor-pointer rounded border border-border-subtle bg-surface p-0"
               aria-label="Title color picker"
             />
           </div>
@@ -1713,7 +1987,7 @@ function PanelText({
         className={`space-y-3 rounded-xl border p-3 transition-colors ${
           activeText === "subtitle"
             ? "border-primary/40 bg-primary/[0.03]"
-            : "border-white/10"
+            : "border-border-subtle"
         }`}
       >
         <div className="flex items-baseline justify-between">
@@ -1722,7 +1996,9 @@ function PanelText({
           </h3>
           <span
             className={`rounded-full px-2 py-0.5 font-mono text-[10px] tabular-nums transition-colors ${
-              activeText === "subtitle" ? "bg-primary/15 text-primary" : "text-on-surface-variant/70"
+              activeText === "subtitle"
+                ? "bg-primary/15 text-primary"
+                : "text-on-surface-variant/70"
             }`}
             aria-label={`Subtitle position ${config.cover.subtitlePosition.x}% horizontal, ${config.cover.subtitlePosition.y}% vertical`}
           >
@@ -1733,19 +2009,32 @@ function PanelText({
         <input
           id="cover-subtitle-input"
           value={config.cover.subtitle}
-          onChange={(e) => setConfig((c) => ({ ...c, cover: { ...c.cover, subtitle: e.target.value } }))}
+          onChange={(e) =>
+            setConfig((c) => ({
+              ...c,
+              cover: { ...c.cover, subtitle: e.target.value },
+            }))
+          }
           onFocus={() => setActiveText("subtitle")}
           placeholder="Optional subtitle"
-          className="w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm transition-colors hover:border-white/20 focus:border-primary focus:outline-none"
+          className="w-full rounded-lg border border-border-subtle bg-surface px-3 py-2 text-sm transition-colors hover:border-border-default focus:border-primary focus:outline-none"
         />
 
         <div className="space-y-1.5">
-          <label htmlFor="cover-subtitle-font" className="text-[11px] text-on-surface-variant">Font</label>
+          <label
+            htmlFor="cover-subtitle-font"
+            className="text-[11px] text-on-surface-variant"
+          >
+            Font
+          </label>
           <FontPicker
             id="cover-subtitle-font"
             value={config.typography.bodyFont}
             onChange={(next) =>
-              setConfig((c) => ({ ...c, typography: { ...c.typography, bodyFont: next } }))
+              setConfig((c) => ({
+                ...c,
+                typography: { ...c.typography, bodyFont: next },
+              }))
             }
             onOpenChange={(opened) => {
               if (opened) setActiveText("subtitle");
@@ -1757,8 +2046,15 @@ function PanelText({
         <div className="grid grid-cols-[1fr_auto] items-center gap-3">
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label htmlFor="cover-subtitle-size" className="text-[11px] text-on-surface-variant">Size</label>
-              <span className="text-[11px] tabular-nums">{config.typography.subtitleSize}px</span>
+              <label
+                htmlFor="cover-subtitle-size"
+                className="text-[11px] text-on-surface-variant"
+              >
+                Size
+              </label>
+              <span className="text-[11px] tabular-nums">
+                {config.typography.subtitleSize}px
+              </span>
             </div>
             <input
               id="cover-subtitle-size"
@@ -1768,18 +2064,29 @@ function PanelText({
               step={1}
               value={config.typography.subtitleSize}
               onChange={(e) =>
-                setConfig((c) => ({ ...c, typography: { ...c.typography, subtitleSize: Number(e.target.value) } }))
+                setConfig((c) => ({
+                  ...c,
+                  typography: {
+                    ...c.typography,
+                    subtitleSize: Number(e.target.value),
+                  },
+                }))
               }
               onFocus={() => setActiveText("subtitle")}
               className="w-full accent-primary"
             />
           </div>
           <div className="space-y-1.5">
-            <label htmlFor="cover-subtitle-color" className="text-[11px] text-on-surface-variant">Color</label>
+            <label
+              htmlFor="cover-subtitle-color"
+              className="text-[11px] text-on-surface-variant"
+            >
+              Color
+            </label>
             <input
               id="cover-subtitle-color"
               type="color"
-              value={config.cover.subtitleColor || "#ffffff"}
+              value={config.cover.subtitleColor || COVER_COLORS.textMedia}
               onChange={(e) =>
                 setConfig((c) => ({
                   ...c,
@@ -1787,7 +2094,7 @@ function PanelText({
                 }))
               }
               onFocus={() => setActiveText("subtitle")}
-              className="h-8 w-12 cursor-pointer rounded border border-white/10 bg-surface p-0"
+              className="h-8 w-12 cursor-pointer rounded border border-border-subtle bg-surface p-0"
               aria-label="Subtitle color picker"
             />
           </div>
@@ -1804,7 +2111,7 @@ function PanelText({
             anchor math keeps working.
           - Only the readability-shadow toggle remained shared, so it
             lives inline at the bottom of the panel as a compact row. */}
-      <section className="space-y-3 rounded-xl border border-white/10 p-3">
+      <section className="space-y-3 rounded-xl border border-border-subtle p-3">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
@@ -1829,53 +2136,81 @@ function PanelText({
         <div className="grid gap-2 sm:grid-cols-2">
           <button
             type="button"
-            onClick={() => setConfig((c) => ({
-              ...c,
-              cover: { ...c.cover, scrimStyle: "soft-gradient", textShadow: true },
-            }))}
-            className="min-h-[40px] rounded-lg border border-white/10 px-3 py-2 text-left text-sm transition-colors hover:bg-white/5"
+            onClick={() =>
+              setConfig((c) => ({
+                ...c,
+                cover: {
+                  ...c.cover,
+                  scrimStyle: "soft-gradient",
+                  textShadow: true,
+                },
+              }))
+            }
+            className="min-h-[40px] rounded-lg border border-border-subtle px-3 py-2 text-left text-sm transition-colors hover:bg-accent-subtle"
           >
             Gradient scrim
           </button>
           <button
             type="button"
-            onClick={() => setConfig((c) => ({
-              ...c,
-              cover: { ...c.cover, textBackdrop: "glass", textShadow: true },
-            }))}
-            className="min-h-[40px] rounded-lg border border-white/10 px-3 py-2 text-left text-sm transition-colors hover:bg-white/5"
+            onClick={() =>
+              setConfig((c) => ({
+                ...c,
+                cover: { ...c.cover, textBackdrop: "glass", textShadow: true },
+              }))
+            }
+            className="min-h-[40px] rounded-lg border border-border-subtle px-3 py-2 text-left text-sm transition-colors hover:bg-accent-subtle"
           >
             Glass title plate
           </button>
           <button
             type="button"
-            onClick={() => setConfig((c) => ({
-              ...c,
-              cover: { ...c.cover, scrimStyle: "blur-band", textShadow: true },
-            }))}
-            className="min-h-[40px] rounded-lg border border-white/10 px-3 py-2 text-left text-sm transition-colors hover:bg-white/5"
+            onClick={() =>
+              setConfig((c) => ({
+                ...c,
+                cover: {
+                  ...c.cover,
+                  scrimStyle: "blur-band",
+                  textShadow: true,
+                },
+              }))
+            }
+            className="min-h-[40px] rounded-lg border border-border-subtle px-3 py-2 text-left text-sm transition-colors hover:bg-accent-subtle"
           >
             Blur band
           </button>
           <button
             type="button"
-            onClick={() => setConfig((c) => ({
-              ...c,
-              cover: { ...c.cover, scrimStyle: "cinematic-dark", textBackdrop: "dark", textShadow: true },
-            }))}
-            className="min-h-[40px] rounded-lg border border-white/10 px-3 py-2 text-left text-sm transition-colors hover:bg-white/5"
+            onClick={() =>
+              setConfig((c) => ({
+                ...c,
+                cover: {
+                  ...c.cover,
+                  scrimStyle: "cinematic-dark",
+                  textBackdrop: "dark",
+                  textShadow: true,
+                },
+              }))
+            }
+            className="min-h-[40px] rounded-lg border border-border-subtle px-3 py-2 text-left text-sm transition-colors hover:bg-accent-subtle"
           >
             Darker overlay
           </button>
         </div>
       </section>
 
-      <label className="flex cursor-pointer items-center justify-between gap-3 border-t border-white/10 pt-4">
-        <span className="text-[11px] font-medium text-on-surface-variant">Readability shadow</span>
+      <label className="flex cursor-pointer items-center justify-between gap-3 border-t border-border-subtle pt-4">
+        <span className="text-[11px] font-medium text-on-surface-variant">
+          Readability shadow
+        </span>
         <input
           type="checkbox"
           checked={config.cover.textShadow}
-          onChange={(e) => setConfig((c) => ({ ...c, cover: { ...c.cover, textShadow: e.target.checked } }))}
+          onChange={(e) =>
+            setConfig((c) => ({
+              ...c,
+              cover: { ...c.cover, textShadow: e.target.checked },
+            }))
+          }
           className="h-4 w-4 cursor-pointer accent-primary"
         />
       </label>
@@ -1896,14 +2231,17 @@ function PanelMedia({
   setConfig: React.Dispatch<React.SetStateAction<DesignConfig>>;
   assets: Asset[];
 }) {
-  const videoCount = assets.filter((asset) => asset.content_type?.startsWith("video/")).length;
+  const videoCount = assets.filter((asset) =>
+    asset.content_type?.startsWith("video/"),
+  ).length;
 
   return (
     <div className="space-y-4">
       <div>
         <h3 className="text-sm font-semibold">Cover media mode</h3>
         <p className="text-xs text-on-surface-variant">
-          Choose how the public gallery opens before clients reach the photo grid.
+          Choose how the public gallery opens before clients reach the photo
+          grid.
         </p>
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
@@ -1916,7 +2254,10 @@ function PanelMedia({
               type="button"
               onClick={() => {
                 if (disabled) return;
-                setConfig((c) => ({ ...c, cover: { ...c.cover, mediaMode: mode.id } }));
+                setConfig((c) => ({
+                  ...c,
+                  cover: { ...c.cover, mediaMode: mode.id },
+                }));
               }}
               aria-pressed={active}
               aria-disabled={disabled}
@@ -1924,8 +2265,8 @@ function PanelMedia({
                 active
                   ? "border-primary bg-primary/10 text-primary"
                   : disabled
-                    ? "border-white/10 opacity-50"
-                    : "border-white/10 hover:bg-white/5"
+                    ? "border-border-subtle opacity-50"
+                    : "border-border-subtle hover:bg-accent-subtle"
               }`}
             >
               <span className="block text-sm font-semibold">{mode.label}</span>
@@ -1936,11 +2277,15 @@ function PanelMedia({
           );
         })}
       </div>
-      <div className="rounded-xl border border-white/10 bg-surface/40 p-3 text-xs text-on-surface-variant">
-        {config.cover.mediaMode === "single-photo" && "A single cover photo gives the fastest first paint and cleanest hero."}
-        {config.cover.mediaMode === "slideshow" && "The public hero will use available gallery thumbnails as a rotating opener."}
-        {config.cover.mediaMode === "short-video" && "Short video mode plays the selected video cover when the cover asset is video."}
-        {config.cover.mediaMode === "photo-grid" && "Photo grid mode opens with a 2x2 collage using the cover plus the next gallery images."}
+      <div className="rounded-xl border border-border-subtle bg-surface/40 p-3 text-xs text-on-surface-variant">
+        {config.cover.mediaMode === "single-photo" &&
+          "A single cover photo gives the fastest first paint and cleanest hero."}
+        {config.cover.mediaMode === "slideshow" &&
+          "The public hero will use available gallery thumbnails as a rotating opener."}
+        {config.cover.mediaMode === "short-video" &&
+          "Short video mode plays the selected video cover when the cover asset is video."}
+        {config.cover.mediaMode === "photo-grid" &&
+          "Photo grid mode opens with a 2x2 collage using the cover plus the next gallery images."}
       </div>
     </div>
   );
@@ -1960,7 +2305,8 @@ function PanelScenes({
       <div>
         <h3 className="text-sm font-semibold">Scene headers</h3>
         <p className="text-xs text-on-surface-variant">
-          Prepare mini-cover moments for the rituals and story sections photographers deliver most often.
+          Prepare mini-cover moments for the rituals and story sections
+          photographers deliver most often.
         </p>
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
@@ -1970,13 +2316,17 @@ function PanelScenes({
             className={`space-y-3 rounded-xl border p-3 transition-colors ${
               scene.enabled
                 ? "border-primary bg-primary/10"
-                : "border-white/10 hover:bg-white/5"
+                : "border-border-subtle hover:bg-accent-subtle"
             }`}
           >
             <label className="flex min-h-[40px] cursor-pointer items-center justify-between gap-3">
               <span>
-                <span className="block text-sm font-semibold">{scene.label}</span>
-                <span className="block text-xs text-on-surface-variant">Scene header</span>
+                <span className="block text-sm font-semibold">
+                  {scene.label}
+                </span>
+                <span className="block text-xs text-on-surface-variant">
+                  Scene header
+                </span>
               </span>
               <input
                 type="checkbox"
@@ -1985,7 +2335,9 @@ function PanelScenes({
                   setConfig((c) => ({
                     ...c,
                     sceneHeaders: c.sceneHeaders.map((item) =>
-                      item.id === scene.id ? { ...item, enabled: e.target.checked } : item,
+                      item.id === scene.id
+                        ? { ...item, enabled: e.target.checked }
+                        : item,
                     ),
                   }))
                 }
@@ -1994,7 +2346,9 @@ function PanelScenes({
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[11px] text-on-surface-variant">Mini-cover</span>
+              <span className="text-[11px] text-on-surface-variant">
+                Mini-cover
+              </span>
               <select
                 value={scene.assetId || ""}
                 disabled={!scene.enabled}
@@ -2002,12 +2356,14 @@ function PanelScenes({
                   setConfig((c) => ({
                     ...c,
                     sceneHeaders: c.sceneHeaders.map((item) =>
-                      item.id === scene.id ? { ...item, assetId: e.target.value || null } : item,
+                      item.id === scene.id
+                        ? { ...item, assetId: e.target.value || null }
+                        : item,
                     ),
                   }))
                 }
                 aria-label={`${scene.label} mini-cover`}
-                className="min-h-[40px] w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm disabled:opacity-50"
+                className="min-h-[40px] w-full rounded-lg border border-border-subtle bg-surface px-3 py-2 text-sm disabled:opacity-50"
               >
                 <option value="">Use gallery cover</option>
                 {assets.map((asset) => (
@@ -2021,7 +2377,8 @@ function PanelScenes({
         ))}
       </div>
       <p className="text-[11px] text-on-surface-variant/80">
-        Enabled scenes are saved with this cover design and can power future album/ritual section headers.
+        Enabled scenes are saved with this cover design and can power future
+        album/ritual section headers.
       </p>
     </div>
   );
@@ -2039,7 +2396,8 @@ function PanelBrand({
       <div>
         <h3 className="text-sm font-semibold">Studio branding</h3>
         <p className="text-xs text-on-surface-variant">
-          Add a monogram, brand tint, watermark behavior, and placement for the public cover.
+          Add a monogram, brand tint, watermark behavior, and placement for the
+          public cover.
         </p>
       </div>
 
@@ -2051,19 +2409,28 @@ function PanelBrand({
             onChange={(e) =>
               setConfig((c) => ({
                 ...c,
-                branding: { ...c.branding, monogram: e.target.value.toUpperCase().slice(0, 4) },
+                branding: {
+                  ...c.branding,
+                  monogram: e.target.value.toUpperCase().slice(0, 4),
+                },
               }))
             }
             placeholder="AR"
-            className="w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm uppercase transition-colors hover:border-white/20 focus:border-primary focus:outline-none"
+            className="w-full rounded-lg border border-border-subtle bg-surface px-3 py-2 text-sm uppercase transition-colors hover:border-border-default focus:border-primary focus:outline-none"
             aria-label="Monogram"
           />
         </label>
         <label className="space-y-1.5">
-          <span className="text-[11px] text-on-surface-variant">Brand color</span>
+          <span className="text-[11px] text-on-surface-variant">
+            Brand color
+          </span>
           <input
             type="color"
-            value={config.branding.brandColor || config.theme.accentColor || "#ffffff"}
+            value={
+              config.branding.brandColor ||
+              config.theme.accentColor ||
+              COVER_COLORS.textMedia
+            }
             onChange={(e) =>
               setConfig((c) => ({
                 ...c,
@@ -2071,14 +2438,16 @@ function PanelBrand({
                 theme: { ...c.theme, accentColor: e.target.value },
               }))
             }
-            className="h-10 w-full cursor-pointer rounded-lg border border-white/10 bg-surface p-1"
+            className="h-10 w-full cursor-pointer rounded-lg border border-border-subtle bg-surface p-1"
             aria-label="Brand color"
           />
         </label>
       </div>
 
       <section className="space-y-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">Logo placement</h4>
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
+          Logo placement
+        </h4>
         <div className="grid gap-2 sm:grid-cols-3">
           {LOGO_PLACEMENTS.map((placement) => {
             const active = config.branding.logoPlacement === placement.id;
@@ -2086,15 +2455,17 @@ function PanelBrand({
               <button
                 key={placement.id}
                 type="button"
-                onClick={() => setConfig((c) => ({
-                  ...c,
-                  branding: { ...c.branding, logoPlacement: placement.id },
-                }))}
+                onClick={() =>
+                  setConfig((c) => ({
+                    ...c,
+                    branding: { ...c.branding, logoPlacement: placement.id },
+                  }))
+                }
                 aria-pressed={active}
                 className={`min-h-[40px] rounded-lg border px-3 py-2 text-sm transition-colors ${
                   active
                     ? "border-primary bg-primary/10 text-primary"
-                    : "border-white/10 hover:bg-white/5"
+                    : "border-border-subtle hover:bg-accent-subtle"
                 }`}
               >
                 {placement.label}
@@ -2105,7 +2476,9 @@ function PanelBrand({
       </section>
 
       <section className="space-y-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">Watermark style</h4>
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
+          Watermark style
+        </h4>
         <div className="grid gap-2 sm:grid-cols-2">
           {WATERMARK_STYLES.map((watermark) => {
             const active = config.branding.watermarkStyle === watermark.id;
@@ -2113,15 +2486,17 @@ function PanelBrand({
               <button
                 key={watermark.id}
                 type="button"
-                onClick={() => setConfig((c) => ({
-                  ...c,
-                  branding: { ...c.branding, watermarkStyle: watermark.id },
-                }))}
+                onClick={() =>
+                  setConfig((c) => ({
+                    ...c,
+                    branding: { ...c.branding, watermarkStyle: watermark.id },
+                  }))
+                }
                 aria-pressed={active}
                 className={`min-h-[40px] rounded-lg border px-3 py-2 text-sm transition-colors ${
                   active
                     ? "border-primary bg-primary/10 text-primary"
-                    : "border-white/10 hover:bg-white/5"
+                    : "border-border-subtle hover:bg-accent-subtle"
                 }`}
               >
                 {watermark.label}
@@ -2131,9 +2506,11 @@ function PanelBrand({
         </div>
       </section>
 
-      <label className="flex cursor-pointer items-center justify-between gap-3 border-t border-white/10 pt-4">
+      <label className="flex cursor-pointer items-center justify-between gap-3 border-t border-border-subtle pt-4">
         <span>
-          <span className="block text-sm font-medium">Apply this look to all galleries</span>
+          <span className="block text-sm font-medium">
+            Apply this look to all galleries
+          </span>
           <span className="block text-xs text-on-surface-variant">
             Saved as intent for the studio design system.
           </span>
@@ -2178,15 +2555,21 @@ function PanelGrid({
     <div className="space-y-4">
       <div>
         <h3 className="text-sm font-semibold">Grid layout</h3>
-        <p className="text-xs text-on-surface-variant">How photos arrange in the public gallery.</p>
+        <p className="text-xs text-on-surface-variant">
+          How photos arrange in the public gallery.
+        </p>
       </div>
       <div className="grid grid-cols-2 gap-2">
         {GRID_LAYOUTS.map((g) => (
           <button
             key={g.id}
-            onClick={() => setConfig((c) => ({ ...c, grid: { ...c.grid, layout: g.id } }))}
+            onClick={() =>
+              setConfig((c) => ({ ...c, grid: { ...c.grid, layout: g.id } }))
+            }
             className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
-              config.grid.layout === g.id ? "border-primary bg-primary/10 text-primary" : "border-white/10 hover:bg-white/5"
+              config.grid.layout === g.id
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border-subtle hover:bg-accent-subtle"
             }`}
           >
             {g.label}
@@ -2194,9 +2577,14 @@ function PanelGrid({
         ))}
       </div>
 
-      <div className="space-y-2 border-t border-white/10 pt-4">
+      <div className="space-y-2 border-t border-border-subtle pt-4">
         <div className="flex items-center justify-between">
-          <label htmlFor="cover-grid-cols" className="text-xs font-medium text-on-surface-variant">Columns</label>
+          <label
+            htmlFor="cover-grid-cols"
+            className="text-xs font-medium text-on-surface-variant"
+          >
+            Columns
+          </label>
           <span className="text-xs">{config.grid.columns}</span>
         </div>
         <input
@@ -2207,17 +2595,25 @@ function PanelGrid({
           step={1}
           value={config.grid.columns}
           onChange={(e) =>
-            setConfig((c) => ({ ...c, grid: { ...c.grid, columns: Number(e.target.value) } }))
+            setConfig((c) => ({
+              ...c,
+              grid: { ...c.grid, columns: Number(e.target.value) },
+            }))
           }
           className="w-full accent-primary"
         />
       </div>
 
-      <label className="flex items-center gap-2 border-t border-white/10 pt-4 text-xs text-on-surface-variant">
+      <label className="flex items-center gap-2 border-t border-border-subtle pt-4 text-xs text-on-surface-variant">
         <input
           type="checkbox"
           checked={config.grid.showInfo}
-          onChange={(e) => setConfig((c) => ({ ...c, grid: { ...c.grid, showInfo: e.target.checked } }))}
+          onChange={(e) =>
+            setConfig((c) => ({
+              ...c,
+              grid: { ...c.grid, showInfo: e.target.checked },
+            }))
+          }
         />
         Show filename caption under photos
       </label>
@@ -2228,7 +2624,7 @@ function PanelGrid({
           grid uses N square cells, justified uses varied-width flex rows.
           (Masonry/carousel branches retained inside GridLivePreview for
           legacy galleries that have those saved.) */}
-      <div className="space-y-2 border-t border-white/10 pt-4">
+      <div className="space-y-2 border-t border-border-subtle pt-4">
         <div className="flex items-baseline justify-between">
           <h3 className="text-sm font-semibold">Preview</h3>
           <span className="text-[10px] text-on-surface-variant/70">
@@ -2263,28 +2659,30 @@ function GridLivePreview({
   if (grid.layout === "carousel") {
     return (
       <div
-        className="overflow-x-auto rounded-lg border border-white/10 bg-surface/40 p-3"
+        className="overflow-x-auto rounded-lg border border-border-subtle bg-surface/40 p-3"
         style={{ maxHeight: 200 }}
       >
         <div className="flex" style={{ gap }}>
-          {(empty ? Array.from({ length: placeholderCount }) : sample).map((a, i) => {
-            const asset = empty ? null : (a as Asset);
-            return (
-              <div
-                key={i}
-                className="shrink-0 overflow-hidden rounded-md bg-surface-container-high"
-                style={{ width: 120, height: 80 }}
-              >
-                <DecryptedPreviewImage
-                  asset={asset}
-                  token={token}
-                  variants={GRID_VARIANTS}
-                  alt=""
-                  className="h-full w-full object-cover"
-                />
-              </div>
-            );
-          })}
+          {(empty ? Array.from({ length: placeholderCount }) : sample).map(
+            (a, i) => {
+              const asset = empty ? null : (a as Asset);
+              return (
+                <div
+                  key={i}
+                  className="shrink-0 overflow-hidden rounded-md bg-surface-container-high"
+                  style={{ width: 120, height: 80 }}
+                >
+                  <DecryptedPreviewImage
+                    asset={asset}
+                    token={token}
+                    variants={GRID_VARIANTS}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              );
+            },
+          )}
         </div>
       </div>
     );
@@ -2297,28 +2695,35 @@ function GridLivePreview({
     const heights = [70, 100, 80, 120, 90, 110, 75, 95, 105, 85, 115, 90];
     return (
       <div
-        className="rounded-lg border border-white/10 bg-surface/40 p-3"
+        className="rounded-lg border border-border-subtle bg-surface/40 p-3"
         style={{ columnCount: cols, columnGap: gap }}
       >
-        {(empty ? Array.from({ length: placeholderCount }) : sample).map((a, i) => {
-          const asset = empty ? null : (a as Asset);
-          const h = heights[i % heights.length];
-          return (
-            <div
-              key={i}
-              className="mb-[var(--gap)] overflow-hidden rounded-md bg-surface-container-high"
-              style={{ ["--gap" as never]: `${gap}px`, marginBottom: gap, height: h, breakInside: "avoid" }}
-            >
-              <DecryptedPreviewImage
-                asset={asset}
-                token={token}
-                variants={GRID_VARIANTS}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            </div>
-          );
-        })}
+        {(empty ? Array.from({ length: placeholderCount }) : sample).map(
+          (a, i) => {
+            const asset = empty ? null : (a as Asset);
+            const h = heights[i % heights.length];
+            return (
+              <div
+                key={i}
+                className="mb-[var(--gap)] overflow-hidden rounded-md bg-surface-container-high"
+                style={{
+                  ["--gap" as never]: `${gap}px`,
+                  marginBottom: gap,
+                  height: h,
+                  breakInside: "avoid",
+                }}
+              >
+                <DecryptedPreviewImage
+                  asset={asset}
+                  token={token}
+                  variants={GRID_VARIANTS}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            );
+          },
+        )}
       </div>
     );
   }
@@ -2329,17 +2734,51 @@ function GridLivePreview({
     const widthWeights = [1.5, 1, 2, 1, 1.7, 1.2, 1, 1.8, 1.3, 1.4, 1, 1.6];
     return (
       <div
-        className="rounded-lg border border-white/10 bg-surface/40 p-3"
+        className="rounded-lg border border-border-subtle bg-surface/40 p-3"
         style={{ display: "flex", flexWrap: "wrap", gap }}
       >
-        {(empty ? Array.from({ length: placeholderCount }) : sample).map((a, i) => {
+        {(empty ? Array.from({ length: placeholderCount }) : sample).map(
+          (a, i) => {
+            const asset = empty ? null : (a as Asset);
+            const w = widthWeights[i % widthWeights.length];
+            return (
+              <div
+                key={i}
+                className="overflow-hidden rounded-md bg-surface-container-high"
+                style={{ flex: `${w} 1 ${w * 60}px`, height: 80 }}
+              >
+                <DecryptedPreviewImage
+                  asset={asset}
+                  token={token}
+                  variants={GRID_VARIANTS}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            );
+          },
+        )}
+      </div>
+    );
+  }
+
+  // grid (default) — uniform square cells in N columns.
+  return (
+    <div
+      className="rounded-lg border border-border-subtle bg-surface/40 p-3"
+      style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(${cols}, 1fr)`,
+        gap,
+      }}
+    >
+      {(empty ? Array.from({ length: placeholderCount }) : sample).map(
+        (a, i) => {
           const asset = empty ? null : (a as Asset);
-          const w = widthWeights[i % widthWeights.length];
           return (
             <div
               key={i}
-              className="overflow-hidden rounded-md bg-surface-container-high"
-              style={{ flex: `${w} 1 ${w * 60}px`, height: 80 }}
+              className="aspect-square overflow-hidden rounded-md bg-surface-container-high"
             >
               <DecryptedPreviewImage
                 asset={asset}
@@ -2350,34 +2789,8 @@ function GridLivePreview({
               />
             </div>
           );
-        })}
-      </div>
-    );
-  }
-
-  // grid (default) — uniform square cells in N columns.
-  return (
-    <div
-      className="rounded-lg border border-white/10 bg-surface/40 p-3"
-      style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap }}
-    >
-      {(empty ? Array.from({ length: placeholderCount }) : sample).map((a, i) => {
-        const asset = empty ? null : (a as Asset);
-        return (
-          <div
-            key={i}
-            className="aspect-square overflow-hidden rounded-md bg-surface-container-high"
-          >
-            <DecryptedPreviewImage
-              asset={asset}
-              token={token}
-              variants={GRID_VARIANTS}
-              alt=""
-              className="h-full w-full object-cover"
-            />
-          </div>
-        );
-      })}
+        },
+      )}
     </div>
   );
 }

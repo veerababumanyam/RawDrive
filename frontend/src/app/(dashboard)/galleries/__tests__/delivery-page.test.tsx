@@ -34,7 +34,14 @@ async function renderPage(id: string) {
 // next/link renders a plain anchor in the test environment so href
 // assertions resolve against real DOM attributes.
 vi.mock("next/link", () => ({
-  default: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
+  default: ({
+    href,
+    children,
+    ...props
+  }: {
+    href: string;
+    children: React.ReactNode;
+  }) => (
     <a href={href} {...props}>
       {children}
     </a>
@@ -45,7 +52,14 @@ vi.mock("next/link", () => ({
 // mounts on the delivery sub-route.
 vi.mock("next/navigation", () => ({
   usePathname: () => "/galleries/gallery-1/delivery",
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn(), back: vi.fn(), forward: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    prefetch: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+    refresh: vi.fn(),
+  }),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -68,10 +82,34 @@ vi.mock("@/lib/api/galleries", () => ({
   })),
   // Four assets linked to the gallery → totalCount must resolve to 4.
   listGalleryAssets: vi.fn(async () => [
-    { id: "ga-1", gallery_id: "gallery-1", asset_id: "a-1", sort_order: 0, is_hero: false },
-    { id: "ga-2", gallery_id: "gallery-1", asset_id: "a-2", sort_order: 1, is_hero: false },
-    { id: "ga-3", gallery_id: "gallery-1", asset_id: "a-3", sort_order: 2, is_hero: false },
-    { id: "ga-4", gallery_id: "gallery-1", asset_id: "a-4", sort_order: 3, is_hero: false },
+    {
+      id: "ga-1",
+      gallery_id: "gallery-1",
+      asset_id: "a-1",
+      sort_order: 0,
+      is_hero: false,
+    },
+    {
+      id: "ga-2",
+      gallery_id: "gallery-1",
+      asset_id: "a-2",
+      sort_order: 1,
+      is_hero: false,
+    },
+    {
+      id: "ga-3",
+      gallery_id: "gallery-1",
+      asset_id: "a-3",
+      sort_order: 2,
+      is_hero: false,
+    },
+    {
+      id: "ga-4",
+      gallery_id: "gallery-1",
+      asset_id: "a-4",
+      sort_order: 3,
+      is_hero: false,
+    },
   ]),
 }));
 
@@ -80,10 +118,46 @@ vi.mock("@/lib/api/proofing", () => ({
   // → dedupe to one), plus a rejected row that must NOT count. selectedCount
   // must resolve to 2 ("2 of 4 selected").
   listProofingSelections: vi.fn(async () => [
-    { id: "s-1", gallery_id: "gallery-1", asset_id: "a-1", client_name: "Anika", client_email: "a@x.com", status: "selected", note: "", created_at: "2026-04-02T00:00:00Z" },
-    { id: "s-2", gallery_id: "gallery-1", asset_id: "a-1", client_name: "Rohan", client_email: "r@x.com", status: "selected", note: "", created_at: "2026-04-02T00:00:00Z" },
-    { id: "s-3", gallery_id: "gallery-1", asset_id: "a-2", client_name: "Anika", client_email: "a@x.com", status: "selected", note: "", created_at: "2026-04-02T00:00:00Z" },
-    { id: "s-4", gallery_id: "gallery-1", asset_id: "a-3", client_name: "Anika", client_email: "a@x.com", status: "rejected", note: "", created_at: "2026-04-02T00:00:00Z" },
+    {
+      id: "s-1",
+      gallery_id: "gallery-1",
+      asset_id: "a-1",
+      client_name: "Anika",
+      client_email: "a@x.com",
+      status: "selected",
+      note: "",
+      created_at: "2026-04-02T00:00:00Z",
+    },
+    {
+      id: "s-2",
+      gallery_id: "gallery-1",
+      asset_id: "a-1",
+      client_name: "Rohan",
+      client_email: "r@x.com",
+      status: "selected",
+      note: "",
+      created_at: "2026-04-02T00:00:00Z",
+    },
+    {
+      id: "s-3",
+      gallery_id: "gallery-1",
+      asset_id: "a-2",
+      client_name: "Anika",
+      client_email: "a@x.com",
+      status: "selected",
+      note: "",
+      created_at: "2026-04-02T00:00:00Z",
+    },
+    {
+      id: "s-4",
+      gallery_id: "gallery-1",
+      asset_id: "a-3",
+      client_name: "Anika",
+      client_email: "a@x.com",
+      status: "rejected",
+      note: "",
+      created_at: "2026-04-02T00:00:00Z",
+    },
   ]),
 }));
 
@@ -107,7 +181,9 @@ describe("Gallery delivery continuity sub-route", () => {
 
     // The panel mounts only once the token snapshot is present.
     await waitFor(() => {
-      expect(screen.getByTestId("delivery-continuity-panel")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("delivery-continuity-panel"),
+      ).toBeInTheDocument();
     });
 
     // 2 distinct selected assets (a-1 deduped, a-2; a-3 rejected excluded)
@@ -130,13 +206,16 @@ describe("Gallery delivery continuity sub-route", () => {
     await renderPage("gallery-1");
 
     await waitFor(() => {
-      expect(screen.getByTestId("delivery-continuity-panel")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("delivery-continuity-panel"),
+      ).toBeInTheDocument();
     });
 
-    expect(screen.getByRole("navigation", { name: "Gallery workspace" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /back to gallery/i })).toHaveAttribute(
-      "href",
-      "/galleries/gallery-1",
-    );
+    expect(
+      screen.getByRole("navigation", { name: "Gallery workspace" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /back to gallery/i }),
+    ).toHaveAttribute("href", "/galleries/gallery-1");
   });
 });

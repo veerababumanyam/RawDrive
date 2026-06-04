@@ -55,7 +55,9 @@ describe("Landing Page", () => {
     // "Start free trial" appears in both the Hero and FinalCta CTAs,
     // so we assert "at least one" instead of "exactly one" and verify
     // every instance points to /register.
-    const registerLinks = screen.getAllByRole("link", { name: /start free trial/i });
+    const registerLinks = screen.getAllByRole("link", {
+      name: /start free trial/i,
+    });
     expect(registerLinks.length).toBeGreaterThan(0);
     registerLinks.forEach((link) => {
       expect(link).toHaveAttribute("href", "/register");

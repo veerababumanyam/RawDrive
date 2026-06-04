@@ -40,7 +40,7 @@ export function FaceBoxesOverlay({ boxes, visible }: Props) {
           height={box.height}
           fill="none"
           // 2px stroke at 1x scale; vector-effect keeps the stroke crisp on zoom
-          stroke="rgb(255 255 255)"
+          stroke="var(--text-media)"
           strokeOpacity="0.85"
           strokeWidth="0.004"
           vectorEffect="non-scaling-stroke"

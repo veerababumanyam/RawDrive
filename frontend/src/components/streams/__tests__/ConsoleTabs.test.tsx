@@ -30,14 +30,18 @@ describe("ConsoleTabs", () => {
     expect(screen.getByTestId("tab-live")).toBeTruthy();
     expect(screen.getByTestId("tab-replay")).toBeTruthy();
     expect(screen.getByTestId("tab-audit")).toBeTruthy();
-    expect(screen.getByTestId("tab-overview").getAttribute("aria-selected")).toBe("true");
+    expect(
+      screen.getByTestId("tab-overview").getAttribute("aria-selected"),
+    ).toBe("true");
   });
 
   it("clicking a tab switches the active panel and fires onTabChange", () => {
     const onChange = vi.fn();
     render(<ConsoleTabs payload={payload()} onTabChange={onChange} />);
     fireEvent.click(screen.getByTestId("tab-setup"));
-    expect(screen.getByTestId("tab-setup").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByTestId("tab-setup").getAttribute("aria-selected")).toBe(
+      "true",
+    );
     expect(screen.getByTestId("panel-setup")).toBeTruthy();
     expect(onChange).toHaveBeenCalledWith("setup");
   });
@@ -47,7 +51,9 @@ describe("ConsoleTabs", () => {
     const overview = screen.getByTestId("tab-overview");
     overview.focus();
     fireEvent.keyDown(overview, { key: "ArrowRight" });
-    expect(screen.getByTestId("tab-setup").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByTestId("tab-setup").getAttribute("aria-selected")).toBe(
+      "true",
+    );
   });
 
   it("arrow-left wraps to last tab", () => {
@@ -55,14 +61,20 @@ describe("ConsoleTabs", () => {
     const overview = screen.getByTestId("tab-overview");
     overview.focus();
     fireEvent.keyDown(overview, { key: "ArrowLeft" });
-    expect(screen.getByTestId("tab-audit").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByTestId("tab-audit").getAttribute("aria-selected")).toBe(
+      "true",
+    );
   });
 
   it("hides audit tab when canViewAudit is false", () => {
     render(
       <ConsoleTabs
         payload={payload({
-          permissions: { can_control: true, can_moderate: true, can_view_audit: false },
+          permissions: {
+            can_control: true,
+            can_moderate: true,
+            can_view_audit: false,
+          },
         })}
       />,
     );
@@ -80,12 +92,16 @@ describe("ConsoleTabs", () => {
   it("Live/Replay tabs show placeholder shell content", () => {
     render(<ConsoleTabs payload={payload()} activeTab="live" />);
     expect(screen.getByTestId("panel-live")).toBeTruthy();
-    expect(screen.getByTestId("panel-live").textContent).toMatch(/not live|coming|live widgets/i);
+    expect(screen.getByTestId("panel-live").textContent).toMatch(
+      /not live|coming|live widgets/i,
+    );
   });
 
   it("respects explicit activeTab prop", () => {
     render(<ConsoleTabs payload={payload()} activeTab="replay" />);
-    expect(screen.getByTestId("tab-replay").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByTestId("tab-replay").getAttribute("aria-selected")).toBe(
+      "true",
+    );
     expect(screen.getByTestId("panel-replay")).toBeTruthy();
   });
 });

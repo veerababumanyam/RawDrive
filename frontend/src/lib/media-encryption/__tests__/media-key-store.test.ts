@@ -63,6 +63,56 @@ describe("media key store", () => {
     expect(await decrypted.text()).toBe("preview");
   });
 
+  it("does not try an unrelated active gallery key for versioned media", async () => {
+    const galleryId = "gallery-versioned-missing-test";
+    const baseKeyId = galleryKeyId(galleryId);
+    const correctKey = await generateRawMediaKey();
+    const wrongKey = await generateRawMediaKey();
+    const correctExport = await exportRawMediaKey(correctKey);
+    const wrongExport = await exportRawMediaKey(wrongKey);
+    const correctVersionedKeyId = await versionedGalleryKeyId(galleryId, correctExport);
+    const wrongVersionedKeyId = await versionedGalleryKeyId(galleryId, wrongExport);
+
+    window.localStorage.setItem(`${KEY_PREFIX}${wrongVersionedKeyId}`, wrongExport);
+    window.localStorage.setItem(`${ACTIVE_PREFIX}${baseKeyId}`, wrongVersionedKeyId);
+
+    const encrypted = await encryptBlob(new Blob(["preview"], { type: "image/webp" }), {
+      key: correctKey,
+      keyId: correctVersionedKeyId,
+      objectType: "thumb_md_webp",
+      contentType: "image/webp",
+    });
+
+    await expect(
+      decryptBlobWithAvailableMediaKeys(encrypted.ciphertext, encrypted.manifest),
+    ).rejects.toThrow(MEDIA_KEY_UNAVAILABLE_MESSAGE);
+  });
+
+  it("uses URL hash keys only when they match a versioned media key", async () => {
+    const galleryId = "gallery-versioned-hash-test";
+    const correctKey = await generateRawMediaKey();
+    const wrongKey = await generateRawMediaKey();
+    const correctExport = await exportRawMediaKey(correctKey);
+    const wrongExport = await exportRawMediaKey(wrongKey);
+    const correctVersionedKeyId = await versionedGalleryKeyId(galleryId, correctExport);
+
+    const encrypted = await encryptBlob(new Blob(["preview"], { type: "image/webp" }), {
+      key: correctKey,
+      keyId: correctVersionedKeyId,
+      objectType: "thumb_md_webp",
+      contentType: "image/webp",
+    });
+
+    window.history.replaceState(null, "", `/galleries/${galleryId}#rd_key=${wrongExport}`);
+    await expect(
+      decryptBlobWithAvailableMediaKeys(encrypted.ciphertext, encrypted.manifest),
+    ).rejects.toThrow(MEDIA_KEY_UNAVAILABLE_MESSAGE);
+
+    window.history.replaceState(null, "", `/galleries/${galleryId}#rd_key=${correctExport}`);
+    const decrypted = await decryptBlobWithAvailableMediaKeys(encrypted.ciphertext, encrypted.manifest);
+    expect(await decrypted.text()).toBe("preview");
+  });
+
   it("reports unavailable and mismatched keys without leaking browser crypto errors", async () => {
     const galleryId = "gallery-error-test";
     const baseKeyId = galleryKeyId(galleryId);

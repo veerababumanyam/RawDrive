@@ -154,7 +154,7 @@ export default function PayoutHistory() {
             <button
               onClick={table.previousPage}
               disabled={!table.canPreviousPage}
-              className="rounded-xl border border-white/[0.06] px-3 py-2 text-sm text-text-secondary hover:bg-white/[0.06] disabled:opacity-30 transition-all min-h-[44px]"
+              className="rounded-xl border border-text-media/10 px-3 py-2 text-sm text-text-secondary hover:bg-surface-overlay/5 disabled:opacity-30 transition-all min-h-[44px]"
             >
               Previous
             </button>
@@ -164,7 +164,7 @@ export default function PayoutHistory() {
             <button
               onClick={table.nextPage}
               disabled={!table.canNextPage}
-              className="rounded-xl border border-white/[0.06] px-3 py-2 text-sm text-text-secondary hover:bg-white/[0.06] disabled:opacity-30 transition-all min-h-[44px]"
+              className="rounded-xl border border-text-media/10 px-3 py-2 text-sm text-text-secondary hover:bg-surface-overlay/5 disabled:opacity-30 transition-all min-h-[44px]"
             >
               Next
             </button>

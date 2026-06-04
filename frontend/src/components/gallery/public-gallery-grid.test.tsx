@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, within, fireEvent, waitFor, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  within,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import type { PublicAsset } from "@/lib/api/galleries";
 import { PublicGalleryGrid } from "./public-gallery-grid";
 
@@ -157,9 +165,7 @@ describe("PublicGalleryGrid — F-087 success banner uses a semantic token", () 
 
     // Banner appears once the POST resolves and `submitted` flips true.
     await waitFor(() =>
-      expect(
-        screen.getByText(/selections have been submitted/i),
-      ).toBeTruthy(),
+      expect(screen.getByText(/selections have been submitted/i)).toBeTruthy(),
     );
     return container;
   }

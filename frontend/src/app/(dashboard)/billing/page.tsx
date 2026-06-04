@@ -73,17 +73,27 @@ function BillingPageContent() {
     const token = getStoredAccessToken();
     listInvoices(token)
       .then(setInvoices)
-      .catch((err) => { setError(err?.message || "Failed to load invoices"); setInvoices([]); })
+      .catch((err) => {
+        setError(err?.message || "Failed to load invoices");
+        setInvoices([]);
+      })
       .finally(() => setLoading(false));
   }, [refreshTick]);
 
   useEffect(() => {
     const token = getStoredAccessToken();
-    listContacts(token).then(setContacts).catch(() => setContacts([]));
-    listServicePackages(token).then(setPackages).catch(() => setPackages([]));
+    listContacts(token)
+      .then(setContacts)
+      .catch(() => setContacts([]));
+    listServicePackages(token)
+      .then(setPackages)
+      .catch(() => setPackages([]));
   }, []);
 
-  const totalRupees = form.lines.reduce((sum, l) => sum + l.quantity * l.unit_price_rupees, 0);
+  const totalRupees = form.lines.reduce(
+    (sum, l) => sum + l.quantity * l.unit_price_rupees,
+    0,
+  );
   const taxRupees = form.lines.reduce(
     (sum, l) => sum + (l.quantity * l.unit_price_rupees * l.tax_rate) / 100,
     0,
@@ -145,7 +155,9 @@ function BillingPageContent() {
         0,
       );
       const totalTaxPaisa = lineItems.reduce(
-        (sum, l) => sum + Math.round((l.quantity * l.unit_price_paisa * l.tax_rate) / 100),
+        (sum, l) =>
+          sum +
+          Math.round((l.quantity * l.unit_price_paisa * l.tax_rate) / 100),
         0,
       );
       const cgstPaisa = Math.floor(totalTaxPaisa / 2);
@@ -164,9 +176,20 @@ function BillingPageContent() {
         // HTML date inputs produce "YYYY-MM-DD"; Go's time.Time.UnmarshalJSON
         // requires RFC3339 ("YYYY-MM-DDT00:00:00Z"). Append the time suffix
         // so the backend's json.Decode doesn't return 400 "invalid request body".
-        quotation_valid_until: form.invoice_type === "quotation" ? (form.quotation_valid_until ? form.quotation_valid_until + "T00:00:00Z" : undefined) : undefined,
-        credit_note_invoice_id: form.invoice_type === "credit_note" ? form.credit_note_invoice_id || undefined : undefined,
-        credit_note_reason: form.invoice_type === "credit_note" ? form.credit_note_reason || undefined : undefined,
+        quotation_valid_until:
+          form.invoice_type === "quotation"
+            ? form.quotation_valid_until
+              ? form.quotation_valid_until + "T00:00:00Z"
+              : undefined
+            : undefined,
+        credit_note_invoice_id:
+          form.invoice_type === "credit_note"
+            ? form.credit_note_invoice_id || undefined
+            : undefined,
+        credit_note_reason:
+          form.invoice_type === "credit_note"
+            ? form.credit_note_reason || undefined
+            : undefined,
         due_date: form.due_date ? form.due_date + "T00:00:00Z" : undefined,
         line_items: lineItems,
         subtotal_paisa: subtotalPaisa,
@@ -203,7 +226,9 @@ function BillingPageContent() {
       await convertQuotation(token, inv.id);
       setRefreshTick((n) => n + 1);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to convert quotation");
+      setError(
+        err instanceof Error ? err.message : "Failed to convert quotation",
+      );
     }
   };
 
@@ -214,9 +239,12 @@ function BillingPageContent() {
     // the blob into a temporary download anchor.
     const token = getStoredAccessToken();
     try {
-      const res = await fetch(`${API_BASE}/api/v1/billing/invoices/${inv.id}/pdf`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(
+        `${API_BASE}/api/v1/billing/invoices/${inv.id}/pdf`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
       if (!res.ok) throw new Error(`PDF HTTP ${res.status}`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -244,23 +272,26 @@ function BillingPageContent() {
       return;
     }
     try {
-      const res = await fetch(`${API_BASE}/api/v1/billing/invoices/${inv.id}/payments`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
+      const res = await fetch(
+        `${API_BASE}/api/v1/billing/invoices/${inv.id}/payments`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            amount_paisa: amountPaisa,
+            // DB columns are `method` and `reference_number` — caught
+            // by UAT 2026-04-12 after the initial draft sent
+            // payment_method/reference and the backend discarded
+            // them, causing the NOT NULL method column to violate
+            // its constraint. Use the schema names directly.
+            method: "bank_transfer",
+            reference_number: "Recorded via UAT",
+          }),
         },
-        body: JSON.stringify({
-          amount_paisa: amountPaisa,
-          // DB columns are `method` and `reference_number` — caught
-          // by UAT 2026-04-12 after the initial draft sent
-          // payment_method/reference and the backend discarded
-          // them, causing the NOT NULL method column to violate
-          // its constraint. Use the schema names directly.
-          method: "bank_transfer",
-          reference_number: "Recorded via UAT",
-        }),
-      });
+      );
       if (!res.ok) {
         const body = await res.text();
         throw new Error(body || `HTTP ${res.status}`);
@@ -304,7 +335,7 @@ function BillingPageContent() {
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px]"
+          className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-text-inverse hover:bg-accent-primary/90 min-h-[44px]"
         >
           + New Invoice
         </button>
@@ -312,7 +343,9 @@ function BillingPageContent() {
 
       {showCreate && (
         <div className="rounded-2xl border border-border-default bg-surface-raised p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-text-primary">New Invoice</h2>
+          <h2 className="text-lg font-semibold text-text-primary">
+            New Invoice
+          </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <select
               value={form.contact_id}
@@ -320,11 +353,17 @@ function BillingPageContent() {
               className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
             >
               <option value="">— Select client * —</option>
-              {contacts.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
+              {contacts.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
             </select>
             <select
               value={form.invoice_type}
-              onChange={(e) => setForm({ ...form, invoice_type: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, invoice_type: e.target.value })
+              }
               className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
             >
               <option value="tax_invoice">Tax Invoice</option>
@@ -339,11 +378,14 @@ function BillingPageContent() {
             >
               <option value="">No package</option>
               {packages.map((pkg) => (
-                <option key={pkg.id} value={pkg.id}>{pkg.name}</option>
+                <option key={pkg.id} value={pkg.id}>
+                  {pkg.name}
+                </option>
               ))}
             </select>
             <input
-              type="date" placeholder="Due date"
+              type="date"
+              placeholder="Due date"
               value={form.due_date}
               onChange={(e) => setForm({ ...form, due_date: e.target.value })}
               className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
@@ -356,7 +398,9 @@ function BillingPageContent() {
               <input
                 type="date"
                 value={form.quotation_valid_until}
-                onChange={(e) => setForm({ ...form, quotation_valid_until: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, quotation_valid_until: e.target.value })
+                }
                 className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
               />
             </label>
@@ -368,14 +412,18 @@ function BillingPageContent() {
                 Original invoice
                 <select
                   value={form.credit_note_invoice_id}
-                  onChange={(e) => setForm({ ...form, credit_note_invoice_id: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, credit_note_invoice_id: e.target.value })
+                  }
                   className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
                 >
                   <option value="">Select invoice</option>
                   {invoices
                     .filter((inv) => inv.invoice_type !== "credit_note")
                     .map((inv) => (
-                      <option key={inv.id} value={inv.id}>{inv.invoice_number}</option>
+                      <option key={inv.id} value={inv.id}>
+                        {inv.invoice_number}
+                      </option>
                     ))}
                 </select>
               </label>
@@ -384,7 +432,9 @@ function BillingPageContent() {
                 <input
                   type="text"
                   value={form.credit_note_reason}
-                  onChange={(e) => setForm({ ...form, credit_note_reason: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, credit_note_reason: e.target.value })
+                  }
                   className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
                   placeholder="Cancellation or refund reason"
                 />
@@ -393,50 +443,86 @@ function BillingPageContent() {
           )}
 
           <div className="space-y-2">
-            <h3 className="text-sm font-medium text-text-secondary">Line items</h3>
+            <h3 className="text-sm font-medium text-text-secondary">
+              Line items
+            </h3>
             {/* Column header row — mirrors the 12-col grid used by each line */}
             <div className="grid grid-cols-12 gap-2 px-1">
-              <span className="col-span-5 text-xs text-text-tertiary">Description</span>
-              <span className="col-span-1 text-xs text-text-tertiary text-right">Qty</span>
-              <span className="col-span-2 text-xs text-text-tertiary text-right">Rate (₹)</span>
-              <span className="col-span-2 text-xs text-text-tertiary">HSN/SAC</span>
-              <span className="col-span-1 text-xs text-text-tertiary text-right">GST %</span>
+              <span className="col-span-5 text-xs text-text-tertiary">
+                Description
+              </span>
+              <span className="col-span-1 text-xs text-text-tertiary text-right">
+                Qty
+              </span>
+              <span className="col-span-2 text-xs text-text-tertiary text-right">
+                Rate (₹)
+              </span>
+              <span className="col-span-2 text-xs text-text-tertiary">
+                HSN/SAC
+              </span>
+              <span className="col-span-1 text-xs text-text-tertiary text-right">
+                GST %
+              </span>
               <span className="col-span-1" />
             </div>
             {form.lines.map((line, idx) => (
               <div key={idx} className="grid grid-cols-12 gap-2">
                 <input
-                  type="text" placeholder="Description *"
+                  type="text"
+                  placeholder="Description *"
                   value={line.description}
-                  onChange={(e) => setLine(idx, { description: e.target.value })}
+                  onChange={(e) =>
+                    setLine(idx, { description: e.target.value })
+                  }
                   className="col-span-5 rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-sm text-text-primary"
                 />
                 <input
-                  type="number" min="1" placeholder="Qty"
+                  type="number"
+                  min="1"
+                  placeholder="Qty"
                   value={line.quantity}
-                  onChange={(e) => setLine(idx, { quantity: Number(e.target.value) || 1 })}
+                  onChange={(e) =>
+                    setLine(idx, { quantity: Number(e.target.value) || 1 })
+                  }
                   className="col-span-1 rounded-xl border border-border-default bg-surface-sunken px-2 py-2 text-sm text-text-primary text-right"
                 />
                 <input
-                  type="number" min="0" placeholder="₹ Rate"
+                  type="number"
+                  min="0"
+                  placeholder="₹ Rate"
                   value={line.unit_price_rupees}
-                  onChange={(e) => setLine(idx, { unit_price_rupees: Number(e.target.value) || 0 })}
+                  onChange={(e) =>
+                    setLine(idx, {
+                      unit_price_rupees: Number(e.target.value) || 0,
+                    })
+                  }
                   className="col-span-2 rounded-xl border border-border-default bg-surface-sunken px-2 py-2 text-sm text-text-primary text-right"
                 />
                 <input
-                  type="text" placeholder="HSN"
+                  type="text"
+                  placeholder="HSN"
                   value={line.hsn_code}
                   onChange={(e) => setLine(idx, { hsn_code: e.target.value })}
                   className="col-span-2 rounded-xl border border-border-default bg-surface-sunken px-2 py-2 text-sm text-text-primary"
                 />
                 <input
-                  type="number" min="0" max="28" placeholder="GST %"
+                  type="number"
+                  min="0"
+                  max="28"
+                  placeholder="GST %"
                   value={line.tax_rate}
-                  onChange={(e) => setLine(idx, { tax_rate: Number(e.target.value) || 0 })}
+                  onChange={(e) =>
+                    setLine(idx, { tax_rate: Number(e.target.value) || 0 })
+                  }
                   className="col-span-1 rounded-xl border border-border-default bg-surface-sunken px-2 py-2 text-sm text-text-primary text-right"
                 />
                 <button
-                  onClick={() => setForm((f) => ({ ...f, lines: f.lines.filter((_, i) => i !== idx) }))}
+                  onClick={() =>
+                    setForm((f) => ({
+                      ...f,
+                      lines: f.lines.filter((_, i) => i !== idx),
+                    }))
+                  }
                   disabled={form.lines.length === 1}
                   className="col-span-1 text-text-tertiary hover:text-error disabled:opacity-30"
                   aria-label="Remove line"
@@ -446,7 +532,12 @@ function BillingPageContent() {
               </div>
             ))}
             <button
-              onClick={() => setForm((f) => ({ ...f, lines: [...f.lines, { ...BLANK_LINE }] }))}
+              onClick={() =>
+                setForm((f) => ({
+                  ...f,
+                  lines: [...f.lines, { ...BLANK_LINE }],
+                }))
+              }
               className="text-sm text-accent-primary hover:underline"
             >
               + Add line
@@ -454,9 +545,13 @@ function BillingPageContent() {
           </div>
 
           <div className="rounded-xl border border-border-default bg-surface-sunken px-4 py-3 flex items-center justify-between">
-            <span className="text-sm text-text-secondary">Subtotal / GST / Total</span>
+            <span className="text-sm text-text-secondary">
+              Subtotal / GST / Total
+            </span>
             <span className="font-semibold text-text-primary">
-              ₹{totalRupees.toLocaleString("en-IN")} + ₹{taxRupees.toLocaleString("en-IN")} = ₹{(totalRupees + taxRupees).toLocaleString("en-IN")}
+              ₹{totalRupees.toLocaleString("en-IN")} + ₹
+              {taxRupees.toLocaleString("en-IN")} = ₹
+              {(totalRupees + taxRupees).toLocaleString("en-IN")}
             </span>
           </div>
 
@@ -474,9 +569,11 @@ function BillingPageContent() {
                 creating ||
                 !form.contact_id ||
                 !form.lines[0].description.trim() ||
-                (form.invoice_type === "credit_note" && (!form.credit_note_invoice_id || !form.credit_note_reason.trim()))
+                (form.invoice_type === "credit_note" &&
+                  (!form.credit_note_invoice_id ||
+                    !form.credit_note_reason.trim()))
               }
-              className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 disabled:opacity-50 min-h-[44px]"
+              className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-text-inverse hover:bg-accent-primary/90 disabled:opacity-50 min-h-[44px]"
             >
               {creating ? "Creating…" : "Create Invoice"}
             </button>
@@ -486,7 +583,9 @@ function BillingPageContent() {
 
       {invoices.length === 0 ? (
         <div className="text-center py-16 space-y-3">
-          <p className="text-text-secondary">No invoices yet. Create your first GST-compliant invoice.</p>
+          <p className="text-text-secondary">
+            No invoices yet. Create your first GST-compliant invoice.
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -497,18 +596,32 @@ function BillingPageContent() {
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-mono text-sm text-text-primary">{inv.invoice_number}</p>
+                  <p className="font-mono text-sm text-text-primary">
+                    {inv.invoice_number}
+                  </p>
                   <div className="flex items-center gap-3 mt-1 text-sm text-text-secondary">
-                    <span className="capitalize">{inv.invoice_type === "service" ? "Tax Invoice" : inv.invoice_type.replace("_", " ")}</span>
-                    {inv.due_date && <span>Due: {new Date(inv.due_date).toLocaleDateString("en-IN")}</span>}
+                    <span className="capitalize">
+                      {inv.invoice_type === "service"
+                        ? "Tax Invoice"
+                        : inv.invoice_type.replace("_", " ")}
+                    </span>
+                    {inv.due_date && (
+                      <span>
+                        Due:{" "}
+                        {new Date(inv.due_date).toLocaleDateString("en-IN")}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold text-text-primary">{formatPaisa(inv.total_paisa)}</p>
+                  <p className="font-semibold text-text-primary">
+                    {formatPaisa(inv.total_paisa)}
+                  </p>
                   <span
                     className={cn(
                       "mt-1",
-                      invoiceStatusClasses[inv.status] || "status-badge status-badge--neutral",
+                      invoiceStatusClasses[inv.status] ||
+                        "status-badge status-badge--neutral",
                     )}
                   >
                     {inv.status.replace("_", " ")}
@@ -518,11 +631,19 @@ function BillingPageContent() {
               {/* GST breakdown */}
               <div className="mt-2 flex gap-4 text-xs text-text-tertiary">
                 <span>Subtotal: {formatPaisa(inv.subtotal_paisa)}</span>
-                {inv.cgst_paisa > 0 && <span>CGST: {formatPaisa(inv.cgst_paisa)}</span>}
-                {inv.sgst_paisa > 0 && <span>SGST: {formatPaisa(inv.sgst_paisa)}</span>}
-                {inv.igst_paisa > 0 && <span>IGST: {formatPaisa(inv.igst_paisa)}</span>}
+                {inv.cgst_paisa > 0 && (
+                  <span>CGST: {formatPaisa(inv.cgst_paisa)}</span>
+                )}
+                {inv.sgst_paisa > 0 && (
+                  <span>SGST: {formatPaisa(inv.sgst_paisa)}</span>
+                )}
+                {inv.igst_paisa > 0 && (
+                  <span>IGST: {formatPaisa(inv.igst_paisa)}</span>
+                )}
                 {inv.amount_paid_paisa > 0 && (
-                  <span className="text-success">Paid: {formatPaisa(inv.amount_paid_paisa)}</span>
+                  <span className="text-success">
+                    Paid: {formatPaisa(inv.amount_paid_paisa)}
+                  </span>
                 )}
               </div>
               <div className="mt-3 flex gap-2">

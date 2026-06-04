@@ -46,6 +46,8 @@ import {
   InfoCircle,
   ChatBubble,
   CheckCircle,
+  FaceSmile,
+  SquareSplit,
   ThumbsUp,
   XCircle,
   Trash,
@@ -166,11 +168,11 @@ function BurstSiblingThumb({
   return (
     <div
       className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border-2 ${
-        sibling.id === activeId ? "border-white" : "border-white/20"
+        sibling.id === activeId ? "border-text-media" : "border-text-media/20"
       }`}
     >
       {media.loading ? (
-        <div className="h-full w-full animate-pulse bg-white/5" />
+        <div className="h-full w-full animate-pulse bg-surface-overlay/5" />
       ) : media.src && !imageFailed ? (
         <img
           src={media.src}
@@ -179,7 +181,7 @@ function BurstSiblingThumb({
           onError={handleImageError}
         />
       ) : (
-        <div className="h-full w-full bg-white/5" />
+        <div className="h-full w-full bg-surface-overlay/5" />
       )}
       {sibling.burst_is_top_pick && (
         <div
@@ -323,6 +325,29 @@ export function PhotoLightbox({
       )
         return;
       resetChromeTimer();
+      // Focus trap (WCAG 2.4.3): keep Tab cycling inside the dialog. The
+      // lightbox covers the page, so focus escaping to content behind it is
+      // both invisible and disorienting for keyboard/screen-reader users.
+      if (e.key === "Tab" && containerRef.current) {
+        const focusables = Array.from(
+          containerRef.current.querySelectorAll<HTMLElement>(
+            'button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])',
+          ),
+        ).filter((el) => !el.hasAttribute("disabled") && el.offsetParent !== null);
+        if (focusables.length > 0) {
+          const first = focusables[0];
+          const last = focusables[focusables.length - 1];
+          const active = document.activeElement as HTMLElement | null;
+          if (e.shiftKey && (active === first || !containerRef.current.contains(active))) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && (active === last || !containerRef.current.contains(active))) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+        return;
+      }
       switch (e.key) {
         case "Escape":
           if (compareMode) setCompareMode(false);
@@ -411,6 +436,16 @@ export function PhotoLightbox({
       document.body.style.overflow = "";
     };
   }, [handleKeyDown]);
+
+  // Move focus into the dialog on open and restore it to the trigger on
+  // close (WCAG 2.4.3 focus order). Runs once per mount.
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    containerRef.current?.focus();
+    return () => {
+      previouslyFocused?.focus?.();
+    };
+  }, []);
 
   // Reset per-photo view state whenever the active asset changes. Done with
   // the adjust-state-during-render pattern (tracking the last asset id in
@@ -592,13 +627,13 @@ export function PhotoLightbox({
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 z-50 flex flex-col bg-black/95"
+      tabIndex={-1}
+      className="media-viewer-shell fixed inset-0 z-50 flex flex-col outline-none"
       onClick={handleLightboxSurfaceClick}
       onMouseMove={resetChromeTimer}
       role="dialog"
       aria-modal="true"
       aria-label={`Photo: ${asset.filename}`}
-      tabIndex={-1}
       {...lightboxPointerHandlers}
     >
       {/* ─── Top Toolbar ─── */}
@@ -609,7 +644,7 @@ export function PhotoLightbox({
         onFocus={isFullscreen ? revealChrome : undefined}
         onBlur={isFullscreen ? resetChromeTimer : undefined}
       >
-        <div className="flex min-w-0 items-center gap-3 text-white text-sm">
+        <div className="flex min-w-0 items-center gap-3 text-sm text-text-media">
           {/* Tighter filename clamp on mobile so the Close button on the
               right stays inside the viewport. The default 200px ate
               ~half the iPhone width and pushed the trailing buttons
@@ -619,12 +654,12 @@ export function PhotoLightbox({
             {asset.filename}
           </span>
           {asset.width && asset.height && (
-            <span className="hidden sm:inline text-white/40 text-xs">
+            <span className="hidden text-xs text-text-media/40 sm:inline">
               {asset.width} x {asset.height}
             </span>
           )}
           {zoom !== 1 && (
-            <span className="text-white/40 text-xs">
+            <span className="text-xs text-text-media/40">
               {Math.round(zoom * 100)}%
             </span>
           )}
@@ -653,7 +688,7 @@ export function PhotoLightbox({
           >
             <ZoomIn />
           </GlassIconButton>
-          <div className="hidden sm:block w-px h-6 bg-white/10 mx-1" />
+          <div className="media-viewer-divider mx-1 hidden h-6 w-px sm:block" />
           {asset.face_boxes && asset.face_boxes.length > 0 && (
             <GlassIconButton
               size="sm"
@@ -661,8 +696,7 @@ export function PhotoLightbox({
               active={showFaces}
               onClick={() => setShowFaces((s) => !s)}
             >
-              {/* Square outline icon reused from CheckCircle as face marker */}
-              <CheckCircle />
+              <FaceSmile />
             </GlassIconButton>
           )}
           {allAssets && allAssets.length > 1 && hasNext && (
@@ -672,8 +706,7 @@ export function PhotoLightbox({
               active={compareMode}
               onClick={() => setCompareMode((s) => !s)}
             >
-              {/* Reuses ChevronRight as "split" marker */}
-              <ChevronRight />
+              <SquareSplit />
             </GlassIconButton>
           )}
           <GlassIconButton
@@ -692,8 +725,11 @@ export function PhotoLightbox({
           >
             <InfoCircle />
           </GlassIconButton>
+          {/* Divider — separates view-mode toggles from file actions so the
+              toolbar reads as three groups: zoom | modes | actions. */}
+          <div className="media-viewer-divider mx-1 hidden h-6 w-px sm:block" />
           <GlassIconButton
-            size="sm"
+            size="md"
             label="Download original"
             onClick={() => void handleDownloadFormat("original")}
           >
@@ -704,7 +740,6 @@ export function PhotoLightbox({
               size="sm"
               variant="danger"
               label="Delete photo"
-              className="bg-feedback-error text-white border-feedback-error shadow-elevation-1 ring-2 ring-feedback-error/30 hover:bg-feedback-error/90 hover:text-white hover:border-feedback-error focus-visible:ring-feedback-error"
               onClick={handleDeleteRequest}
             >
               <Trash />
@@ -721,9 +756,9 @@ export function PhotoLightbox({
           >
             {isFullscreen ? <Compress /> : <Expand />}
           </GlassIconButton>
-          <div className="hidden sm:block w-px h-6 bg-white/10 mx-1" />
+          <div className="media-viewer-divider mx-1 hidden h-6 w-px sm:block" />
           <GlassIconButton
-            size="sm"
+            size="md"
             variant="ghost"
             label="Close (Esc)"
             onClick={onClose}
@@ -788,7 +823,7 @@ export function PhotoLightbox({
               ) : (
                 <div className="relative flex h-full w-full min-h-0 min-w-0 items-center justify-center">
                   {media.loading ? (
-                    <div className="flex h-full w-full items-center justify-center text-sm text-white/60">
+                    <div className="flex h-full w-full items-center justify-center text-sm text-text-media/60">
                       Decrypting photo...
                     </div>
                   ) : media.src ? (
@@ -800,7 +835,7 @@ export function PhotoLightbox({
                       draggable={false}
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-sm text-white/60">
+                    <div className="flex h-full w-full items-center justify-center text-sm text-text-media/60">
                       {media.error || "Preview unavailable"}
                     </div>
                   )}
@@ -833,13 +868,13 @@ export function PhotoLightbox({
 
         {/* Comments sidebar */}
         {showComments && (
-          <div className="w-80 shrink-0 border-l border-white/10 bg-black/60 backdrop-blur-xl flex flex-col">
-            <div className="p-4 border-b border-white/10">
-              <h3 className="text-sm font-semibold text-white">Comments</h3>
+          <div className="w-80 shrink-0 border-l border-text-media/10 bg-surface-scrim-strong/60 glass-blur-full flex flex-col">
+            <div className="p-4 border-b border-text-media/10">
+              <h3 className="text-sm font-semibold text-text-media">Comments</h3>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
               {displayedComments.length === 0 ? (
-                <p className="text-sm text-white/30 text-center py-8">
+                <p className="text-sm text-text-media/30 text-center py-8">
                   No comments yet
                 </p>
               ) : (
@@ -847,14 +882,14 @@ export function PhotoLightbox({
                   {displayedComments.map((comment) => (
                     <article
                       key={comment.id}
-                      className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2"
+                      className="rounded-xl border border-text-media/10 bg-surface-overlay/10 px-3 py-2"
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-xs font-semibold text-white/80">
+                        <p className="truncate text-xs font-semibold text-text-media/80">
                           {comment.author_name || "Studio"}
                         </p>
                         <time
-                          className="shrink-0 text-[10px] text-white/35"
+                          className="shrink-0 text-[10px] text-text-media/35"
                           dateTime={comment.created_at}
                         >
                           {new Date(comment.created_at).toLocaleTimeString(
@@ -863,7 +898,7 @@ export function PhotoLightbox({
                           )}
                         </time>
                       </div>
-                      <p className="mt-1 whitespace-pre-wrap text-sm text-white/70">
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-text-media/70">
                         {comment.body}
                       </p>
                     </article>
@@ -871,7 +906,7 @@ export function PhotoLightbox({
                 </div>
               )}
             </div>
-            <div className="p-4 border-t border-white/10">
+            <div className="p-4 border-t border-text-media/10">
               {commentError && (
                 <p role="alert" className="mb-2 text-xs text-feedback-error">
                   {commentError}
@@ -887,13 +922,13 @@ export function PhotoLightbox({
                   }
                 }}
                 placeholder="Add a comment..."
-                className="w-full resize-none rounded-xl border border-white/15 bg-white/5 backdrop-blur-sm px-3 py-2 text-sm text-white placeholder-white/25 focus:border-white/30 focus:outline-none"
+                className="w-full resize-none rounded-xl border border-text-media/15 bg-surface-overlay/5 glass-blur-subtle px-3 py-2 text-sm text-text-media placeholder-text-media/25 focus:border-text-media/30 focus:outline-none"
                 rows={2}
               />
               <button
                 onClick={() => void handleSubmitComment()}
                 disabled={!commentText.trim() || commentSubmitting}
-                className="mt-2 w-full rounded-xl bg-white/10 backdrop-blur-sm border border-white/10 py-2 text-sm font-medium text-white hover:bg-white/18 disabled:opacity-30 transition-all"
+                className="mt-2 w-full rounded-xl bg-surface-overlay/10 glass-blur-subtle border border-text-media/10 py-2 text-sm font-medium text-text-media hover:bg-surface-overlay/18 disabled:opacity-30 transition-all"
               >
                 {commentSubmitting ? "Posting..." : "Post"}
               </button>
@@ -908,7 +943,7 @@ export function PhotoLightbox({
           <button
             type="button"
             onClick={() => setBurstExpanded((s) => !s)}
-            className="text-xs text-white/50 hover:text-white/80 transition-colors"
+            className="text-xs text-text-media/50 hover:text-text-media/80 transition-colors"
           >
             {burstExpanded ? "Hide" : "Show"} burst ({burstSiblings.length}{" "}
             photos)
@@ -1000,13 +1035,13 @@ export function PhotoLightbox({
 
           {/* Info panel — EXIF metadata and file details (separate from Comments sidebar) */}
           {showInfo && (
-            <div className="mx-auto max-w-2xl rounded-2xl bg-white/[0.08] backdrop-blur-xl border border-white/[0.12] px-6 py-4 text-white shadow-[0_8px_32px_-4px_hsla(0,0%,0%,0.2)]">
+            <div className="mx-auto max-w-2xl rounded-2xl bg-surface-overlay/10 glass-blur-full border border-text-media/10 px-6 py-4 text-text-media shadow-[0_8px_32px_-4px_hsla(0,0%,0%,0.2)]">
               <div className="flex items-start justify-between mb-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-white/40">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-text-media/40">
                   File info
                 </h3>
                 <span
-                  className={`rounded-full px-3 py-0.5 text-[10px] font-semibold tracking-wider uppercase backdrop-blur-sm border ${
+                  className={`rounded-full px-3 py-0.5 text-[10px] font-semibold tracking-wider uppercase glass-blur-subtle border ${
                     asset.status === "ready"
                       ? "bg-feedback-success/15 text-feedback-success/70 border-feedback-success/20"
                       : asset.status === "failed"
@@ -1017,7 +1052,7 @@ export function PhotoLightbox({
                   {asset.status}
                 </span>
               </div>
-              <p className="text-sm text-white/60">
+              <p className="text-sm text-text-media/60">
                 {asset.filename}
                 {" — "}
                 {asset.width && asset.height
@@ -1026,11 +1061,11 @@ export function PhotoLightbox({
                 — {formatBytes(asset.size_bytes)} — {asset.content_type}
               </p>
               {Object.keys(exif).length > 0 ? (
-                <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 border-t border-white/8 pt-3 text-xs sm:grid-cols-3">
+                <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 border-t border-text-media/8 pt-3 text-xs sm:grid-cols-3">
                   {exif.camera_make ? (
                     <div>
-                      <span className="text-white/35">Camera</span>{" "}
-                      <span className="text-white/70">
+                      <span className="text-text-media/35">Camera</span>{" "}
+                      <span className="text-text-media/70">
                         {String(exif.camera_make)}{" "}
                         {String(exif.camera_model || "")}
                       </span>
@@ -1038,53 +1073,53 @@ export function PhotoLightbox({
                   ) : null}
                   {exif.focal_length ? (
                     <div>
-                      <span className="text-white/35">Focal</span>{" "}
-                      <span className="text-white/70">
+                      <span className="text-text-media/35">Focal</span>{" "}
+                      <span className="text-text-media/70">
                         {String(exif.focal_length)}mm
                       </span>
                     </div>
                   ) : null}
                   {exif.exposure_time ? (
                     <div>
-                      <span className="text-white/35">Shutter</span>{" "}
-                      <span className="text-white/70">
+                      <span className="text-text-media/35">Shutter</span>{" "}
+                      <span className="text-text-media/70">
                         {String(exif.exposure_time)}
                       </span>
                     </div>
                   ) : null}
                   {exif.f_number ? (
                     <div>
-                      <span className="text-white/35">Aperture</span>{" "}
-                      <span className="text-white/70">
+                      <span className="text-text-media/35">Aperture</span>{" "}
+                      <span className="text-text-media/70">
                         f/{String(exif.f_number)}
                       </span>
                     </div>
                   ) : null}
                   {exif.iso ? (
                     <div>
-                      <span className="text-white/35">ISO</span>{" "}
-                      <span className="text-white/70">{String(exif.iso)}</span>
+                      <span className="text-text-media/35">ISO</span>{" "}
+                      <span className="text-text-media/70">{String(exif.iso)}</span>
                     </div>
                   ) : null}
                   {exif.date_taken ? (
                     <div>
-                      <span className="text-white/35">Taken</span>{" "}
-                      <span className="text-white/70">
+                      <span className="text-text-media/35">Taken</span>{" "}
+                      <span className="text-text-media/70">
                         {String(exif.date_taken)}
                       </span>
                     </div>
                   ) : null}
                   {exif.lens_model ? (
                     <div className="sm:col-span-2">
-                      <span className="text-white/35">Lens</span>{" "}
-                      <span className="text-white/70">
+                      <span className="text-text-media/35">Lens</span>{" "}
+                      <span className="text-text-media/70">
                         {String(exif.lens_model)}
                       </span>
                     </div>
                   ) : null}
                 </div>
               ) : (
-                <p className="mt-3 text-xs text-white/25 border-t border-white/8 pt-3">
+                <p className="mt-3 text-xs text-text-media/25 border-t border-text-media/8 pt-3">
                   No EXIF metadata available for this file.
                 </p>
               )}

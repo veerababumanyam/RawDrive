@@ -64,15 +64,16 @@ export function CompareMode({ left, right, onExit }: Props) {
   const rightMedia = useDecryptedAssetUrl(right, LIGHTBOX_VARIANTS, token);
   const loading = leftMedia.loading || rightMedia.loading;
   const showCompareImages = Boolean(leftMedia.src && rightMedia.src);
-  const unavailable = leftMedia.error || rightMedia.error || "Preview unavailable";
+  const unavailable =
+    leftMedia.error || rightMedia.error || "Preview unavailable";
 
   return (
     <div
       ref={containerRef}
-      className="relative flex h-full w-full items-center justify-center overflow-hidden bg-black select-none"
+      className="relative flex h-full w-full items-center justify-center overflow-hidden bg-surface-scrim-strong select-none"
     >
       {loading ? (
-        <div className="text-sm text-white/60">Decrypting photos...</div>
+        <div className="text-sm text-text-media/60">Decrypting photos...</div>
       ) : showCompareImages ? (
         <>
           {/* Left image (base layer) */}
@@ -92,7 +93,7 @@ export function CompareMode({ left, right, onExit }: Props) {
           />
         </>
       ) : (
-        <div className="text-sm text-white/60">{unavailable}</div>
+        <div className="text-sm text-text-media/60">{unavailable}</div>
       )}
 
       {/* Draggable divider — absolute line with a circular grab handle */}
@@ -104,27 +105,28 @@ export function CompareMode({ left, right, onExit }: Props) {
           aria-valuemin={0}
           aria-valuemax={100}
           tabIndex={0}
-          className="absolute top-0 bottom-0 w-0.5 bg-white/80 cursor-ew-resize z-10"
+          className="absolute top-0 bottom-0 w-0.5 bg-surface-overlay/80 cursor-ew-resize z-10"
           style={{ left: `${dividerPct}%` }}
           onPointerDown={() => {
             dragging.current = true;
           }}
           onKeyDown={(e) => {
             if (e.key === "ArrowLeft") setDividerPct((p) => Math.max(0, p - 2));
-            else if (e.key === "ArrowRight") setDividerPct((p) => Math.min(100, p + 2));
+            else if (e.key === "ArrowRight")
+              setDividerPct((p) => Math.min(100, p + 2));
           }}
         >
-          <div className="absolute top-1/2 left-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/90 shadow-lg flex items-center justify-center text-black text-xs font-bold">
+          <div className="absolute top-1/2 left-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full bg-surface-overlay/90 shadow-lg flex items-center justify-center text-text-primary text-xs font-bold">
             ⇔
           </div>
         </div>
       )}
 
       {/* Filename tags */}
-      <div className="absolute top-4 left-4 rounded-full bg-black/60 backdrop-blur-sm px-3 py-1 text-xs text-white/90">
+      <div className="absolute top-4 left-4 rounded-full bg-surface-scrim-strong/60 glass-blur-subtle px-3 py-1 text-xs text-text-media/90">
         {left.filename}
       </div>
-      <div className="absolute top-4 right-4 rounded-full bg-black/60 backdrop-blur-sm px-3 py-1 text-xs text-white/90">
+      <div className="absolute top-4 right-4 rounded-full bg-surface-scrim-strong/60 glass-blur-subtle px-3 py-1 text-xs text-text-media/90">
         {right.filename}
       </div>
 
@@ -132,7 +134,7 @@ export function CompareMode({ left, right, onExit }: Props) {
       <button
         type="button"
         onClick={onExit}
-        className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/10 backdrop-blur-xl border border-white/15 px-4 py-2 text-sm text-white hover:bg-white/20"
+        className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-surface-overlay/10 glass-blur-full border border-text-media/15 px-4 py-2 text-sm text-text-media hover:bg-surface-overlay/20"
       >
         Exit compare
       </button>

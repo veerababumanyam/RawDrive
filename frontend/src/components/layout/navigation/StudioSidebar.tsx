@@ -2,21 +2,21 @@
 
 import {
   BarChart3,
+  CalendarDays,
   Film,
   Home,
   ImageIcon,
   MessageSquare,
-  Monitor,
   Settings,
   ShoppingBag,
-  UserCircle,
-} from "lucide-react";
+  Wallet,
+} from "@/components/icons";
 import { SidebarShell, SidebarAvatar } from "./SidebarShell";
-import type { NavGroup } from "./SidebarShell";
+import type { NavGroup, NavItem } from "./SidebarShell";
 
 /* ------------------------------------------------------------------ */
 /*  Studio / Photographer sidebar — PRD §6.2 Studio navigation       */
-/*  Business operations are grouped under Studio CRM.                 */
+/*  Business operations stay directly discoverable from the rail.     */
 /* ------------------------------------------------------------------ */
 
 const groups: NavGroup[] = [
@@ -34,25 +34,45 @@ const groups: NavGroup[] = [
         href: "/crm",
         label: "Studio CRM",
         icon: BarChart3,
-        activeHrefs: ["/crm", "/calendar", "/billing", "/settings/packages", "/reports/gstr1"],
+        activeHrefs: ["/crm", "/settings/packages", "/reports/gstr1"],
       },
+      { href: "/calendar", label: "Calendar", icon: CalendarDays },
+      { href: "/billing", label: "Billing", icon: Wallet },
     ],
   },
   {
     title: "Marketplace",
     items: [
-      { href: "/marketplace/freelancers", label: "Freelancers", icon: ShoppingBag },
-      { href: "/marketplace/camera-rentals", label: "Camera Rentals", icon: Film },
+      {
+        href: "/marketplace/freelancers",
+        label: "Freelancers",
+        icon: ShoppingBag,
+      },
+      {
+        href: "/marketplace/camera-rentals",
+        label: "Camera Rentals",
+        icon: Film,
+      },
       { href: "/messages", label: "Messages", icon: MessageSquare },
     ],
   },
+];
+
+const utilityItems: NavItem[] = [
   {
-    title: "Tools",
-    items: [
-      { href: "/settings/pwa", label: "Install App", icon: Monitor },
-      { href: "/settings/profile", label: "Profile", icon: UserCircle },
-      { href: "/settings/business", label: "Business Profile", icon: Settings },
-      { href: "/settings/storage", label: "Storage", icon: Settings },
+    href: "/settings/profile",
+    label: "Settings",
+    icon: Settings,
+    activeHrefs: [
+      "/settings",
+      "/settings/profile",
+      "/settings/business",
+      "/settings/storage",
+      "/settings/pwa",
+      "/settings/security",
+      "/settings/subscription",
+      "/settings/packages",
+      "/settings/plans",
     ],
   },
 ];
@@ -65,11 +85,18 @@ interface StudioSidebarProps {
   onMobileClose?: () => void;
 }
 
-export function StudioSidebar({ userName, avatarUrl, planBadge, mobileOpen, onMobileClose }: StudioSidebarProps) {
+export function StudioSidebar({
+  userName,
+  avatarUrl,
+  planBadge,
+  mobileOpen,
+  onMobileClose,
+}: StudioSidebarProps) {
   return (
     <SidebarShell
-      subtitle="Creative Studio"
+      subtitle=""
       groups={groups}
+      utilityItems={utilityItems}
       mobileOpen={mobileOpen}
       onMobileClose={onMobileClose}
       footer={

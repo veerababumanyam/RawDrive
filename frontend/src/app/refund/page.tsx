@@ -57,7 +57,9 @@ export default function RefundPage() {
         <div className="mt-10 space-y-8">
           {sections.map((section) => (
             <section key={section.title}>
-              <h2 className="text-xl font-semibold text-text-primary">{section.title}</h2>
+              <h2 className="text-xl font-semibold text-text-primary">
+                {section.title}
+              </h2>
               <p className="mt-3 text-sm leading-relaxed text-text-secondary">
                 {section.content}
               </p>
@@ -67,7 +69,10 @@ export default function RefundPage() {
         <div className="mt-12 rounded-xl border border-border bg-surface-elevated p-6">
           <p className="text-sm text-text-secondary">
             Need help with a refund? Contact{" "}
-            <a href="mailto:support@rawdrive.in" className="text-accent hover:text-accent-hover">
+            <a
+              href="mailto:support@rawdrive.in"
+              className="text-accent hover:text-accent-hover"
+            >
               support@rawdrive.in
             </a>
           </p>

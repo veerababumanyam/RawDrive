@@ -14,7 +14,11 @@ export interface ReplayPlayerViewProps {
   onError?: (e: Error) => void;
 }
 
-export function ReplayPlayerView({ playbackUrl, poster, onError }: ReplayPlayerViewProps) {
+export function ReplayPlayerView({
+  playbackUrl,
+  poster,
+  onError,
+}: ReplayPlayerViewProps) {
   return (
     <section
       data-testid="viewer-replay-player"

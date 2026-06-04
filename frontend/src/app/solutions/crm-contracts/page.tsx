@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { FileSignature, ReceiptText, Users, Wallet } from "lucide-react";
+import { FileSignature, ReceiptText, Users, Wallet } from "@/components/icons";
 import { SolutionShowcasePage } from "@/components/marketing/SolutionShowcasePage";
 import { createPageMetadata } from "@/lib/seo";
 

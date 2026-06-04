@@ -1,969 +1,1483 @@
 {
-    "$schema": "https://design-tokens.github.io/community-group/format/",
-    "_meta": {
-        "name": "RawDrive Design Token System",
-        "version": "1.0.0",
-        "description": "Single source of truth for all visual styling across RawDrive. Every component, page, agent prompt, and design tool reads from this file. Change it once — everything cascades.",
-        "lastUpdated": "2026-04-07",
-        "generatesTo": [
-            "frontend/src/index.css            — Tailwind CSS v4 custom properties",
-            "frontend/src/lib/tokens.ts         — TypeScript token constants for runtime use",
-            ".stitch/DESIGN.md                  — Stitch MCP design system definition",
-            "component-registry.json            — Component catalog token references"
-        ],
-        "themeSystem": {
-            "activeTheme": "liquid-glass",
-            "availableThemes": [
-                "liquid-glass",
-                "liquid-glass-dark",
-                "midnight"
-            ],
-            "extensible": true,
-            "note": "Add new themes by adding a key under 'themes'. The build script picks up all theme keys automatically."
-        }
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "_meta": {
+    "name": "RawDrive Design Token System",
+    "version": "1.3.0",
+    "description": "Single source of truth for all visual styling across RawDrive. Every component, page, agent prompt, and design tool reads from this file. Change it once — everything cascades.",
+    "lastUpdated": "2026-06-04",
+    "generatesTo": [
+      "frontend/src/app/globals.css      — Tailwind CSS v4 custom properties",
+      "frontend/src/lib/tokens.ts         — TypeScript token constants for runtime use",
+      ".stitch/DESIGN.md                  — Stitch MCP design system definition",
+      "component-registry.json            — Component catalog token references"
+    ],
+    "themeSystem": {
+      "activeTheme": "liquid-glass-dark",
+      "availableThemes": ["liquid-glass", "liquid-glass-dark", "midnight"],
+      "extensible": true,
+      "note": "Add new themes by adding a key under 'themes'. The build script picks up all theme keys automatically."
+    }
+  },
+  "brand": {
+    "_description": "User-editable branding. Studios can override these in their workspace settings (stored in DB). These are the platform defaults.",
+    "name": "RawDrive",
+    "tagline": "The Operating System for Professional Photography in India",
+    "logoPath": "frontend/public/logo/android-chrome-512x512.png",
+    "faviconPath": "frontend/public/logo/favicon-32x32.png",
+    "domain": "rawdrive.in",
+    "locale": "en-IN",
+    "supportedLocales": [
+      "en-IN",
+      "hi",
+      "te",
+      "ta",
+      "kn",
+      "mr",
+      "gu",
+      "bn",
+      "ml",
+      "pa",
+      "or"
+    ],
+    "socialProfiles": {
+      "instagram": "",
+      "twitter": "",
+      "youtube": "",
+      "linkedin": ""
     },
-    "brand": {
-        "_description": "User-editable branding. Studios can override these in their workspace settings (stored in DB). These are the platform defaults.",
-        "name": "RawDrive",
-        "tagline": "The Operating System for Professional Photography in India",
-        "logoPath": "frontend/public/logo/android-chrome-512x512.png",
-        "faviconPath": "frontend/public/logo/favicon-32x32.png",
-        "domain": "rawdrive.in",
-        "locale": "en-IN",
-        "supportedLocales": [
-            "en-IN",
-            "hi",
-            "te",
-            "ta",
-            "kn",
-            "mr",
-            "gu",
-            "bn",
-            "ml",
-            "pa",
-            "or"
-        ],
-        "socialProfiles": {
-            "instagram": "",
-            "twitter": "",
-            "youtube": "",
-            "linkedin": ""
+    "thirdPartyMarks": {
+      "_description": "Third-party brand marks used in UI controls. These are still tokenized so brand SVGs do not hardcode colors inside components.",
+      "google": {
+        "blue": {
+          "value": "#4285f4",
+          "description": "Google sign-in mark blue"
         },
-        "legalEntity": {
-            "companyName": "",
-            "registeredAddress": "",
-            "dpoEmail": "contactus@rawdrive.in"
+        "green": {
+          "value": "#34a853",
+          "description": "Google sign-in mark green"
+        },
+        "yellow": {
+          "value": "#fbbc05",
+          "description": "Google sign-in mark yellow"
+        },
+        "red": {
+          "value": "#ea4335",
+          "description": "Google sign-in mark red"
         }
-    },
-    "themes": {
-        "liquid-glass": {
-            "_description": "Default light theme. Liquid Glass aesthetic inspired by iOS 26 / macOS Tahoe. Translucent surfaces, soft shadows, depth through blur.",
-            "colorMode": "light",
-            "surface": {
-                "base": {
-                    "value": "hsl(220, 20%, 97%)",
-                    "description": "Primary page background"
-                },
-                "elevated": {
-                    "value": "hsl(0, 0%, 100%)",
-                    "description": "Cards, modals, raised elements"
-                },
-                "sunken": {
-                    "value": "hsl(220, 15%, 93%)",
-                    "description": "Secondary backgrounds, inset areas"
-                },
-                "overlay": {
-                    "value": "hsla(220, 20%, 97%, 0.80)",
-                    "description": "Modal/dialog backdrop"
-                }
-            },
-            "text": {
-                "primary": {
-                    "value": "hsl(220, 25%, 10%)",
-                    "description": "High-contrast headers, body text"
-                },
-                "secondary": {
-                    "value": "hsl(220, 15%, 40%)",
-                    "description": "Subheaders, descriptive text"
-                },
-                "tertiary": {
-                    "value": "hsl(220, 10%, 55%)",
-                    "description": "Captions, timestamps, metadata"
-                },
-                "inverse": {
-                    "value": "hsl(0, 0%, 100%)",
-                    "description": "Text on dark/accent backgrounds"
-                }
-            },
-            "accent": {
-                "default": {
-                    "value": "hsl(221, 83%, 53%)",
-                    "description": "Brand color — primary buttons, links, highlights (blue-600)"
-                },
-                "hover": {
-                    "value": "hsl(221, 83%, 46%)",
-                    "description": "Accent hover state"
-                },
-                "active": {
-                    "value": "hsl(221, 83%, 40%)",
-                    "description": "Accent pressed state"
-                },
-                "subtle": {
-                    "value": "hsla(221, 83%, 53%, 0.10)",
-                    "description": "Accent background wash (10% opacity)"
-                },
-                "muted": {
-                    "value": "hsla(221, 83%, 53%, 0.20)",
-                    "description": "Accent background medium (20% opacity)"
-                }
-            },
-            "semantic": {
-                "success": {
-                    "value": "hsl(142, 71%, 45%)",
-                    "description": "Positive actions, confirmations"
-                },
-                "warning": {
-                    "value": "hsl(38, 92%, 50%)",
-                    "description": "Caution states, pending actions"
-                },
-                "destructive": {
-                    "value": "hsl(0, 84%, 60%)",
-                    "description": "Errors, destructive actions, critical alerts"
-                },
-                "info": {
-                    "value": "hsl(199, 89%, 48%)",
-                    "description": "Informational states, tips"
-                }
-            },
-            "border": {
-                "default": {
-                    "value": "hsl(220, 13%, 87%)",
-                    "description": "Default border color"
-                },
-                "strong": {
-                    "value": "hsl(220, 13%, 75%)",
-                    "description": "Emphasized borders, dividers"
-                },
-                "subtle": {
-                    "value": "hsl(220, 13%, 93%)",
-                    "description": "Subtle borders, hairlines"
-                },
-                "focus": {
-                    "value": "hsl(221, 83%, 53%)",
-                    "description": "Focus ring color (matches accent)"
-                }
-            },
-            "glass": {
-                "blur": {
-                    "value": "12px",
-                    "description": "backdrop-blur intensity for glassmorphism"
-                },
-                "saturation": {
-                    "value": "180%",
-                    "description": "backdrop-saturate for glass vibrancy"
-                },
-                "borderOpacity": {
-                    "value": "0.18",
-                    "description": "Border opacity for glass edges"
-                }
-            }
-        },
-        "liquid-glass-dark": {
-            "_description": "Dark variant of Liquid Glass matched to the RawDrive logo: deep navy glass, electric blue primary, cyan secondary, and a restrained gold highlight.",
-            "colorMode": "dark",
-            "surface": {
-                "base": {
-                    "value": "hsl(218, 72%, 8%)",
-                    "description": "Primary page background"
-                },
-                "elevated": {
-                    "value": "hsl(213, 70%, 12%)",
-                    "description": "Cards, modals, raised elements"
-                },
-                "sunken": {
-                    "value": "hsl(217, 76%, 6%)",
-                    "description": "Secondary backgrounds, inset areas"
-                },
-                "overlay": {
-                    "value": "hsla(218, 72%, 8%, 0.86)",
-                    "description": "Modal/dialog backdrop"
-                }
-            },
-            "text": {
-                "primary": {
-                    "value": "hsl(0, 0%, 100%)",
-                    "description": "High-contrast headers, body text"
-                },
-                "secondary": {
-                    "value": "hsl(210, 100%, 95%)",
-                    "description": "Subheaders, descriptive text"
-                },
-                "tertiary": {
-                    "value": "hsl(212, 64%, 85%)",
-                    "description": "Captions, timestamps, metadata"
-                },
-                "inverse": {
-                    "value": "hsl(218, 72%, 8%)",
-                    "description": "Text on light/accent backgrounds"
-                }
-            },
-            "accent": {
-                "default": {
-                    "value": "hsl(223, 82%, 58%)",
-                    "description": "Logo electric blue primary accent"
-                },
-                "hover": {
-                    "value": "hsl(184, 75%, 55%)",
-                    "description": "Accent hover state"
-                },
-                "active": {
-                    "value": "hsl(223, 76%, 48%)",
-                    "description": "Accent pressed state"
-                },
-                "subtle": {
-                    "value": "hsla(184, 75%, 55%, 0.12)",
-                    "description": "Accent background wash"
-                },
-                "muted": {
-                    "value": "hsla(223, 82%, 58%, 0.24)",
-                    "description": "Accent background medium"
-                }
-            },
-            "semantic": {
-                "success": {
-                    "value": "hsl(170, 70%, 50%)",
-                    "description": "Positive actions"
-                },
-                "warning": {
-                    "value": "hsl(45, 62%, 62%)",
-                    "description": "Caution states"
-                },
-                "destructive": {
-                    "value": "hsl(0, 72%, 65%)",
-                    "description": "Errors, destructive actions"
-                },
-                "info": {
-                    "value": "hsl(184, 75%, 55%)",
-                    "description": "Informational states"
-                }
-            },
-            "border": {
-                "default": {
-                    "value": "hsl(213, 45%, 23%)",
-                    "description": "Default border color"
-                },
-                "strong": {
-                    "value": "hsl(206, 52%, 34%)",
-                    "description": "Emphasized borders"
-                },
-                "subtle": {
-                    "value": "hsl(217, 55%, 15%)",
-                    "description": "Subtle borders"
-                },
-                "focus": {
-                    "value": "hsl(184, 75%, 55%)",
-                    "description": "Focus ring"
-                }
-            },
-            "glass": {
-                "blur": {
-                    "value": "16px",
-                    "description": "Slightly stronger blur on dark for contrast"
-                },
-                "saturation": {
-                    "value": "150%",
-                    "description": "Reduced saturation for dark mode"
-                },
-                "borderOpacity": {
-                    "value": "0.12",
-                    "description": "Softer glass edges in dark"
-                }
-            }
-        },
-        "midnight": {
-            "_description": "AMOLED dark theme matched to the RawDrive logo. True-black navy surfaces with blue/cyan brand accents and a small gold highlight.",
-            "colorMode": "dark",
-            "surface": {
-                "base": {
-                    "value": "hsl(224, 78%, 4%)",
-                    "description": "Near-black base — AMOLED friendly"
-                },
-                "elevated": {
-                    "value": "hsl(217, 70%, 8%)",
-                    "description": "Slightly lifted cards"
-                },
-                "sunken": {
-                    "value": "hsl(225, 100%, 2%)",
-                    "description": "True black insets"
-                },
-                "overlay": {
-                    "value": "hsla(224, 78%, 4%, 0.92)",
-                    "description": "Modal backdrop"
-                }
-            },
-            "text": {
-                "primary": {
-                    "value": "hsl(0, 0%, 100%)",
-                    "description": "White for maximum dark-dashboard readability"
-                },
-                "secondary": {
-                    "value": "hsl(210, 100%, 95%)",
-                    "description": "Near-white secondary text"
-                },
-                "tertiary": {
-                    "value": "hsl(212, 64%, 85%)",
-                    "description": "Subdued metadata"
-                },
-                "inverse": {
-                    "value": "hsl(224, 78%, 4%)",
-                    "description": "Text on accent backgrounds"
-                }
-            },
-            "accent": {
-                "default": {
-                    "value": "hsl(184, 75%, 55%)",
-                    "description": "Logo cyan accent"
-                },
-                "hover": {
-                    "value": "hsl(190, 90%, 68%)",
-                    "description": "Accent hover"
-                },
-                "active": {
-                    "value": "hsl(223, 76%, 48%)",
-                    "description": "Accent pressed"
-                },
-                "subtle": {
-                    "value": "hsla(184, 75%, 55%, 0.10)",
-                    "description": "Cyan wash"
-                },
-                "muted": {
-                    "value": "hsla(223, 82%, 58%, 0.22)",
-                    "description": "Logo blue medium"
-                }
-            },
-            "semantic": {
-                "success": {
-                    "value": "hsl(170, 70%, 50%)",
-                    "description": "Cyan-green success"
-                },
-                "warning": {
-                    "value": "hsl(45, 62%, 62%)",
-                    "description": "Logo gold warning"
-                },
-                "destructive": {
-                    "value": "hsl(0, 65%, 58%)",
-                    "description": "Muted red for dark context"
-                },
-                "info": {
-                    "value": "hsl(223, 82%, 58%)",
-                    "description": "Logo blue info"
-                }
-            },
-            "border": {
-                "default": {
-                    "value": "hsl(217, 55%, 15%)",
-                    "description": "Default border"
-                },
-                "strong": {
-                    "value": "hsl(206, 52%, 28%)",
-                    "description": "Emphasized borders"
-                },
-                "subtle": {
-                    "value": "hsl(225, 70%, 8%)",
-                    "description": "Barely visible borders"
-                },
-                "focus": {
-                    "value": "hsl(184, 75%, 55%)",
-                    "description": "Cyan focus ring"
-                }
-            },
-            "glass": {
-                "blur": {
-                    "value": "20px",
-                    "description": "Heavy blur for dramatic depth"
-                },
-                "saturation": {
-                    "value": "120%",
-                    "description": "Low saturation — moody feel"
-                },
-                "borderOpacity": {
-                    "value": "0.08",
-                    "description": "Near-invisible glass edges"
-                }
-            }
+      },
+      "instagram": {
+        "primary": {
+          "value": "#e4405f",
+          "description": "Instagram brand mark primary"
         }
-    },
-    "typography": {
-        "_description": "System font stack. No web fonts loaded — optimizes LCP and supports Indic scripts natively via OS fonts.",
-        "fontFamily": {
-            "sans": {
-                "value": "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
-            },
-            "mono": {
-                "value": "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace"
-            }
-        },
-        "scale": {
-            "xs": {
-                "value": "0.75rem",
-                "lineHeight": "1rem",
-                "usage": "Caption, metadata, badges"
-            },
-            "sm": {
-                "value": "0.875rem",
-                "lineHeight": "1.25rem",
-                "usage": "Secondary text, form labels"
-            },
-            "base": {
-                "value": "1rem",
-                "lineHeight": "1.5rem",
-                "usage": "Body text, paragraphs"
-            },
-            "lg": {
-                "value": "1.125rem",
-                "lineHeight": "1.75rem",
-                "usage": "Card titles, emphasized body"
-            },
-            "xl": {
-                "value": "1.25rem",
-                "lineHeight": "1.75rem",
-                "usage": "Section subheadings"
-            },
-            "2xl": {
-                "value": "1.5rem",
-                "lineHeight": "2rem",
-                "usage": "Section headings (h2)"
-            },
-            "3xl": {
-                "value": "1.875rem",
-                "lineHeight": "2.25rem",
-                "usage": "Page titles (h1)"
-            },
-            "4xl": {
-                "value": "2.25rem",
-                "lineHeight": "2.5rem",
-                "usage": "Hero headings"
-            },
-            "5xl": {
-                "value": "3rem",
-                "lineHeight": "1",
-                "usage": "Landing page hero"
-            }
-        },
-        "weight": {
-            "normal": {
-                "value": "400"
-            },
-            "medium": {
-                "value": "500"
-            },
-            "semibold": {
-                "value": "600"
-            },
-            "bold": {
-                "value": "700"
-            }
+      },
+      "facebook": {
+        "primary": {
+          "value": "#1877f2",
+          "description": "Facebook brand mark primary"
         }
-    },
-    "spacing": {
-        "_description": "4px base unit. All spacing derives from this scale. No arbitrary pixel values.",
-        "unit": "4px",
-        "scale": {
-            "0": {
-                "value": "0"
-            },
-            "0.5": {
-                "value": "0.125rem",
-                "px": "2px"
-            },
-            "1": {
-                "value": "0.25rem",
-                "px": "4px"
-            },
-            "1.5": {
-                "value": "0.375rem",
-                "px": "6px"
-            },
-            "2": {
-                "value": "0.5rem",
-                "px": "8px"
-            },
-            "3": {
-                "value": "0.75rem",
-                "px": "12px"
-            },
-            "4": {
-                "value": "1rem",
-                "px": "16px"
-            },
-            "5": {
-                "value": "1.25rem",
-                "px": "20px"
-            },
-            "6": {
-                "value": "1.5rem",
-                "px": "24px"
-            },
-            "8": {
-                "value": "2rem",
-                "px": "32px"
-            },
-            "10": {
-                "value": "2.5rem",
-                "px": "40px"
-            },
-            "12": {
-                "value": "3rem",
-                "px": "48px"
-            },
-            "16": {
-                "value": "4rem",
-                "px": "64px"
-            },
-            "20": {
-                "value": "5rem",
-                "px": "80px"
-            },
-            "24": {
-                "value": "6rem",
-                "px": "96px"
-            }
+      },
+      "linkedin": {
+        "primary": {
+          "value": "#0a66c2",
+          "description": "LinkedIn brand mark primary"
         }
-    },
-    "radii": {
-        "_description": "Border radius tokens. Liquid Glass favors generous rounding.",
-        "none": {
-            "value": "0"
-        },
-        "sm": {
-            "value": "0.25rem",
-            "px": "4px",
-            "usage": "Badges, chips"
-        },
-        "md": {
-            "value": "0.375rem",
-            "px": "6px",
-            "usage": "Inputs, small buttons"
-        },
-        "lg": {
-            "value": "0.5rem",
-            "px": "8px",
-            "usage": "Cards, dialogs"
-        },
-        "xl": {
-            "value": "0.75rem",
-            "px": "12px",
-            "usage": "Large cards, modals"
-        },
-        "2xl": {
-            "value": "1rem",
-            "px": "16px",
-            "usage": "Hero cards, feature sections"
-        },
-        "full": {
-            "value": "9999px",
-            "usage": "Pills, avatars, circular elements"
+      },
+      "youtube": {
+        "primary": {
+          "value": "#ff0000",
+          "description": "YouTube brand mark primary"
         }
+      }
     },
-    "shadows": {
-        "_description": "Shadow tokens. 'glass' is the primary shadow for Liquid Glass surfaces. Never use raw Tailwind shadow primitives.",
-        "sm": {
-            "value": "0 1px 2px 0 hsla(0, 0%, 0%, 0.05)",
-            "usage": "Subtle elevation (badges, tooltips)"
+    "nationalMarks": {
+      "_description": "Official national identity colors used by decorative marks. Values are fixed by source specifications, but still centralized so components do not inline them.",
+      "indiaFlag": {
+        "saffron": {
+          "value": "#FF9933",
+          "description": "Indian national flag saffron band"
         },
-        "md": {
-            "value": "0 4px 6px -1px hsla(0, 0%, 0%, 0.07), 0 2px 4px -2px hsla(0, 0%, 0%, 0.05)",
-            "usage": "Medium elevation (dropdowns)"
+        "white": {
+          "value": "#FFFFFF",
+          "description": "Indian national flag white band"
         },
-        "glass": {
-            "value": "0 8px 32px -4px hsla(0, 0%, 0%, 0.08), 0 4px 8px -2px hsla(0, 0%, 0%, 0.04)",
-            "usage": "PRIMARY — glassmorphism cards, navbar, modals"
+        "green": {
+          "value": "#138808",
+          "description": "Indian national flag green band"
         },
-        "lg": {
-            "value": "0 10px 15px -3px hsla(0, 0%, 0%, 0.08), 0 4px 6px -4px hsla(0, 0%, 0%, 0.04)",
-            "usage": "High elevation (popovers, floating panels)"
-        },
-        "xl": {
-            "value": "0 20px 25px -5px hsla(0, 0%, 0%, 0.10), 0 8px 10px -6px hsla(0, 0%, 0%, 0.04)",
-            "usage": "Max elevation (full modals, lightbox)"
-        },
-        "inner": {
-            "value": "inset 0 2px 4px 0 hsla(0, 0%, 0%, 0.05)",
-            "usage": "Sunken inputs, inset areas"
+        "chakra": {
+          "value": "#000080",
+          "description": "Ashoka Chakra navy blue"
         }
+      }
     },
-    "motion": {
-        "_description": "Animation tokens. All transitions use these durations and easings. Respects prefers-reduced-motion automatically.",
-        "duration": {
-            "instant": {
-                "value": "0ms",
-                "usage": "Reduced motion fallback"
-            },
-            "fast": {
-                "value": "150ms",
-                "usage": "Micro-interactions (hover, focus)"
-            },
-            "normal": {
-                "value": "300ms",
-                "usage": "Component transitions (expand, collapse, modal)"
-            },
-            "slow": {
-                "value": "500ms",
-                "usage": "Page transitions, large layout shifts"
-            },
-            "shimmer": {
-                "value": "1500ms",
-                "usage": "Skeleton loading shimmer (infinite)"
-            }
-        },
-        "easing": {
-            "default": {
-                "value": "cubic-bezier(0.4, 0, 0.2, 1)",
-                "usage": "Standard easing — most transitions"
-            },
-            "in": {
-                "value": "cubic-bezier(0.4, 0, 1, 1)",
-                "usage": "Elements leaving view"
-            },
-            "out": {
-                "value": "cubic-bezier(0, 0, 0.2, 1)",
-                "usage": "Elements entering view"
-            },
-            "bounce": {
-                "value": "cubic-bezier(0.34, 1.56, 0.64, 1)",
-                "usage": "Playful interactions (FAB, notifications)"
-            }
-        }
-    },
-    "breakpoints": {
-        "_description": "Responsive breakpoints. Mobile-first (min-width). Matches Tailwind v4 defaults with India-specific xs for budget Android phones.",
-        "xs": {
-            "value": "0px",
-            "target": "Small phones (budget Android)"
-        },
-        "sm": {
-            "value": "480px",
-            "target": "Large phones"
-        },
-        "md": {
-            "value": "640px",
-            "target": "Small tablets"
-        },
-        "lg": {
-            "value": "768px",
-            "target": "Tablets, small laptops"
-        },
-        "xl": {
-            "value": "1024px",
-            "target": "Laptops"
-        },
-        "2xl": {
-            "value": "1280px",
-            "target": "Desktops"
-        }
-    },
-    "zIndex": {
-        "_description": "Z-index scale to prevent stacking context wars.",
+    "legalEntity": {
+      "companyName": "",
+      "registeredAddress": "",
+      "dpoEmail": "contactus@rawdrive.in"
+    }
+  },
+  "themes": {
+    "liquid-glass": {
+      "_description": "Default light theme. iOS 26 inspired Liquid Glass: cool blue-opal content surfaces, floating glass controls, logo-derived electric-blue/cyan/champagne-gold tinting, and contrast-safe text.",
+      "colorMode": "light",
+      "surface": {
         "base": {
-            "value": "0"
+          "value": "#f6f9fd",
+          "description": "Primary page background with a neutral opal cast"
         },
-        "dropdown": {
-            "value": "10"
+        "elevated": {
+          "value": "#ffffff",
+          "description": "Cards, modals, raised elements"
         },
-        "sticky": {
-            "value": "20",
-            "usage": "Sticky navbar, section nav"
+        "sunken": {
+          "value": "#edf2f9",
+          "description": "Secondary backgrounds, inset areas"
         },
         "overlay": {
-            "value": "30",
-            "usage": "Modal backdrops, drawer overlays"
+          "value": "rgba(255, 255, 255, 0.78)",
+          "description": "Frosted modal/dialog backdrop"
         },
-        "modal": {
-            "value": "40",
-            "usage": "Modals, dialogs"
+        "container": {
+          "value": "#e8eef7",
+          "description": "Grouped content containers"
         },
-        "popover": {
-            "value": "50",
-            "usage": "Popovers, tooltips"
+        "containerLow": {
+          "value": "#f2f6fb",
+          "description": "Low-emphasis grouped surfaces"
         },
-        "toast": {
-            "value": "60",
-            "usage": "Toast notifications (always on top)"
+        "containerHigh": {
+          "value": "#dee7f2",
+          "description": "Raised grouped surfaces"
+        },
+        "containerHighest": {
+          "value": "#d2deee",
+          "description": "Highest light-mode container before borders"
+        },
+        "variant": {
+          "value": "#d8e4f5",
+          "description": "Subtle glass tint carrier"
+        },
+        "bright": {
+          "value": "#ffffff",
+          "description": "Brightest solid surface"
+        },
+        "dim": {
+          "value": "#c6d2e2",
+          "description": "Dim surface for separators and pressed wells"
+        },
+        "scrim": {
+          "value": "rgba(20, 30, 45, 0.28)",
+          "description": "Media scrim for legible text over imagery"
+        },
+        "scrimStrong": {
+          "value": "rgba(8, 14, 22, 0.95)",
+          "description": "Near-opaque shell for immersive media viewers (lightbox, video)"
         }
+      },
+      "text": {
+        "primary": {
+          "value": "#151f2a",
+          "description": "High-contrast headers, body text"
+        },
+        "secondary": {
+          "value": "#44515f",
+          "description": "Subheaders, descriptive text"
+        },
+        "tertiary": {
+          "value": "#51606c",
+          "description": "Captions, timestamps, metadata"
+        },
+        "inverse": {
+          "value": "#fbfdff",
+          "description": "Text on dark/accent backgrounds"
+        },
+        "media": {
+          "value": "#ffffff",
+          "description": "Text over photographic/video media scrims"
+        }
+      },
+      "accent": {
+        "default": {
+          "value": "#1456b8",
+          "description": "Primary logo electric-blue accent; 6.9:1 against white (AA+)"
+        },
+        "hover": {
+          "value": "#0f47a1",
+          "description": "Accent hover state"
+        },
+        "active": {
+          "value": "#0c3a85",
+          "description": "Accent pressed state"
+        },
+        "subtle": {
+          "value": "rgba(20, 86, 184, 0.10)",
+          "description": "Accent background wash (10% opacity)"
+        },
+        "muted": {
+          "value": "rgba(20, 86, 184, 0.20)",
+          "description": "Accent background medium (20% opacity)"
+        },
+        "primary": {
+          "value": "#1a66c9",
+          "description": "Lifted electric blue for primary emphasis and charts; white text passes AA"
+        },
+        "secondary": {
+          "value": "#0a7191",
+          "description": "Logo cyan deepened for AA on light surfaces"
+        },
+        "tertiary": {
+          "value": "#8a6516",
+          "description": "Champagne gold (logo aperture blade) for selective warmth; AA on white"
+        }
+      },
+      "semantic": {
+        "success": {
+          "value": "#1b6f4d",
+          "description": "Positive actions, confirmations"
+        },
+        "warning": {
+          "value": "#94630f",
+          "description": "Caution states, pending actions"
+        },
+        "destructive": {
+          "value": "#a33d43",
+          "description": "Errors, destructive actions, critical alerts"
+        },
+        "info": {
+          "value": "#0a7191",
+          "description": "Informational states, tips"
+        }
+      },
+      "border": {
+        "default": {
+          "value": "rgba(100, 122, 145, 0.34)",
+          "description": "Default visible glass/content border"
+        },
+        "strong": {
+          "value": "rgba(72, 92, 112, 0.52)",
+          "description": "Emphasized borders, dividers"
+        },
+        "subtle": {
+          "value": "rgba(100, 122, 145, 0.18)",
+          "description": "Subtle borders, hairlines"
+        },
+        "focus": {
+          "value": "#0f5dba",
+          "description": "High-contrast focus ring"
+        },
+        "outlineVariant": {
+          "value": "#92a3bd",
+          "description": "Outline color used by translucent glass edges"
+        }
+      },
+      "glass": {
+        "blur": {
+          "value": "24px",
+          "description": "Regular Liquid Glass backdrop blur"
+        },
+        "saturation": {
+          "value": "185%",
+          "description": "backdrop-saturate for glass vibrancy"
+        },
+        "borderOpacity": {
+          "value": "0.22",
+          "description": "Border opacity for glass edges"
+        },
+        "surfaceOpacity": {
+          "value": "0.76",
+          "description": "Regular glass fill opacity"
+        },
+        "clearSurfaceOpacity": {
+          "value": "0.38",
+          "description": "Clear glass over media only; requires scrim"
+        },
+        "highlightOpacity": {
+          "value": "0.72",
+          "description": "Specular highlight intensity"
+        },
+        "rimOpacity": {
+          "value": "0.42",
+          "description": "Bright rim lensing edge"
+        },
+        "refractionOpacity": {
+          "value": "0.18",
+          "description": "Inner lens/refraction layer"
+        },
+        "tintOpacity": {
+          "value": "0.20",
+          "description": "Selective primary action tint opacity"
+        },
+        "reducedTransparencyOpacity": {
+          "value": "0.94",
+          "description": "Fallback fill when reduced transparency is preferred"
+        },
+        "increasedContrastBorderOpacity": {
+          "value": "0.70",
+          "description": "Fallback edge opacity when increased contrast is preferred"
+        }
+      }
     },
-    "components": {
-        "_description": "Component-level tokens. These compose the primitive tokens above into component-specific presets.",
-        "navbar": {
-            "height": {
-                "value": "64px"
-            },
-            "heightMobile": {
-                "value": "56px"
-            },
-            "blur": {
-                "ref": "themes.{active}.glass.blur"
-            },
-            "background": {
-                "ref": "themes.{active}.surface.overlay"
-            },
-            "shadow": {
-                "ref": "shadows.glass"
-            },
-            "zIndex": {
-                "ref": "zIndex.sticky"
-            }
+    "liquid-glass-dark": {
+      "_description": "Dark Liquid Glass. Ink-navy surfaces matching the logo field, electric-blue/cyan lensing, restrained champagne-gold warmth, and high legibility in dim rooms.",
+      "colorMode": "dark",
+      "surface": {
+        "base": {
+          "value": "#06121b",
+          "description": "Primary page background"
         },
-        "card": {
-            "background": {
-                "ref": "themes.{active}.surface.elevated"
-            },
-            "border": {
-                "ref": "themes.{active}.border.default"
-            },
-            "borderRadius": {
-                "ref": "radii.xl"
-            },
-            "shadow": {
-                "ref": "shadows.glass"
-            },
-            "hoverScale": {
-                "value": "1.01"
-            },
-            "hoverTransition": {
-                "ref": "motion.duration.normal"
-            },
-            "padding": {
-                "ref": "spacing.scale.6"
-            }
+        "elevated": {
+          "value": "#0b1d2a",
+          "description": "Cards, modals, raised elements"
         },
-        "button": {
-            "primaryBg": {
-                "ref": "themes.{active}.accent.default"
-            },
-            "primaryHoverBg": {
-                "ref": "themes.{active}.accent.hover"
-            },
-            "primaryActiveBg": {
-                "ref": "themes.{active}.accent.active"
-            },
-            "primaryText": {
-                "ref": "themes.{active}.text.inverse"
-            },
-            "borderRadius": {
-                "ref": "radii.lg"
-            },
-            "paddingX": {
-                "ref": "spacing.scale.4"
-            },
-            "paddingY": {
-                "ref": "spacing.scale.2"
-            },
-            "height": {
-                "value": "40px"
-            },
-            "heightSm": {
-                "value": "32px"
-            },
-            "heightLg": {
-                "value": "48px"
-            },
-            "transition": {
-                "ref": "motion.duration.fast"
-            }
+        "sunken": {
+          "value": "#030e18",
+          "description": "Secondary backgrounds, inset areas"
         },
-        "glassIconButton": {
-            "_description": "iOS 26 liquid glass circular icon button. Component: frontend/src/components/ui/glass-icon-button.tsx. MANDATORY for all icon-only interactive elements.",
-            "sizeSm": {
-                "value": "36px",
-                "usage": "Compact toolbar buttons"
-            },
-            "sizeMd": {
-                "value": "44px",
-                "usage": "Standard — meets WCAG 2.1 AA touch target"
-            },
-            "sizeLg": {
-                "value": "52px",
-                "usage": "Prominent actions (lightbox nav, proofing)"
-            },
-            "borderRadius": {
-                "ref": "radii.full"
-            },
-            "backdropBlur": {
-                "ref": "themes.{active}.glass.blur"
-            },
-            "backdropSaturate": {
-                "ref": "themes.{active}.glass.saturation"
-            },
-            "borderOpacity": {
-                "ref": "themes.{active}.glass.borderOpacity"
-            },
-            "bgOpacity": {
-                "value": "0.12",
-                "description": "Background opacity for glass variant"
-            },
-            "bgOpacityHover": {
-                "value": "0.22",
-                "description": "Background opacity on hover"
-            },
-            "bgOpacityActive": {
-                "value": "0.30",
-                "description": "Background opacity when active/pressed"
-            },
-            "pressScale": {
-                "value": "0.92",
-                "description": "Scale on press — spring animation"
-            },
-            "transition": {
-                "ref": "motion.duration.fast"
-            },
-            "shadow": {
-                "value": "0 2px 8px -2px hsla(0,0%,0%,0.08)",
-                "usage": "Subtle elevation"
-            },
-            "shadowHover": {
-                "value": "0 4px 12px -2px hsla(0,0%,0%,0.12)",
-                "usage": "Elevated on hover"
-            },
-            "iconStrokeWidth": {
-                "value": "1.5",
-                "description": "SF Symbols-style stroke weight"
-            },
-            "iconViewBox": {
-                "value": "0 0 24 24",
-                "description": "Standard 24x24 icon grid"
-            }
+        "overlay": {
+          "value": "rgba(6, 17, 28, 0.88)",
+          "description": "Modal/dialog backdrop"
         },
-        "input": {
-            "background": {
-                "ref": "themes.{active}.surface.sunken"
-            },
-            "border": {
-                "ref": "themes.{active}.border.default"
-            },
-            "borderFocus": {
-                "ref": "themes.{active}.border.focus"
-            },
-            "borderRadius": {
-                "ref": "radii.md"
-            },
-            "height": {
-                "value": "40px"
-            },
-            "paddingX": {
-                "ref": "spacing.scale.3"
-            },
-            "placeholderColor": {
-                "ref": "themes.{active}.text.tertiary"
-            }
+        "container": {
+          "value": "#0e2336",
+          "description": "Grouped content containers"
         },
-        "modal": {
-            "background": {
-                "ref": "themes.{active}.surface.elevated"
-            },
-            "overlay": {
-                "ref": "themes.{active}.surface.overlay"
-            },
-            "borderRadius": {
-                "ref": "radii.xl"
-            },
-            "shadow": {
-                "ref": "shadows.xl"
-            },
-            "blur": {
-                "ref": "themes.{active}.glass.blur"
-            },
-            "zIndex": {
-                "ref": "zIndex.modal"
-            },
-            "maxWidth": {
-                "value": "32rem"
-            }
+        "containerLow": {
+          "value": "#0a1a2a",
+          "description": "Low-emphasis grouped surfaces"
         },
-        "sidebar": {
-            "widthExpanded": {
-                "value": "240px"
-            },
-            "widthCollapsed": {
-                "value": "64px"
-            },
-            "background": {
-                "ref": "themes.{active}.surface.elevated"
-            },
-            "border": {
-                "ref": "themes.{active}.border.subtle"
-            }
+        "containerHigh": {
+          "value": "#14304a",
+          "description": "Raised grouped surfaces"
         },
-        "toast": {
-            "zIndex": {
-                "ref": "zIndex.toast"
-            },
-            "borderRadius": {
-                "ref": "radii.lg"
-            },
-            "shadow": {
-                "ref": "shadows.lg"
-            },
-            "autoDismiss": {
-                "value": "5000ms"
-            }
+        "containerHighest": {
+          "value": "#1a3f5e",
+          "description": "Highest dark-mode container before borders"
         },
-        "gallery": {
-            "gridGap": {
-                "ref": "spacing.scale.3"
-            },
-            "columnsMobile": {
-                "value": "1"
-            },
-            "columnsTablet": {
-                "value": "2"
-            },
-            "columnsDesktop": {
-                "value": "3-4"
-            },
-            "imageRadius": {
-                "ref": "radii.lg"
-            },
-            "hoverOverlayBg": {
-                "value": "hsla(0, 0%, 0%, 0.4)"
-            },
-            "staggerDelay": {
-                "value": "50ms"
-            }
+        "variant": {
+          "value": "#12324a",
+          "description": "Subtle glass tint carrier"
         },
-        "skeleton": {
-            "baseColor": {
-                "ref": "themes.{active}.surface.sunken"
-            },
-            "shimmerDuration": {
-                "ref": "motion.duration.shimmer"
-            },
-            "shimmerEasing": {
-                "value": "linear"
-            }
+        "bright": {
+          "value": "#225a80",
+          "description": "Bright dark-mode surface"
         },
-        "focusRing": {
-            "width": {
-                "value": "2px"
-            },
-            "offset": {
-                "value": "2px"
-            },
-            "color": {
-                "ref": "themes.{active}.border.focus"
-            },
-            "style": {
-                "value": "solid"
-            }
+        "dim": {
+          "value": "#030e18",
+          "description": "Dim dark-mode surface"
         },
-        "touchTarget": {
-            "minimum": {
-                "value": "44px",
-                "description": "WCAG minimum touch target"
-            },
-            "gap": {
-                "value": "8px",
-                "description": "Minimum gap between touch targets"
-            }
+        "scrim": {
+          "value": "rgba(3, 14, 24, 0.78)",
+          "description": "Media scrim for legible text over imagery"
+        },
+        "scrimStrong": {
+          "value": "rgba(2, 8, 12, 0.96)",
+          "description": "Near-opaque shell for immersive media viewers (lightbox, video)"
         }
+      },
+      "text": {
+        "primary": {
+          "value": "#f8fcff",
+          "description": "High-contrast headers, body text"
+        },
+        "secondary": {
+          "value": "#d8e9f8",
+          "description": "Subheaders, descriptive text"
+        },
+        "tertiary": {
+          "value": "#b6cde0",
+          "description": "Captions, timestamps, metadata"
+        },
+        "inverse": {
+          "value": "#06121b",
+          "description": "Text on light/accent backgrounds"
+        },
+        "media": {
+          "value": "#ffffff",
+          "description": "Text over photographic/video media scrims"
+        }
+      },
+      "accent": {
+        "default": {
+          "value": "#4fcdf7",
+          "description": "Logo cyan for dark surfaces; 10.3:1 on base"
+        },
+        "hover": {
+          "value": "#8ae1ff",
+          "description": "Accent hover state"
+        },
+        "active": {
+          "value": "#2da6d8",
+          "description": "Accent pressed state"
+        },
+        "subtle": {
+          "value": "rgba(79, 205, 247, 0.12)",
+          "description": "Accent background wash"
+        },
+        "muted": {
+          "value": "rgba(77, 154, 255, 0.24)",
+          "description": "Accent background medium"
+        },
+        "primary": {
+          "value": "#4d9aff",
+          "description": "Logo electric blue for primary emphasis and charts; AA on elevated"
+        },
+        "secondary": {
+          "value": "#4fcdf7",
+          "description": "Cyan glass tint for secondary emphasis"
+        },
+        "tertiary": {
+          "value": "#e8c170",
+          "description": "Champagne gold (logo aperture blade) for selective highlights"
+        }
+      },
+      "semantic": {
+        "success": {
+          "value": "#5be0b8",
+          "description": "Positive actions"
+        },
+        "warning": {
+          "value": "#f1c66f",
+          "description": "Caution states"
+        },
+        "destructive": {
+          "value": "#ff8d97",
+          "description": "Errors, destructive actions"
+        },
+        "info": {
+          "value": "#4fcdf7",
+          "description": "Informational states"
+        }
+      },
+      "border": {
+        "default": {
+          "value": "rgba(110, 170, 215, 0.28)",
+          "description": "Default border color"
+        },
+        "strong": {
+          "value": "rgba(79, 205, 247, 0.42)",
+          "description": "Emphasized borders"
+        },
+        "subtle": {
+          "value": "rgba(110, 170, 215, 0.14)",
+          "description": "Subtle borders"
+        },
+        "focus": {
+          "value": "#7fd9ff",
+          "description": "Focus ring"
+        },
+        "outlineVariant": {
+          "value": "#2f6390",
+          "description": "Outline color used by translucent glass edges"
+        }
+      },
+      "glass": {
+        "blur": {
+          "value": "26px",
+          "description": "Slightly stronger blur on dark for contrast"
+        },
+        "saturation": {
+          "value": "155%",
+          "description": "Reduced saturation for dark mode"
+        },
+        "borderOpacity": {
+          "value": "0.24",
+          "description": "Softer glass edges in dark"
+        },
+        "surfaceOpacity": {
+          "value": "0.82",
+          "description": "Regular glass fill opacity"
+        },
+        "clearSurfaceOpacity": {
+          "value": "0.44",
+          "description": "Clear glass over media only; requires scrim"
+        },
+        "highlightOpacity": {
+          "value": "0.55",
+          "description": "Specular highlight intensity"
+        },
+        "rimOpacity": {
+          "value": "0.48",
+          "description": "Bright rim lensing edge"
+        },
+        "refractionOpacity": {
+          "value": "0.22",
+          "description": "Inner lens/refraction layer"
+        },
+        "tintOpacity": {
+          "value": "0.24",
+          "description": "Selective primary action tint opacity"
+        },
+        "reducedTransparencyOpacity": {
+          "value": "0.96",
+          "description": "Fallback fill when reduced transparency is preferred"
+        },
+        "increasedContrastBorderOpacity": {
+          "value": "0.78",
+          "description": "Fallback edge opacity when increased contrast is preferred"
+        }
+      }
+    },
+    "midnight": {
+      "_description": "AMOLED Liquid Glass. Near-black navy content layer with luminous logo cyan/blue/gold controls for long editing and proofing sessions.",
+      "colorMode": "dark",
+      "surface": {
+        "base": {
+          "value": "#020709",
+          "description": "Near-black base — AMOLED friendly"
+        },
+        "elevated": {
+          "value": "#08141a",
+          "description": "Slightly lifted cards"
+        },
+        "sunken": {
+          "value": "#000303",
+          "description": "True black insets"
+        },
+        "overlay": {
+          "value": "rgba(2, 7, 9, 0.94)",
+          "description": "Modal backdrop"
+        },
+        "container": {
+          "value": "#0a1a2a",
+          "description": "Grouped content containers"
+        },
+        "containerLow": {
+          "value": "#061119",
+          "description": "Low-emphasis grouped surfaces"
+        },
+        "containerHigh": {
+          "value": "#0f2740",
+          "description": "Raised grouped surfaces"
+        },
+        "containerHighest": {
+          "value": "#163a5c",
+          "description": "Highest midnight container before borders"
+        },
+        "variant": {
+          "value": "#0e2a44",
+          "description": "Subtle glass tint carrier"
+        },
+        "bright": {
+          "value": "#1c5586",
+          "description": "Bright midnight surface"
+        },
+        "dim": {
+          "value": "#000303",
+          "description": "Dim midnight surface"
+        },
+        "scrim": {
+          "value": "rgba(0, 3, 3, 0.90)",
+          "description": "Media scrim for legible text over imagery"
+        },
+        "scrimStrong": {
+          "value": "rgba(0, 2, 3, 0.97)",
+          "description": "Near-opaque shell for immersive media viewers (lightbox, video)"
+        }
+      },
+      "text": {
+        "primary": {
+          "value": "#ffffff",
+          "description": "White for maximum dark-dashboard readability"
+        },
+        "secondary": {
+          "value": "#e2f1fb",
+          "description": "Near-white secondary text"
+        },
+        "tertiary": {
+          "value": "#b9cfe2",
+          "description": "Subdued metadata"
+        },
+        "inverse": {
+          "value": "#020709",
+          "description": "Text on accent backgrounds"
+        },
+        "media": {
+          "value": "#ffffff",
+          "description": "Text over photographic/video media scrims"
+        }
+      },
+      "accent": {
+        "default": {
+          "value": "#6fdcff",
+          "description": "Luminous logo cyan"
+        },
+        "hover": {
+          "value": "#a8ecff",
+          "description": "Accent hover"
+        },
+        "active": {
+          "value": "#3cb2e6",
+          "description": "Accent pressed"
+        },
+        "subtle": {
+          "value": "rgba(111, 220, 255, 0.10)",
+          "description": "Cyan wash"
+        },
+        "muted": {
+          "value": "rgba(106, 176, 255, 0.22)",
+          "description": "Logo blue medium"
+        },
+        "primary": {
+          "value": "#6ab0ff",
+          "description": "Logo electric blue tint for primary emphasis and charts"
+        },
+        "secondary": {
+          "value": "#6fdcff",
+          "description": "Cyan glass tint for secondary emphasis"
+        },
+        "tertiary": {
+          "value": "#f6cd75",
+          "description": "Gold tint for selective highlights"
+        }
+      },
+      "semantic": {
+        "success": {
+          "value": "#67e4bd",
+          "description": "Cyan-green success"
+        },
+        "warning": {
+          "value": "#f6cd75",
+          "description": "Logo gold warning"
+        },
+        "destructive": {
+          "value": "#ff8d97",
+          "description": "Muted red for dark context"
+        },
+        "info": {
+          "value": "#6fdcff",
+          "description": "Logo blue info"
+        }
+      },
+      "border": {
+        "default": {
+          "value": "rgba(100, 170, 215, 0.28)",
+          "description": "Default border"
+        },
+        "strong": {
+          "value": "rgba(111, 220, 255, 0.46)",
+          "description": "Emphasized borders"
+        },
+        "subtle": {
+          "value": "rgba(100, 170, 215, 0.12)",
+          "description": "Barely visible borders"
+        },
+        "focus": {
+          "value": "#9fe5ff",
+          "description": "Cyan focus ring"
+        },
+        "outlineVariant": {
+          "value": "#1f5a86",
+          "description": "Outline color used by translucent glass edges"
+        }
+      },
+      "glass": {
+        "blur": {
+          "value": "28px",
+          "description": "Heavy blur for dramatic depth"
+        },
+        "saturation": {
+          "value": "135%",
+          "description": "Controlled saturation for AMOLED clarity"
+        },
+        "borderOpacity": {
+          "value": "0.20",
+          "description": "Near-invisible glass edges"
+        },
+        "surfaceOpacity": {
+          "value": "0.86",
+          "description": "Regular glass fill opacity"
+        },
+        "clearSurfaceOpacity": {
+          "value": "0.48",
+          "description": "Clear glass over media only; requires scrim"
+        },
+        "highlightOpacity": {
+          "value": "0.48",
+          "description": "Specular highlight intensity"
+        },
+        "rimOpacity": {
+          "value": "0.50",
+          "description": "Bright rim lensing edge"
+        },
+        "refractionOpacity": {
+          "value": "0.24",
+          "description": "Inner lens/refraction layer"
+        },
+        "tintOpacity": {
+          "value": "0.26",
+          "description": "Selective primary action tint opacity"
+        },
+        "reducedTransparencyOpacity": {
+          "value": "0.98",
+          "description": "Fallback fill when reduced transparency is preferred"
+        },
+        "increasedContrastBorderOpacity": {
+          "value": "0.82",
+          "description": "Fallback edge opacity when increased contrast is preferred"
+        }
+      }
     }
+  },
+  "typography": {
+    "_description": "System font stack. No web fonts loaded - optimizes LCP and supports Indic scripts natively via OS fonts.",
+    "fontFamily": {
+      "display": {
+        "value": "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+        "description": "Same as body; iOS-like clarity without a remote font dependency"
+      },
+      "sans": {
+        "value": "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+      },
+      "mono": {
+        "value": "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace"
+      }
+    },
+    "scale": {
+      "2xs": {
+        "value": "0.625rem",
+        "lineHeight": "0.875rem",
+        "usage": "Micro labels: badges, safe-zone chips, counters"
+      },
+      "xs": {
+        "value": "0.75rem",
+        "lineHeight": "1rem",
+        "usage": "Caption, metadata, badges"
+      },
+      "sm": {
+        "value": "0.875rem",
+        "lineHeight": "1.25rem",
+        "usage": "Secondary text, form labels"
+      },
+      "base": {
+        "value": "1rem",
+        "lineHeight": "1.5rem",
+        "usage": "Body text, paragraphs"
+      },
+      "lg": {
+        "value": "1.125rem",
+        "lineHeight": "1.75rem",
+        "usage": "Card titles, emphasized body"
+      },
+      "xl": {
+        "value": "1.25rem",
+        "lineHeight": "1.75rem",
+        "usage": "Section subheadings"
+      },
+      "2xl": {
+        "value": "1.5rem",
+        "lineHeight": "2rem",
+        "usage": "Section headings (h2)"
+      },
+      "3xl": {
+        "value": "1.875rem",
+        "lineHeight": "2.25rem",
+        "usage": "Page titles (h1)"
+      },
+      "4xl": {
+        "value": "clamp(2.25rem, 2rem + 1.1vw, 2.75rem)",
+        "lineHeight": "1.12",
+        "usage": "Hero headings — fluid; minimum equals previous fixed 2.25rem"
+      },
+      "5xl": {
+        "value": "clamp(3rem, 2.55rem + 2vw, 3.75rem)",
+        "lineHeight": "1.08",
+        "usage": "Landing page hero — fluid; minimum equals previous fixed 3rem"
+      },
+      "6xl": {
+        "value": "clamp(3.5rem, 2.8rem + 3vw, 4.75rem)",
+        "lineHeight": "1.05",
+        "usage": "Display headlines on large marketing surfaces"
+      },
+      "7xl": {
+        "value": "clamp(4rem, 3rem + 4.5vw, 6rem)",
+        "lineHeight": "1.02",
+        "usage": "Maximum display size — hero statements only"
+      }
+    },
+    "letterSpacing": {
+      "default": {
+        "value": "0",
+        "usage": "Do not tighten letter spacing; preserves readability and Indic script shaping"
+      }
+    },
+    "weight": {
+      "normal": {
+        "value": "400"
+      },
+      "medium": {
+        "value": "500"
+      },
+      "semibold": {
+        "value": "600"
+      },
+      "bold": {
+        "value": "700"
+      }
+    }
+  },
+  "spacing": {
+    "_description": "4px base unit. All spacing derives from this scale. No arbitrary pixel values.",
+    "unit": "4px",
+    "scale": {
+      "0": {
+        "value": "0"
+      },
+      "0.5": {
+        "value": "0.125rem",
+        "px": "2px"
+      },
+      "1": {
+        "value": "0.25rem",
+        "px": "4px"
+      },
+      "1.5": {
+        "value": "0.375rem",
+        "px": "6px"
+      },
+      "2": {
+        "value": "0.5rem",
+        "px": "8px"
+      },
+      "3": {
+        "value": "0.75rem",
+        "px": "12px"
+      },
+      "4": {
+        "value": "1rem",
+        "px": "16px"
+      },
+      "5": {
+        "value": "1.25rem",
+        "px": "20px"
+      },
+      "6": {
+        "value": "1.5rem",
+        "px": "24px"
+      },
+      "8": {
+        "value": "2rem",
+        "px": "32px"
+      },
+      "10": {
+        "value": "2.5rem",
+        "px": "40px"
+      },
+      "12": {
+        "value": "3rem",
+        "px": "48px"
+      },
+      "16": {
+        "value": "4rem",
+        "px": "64px"
+      },
+      "20": {
+        "value": "5rem",
+        "px": "80px"
+      },
+      "24": {
+        "value": "6rem",
+        "px": "96px"
+      },
+      "32": {
+        "value": "8rem",
+        "px": "128px"
+      }
+    }
+  },
+  "radii": {
+    "_description": "Border radius tokens. Liquid Glass favors concentric rounding: compact content stays restrained; floating controls become pill/circular.",
+    "none": {
+      "value": "0"
+    },
+    "sm": {
+      "value": "0.25rem",
+      "px": "4px",
+      "usage": "Badges, chips"
+    },
+    "md": {
+      "value": "0.375rem",
+      "px": "6px",
+      "usage": "Inputs, small buttons"
+    },
+    "lg": {
+      "value": "0.625rem",
+      "px": "10px",
+      "usage": "Cards, dialogs"
+    },
+    "xl": {
+      "value": "0.875rem",
+      "px": "14px",
+      "usage": "Large cards, modals"
+    },
+    "2xl": {
+      "value": "1.25rem",
+      "px": "20px",
+      "usage": "Hero cards, feature sections"
+    },
+    "3xl": {
+      "value": "1.5rem",
+      "px": "24px",
+      "usage": "Floating glass sheets and large media overlays"
+    },
+    "full": {
+      "value": "9999px",
+      "usage": "Pills, avatars, circular elements"
+    }
+  },
+  "shadows": {
+    "_description": "Shadow tokens. Multilayer soft shadows create Liquid Glass separation without relying only on borders.",
+    "sm": {
+      "value": "0 1px 2px rgba(22, 34, 42, 0.07), 0 1px 1px rgba(22, 34, 42, 0.04)",
+      "usage": "Subtle elevation (badges, tooltips)"
+    },
+    "md": {
+      "value": "0 8px 18px rgba(22, 34, 42, 0.10), 0 2px 5px rgba(22, 34, 42, 0.06)",
+      "usage": "Medium elevation (dropdowns)"
+    },
+    "glass": {
+      "value": "0 18px 44px rgba(22, 34, 42, 0.16), 0 6px 14px rgba(22, 34, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.54)",
+      "usage": "PRIMARY - glassmorphism controls, navbar, modals"
+    },
+    "lg": {
+      "value": "0 24px 60px rgba(22, 34, 42, 0.18), 0 8px 18px rgba(22, 34, 42, 0.08)",
+      "usage": "High elevation (popovers, floating panels)"
+    },
+    "xl": {
+      "value": "0 34px 90px rgba(22, 34, 42, 0.24), 0 12px 28px rgba(22, 34, 42, 0.10)",
+      "usage": "Max elevation (full modals, lightbox)"
+    },
+    "inner": {
+      "value": "inset 0 1px 0 rgba(255, 255, 255, 0.42), inset 0 -1px 0 rgba(22, 34, 42, 0.08)",
+      "usage": "Sunken inputs, inset areas"
+    },
+    "glow": {
+      "value": "0 0 0 1px rgba(255, 255, 255, 0.36), 0 0 34px rgba(15, 141, 152, 0.18)",
+      "usage": "Selective illuminated active controls"
+    }
+  },
+  "motion": {
+    "_description": "Animation tokens. Fluid glass motion is responsive and subtle; reduced-motion should fall back to instant opacity/state changes.",
+    "duration": {
+      "instant": {
+        "value": "0ms",
+        "usage": "Reduced motion fallback"
+      },
+      "fast": {
+        "value": "140ms",
+        "usage": "Micro-interactions (hover, focus)"
+      },
+      "normal": {
+        "value": "260ms",
+        "usage": "Component transitions (expand, collapse, modal)"
+      },
+      "slow": {
+        "value": "420ms",
+        "usage": "Page transitions, large layout shifts"
+      },
+      "shimmer": {
+        "value": "1500ms",
+        "usage": "Skeleton loading shimmer (infinite)"
+      }
+    },
+    "easing": {
+      "default": {
+        "value": "cubic-bezier(0.2, 0, 0, 1)",
+        "usage": "Standard easing - most transitions"
+      },
+      "in": {
+        "value": "cubic-bezier(0.3, 0, 1, 1)",
+        "usage": "Elements leaving view"
+      },
+      "out": {
+        "value": "cubic-bezier(0, 0, 0, 1)",
+        "usage": "Elements entering view"
+      },
+      "spring": {
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "usage": "Liquid press/release, sheets, floating controls"
+      },
+      "bounce": {
+        "value": "cubic-bezier(0.22, 1.28, 0.36, 1)",
+        "usage": "Contained spring feedback"
+      }
+    }
+  },
+  "accessibility": {
+    "_description": "Accessibility contract for all token consumers. The visual system must remain readable when transparency, contrast, motion, and target-size preferences change.",
+    "contrast": {
+      "normalText": {
+        "value": "4.5:1",
+        "wcag": "SC 1.4.3 AA"
+      },
+      "largeText": {
+        "value": "3:1",
+        "wcag": "SC 1.4.3 AA"
+      },
+      "uiComponent": {
+        "value": "3:1",
+        "wcag": "SC 1.4.11 AA"
+      },
+      "focusIndicator": {
+        "value": "3:1",
+        "wcag": "SC 2.4.13 AAA"
+      }
+    },
+    "touchTarget": {
+      "minimum": {
+        "value": "44px",
+        "description": "Apple-recommended default control size for iOS/iPadOS and RawDrive icon buttons"
+      },
+      "wcagMinimum": {
+        "value": "24px",
+        "wcag": "SC 2.5.8 AA"
+      },
+      "gap": {
+        "value": "12px",
+        "description": "Preferred spacing around touch targets"
+      }
+    },
+    "preferences": {
+      "reduceTransparency": {
+        "value": "supported",
+        "description": "Use theme glass.reducedTransparencyOpacity and suppress clear glass"
+      },
+      "increaseContrast": {
+        "value": "supported",
+        "description": "Use theme glass.increasedContrastBorderOpacity and stronger solid fills"
+      },
+      "reduceMotion": {
+        "value": "supported",
+        "description": "Use motion.duration.instant and remove elastic transforms"
+      },
+      "differentiateWithoutColor": {
+        "value": "supported",
+        "description": "Status components must include icon/shape/text, not color alone"
+      }
+    }
+  },
+  "breakpoints": {
+    "_description": "Responsive breakpoints. Mobile-first (min-width). Matches Tailwind v4 defaults with India-specific xs for budget Android phones.",
+    "xs": {
+      "value": "0px",
+      "target": "Small phones (budget Android)"
+    },
+    "sm": {
+      "value": "480px",
+      "target": "Large phones"
+    },
+    "md": {
+      "value": "640px",
+      "target": "Small tablets"
+    },
+    "lg": {
+      "value": "768px",
+      "target": "Tablets, small laptops"
+    },
+    "xl": {
+      "value": "1024px",
+      "target": "Laptops"
+    },
+    "2xl": {
+      "value": "1280px",
+      "target": "Desktops"
+    }
+  },
+  "zIndex": {
+    "_description": "Z-index scale to prevent stacking context wars.",
+    "base": {
+      "value": "0"
+    },
+    "dropdown": {
+      "value": "10"
+    },
+    "sticky": {
+      "value": "20",
+      "usage": "Sticky navbar, section nav"
+    },
+    "overlay": {
+      "value": "30",
+      "usage": "Modal backdrops, drawer overlays"
+    },
+    "modal": {
+      "value": "40",
+      "usage": "Modals, dialogs"
+    },
+    "popover": {
+      "value": "50",
+      "usage": "Popovers, tooltips"
+    },
+    "toast": {
+      "value": "60",
+      "usage": "Toast notifications (always on top)"
+    }
+  },
+  "components": {
+    "_description": "Component-level tokens. These compose the primitive tokens above into component-specific presets.",
+    "navbar": {
+      "height": {
+        "value": "64px"
+      },
+      "heightMobile": {
+        "value": "56px"
+      },
+      "blur": {
+        "ref": "themes.{active}.glass.blur"
+      },
+      "background": {
+        "ref": "themes.{active}.surface.overlay"
+      },
+      "shadow": {
+        "ref": "shadows.glass"
+      },
+      "zIndex": {
+        "ref": "zIndex.sticky"
+      }
+    },
+    "card": {
+      "background": {
+        "ref": "themes.{active}.surface.elevated"
+      },
+      "border": {
+        "ref": "themes.{active}.border.default"
+      },
+      "borderRadius": {
+        "ref": "radii.xl"
+      },
+      "shadow": {
+        "ref": "shadows.glass"
+      },
+      "hoverScale": {
+        "value": "1.01"
+      },
+      "hoverTransition": {
+        "ref": "motion.duration.normal"
+      },
+      "padding": {
+        "ref": "spacing.scale.6"
+      }
+    },
+    "button": {
+      "primaryBg": {
+        "ref": "themes.{active}.accent.default"
+      },
+      "primaryHoverBg": {
+        "ref": "themes.{active}.accent.hover"
+      },
+      "primaryActiveBg": {
+        "ref": "themes.{active}.accent.active"
+      },
+      "primaryText": {
+        "ref": "themes.{active}.text.inverse"
+      },
+      "borderRadius": {
+        "ref": "radii.xl"
+      },
+      "paddingX": {
+        "ref": "spacing.scale.4"
+      },
+      "paddingY": {
+        "ref": "spacing.scale.3"
+      },
+      "height": {
+        "value": "44px"
+      },
+      "heightSm": {
+        "value": "36px"
+      },
+      "heightLg": {
+        "value": "52px"
+      },
+      "transition": {
+        "ref": "motion.duration.fast"
+      }
+    },
+    "glassIconButton": {
+      "_description": "iOS 26 liquid glass circular icon button. Component: frontend/src/components/ui/glass-icon-button.tsx. MANDATORY for all icon-only interactive elements.",
+      "sizeSm": {
+        "value": "36px",
+        "usage": "Compact toolbar buttons"
+      },
+      "sizeMd": {
+        "value": "44px",
+        "usage": "Standard - meets Apple default control size and WCAG target guidance"
+      },
+      "sizeLg": {
+        "value": "52px",
+        "usage": "Prominent actions (lightbox nav, proofing)"
+      },
+      "borderRadius": {
+        "ref": "radii.full"
+      },
+      "backdropBlur": {
+        "ref": "themes.{active}.glass.blur"
+      },
+      "backdropSaturate": {
+        "ref": "themes.{active}.glass.saturation"
+      },
+      "borderOpacity": {
+        "ref": "themes.{active}.glass.borderOpacity"
+      },
+      "bgOpacity": {
+        "value": "0.18",
+        "description": "Background opacity for glass variant"
+      },
+      "bgOpacityHover": {
+        "value": "0.28",
+        "description": "Background opacity on hover"
+      },
+      "bgOpacityActive": {
+        "value": "0.36",
+        "description": "Background opacity when active/pressed"
+      },
+      "foreground": {
+        "ref": "themes.{active}.text.primary",
+        "description": "Default icon foreground. Must contrast against light glass surfaces."
+      },
+      "foregroundMuted": {
+        "ref": "themes.{active}.text.secondary",
+        "description": "Muted icon foreground for ghost/inactive controls on regular surfaces."
+      },
+      "foregroundOnMedia": {
+        "ref": "themes.{active}.text.media",
+        "description": "Icon foreground over dark/photo/video/media surfaces."
+      },
+      "foregroundDisabledOpacity": {
+        "value": "0.42",
+        "description": "Disabled icon opacity while preserving visible disabled affordance."
+      },
+      "pressScale": {
+        "value": "0.94",
+        "description": "Scale on press - spring animation"
+      },
+      "transition": {
+        "ref": "motion.duration.fast"
+      },
+      "shadow": {
+        "ref": "shadows.glass",
+        "usage": "Subtle elevation"
+      },
+      "shadowHover": {
+        "ref": "shadows.glow",
+        "usage": "Elevated on hover"
+      },
+      "iconStrokeWidth": {
+        "value": "1.5",
+        "description": "SF Symbols-style stroke weight"
+      },
+      "iconViewBox": {
+        "value": "0 0 24 24",
+        "description": "Standard 24x24 icon grid"
+      }
+    },
+    "input": {
+      "background": {
+        "ref": "themes.{active}.surface.containerLow"
+      },
+      "border": {
+        "ref": "themes.{active}.border.default"
+      },
+      "borderFocus": {
+        "ref": "themes.{active}.border.focus"
+      },
+      "borderRadius": {
+        "ref": "radii.xl"
+      },
+      "height": {
+        "value": "44px"
+      },
+      "paddingX": {
+        "ref": "spacing.scale.3"
+      },
+      "placeholderColor": {
+        "ref": "themes.{active}.text.tertiary"
+      }
+    },
+    "modal": {
+      "background": {
+        "ref": "themes.{active}.surface.elevated"
+      },
+      "overlay": {
+        "ref": "themes.{active}.surface.overlay"
+      },
+      "borderRadius": {
+        "ref": "radii.3xl"
+      },
+      "shadow": {
+        "ref": "shadows.xl"
+      },
+      "blur": {
+        "ref": "themes.{active}.glass.blur"
+      },
+      "zIndex": {
+        "ref": "zIndex.modal"
+      },
+      "maxWidth": {
+        "value": "32rem"
+      }
+    },
+    "sidebar": {
+      "widthExpanded": {
+        "value": "240px"
+      },
+      "widthCollapsed": {
+        "value": "64px"
+      },
+      "background": {
+        "ref": "themes.{active}.surface.elevated"
+      },
+      "border": {
+        "ref": "themes.{active}.border.subtle"
+      }
+    },
+    "toast": {
+      "zIndex": {
+        "ref": "zIndex.toast"
+      },
+      "borderRadius": {
+        "ref": "radii.lg"
+      },
+      "shadow": {
+        "ref": "shadows.lg"
+      },
+      "autoDismiss": {
+        "value": "5000ms"
+      }
+    },
+    "viewport": {
+      "_description": "Concrete browser chrome theme colors for metadata and PWA surfaces. Meta tags require concrete color strings, so these are centralized here instead of hardcoded in layouts/providers.",
+      "appDarkThemeColor": {
+        "ref": "themes.liquid-glass-dark.surface.base"
+      },
+      "publicGalleryThemeColor": {
+        "ref": "themes.liquid-glass.accent.primary"
+      }
+    },
+    "gallery": {
+      "gridGap": {
+        "ref": "spacing.scale.3"
+      },
+      "columnsMobile": {
+        "value": "1"
+      },
+      "columnsTablet": {
+        "value": "2"
+      },
+      "columnsDesktop": {
+        "value": "3-4"
+      },
+      "imageRadius": {
+        "ref": "radii.lg"
+      },
+      "hoverOverlayBg": {
+        "value": "hsla(0, 0%, 0%, 0.4)"
+      },
+      "staggerDelay": {
+        "value": "50ms"
+      }
+    },
+    "mediaCover": {
+      "_description": "Readability tokens for photographic cover heroes and the Cover & Design editor. These values keep text legible over busy imagery without per-page hardcoded rgba formulas.",
+      "heroMinHeight": {
+        "value": "60vh"
+      },
+      "heroMaxHeight": {
+        "value": "85vh"
+      },
+      "textBackdropRadius": {
+        "ref": "radii.xl"
+      },
+      "textBackdropPadding": {
+        "value": "0.12em 0.26em"
+      },
+      "textShadow": {
+        "value": "var(--cover-text-shadow)",
+        "wcag": "Supports SC 1.4.3 by preserving media text contrast"
+      },
+      "scrimAuto": {
+        "value": "var(--cover-scrim-auto)",
+        "wcag": "Supports SC 1.4.3 for text over unpredictable media"
+      },
+      "scrimDark": {
+        "value": "var(--cover-scrim-dark)",
+        "wcag": "Supports SC 1.4.3 for high-contrast dark media overlays"
+      },
+      "presetColors": {
+        "_description": "Hex colors used by editable cover presets and color-picker defaults. Kept concrete because color inputs and persisted gallery design payloads require hex strings.",
+        "textMedia": {
+          "value": "#ffffff"
+        },
+        "warmTitle": {
+          "value": "#fffaf0"
+        },
+        "warmSubtitle": {
+          "value": "#e6c36a"
+        },
+        "haldiTitle": {
+          "value": "#fff8e7"
+        },
+        "haldiSubtitle": {
+          "value": "#f5c84b"
+        },
+        "warmAccent": {
+          "value": "#B7791F"
+        },
+        "editorialTitle": {
+          "value": "#172033"
+        },
+        "editorialSubtitle": {
+          "value": "#344054"
+        },
+        "receptionSubtitle": {
+          "value": "#dbeafe"
+        }
+      }
+    },
+    "qrCode": {
+      "_description": "QR export colors. QR modules stay fixed high-contrast for scanner reliability rather than theme-dependent.",
+      "dark": {
+        "value": "#000000",
+        "wcag": "Supports scanner contrast and text-equivalent visibility"
+      },
+      "light": {
+        "value": "#ffffff",
+        "wcag": "Supports scanner quiet-zone contrast"
+      }
+    },
+    "skeleton": {
+      "baseColor": {
+        "ref": "themes.{active}.surface.sunken"
+      },
+      "shimmerDuration": {
+        "ref": "motion.duration.shimmer"
+      },
+      "shimmerEasing": {
+        "value": "linear"
+      }
+    },
+    "focusRing": {
+      "width": {
+        "value": "3px"
+      },
+      "offset": {
+        "value": "3px"
+      },
+      "color": {
+        "ref": "themes.{active}.border.focus"
+      },
+      "style": {
+        "value": "solid"
+      }
+    },
+    "touchTarget": {
+      "minimum": {
+        "value": "44px",
+        "description": "Apple default touch target; exceeds WCAG 2.5.8 minimum"
+      },
+      "gap": {
+        "value": "12px",
+        "description": "Preferred gap between touch targets"
+      }
+    }
+  }
 }

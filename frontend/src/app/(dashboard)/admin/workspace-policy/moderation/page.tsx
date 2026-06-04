@@ -44,16 +44,20 @@ export default function UploadModerationPage() {
 
   const handleOverride = async (row: ModerationRow) => {
     const justification = window.prompt(
-      `Override block for ${row.filename}?\nEnter justification (required):`
+      `Override block for ${row.filename}?\nEnter justification (required):`,
     );
     if (!justification) return;
 
     setOverrideMsg(null);
     try {
       const token = getStoredAccessToken();
-      const resp = await overrideUploadBlock(token, row.asset_id, justification);
+      const resp = await overrideUploadBlock(
+        token,
+        row.asset_id,
+        justification,
+      );
       setOverrideMsg(
-        `Allowlist token issued for ${row.filename}. Expires ${resp.expires_at}. Token: ${resp.token.slice(0, 16)}…`
+        `Allowlist token issued for ${row.filename}. Expires ${resp.expires_at}. Token: ${resp.token.slice(0, 16)}…`,
       );
       // Refresh the list so the overridden row drops out.
       await loadQueue();
@@ -138,8 +142,8 @@ export default function UploadModerationPage() {
           Upload Moderation
         </h1>
         <p className="mt-2 text-sm text-text-secondary">
-          Review files that the Tier D screener blocked. Override false positives
-          by issuing a one-time allowlist token.
+          Review files that the Tier D screener blocked. Override false
+          positives by issuing a one-time allowlist token.
         </p>
       </div>
 
@@ -193,7 +197,8 @@ export default function UploadModerationPage() {
         emptyStateMessage="No blocked uploads for this workspace."
         compareFns={{
           created_at: (a, b) =>
-            new Date(a.created_at as string).getTime() - new Date(b.created_at as string).getTime(),
+            new Date(a.created_at as string).getTime() -
+            new Date(b.created_at as string).getTime(),
         }}
       />
     </div>

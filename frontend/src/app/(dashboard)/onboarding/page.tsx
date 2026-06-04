@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getStoredAccessToken, refreshAuthSession } from "@/lib/auth";
-import { pricingPlans } from "@/lib/tokens";
+import { pricingPlans, viewportThemeColors } from "@/lib/tokens";
 import { getDistrictsForState } from "@/lib/data/india-districts";
 
 // Minimal Razorpay types.
@@ -14,7 +14,11 @@ interface RazorpayOptions {
   order_id: string;
   name: string;
   description: string;
-  handler: (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => void;
+  handler: (response: {
+    razorpay_payment_id: string;
+    razorpay_order_id: string;
+    razorpay_signature: string;
+  }) => void;
   prefill?: { name?: string; email?: string; contact?: string };
   theme?: { color?: string };
   modal?: { ondismiss?: () => void };
@@ -37,7 +41,12 @@ type IndianState = {
 
 type Step = "state_selection" | "profile" | "plan_selection" | "complete";
 
-const STEPS: Step[] = ["state_selection", "profile", "plan_selection", "complete"];
+const STEPS: Step[] = [
+  "state_selection",
+  "profile",
+  "plan_selection",
+  "complete",
+];
 const STEP_LABELS: Record<Step, string> = {
   state_selection: "Location",
   profile: "Profile",
@@ -51,11 +60,31 @@ const ONBOARDING_PLANS = pricingPlans.filter((p) =>
 
 // Short highlight lines shown on each plan card (3 max).
 const PLAN_HIGHLIGHTS: Record<string, string[]> = {
-  free: ["1GB storage · 3 galleries", "5 client profiles", "30-day full-access trial"],
-  starter: ["30GB storage · 10 galleries", "Client proofing & basic CRM", "Priority email support"],
-  professional: ["300GB storage · 50 galleries", "AI culling + full CRM & bookings", "Live streaming · marketplace listing"],
-  business: ["3TB storage · 200 galleries", "Unlimited AI culling + API access", "Dedicated account manager"],
-  enterprise: ["6TB storage · unlimited galleries", "White-label + custom integrations", "SLA + 24/7 dedicated support"],
+  free: [
+    "1GB storage · 3 galleries",
+    "5 client profiles",
+    "30-day full-access trial",
+  ],
+  starter: [
+    "30GB storage · 10 galleries",
+    "Client proofing & basic CRM",
+    "Priority email support",
+  ],
+  professional: [
+    "300GB storage · 50 galleries",
+    "AI culling + full CRM & bookings",
+    "Live streaming · marketplace listing",
+  ],
+  business: [
+    "3TB storage · 200 galleries",
+    "Unlimited AI culling + API access",
+    "Dedicated account manager",
+  ],
+  enterprise: [
+    "6TB storage · unlimited galleries",
+    "White-label + custom integrations",
+    "SLA + 24/7 dedicated support",
+  ],
 };
 
 function OnboardingPageContent() {
@@ -81,7 +110,11 @@ function OnboardingPageContent() {
   // Step 3 — plan selection (prefilled from sessionStorage or ?plan= param on first render)
   const [selectedPlan, setSelectedPlan] = useState<string>(() => {
     let plan: string | null = null;
-    try { plan = window.sessionStorage.getItem("rawdrive_pending_plan"); } catch { /* ignore */ }
+    try {
+      plan = window.sessionStorage.getItem("rawdrive_pending_plan");
+    } catch {
+      /* ignore */
+    }
     if (!plan) plan = planParam;
     if (plan && ONBOARDING_PLANS.some((p) => p.id === plan)) return plan;
     return "starter";
@@ -124,12 +157,17 @@ function OnboardingPageContent() {
       .finally(() => {
         if (!cancelled) setStatesLoading(false);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Load Razorpay checkout script once.
   useEffect(() => {
-    if (rzpScriptLoaded.current || document.getElementById("razorpay-checkout-js")) {
+    if (
+      rzpScriptLoaded.current ||
+      document.getElementById("razorpay-checkout-js")
+    ) {
       rzpScriptLoaded.current = true;
       return;
     }
@@ -137,7 +175,9 @@ function OnboardingPageContent() {
     script.id = "razorpay-checkout-js";
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
     script.async = true;
-    script.onload = () => { rzpScriptLoaded.current = true; };
+    script.onload = () => {
+      rzpScriptLoaded.current = true;
+    };
     script.onerror = () => {
       // 2026-05-18: surface the failure in the console so the cause is
       // visible instead of the misleading 8s polling timeout. Most
@@ -185,7 +225,9 @@ function OnboardingPageContent() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error((data as { error?: string }).error || "Failed to save state");
+        throw new Error(
+          (data as { error?: string }).error || "Failed to save state",
+        );
       }
       setStep("profile");
     } catch (err: unknown) {
@@ -224,14 +266,18 @@ function OnboardingPageContent() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {}),
+            ...(currentToken
+              ? { Authorization: `Bearer ${currentToken}` }
+              : {}),
           },
           body: JSON.stringify(body),
         });
 
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error((data as { error?: string }).error || "Failed to create workspace");
+          throw new Error(
+            (data as { error?: string }).error || "Failed to create workspace",
+          );
         }
 
         workspaceCreated.current = true;
@@ -240,13 +286,17 @@ function OnboardingPageContent() {
         try {
           window.sessionStorage.removeItem("rawdrive_pending_plan");
           window.sessionStorage.removeItem("rawdrive_pending_state_id");
-        } catch { /* non-critical */ }
+        } catch {
+          /* non-critical */
+        }
 
         // Refresh JWT so it carries the new workspace_id before calling upgrade.
         try {
           await refreshAuthSession(API_BASE);
           currentToken = getStoredAccessToken();
-        } catch { /* dashboard will refresh on next visit */ }
+        } catch {
+          /* dashboard will refresh on next visit */
+        }
       }
 
       // Free plan — no payment needed.
@@ -257,17 +307,22 @@ function OnboardingPageContent() {
 
       // Paid plan: create Razorpay order on backend.
       if (!currentToken) throw new Error("Not authenticated");
-      const upgradeRes = await fetch(`${API_BASE}/api/v1/workspace/subscription/upgrade`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${currentToken}`,
+      const upgradeRes = await fetch(
+        `${API_BASE}/api/v1/workspace/subscription/upgrade`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${currentToken}`,
+          },
+          body: JSON.stringify({ to_tier: selectedPlan }),
         },
-        body: JSON.stringify({ to_tier: selectedPlan }),
-      });
+      );
 
       if (!upgradeRes.ok) {
-        const err = (await upgradeRes.json().catch(() => ({}))) as { error?: string };
+        const err = (await upgradeRes.json().catch(() => ({}))) as {
+          error?: string;
+        };
         throw new Error(err.error ?? `HTTP ${upgradeRes.status}`);
       }
 
@@ -283,15 +338,25 @@ function OnboardingPageContent() {
         await new Promise<void>((resolve, reject) => {
           const t = setTimeout(() => {
             clearInterval(check);
-            reject(new Error("Payment gateway could not load. Please check your connection and try again."));
+            reject(
+              new Error(
+                "Payment gateway could not load. Please check your connection and try again.",
+              ),
+            );
           }, 20000);
           const check = setInterval(() => {
-            if (window.Razorpay) { clearInterval(check); clearTimeout(t); resolve(); }
+            if (window.Razorpay) {
+              clearInterval(check);
+              clearTimeout(t);
+              resolve();
+            }
           }, 200);
         });
       }
 
-      const planName = ONBOARDING_PLANS.find((p) => p.id === selectedPlan)?.name ?? selectedPlan;
+      const planName =
+        ONBOARDING_PLANS.find((p) => p.id === selectedPlan)?.name ??
+        selectedPlan;
 
       setSubmitting(false); // let user interact with the modal
 
@@ -303,7 +368,7 @@ function OnboardingPageContent() {
         name: "RawDrive",
         description: `${planName} plan subscription`,
         prefill: { name: displayName.trim() },
-        theme: { color: "var(--accent-default, #2d3435)" },
+        theme: { color: viewportThemeColors.publicGallery },
         // 2026-05-18: post the verification triple to the server so the
         // plan upgrade is settled synchronously. Without this, payment
         // succeeds at Razorpay but workspaces.plan_tier never updates
@@ -313,23 +378,31 @@ function OnboardingPageContent() {
         // pattern + applyPayment idempotency notes.
         handler: async (response) => {
           try {
-            const verifyRes = await fetch(`${API_BASE}/api/v1/workspace/subscription/verify`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {}),
+            const verifyRes = await fetch(
+              `${API_BASE}/api/v1/workspace/subscription/verify`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  ...(currentToken
+                    ? { Authorization: `Bearer ${currentToken}` }
+                    : {}),
+                },
+                body: JSON.stringify({
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_signature: response.razorpay_signature,
+                }),
               },
-              body: JSON.stringify({
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_signature: response.razorpay_signature,
-              }),
-            });
+            );
             if (!verifyRes.ok) {
               // Payment captured but verify failed — webhook will reconcile;
               // still advance to the complete step so the user isn't blocked
               // on the onboarding screen.
-              console.error("[Onboarding] subscription verify failed", await verifyRes.text());
+              console.error(
+                "[Onboarding] subscription verify failed",
+                await verifyRes.text(),
+              );
             } else {
               // 2026-05-18: tell the dashboard shell to refresh the
               // sidebar plan badge so the user lands on the dashboard
@@ -371,8 +444,12 @@ function OnboardingPageContent() {
   return (
     <div className="mx-auto max-w-2xl py-12 px-4">
       <div className="mb-8 text-center">
-        <h1 className="text-3xl font-bold text-text-primary">Welcome to RawDrive</h1>
-        <p className="mt-2 text-text-secondary">Set up your photography workspace in a few steps.</p>
+        <h1 className="text-3xl font-bold text-text-primary">
+          Welcome to RawDrive
+        </h1>
+        <p className="mt-2 text-text-secondary">
+          Set up your photography workspace in a few steps.
+        </p>
       </div>
 
       {/* Step indicator */}
@@ -386,20 +463,24 @@ function OnboardingPageContent() {
                 <div
                   className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold transition-colors ${
                     isDone
-                      ? "bg-accent text-white"
+                      ? "bg-accent text-text-inverse"
                       : isCurrent
-                      ? "bg-accent text-white ring-2 ring-accent/30"
-                      : "bg-surface-elevated text-text-tertiary"
+                        ? "bg-accent text-text-inverse ring-2 ring-accent/30"
+                        : "bg-surface-elevated text-text-tertiary"
                   }`}
                 >
                   {isDone ? "✓" : i + 1}
                 </div>
-                <span className={`hidden sm:block text-[10px] font-medium ${isCurrent ? "text-accent" : "text-text-tertiary"}`}>
+                <span
+                  className={`hidden sm:block text-[10px] font-medium ${isCurrent ? "text-accent" : "text-text-tertiary"}`}
+                >
                   {STEP_LABELS[s]}
                 </span>
               </div>
               {i < STEPS.length - 1 && (
-                <div className={`mb-4 h-px w-8 sm:w-12 ${isDone ? "bg-accent" : "bg-border"}`} />
+                <div
+                  className={`mb-4 h-px w-8 sm:w-12 ${isDone ? "bg-accent" : "bg-border"}`}
+                />
               )}
             </div>
           );
@@ -415,7 +496,9 @@ function OnboardingPageContent() {
       {/* Step 1: State Selection */}
       {step === "state_selection" && (
         <div className="glass-surface rounded-2xl p-8">
-          <h2 className="mb-2 text-xl font-semibold text-text-primary">Where are you based?</h2>
+          <h2 className="mb-2 text-xl font-semibold text-text-primary">
+            Where are you based?
+          </h2>
           <p className="mb-6 text-sm text-text-secondary">
             Your state determines GST rules and local compliance.
           </p>
@@ -457,28 +540,38 @@ function OnboardingPageContent() {
                 </optgroup>
               )}
             </select>
-            {selectedStateID != null && (() => {
-              const stateName = states.find((s) => s.id === selectedStateID)?.name ?? "";
-              const districts = getDistrictsForState(stateName);
-              return districts.length > 0 ? (
-                <div className="mb-6">
-                  <label htmlFor="onboarding-district" className="mb-1 block text-sm font-medium text-text-secondary">
-                    District <span className="text-text-tertiary">(optional)</span>
-                  </label>
-                  <select
-                    id="onboarding-district"
-                    value={selectedDistrict}
-                    onChange={(e) => setSelectedDistrict(e.target.value)}
-                    className="input-base w-full min-h-[44px]"
-                  >
-                    <option value="">Select district…</option>
-                    {districts.map((d) => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
-                  </select>
-                </div>
-              ) : <div className="mb-6" />;
-            })()}
+            {selectedStateID != null &&
+              (() => {
+                const stateName =
+                  states.find((s) => s.id === selectedStateID)?.name ?? "";
+                const districts = getDistrictsForState(stateName);
+                return districts.length > 0 ? (
+                  <div className="mb-6">
+                    <label
+                      htmlFor="onboarding-district"
+                      className="mb-1 block text-sm font-medium text-text-secondary"
+                    >
+                      District{" "}
+                      <span className="text-text-tertiary">(optional)</span>
+                    </label>
+                    <select
+                      id="onboarding-district"
+                      value={selectedDistrict}
+                      onChange={(e) => setSelectedDistrict(e.target.value)}
+                      className="input-base w-full min-h-[44px]"
+                    >
+                      <option value="">Select district…</option>
+                      {districts.map((d) => (
+                        <option key={d} value={d}>
+                          {d}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="mb-6" />
+                );
+              })()}
             <button
               type="submit"
               disabled={selectedStateID == null || submitting || statesLoading}
@@ -493,13 +586,18 @@ function OnboardingPageContent() {
       {/* Step 2: Business Profile */}
       {step === "profile" && (
         <div className="glass-surface rounded-2xl p-8">
-          <h2 className="mb-2 text-xl font-semibold text-text-primary">Business Profile</h2>
+          <h2 className="mb-2 text-xl font-semibold text-text-primary">
+            Business Profile
+          </h2>
           <p className="mb-6 text-sm text-text-secondary">
             This appears on your invoices and client-facing pages.
           </p>
           <form onSubmit={handleProfileContinue} className="space-y-4">
             <div>
-              <label htmlFor="business-name" className="mb-1 block text-sm font-medium text-text-secondary">
+              <label
+                htmlFor="business-name"
+                className="mb-1 block text-sm font-medium text-text-secondary"
+              >
                 Business Name <span className="text-error">*</span>
               </label>
               <input
@@ -513,7 +611,10 @@ function OnboardingPageContent() {
               />
             </div>
             <div>
-              <label htmlFor="display-name" className="mb-1 block text-sm font-medium text-text-secondary">
+              <label
+                htmlFor="display-name"
+                className="mb-1 block text-sm font-medium text-text-secondary"
+              >
                 Display Name <span className="text-error">*</span>
               </label>
               <input
@@ -527,7 +628,10 @@ function OnboardingPageContent() {
               />
             </div>
             <div>
-              <label htmlFor="phone" className="mb-1 block text-sm font-medium text-text-secondary">
+              <label
+                htmlFor="phone"
+                className="mb-1 block text-sm font-medium text-text-secondary"
+              >
                 Phone number
               </label>
               <input
@@ -540,7 +644,10 @@ function OnboardingPageContent() {
               />
             </div>
             <div>
-              <label htmlFor="gstin" className="mb-1 block text-sm font-medium text-text-secondary">
+              <label
+                htmlFor="gstin"
+                className="mb-1 block text-sm font-medium text-text-secondary"
+              >
                 GSTIN <span className="text-text-tertiary">(optional)</span>
               </label>
               <input
@@ -552,7 +659,9 @@ function OnboardingPageContent() {
                 maxLength={15}
                 className="input-base w-full min-h-[44px]"
               />
-              <p className="mt-1 text-xs text-text-tertiary">15-character GST ID, if registered.</p>
+              <p className="mt-1 text-xs text-text-tertiary">
+                15-character GST ID, if registered.
+              </p>
             </div>
             <button
               type="submit"
@@ -568,7 +677,9 @@ function OnboardingPageContent() {
       {/* Step 3: Plan Selection */}
       {step === "plan_selection" && (
         <div className="glass-surface rounded-2xl p-8">
-          <h2 className="mb-2 text-xl font-semibold text-text-primary">Choose your plan</h2>
+          <h2 className="mb-2 text-xl font-semibold text-text-primary">
+            Choose your plan
+          </h2>
           <p className="mb-6 text-sm text-text-secondary">
             You can upgrade or change your plan anytime from settings.
           </p>
@@ -590,7 +701,7 @@ function OnboardingPageContent() {
                     }`}
                   >
                     {plan.popular && (
-                      <span className="absolute right-3 top-3 rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                      <span className="absolute right-3 top-3 rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-text-inverse">
                         Popular
                       </span>
                     )}
@@ -598,18 +709,25 @@ function OnboardingPageContent() {
                       <div className="flex items-center gap-3">
                         <div
                           className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
-                            isSelected ? "border-accent bg-accent" : "border-border"
+                            isSelected
+                              ? "border-accent bg-accent"
+                              : "border-border"
                           }`}
                         >
                           {isSelected && (
-                            <div className="h-2 w-2 rounded-full bg-white" />
+                            <div className="h-2 w-2 rounded-full bg-surface-elevated" />
                           )}
                         </div>
                         <div>
-                          <p className="font-semibold text-text-primary">{plan.name}</p>
+                          <p className="font-semibold text-text-primary">
+                            {plan.name}
+                          </p>
                           <ul className="mt-1 space-y-0.5">
                             {highlights.map((h) => (
-                              <li key={h} className="text-xs text-text-secondary">
+                              <li
+                                key={h}
+                                className="text-xs text-text-secondary"
+                              >
                                 {h}
                               </li>
                             ))}
@@ -618,13 +736,17 @@ function OnboardingPageContent() {
                       </div>
                       <div className="shrink-0 text-right">
                         {isFree ? (
-                          <span className="text-lg font-bold text-text-primary">Free</span>
+                          <span className="text-lg font-bold text-text-primary">
+                            Free
+                          </span>
                         ) : (
                           <>
                             <span className="text-lg font-bold text-text-primary">
                               ₹{plan.monthlyPrice.toLocaleString("en-IN")}
                             </span>
-                            <span className="text-xs text-text-tertiary">/mo</span>
+                            <span className="text-xs text-text-tertiary">
+                              /mo
+                            </span>
                           </>
                         )}
                       </div>
@@ -643,16 +765,19 @@ function OnboardingPageContent() {
               {submitting
                 ? "Setting up…"
                 : selectedPlan === "free"
-                ? "Start for free"
-                : (() => {
-                    const plan = ONBOARDING_PLANS.find((p) => p.id === selectedPlan);
-                    return `Pay & activate · ₹${plan ? plan.monthlyPrice.toLocaleString("en-IN") : ""}/mo`;
-                  })()}
+                  ? "Start for free"
+                  : (() => {
+                      const plan = ONBOARDING_PLANS.find(
+                        (p) => p.id === selectedPlan,
+                      );
+                      return `Pay & activate · ₹${plan ? plan.monthlyPrice.toLocaleString("en-IN") : ""}/mo`;
+                    })()}
             </button>
 
             {selectedPlan !== "free" && (
               <p className="mt-3 text-center text-xs text-text-tertiary">
-                Secure payment via Razorpay. Your workspace activates instantly after payment.
+                Secure payment via Razorpay. Your workspace activates instantly
+                after payment.
               </p>
             )}
           </form>
@@ -665,7 +790,9 @@ function OnboardingPageContent() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent/15">
             <span className="text-3xl text-accent">✓</span>
           </div>
-          <h2 className="mb-2 text-2xl font-bold text-text-primary">Your workspace is ready!</h2>
+          <h2 className="mb-2 text-2xl font-bold text-text-primary">
+            Your workspace is ready!
+          </h2>
           <p className="mb-8 text-text-secondary">
             Welcome to RawDrive. Start adding clients, galleries, and bookings.
           </p>

@@ -12,10 +12,12 @@ describe("Footer", () => {
     const { container } = render(<Footer />);
 
     expect(screen.getByAltText("RawDrive Logo")).toBeInTheDocument();
-    expect(screen.getByText("infor@rawdrive.in")).toBeInTheDocument();
+    expect(screen.getByText("info@rawdrive.in")).toBeInTheDocument();
     expect(screen.getByText("support@rawdrive.in")).toBeInTheDocument();
     expect(screen.getByText("contactus@rawdrive.in")).toBeInTheDocument();
-    expect(screen.getByText("contact:+91 928112993 ,+91 9010012299")).toBeInTheDocument();
+    expect(
+      screen.getByText("contact:+91 928112993 ,+91 9010012299"),
+    ).toBeInTheDocument();
     expect(container).not.toHaveTextContent(/Swaz Consultants/i);
     expect(container.innerHTML).not.toMatch(/swaz-consultants-logo/i);
 

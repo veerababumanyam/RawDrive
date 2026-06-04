@@ -12,7 +12,9 @@ export type CreditPillProps = {
 
 export function CreditPill({ className }: CreditPillProps) {
   const [open, setOpen] = useState(false);
-  const { balance, disabled, refresh } = useCreditBalance({ intervalMs: open ? 5_000 : 60_000 });
+  const { balance, disabled, refresh } = useCreditBalance({
+    intervalMs: open ? 5_000 : 60_000,
+  });
 
   // Backend returns 404 for /credits/balance when the
   // `streaming.credit_pill_v1` feature flag is off. In that case the

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -92,6 +93,30 @@ func TestGalleryFilter_AllFieldsSet(t *testing.T) {
 	assert.Equal(t, "wedding", f.GalleryType)
 	assert.Equal(t, "Sharma", f.Search)
 	assert.Equal(t, 25, f.Limit)
+}
+
+func TestGalleryListBaseQueryUsesEffectiveCoverFallback(t *testing.T) {
+	query := strings.Join(strings.Fields(strings.ToLower(galleryListBaseQuery)), " ")
+
+	assert.Contains(t, query, "cover_asset.id as effective_cover_asset_id")
+	assert.Contains(t, query, "select a.id, a.filename, a.content_type, a.status, a.is_encrypted")
+	assert.Contains(t, query, "a.media_encryption")
+	assert.Contains(t, query, "a.thumbnail_urls")
+	assert.Contains(t, query, "left join lateral")
+	assert.Contains(t, query, "case when g.cover_asset_id is not null and a.id = g.cover_asset_id then 0 else 1 end")
+	assert.Contains(t, query, "ga.sort_order asc")
+	assert.NotContains(t, query, "ga.is_hero")
+}
+
+func TestGallerySingleReadQueriesUseEffectiveCoverFallback(t *testing.T) {
+	query := strings.Join(strings.Fields(strings.ToLower(galleryEffectiveCoverJoinSQL)), " ")
+
+	assert.Contains(t, query, "left join lateral")
+	assert.Contains(t, query, "inner join assets a on a.id = ga.asset_id")
+	assert.Contains(t, query, "where ga.gallery_id = g.id")
+	assert.Contains(t, query, "a.deleted_at is null")
+	assert.Contains(t, query, "case when g.cover_asset_id is not null and a.id = g.cover_asset_id then 0 else 1 end")
+	assert.Contains(t, query, "ga.sort_order asc")
 }
 
 // ──────────────────────── Slug Generation ────────────────────────

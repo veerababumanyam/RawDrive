@@ -5,18 +5,23 @@ import Link from "next/link";
 import {
   Cloud,
   FileText,
+  Lock,
   MoreVertical,
   Plus,
   Sparkles,
   UserPlus,
   Wallet,
-} from "lucide-react";
+} from "@/components/icons";
 import { getStoredAccessToken } from "@/lib/auth";
 import { authFetch } from "@/lib/api/authFetch";
 import { listGalleries, type Gallery } from "@/lib/api/galleries";
 import { getAsset, type Asset } from "@/lib/api/assets";
 import { getCurrentUser, type CurrentUser } from "@/lib/api/auth";
-import { GRID_VARIANTS, type EncryptedAssetLike } from "@/lib/media-encryption/asset-media";
+import {
+  GRID_VARIANTS,
+  type EncryptedAssetLike,
+} from "@/lib/media-encryption/asset-media";
+import { MEDIA_KEY_UNAVAILABLE_MESSAGE } from "@/lib/media-encryption/media-key-store";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { readGalleryCoverAssetId } from "@/lib/gallery-design-config";
 import { cn } from "@/lib/utils";
@@ -69,24 +74,46 @@ function DashboardGalleryCover({
   token,
 }: {
   gallery: Gallery;
-  coverAsset?: Asset;
+  coverAsset?: EncryptedAssetLike;
   token: string | null;
 }) {
   const [failedSrc, setFailedSrc] = useState("");
-  const coverAssetId = readGalleryCoverAssetId(gallery.settings, gallery.cover_asset_id);
+  const coverAssetId =
+    gallery.cover_asset?.id ??
+    readGalleryCoverAssetId(gallery.settings, gallery.cover_asset_id);
   const fallbackAsset = useMemo<EncryptedAssetLike | null>(() => {
     if (coverAsset) return coverAsset;
-    if (!gallery.cover_thumbnails || Object.keys(gallery.cover_thumbnails).length === 0) return null;
+    if (gallery.cover_asset) return gallery.cover_asset;
+    if (
+      !gallery.cover_thumbnails ||
+      Object.keys(gallery.cover_thumbnails).length === 0
+    )
+      return null;
     return {
       id: coverAssetId,
       filename: gallery.title,
       thumbnail_urls: gallery.cover_thumbnails,
     };
-  }, [coverAsset, coverAssetId, gallery.cover_thumbnails, gallery.title]);
-  const media = useDecryptedAssetUrl(fallbackAsset, GRID_VARIANTS, token);
+  }, [
+    coverAsset,
+    coverAssetId,
+    gallery.cover_asset,
+    gallery.cover_thumbnails,
+    gallery.title,
+  ]);
+  const media = useDecryptedAssetUrl(
+    fallbackAsset,
+    GRID_VARIANTS,
+    token || getStoredAccessToken(),
+  );
 
   if (media.loading) {
-    return <div className="absolute inset-0 animate-pulse bg-surface-container-high" aria-hidden="true" />;
+    return (
+      <div
+        className="absolute inset-0 animate-pulse bg-surface-container-high"
+        aria-hidden="true"
+      />
+    );
   }
 
   if (media.src && media.src !== failedSrc) {
@@ -99,6 +126,18 @@ function DashboardGalleryCover({
         decoding="async"
         onError={() => setFailedSrc(media.src)}
       />
+    );
+  }
+
+  if (media.error === MEDIA_KEY_UNAVAILABLE_MESSAGE) {
+    return (
+      <div
+        className="absolute inset-0 flex items-center justify-center bg-surface-container-low text-text-tertiary"
+        title="Encrypted cover key unavailable"
+      >
+        <Lock className="h-8 w-8" aria-hidden="true" />
+        <span className="sr-only">Encrypted cover key unavailable</span>
+      </div>
     );
   }
 
@@ -116,11 +155,16 @@ export default function DashboardPage() {
   useEffect(() => {
     listGalleries(token)
       .then((data) => setGalleries(data ?? []))
-      .catch((err) => { setError(err?.message || "Failed to load galleries"); setGalleries([]); })
+      .catch((err) => {
+        setError(err?.message || "Failed to load galleries");
+        setGalleries([]);
+      })
       .finally(() => setLoading(false));
     // Fetch the logged-in user's profile for the greeting banner. A
     // failed /auth/me call degrades gracefully to a neutral greeting.
-    getCurrentUser(token).then(setUser).catch(() => setUser(null));
+    getCurrentUser(token)
+      .then(setUser)
+      .catch(() => setUser(null));
   }, [token]);
 
   const missingCoverAssetIds = useMemo(() => {
@@ -128,7 +172,15 @@ export default function DashboardPage() {
       new Set(
         galleries
           .slice(0, 4)
-          .map((gallery) => readGalleryCoverAssetId(gallery.settings, gallery.cover_asset_id))
+          .map((gallery) => {
+            if (gallery.cover_asset) return "";
+            const coverAssetId = readGalleryCoverAssetId(
+              gallery.settings,
+              gallery.cover_asset_id,
+            );
+            if (!coverAssetId || coverAssets[coverAssetId]) return "";
+            return coverAssetId;
+          })
           .filter((id): id is string => Boolean(id && !coverAssets[id])),
       ),
     );
@@ -165,30 +217,25 @@ export default function DashboardPage() {
   // fallback set which leaked a different studio's fake data into
   // every fresh account.
   //
-  // Cover image: gallery.cover_thumbnails carries the LEFT JOIN'd
+  // Cover image: listGalleries carries the effective cover asset plus
   // thumbnail map (thumb_sm_webp / thumb_md_webp / thumb_lg_webp /
-  // display_webp) for the gallery's chosen cover asset, populated by
-  // listGalleries. The card fetches cover asset metadata when available
-  // and renders through useDecryptedAssetUrl so encrypted WebP previews
-  // display as blob URLs instead of raw storage bytes.
-  const cards = useMemo<GalleryCard[]>(
-    () => {
-      return galleries.slice(0, 4).map((gallery) => {
-        return {
-          id: gallery.id,
-          title: gallery.title,
-          meta: `${gallery.gallery_type} • ${new Date(gallery.created_at).toLocaleDateString("en-IN")}`,
-          client: "Studio Client",
-          status: gallery.is_published ? "Delivered" : "Draft",
-          chipClass: gallery.is_published
-            ? "bg-accent-subtle text-accent"
-            : "bg-surface-container-high text-text-primary",
-          gallery,
-        };
-      });
-    },
-    [galleries],
-  );
+  // display_webp). Design Studio covers can still fetch metadata when
+  // they differ from the joined list cover.
+  const cards = useMemo<GalleryCard[]>(() => {
+    return galleries.slice(0, 4).map((gallery) => {
+      return {
+        id: gallery.id,
+        title: gallery.title,
+        meta: `${gallery.gallery_type} • ${new Date(gallery.created_at).toLocaleDateString("en-IN")}`,
+        client: "Studio Client",
+        status: gallery.is_published ? "Delivered" : "Draft",
+        chipClass: gallery.is_published
+          ? "bg-accent-subtle text-accent"
+          : "bg-surface-container-high text-text-primary",
+        gallery,
+      };
+    });
+  }, [galleries]);
 
   // Fetch real storage usage from API
   const [storageUsed, setStorageUsed] = useState<string>("— / —");
@@ -198,7 +245,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!getStoredAccessToken()) return;
     authFetch("/api/v1/storage/usage")
-      .then((r) => r.ok ? r.json() : null)
+      .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data?.data) {
           // 2026-05-21: prefer total_bytes (originals + WebP derivatives)
@@ -302,27 +349,37 @@ export default function DashboardPage() {
               aria-label={`Open ${stat.label}`}
               className="surface-panel group rounded-xl p-6 transition-colors hover:bg-surface-container-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
             >
-            <div className="mb-4 flex items-start justify-between">
-              <StatIcon className={cn("h-5 w-5", stat.toneClass)} />
-              <span
+              <div className="mb-4 flex items-start justify-between">
+                <StatIcon className={cn("h-5 w-5", stat.toneClass)} />
+                <span
+                  className={cn(
+                    "rounded-full bg-surface-container-high px-2 py-1 text-[10px] font-semibold transition-colors group-hover:bg-surface-container-highest",
+                    stat.toneClass,
+                  )}
+                >
+                  {stat.meta}
+                </span>
+              </div>
+              <p className="text-xs uppercase tracking-[0.22em] text-text-tertiary">
+                {stat.label}
+              </p>
+              <p
                 className={cn(
-                  "rounded-full bg-surface-container-high px-2 py-1 text-[10px] font-semibold transition-colors group-hover:bg-surface-container-highest",
+                  "mt-3 font-headline text-3xl font-bold",
                   stat.toneClass,
                 )}
               >
-                {stat.meta}
-              </span>
-            </div>
-            <p className="text-xs uppercase tracking-[0.22em] text-text-tertiary">{stat.label}</p>
-            <p className={cn("mt-3 font-headline text-3xl font-bold", stat.toneClass)}>
-              {stat.value}
-            </p>
-            {stat.label === "Storage Used" ? (
-              <div className="mt-4 h-1.5 rounded-full bg-surface-container-high">
-                <div className="h-1.5 rounded-full bg-accent" style={{ width: `${storagePercent}%` }} />
-              </div>
-            ) : null}
-          </Link>
+                {stat.value}
+              </p>
+              {stat.label === "Storage Used" ? (
+                <div className="mt-4 h-1.5 rounded-full bg-surface-container-high">
+                  <div
+                    className="h-1.5 rounded-full bg-accent"
+                    style={{ width: `${storagePercent}%` }}
+                  />
+                </div>
+              ) : null}
+            </Link>
           );
         })}
       </section>
@@ -331,10 +388,17 @@ export default function DashboardPage() {
         <section className="col-span-12 lg:col-span-8">
           <div className="mb-6 flex items-end justify-between">
             <div>
-              <h2 className="font-headline text-xl font-bold text-text-primary">Recent Galleries</h2>
-              <p className="text-sm text-text-secondary">Manage and share your latest shoots</p>
+              <h2 className="font-headline text-xl font-bold text-text-primary">
+                Recent Galleries
+              </h2>
+              <p className="text-sm text-text-secondary">
+                Manage and share your latest shoots
+              </p>
             </div>
-            <Link href="/galleries" className="text-sm font-semibold text-accent hover:underline">
+            <Link
+              href="/galleries"
+              className="text-sm font-semibold text-accent hover:underline"
+            >
               View All
             </Link>
           </div>
@@ -342,7 +406,10 @@ export default function DashboardPage() {
           {loading ? (
             <div className="grid gap-6 md:grid-cols-2">
               {[1, 2, 3, 4].map((item) => (
-                <div key={item} className="h-80 animate-pulse rounded-2xl bg-surface-container-high" />
+                <div
+                  key={item}
+                  className="h-80 animate-pulse rounded-2xl bg-surface-container-high"
+                />
               ))}
             </div>
           ) : cards.length === 0 ? (
@@ -350,7 +417,7 @@ export default function DashboardPage() {
               <p className="text-text-secondary">No galleries yet.</p>
               <Link
                 href={GALLERY_CREATE_HREF}
-                className="mt-4 inline-block rounded-xl bg-accent-primary px-5 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90"
+                className="mt-4 inline-block rounded-xl bg-accent-primary px-5 py-2.5 text-sm font-medium text-text-inverse hover:bg-accent-primary/90"
               >
                 + Create your first gallery
               </Link>
@@ -358,53 +425,70 @@ export default function DashboardPage() {
           ) : (
             <div className="grid gap-6 md:grid-cols-2">
               {cards.map((card) => {
-                const coverAssetId = readGalleryCoverAssetId(card.gallery.settings, card.gallery.cover_asset_id);
+                const coverAssetId = readGalleryCoverAssetId(
+                  card.gallery.settings,
+                  card.gallery.cover_asset_id,
+                );
                 return (
                   <Link
                     key={card.id}
-                    href={card.id.startsWith("/") ? card.id : `/galleries/${card.id}`}
+                    href={
+                      card.id.startsWith("/")
+                        ? card.id
+                        : `/galleries/${card.id}`
+                    }
                     className="surface-panel group overflow-hidden rounded-2xl transition-transform duration-300 hover:scale-[1.02]"
                   >
                     <div className="relative h-48 overflow-hidden bg-surface-container-high">
                       <DashboardGalleryCover
                         gallery={card.gallery}
-                        coverAsset={coverAssetId ? coverAssets[coverAssetId] : undefined}
+                        coverAsset={
+                          card.gallery.cover_asset ??
+                          (coverAssetId ? coverAssets[coverAssetId] : undefined)
+                        }
                         token={token}
                       />
-                    <div
-                      className="absolute inset-0"
-                      style={{ background: "linear-gradient(to top, var(--surface-scrim), transparent)" }}
-                      aria-hidden="true"
-                    />
-                    <div className="absolute bottom-4 left-4">
-                      <span
-                        className={cn(
-                          "rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em]",
-                          card.chipClass,
-                        )}
-                      >
-                        {card.status}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="p-5">
-                    <div className="mb-3 flex items-start justify-between gap-4">
-                      <div>
-                        <h3 className="font-headline text-lg font-bold text-text-primary">
-                          {card.title}
-                        </h3>
-                        <p className="mt-1 text-xs text-text-secondary">{card.meta}</p>
+                      <div
+                        className="absolute inset-0"
+                        style={{
+                          background:
+                            "linear-gradient(to top, var(--surface-scrim), transparent)",
+                        }}
+                        aria-hidden="true"
+                      />
+                      <div className="absolute bottom-4 left-4">
+                        <span
+                          className={cn(
+                            "rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em]",
+                            card.chipClass,
+                          )}
+                        >
+                          {card.status}
+                        </span>
                       </div>
-                      <MoreVertical className="h-4 w-4 text-text-tertiary transition-colors group-hover:text-text-primary" />
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-container-high text-[10px] font-bold text-text-primary">
-                        {initials(card.client)}
+                    <div className="p-5">
+                      <div className="mb-3 flex items-start justify-between gap-4">
+                        <div>
+                          <h3 className="font-headline text-lg font-bold text-text-primary">
+                            {card.title}
+                          </h3>
+                          <p className="mt-1 text-xs text-text-secondary">
+                            {card.meta}
+                          </p>
+                        </div>
+                        <MoreVertical className="h-4 w-4 text-text-tertiary transition-colors group-hover:text-text-primary" />
                       </div>
-                      <span className="text-xs text-text-secondary">{card.client}</span>
-                    </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-container-high text-[10px] font-bold text-text-primary">
+                          {initials(card.client)}
+                        </div>
+                        <span className="text-xs text-text-secondary">
+                          {card.client}
+                        </span>
+                      </div>
                     </div>
                   </Link>
                 );
@@ -415,7 +499,9 @@ export default function DashboardPage() {
 
         <aside className="col-span-12 space-y-8 lg:col-span-4">
           <section className="surface-panel p-6">
-            <h3 className="mb-6 font-headline text-lg font-bold text-text-primary">Quick Actions</h3>
+            <h3 className="mb-6 font-headline text-lg font-bold text-text-primary">
+              Quick Actions
+            </h3>
             <div className="grid grid-cols-2 gap-4">
               {quickActions.map((action) => (
                 <Link
@@ -432,13 +518,16 @@ export default function DashboardPage() {
 
           <section className="surface-panel p-6">
             <div className="mb-6 flex items-center justify-between">
-              <h3 className="font-headline text-lg font-bold text-text-primary">Recent Activity</h3>
+              <h3 className="font-headline text-lg font-bold text-text-primary">
+                Recent Activity
+              </h3>
               <FileText className="h-4 w-4 text-text-tertiary" />
             </div>
 
             {galleries.length === 0 ? (
               <p className="text-sm text-text-secondary">
-                Activity will show up here once you start uploading photos and working with clients.
+                Activity will show up here once you start uploading photos and
+                working with clients.
               </p>
             ) : (
               <div className="space-y-6">
@@ -449,10 +538,15 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex-1">
                       <p className="text-sm leading-tight text-text-primary">
-                        Gallery <span className="font-semibold">{gallery.title}</span> {gallery.is_published ? "published" : "created"}
+                        Gallery{" "}
+                        <span className="font-semibold">{gallery.title}</span>{" "}
+                        {gallery.is_published ? "published" : "created"}
                       </p>
                       <p className="mt-1 text-xs text-text-secondary">
-                        {new Date(gallery.updated_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                        {new Date(gallery.updated_at).toLocaleDateString(
+                          "en-IN",
+                          { day: "numeric", month: "short" },
+                        )}
                       </p>
                     </div>
                   </div>

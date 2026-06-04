@@ -29,6 +29,9 @@ import {
 } from "@/lib/gallery-design-config";
 import { EmbeddedVideosPanel } from "@/components/gallery/embedded-videos-panel";
 import { readEmbeddedVideos } from "@/lib/embedded-videos";
+import { getStorageBackedUrl } from "@/lib/dashboard-ui";
+import { Clock, Photo } from "@/components/icons";
+import { buildPublicGalleryJsonLd, serializeJsonLd } from "@/lib/seo";
 import { OfflineCacher } from "@/components/offline/offline-cacher";
 import { OfflineStorageLauncher } from "@/components/offline/offline-storage-launcher";
 import { PublicGalleryOfflineGate } from "@/components/gallery/public-gallery-offline-gate";
@@ -54,33 +57,9 @@ function PublicGalleryUnavailable({
       <div className="max-w-md px-4 text-center">
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-sunken">
           {icon === "clock" ? (
-            <svg
-              className="h-8 w-8 text-text-tertiary"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
+            <Clock className="h-8 w-8 text-text-tertiary" aria-hidden="true" />
           ) : (
-            <svg
-              className="h-8 w-8 text-text-tertiary"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a2.25 2.25 0 002.25-2.25V5.25a2.25 2.25 0 00-2.25-2.25H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"
-              />
-            </svg>
+            <Photo className="h-8 w-8 text-text-tertiary" aria-hidden="true" />
           )}
         </div>
         <h1 className="text-xl font-semibold text-text-primary">{title}</h1>
@@ -300,6 +279,34 @@ export default async function PublicGalleryPage({
     branding,
   });
 
+  // ImageGallery structured data so shared links are grounded for search
+  // and AI engines. Uses the same encrypted-safe cover resolution as
+  // generateMetadata above.
+  const jsonLdCoverManifest = {
+    ...(gallery.cover_asset?.thumbnail_urls ?? {}),
+    ...(gallery.cover_thumbnails ?? {}),
+  } as Record<string, string>;
+  const jsonLdCoverKey =
+    jsonLdCoverManifest["og_image"] ||
+    jsonLdCoverManifest["cover_1280"] ||
+    jsonLdCoverManifest["display_webp"];
+  const galleryJsonLd = buildPublicGalleryJsonLd({
+    slug,
+    title: gallery.title,
+    description:
+      gallery.description ||
+      `View ${gallery.title} by ${
+        branding?.can_customize ? branding.brand_name : "RawDrive"
+      }`,
+    brandName: branding?.can_customize ? branding.brand_name : "RawDrive",
+    imageUrl:
+      jsonLdCoverKey &&
+      !jsonLdCoverKey.toLowerCase().split("?", 1)[0].endsWith(".enc")
+        ? getStorageBackedUrl(jsonLdCoverKey)
+        : undefined,
+    publishedAt: gallery.published_at,
+  });
+
   // Offline gate: when the visitor is offline AND this gallery has a saved local
   // copy, render the decrypt-capable React renderer (<OfflineGalleryView/>, which
   // reuses PublicGalleryGrid → useDecryptedAssetUrl so E2EE galleries decrypt
@@ -312,6 +319,10 @@ export default async function PublicGalleryPage({
       className="min-h-screen bg-surface"
       style={galleryAccentCssVars(galleryAccent)}
     >
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(galleryJsonLd) }}
+      />
       <OfflineCacher
         gallery={gallery}
         assets={assets}
@@ -442,13 +453,52 @@ export async function generateMetadata({ params, searchParams }: Props) {
       : "RawDrive";
     const description =
       gallery.description || `View ${gallery.title} by ${brandName}`;
+    // Rich share preview: prefer the purpose-built og_image derivative
+    // (1200x630), then responsive cover variants, then the large thumb.
+    // Skip encrypted covers — their bytes cannot be fetched by crawlers.
+    const coverManifest = {
+      ...(gallery.cover_asset?.thumbnail_urls ?? {}),
+      ...(gallery.cover_thumbnails ?? {}),
+    } as Record<string, string>;
+    const ogKey =
+      coverManifest["og_image"] ||
+      coverManifest["cover_1280"] ||
+      coverManifest["cover_1920"] ||
+      coverManifest["display_webp"] ||
+      coverManifest["thumb_lg_webp"];
+    const ogImageUrl =
+      ogKey && !ogKey.toLowerCase().split("?", 1)[0].endsWith(".enc")
+        ? getStorageBackedUrl(ogKey)
+        : undefined;
+    const canonicalPath = `/g/${slug}`;
     return {
       title: `${gallery.title} | ${brandName}`,
       description,
+      alternates: { canonical: canonicalPath },
       openGraph: {
         title: gallery.title,
         description,
         type: "website",
+        url: canonicalPath,
+        siteName: brandName,
+        ...(ogImageUrl
+          ? {
+              images: [
+                {
+                  url: ogImageUrl,
+                  width: 1200,
+                  height: 630,
+                  alt: gallery.title,
+                },
+              ],
+            }
+          : {}),
+      },
+      twitter: {
+        card: ogImageUrl ? "summary_large_image" : "summary",
+        title: gallery.title,
+        description,
+        ...(ogImageUrl ? { images: [ogImageUrl] } : {}),
       },
     };
   } catch {

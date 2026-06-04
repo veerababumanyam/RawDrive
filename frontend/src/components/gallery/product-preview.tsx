@@ -105,7 +105,8 @@ export function ProductPreview({
   // (mirrors the original effect-start clears): when we can preflight, the
   // error is cleared while the new result is in flight; when we can't, the
   // stale result is dropped so the add-to-cart guard never sees it.
-  const [lastPreflightInputKey, setLastPreflightInputKey] = useState(preflightInputKey);
+  const [lastPreflightInputKey, setLastPreflightInputKey] =
+    useState(preflightInputKey);
   if (lastPreflightInputKey !== preflightInputKey) {
     setLastPreflightInputKey(preflightInputKey);
     setPreflightError(null);
@@ -198,7 +199,7 @@ export function ProductPreview({
   const totalPrice = product.price_amount * quantity;
 
   return (
-    <div className="glass-card rounded-2xl p-6 space-y-5 backdrop-blur-xl border border-white/10">
+    <div className="glass-card rounded-2xl p-6 space-y-5 glass-blur-full border border-text-media/10">
       {/* Header: type badge + name */}
       <header className="space-y-1">
         <div className="text-xs uppercase tracking-wide text-text-secondary">
@@ -231,12 +232,12 @@ export function ProductPreview({
                   aria-checked={active}
                   onClick={() => setSelectedSize(size)}
                   className={[
-                    "min-h-[44px] min-w-[60px] rounded-xl px-4 py-2 text-sm font-medium",
+                    "touch-min min-w-[60px] rounded-xl px-4 py-2 text-sm font-medium",
                     "border transition-all duration-200",
                     "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                     active
                       ? "bg-accent/20 border-accent text-accent-primary shadow-md"
-                      : "bg-white/5 border-white/10 hover:bg-white/10",
+                      : "bg-surface-overlay/5 border-text-media/10 hover:bg-surface-overlay/10",
                   ].join(" ")}
                 >
                   {size.label}
@@ -289,7 +290,7 @@ export function ProductPreview({
       </div>
 
       {/* Price + add to cart */}
-      <footer className="flex items-center justify-between border-t border-white/10 pt-4">
+      <footer className="flex items-center justify-between border-t border-text-media/10 pt-4">
         <div>
           <div className="text-xs uppercase tracking-wide text-text-secondary">
             Total
@@ -305,7 +306,7 @@ export function ProductPreview({
             addingToCart || (preflight?.quality === "fail" && isPrintProduct)
           }
           className={[
-            "min-h-[44px] rounded-xl px-5 py-2 text-sm font-semibold",
+            "touch-min rounded-xl px-5 py-2 text-sm font-semibold",
             "bg-accent text-text-inverse shadow-md transition-all duration-200",
             "hover:brightness-110 hover:shadow-lg",
             "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",

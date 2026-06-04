@@ -4,15 +4,16 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { InviteGenerator } from "../InviteGenerator";
 
 function mockFetchOK() {
-  return vi.fn(async () =>
-    new Response(
-      JSON.stringify({
-        code: "aB3kQ9mZ",
-        short_url: "https://rawdrive.live/s/aB3kQ9mZ",
-        qr_payload: "https://rawdrive.live/s/aB3kQ9mZ?src=qr",
-      }),
-      { status: 200, headers: { "Content-Type": "application/json" } },
-    ),
+  return vi.fn(
+    async () =>
+      new Response(
+        JSON.stringify({
+          code: "aB3kQ9mZ",
+          short_url: "https://rawdrive.live/s/aB3kQ9mZ",
+          qr_payload: "https://rawdrive.live/s/aB3kQ9mZ?src=qr",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
   ) as unknown as typeof fetch;
 }
 

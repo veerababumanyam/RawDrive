@@ -18,7 +18,6 @@ import {
   getGallery,
   listGalleryAlbums,
   listGalleryAssets,
-  updateGalleryAlbum,
   updateGallery,
   type Gallery,
   type GalleryAlbum,
@@ -58,12 +57,12 @@ import {
 } from "@/lib/api/workspace-profile";
 import { cn } from "@/lib/utils";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import {
   Share,
   Trash,
   XMark,
   Plus,
-  Pencil,
   CheckCircle,
   Shield,
   Envelope,
@@ -74,6 +73,11 @@ import { TermsAcceptanceModal } from "@/components/legal/terms-acceptance-modal"
 import { getTermsStatus } from "@/lib/api/legal";
 import { useAssetReadySubscription } from "@/hooks/use-asset-ready-subscription";
 import dynamic from "next/dynamic";
+import {
+  GalleryViewSwitcher,
+  useGalleryViewMode,
+  type GalleryViewMode,
+} from "@/components/gallery/gallery-view-switcher";
 // FaceFilter import removed 2026-05-18 — the chip strip was unmounted
 // from the gallery page because it rendered as a row of "Unknown"
 // pills. The window-event listener below (rawdrive:face-filter +
@@ -172,20 +176,51 @@ function assetHasWebPDisplay(asset: Asset | null | undefined): boolean {
   );
 }
 
+// Photo-view layout per mode. The same (feature-rich) tile is reused across all
+// modes — only the container layout + a per-tile flow class change. Token-pure
+// Tailwind utilities only (no arbitrary layout/color literals).
+const PHOTO_VIEW_CONTAINER: Record<GalleryViewMode, string> = {
+  grid: "grid gap-4 sm:grid-cols-2 xl:grid-cols-3",
+  masonry: "columns-1 gap-4 sm:columns-2 xl:columns-3",
+  carousel: "flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2",
+  justified: "flex flex-wrap gap-2",
+  stack: "mx-auto grid max-w-3xl grid-cols-1 gap-6",
+};
+const PHOTO_VIEW_TILE: Record<GalleryViewMode, string> = {
+  grid: "",
+  masonry: "mb-4 break-inside-avoid",
+  carousel: "shrink-0 snap-center basis-4/5 sm:basis-1/2 xl:basis-1/3",
+  justified: "grow basis-48",
+  stack: "",
+};
+
 function GalleryAssetTileImage({
   asset,
   token,
   isProcessing,
+  aspectRatio,
 }: {
   asset: Asset | null;
   token: string | null;
   isProcessing: boolean;
+  // When set (masonry/justified views), the tile uses the photo's natural
+  // aspect ratio instead of the uniform 4/3 grid cell. Driven by Asset
+  // width/height so the layout reflects the real photos.
+  aspectRatio?: number | null;
 }) {
   const media = useDecryptedAssetUrl(asset, GRID_VARIANTS, token);
+  const aspectClass = aspectRatio ? "" : "aspect-[4/3]";
+  const aspectStyle = aspectRatio
+    ? { aspectRatio: String(aspectRatio) }
+    : undefined;
   if (isProcessing || media.loading) {
     return (
       <div
-        className="flex aspect-[4/3] w-full animate-pulse items-center justify-center overflow-hidden bg-surface-sunken"
+        className={cn(
+          "flex w-full animate-pulse items-center justify-center overflow-hidden bg-surface-sunken",
+          aspectClass,
+        )}
+        style={aspectStyle}
         role="status"
         aria-live="polite"
         aria-label={
@@ -206,14 +241,21 @@ function GalleryAssetTileImage({
       <img
         src={media.src}
         alt={asset?.filename || "Gallery asset preview"}
-        className="aspect-[4/3] w-full object-cover"
+        className={cn("w-full object-cover", aspectClass)}
+        style={aspectStyle}
         loading="lazy"
         decoding="async"
       />
     );
   }
   return (
-    <div className="flex aspect-[4/3] w-full items-center justify-center bg-surface-sunken text-xs text-text-tertiary">
+    <div
+      className={cn(
+        "flex w-full items-center justify-center bg-surface-sunken text-xs text-text-tertiary",
+        aspectClass,
+      )}
+      style={aspectStyle}
+    >
       {media.error || "Preview unavailable"}
     </div>
   );
@@ -399,6 +441,7 @@ export default function GalleryDetailPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [photoViewMode, setPhotoViewMode] = useGalleryViewMode(id);
   const [commentsByAsset, setCommentsByAsset] = useState<
     Record<string, ProofingComment[]>
   >({});
@@ -448,9 +491,6 @@ export default function GalleryDetailPage({
   const [newAlbumName, setNewAlbumName] = useState("");
   const [showAlbumCreate, setShowAlbumCreate] = useState(false);
   const [creatingAlbum, setCreatingAlbum] = useState(false);
-  const [managingAlbums, setManagingAlbums] = useState(false);
-  const [editingAlbumId, setEditingAlbumId] = useState<string | null>(null);
-  const [editingAlbumName, setEditingAlbumName] = useState("");
   const [savingAlbumId, setSavingAlbumId] = useState<string | null>(null);
   const [shareMessage, setShareMessage] = useState("");
   const [copiedAssetId, setCopiedAssetId] = useState<string | null>(null);
@@ -716,45 +756,6 @@ export default function GalleryDetailPage({
     }
   }, [id, newAlbumName, refreshAlbums, selectedAssetIds]);
 
-  const startEditingAlbum = useCallback((album: GalleryAlbum) => {
-    if (!albumIsEditable(album)) return;
-    setEditingAlbumId(album.id);
-    setEditingAlbumName(album.name);
-  }, []);
-
-  const cancelEditingAlbum = useCallback(() => {
-    setEditingAlbumId(null);
-    setEditingAlbumName("");
-  }, []);
-
-  const handleRenameAlbum = useCallback(
-    async (album: GalleryAlbum) => {
-      if (!albumIsEditable(album)) return;
-      const name = editingAlbumName.trim();
-      if (!name || name === album.name) {
-        cancelEditingAlbum();
-        return;
-      }
-      const t = getStoredAccessToken();
-      if (!t) return;
-
-      setSavingAlbumId(album.id);
-      setError("");
-      try {
-        await updateGalleryAlbum(t, album.id, { name });
-        cancelEditingAlbum();
-        await refreshAlbums();
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Failed to rename sub-gallery",
-        );
-      } finally {
-        setSavingAlbumId(null);
-      }
-    },
-    [cancelEditingAlbum, editingAlbumName, refreshAlbums],
-  );
-
   const handleDeleteAlbum = useCallback(
     async (album: GalleryAlbum) => {
       if (!albumIsEditable(album)) return;
@@ -770,7 +771,6 @@ export default function GalleryDetailPage({
       try {
         await deleteGalleryAlbum(t, album.id);
         if (activeAlbum === album.id) setActiveAlbum(null);
-        if (editingAlbumId === album.id) cancelEditingAlbum();
         await refreshAlbums();
       } catch (err) {
         setError(
@@ -780,7 +780,7 @@ export default function GalleryDetailPage({
         setSavingAlbumId(null);
       }
     },
-    [activeAlbum, cancelEditingAlbum, editingAlbumId, refreshAlbums],
+    [activeAlbum, refreshAlbums],
   );
 
   // Builds the per-business subdomain URL (migration 121 shape):
@@ -828,11 +828,7 @@ export default function GalleryDetailPage({
         channel,
         ...(expiryDays !== undefined ? { expiry_days: expiryDays } : {}),
       });
-      return setUrlSearchParamBeforeFragment(
-        baseUrl,
-        "share",
-        created.token,
-      );
+      return setUrlSearchParamBeforeFragment(baseUrl, "share", created.token);
     },
     [buildShareUrl, gallery],
   );
@@ -1048,7 +1044,11 @@ export default function GalleryDetailPage({
     prevVisibleFilter.faceFilterIds !== faceFilterIds ||
     prevVisibleFilter.proofingFilterAssetIds !== proofingFilterAssetIds
   ) {
-    setPrevVisibleFilter({ activeAlbum, faceFilterIds, proofingFilterAssetIds });
+    setPrevVisibleFilter({
+      activeAlbum,
+      faceFilterIds,
+      proofingFilterAssetIds,
+    });
     setVisibleLimit(GRID_PAGE_SIZE);
   }
 
@@ -1213,9 +1213,6 @@ export default function GalleryDetailPage({
     }),
     [id],
   );
-  useEffect(() => {
-    void getOrCreateGalleryMediaKey(id);
-  }, [id]);
   // S3-G4 / S3-G5: also bind every upload session to THIS gallery (and the
   // active sub-album, when one is selected) so the backend links the finalized
   // asset into the gallery server-side — idempotent, deterministic sort_order —
@@ -2068,35 +2065,19 @@ export default function GalleryDetailPage({
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                role="switch"
+              <ToggleSwitch
                 data-testid="tethered-enable-toggle"
-                aria-checked={tetheredEnabled}
-                aria-label={
-                  tetheredEnabled
-                    ? "Disable tethered capture"
-                    : "Enable tethered capture"
-                }
+                checked={tetheredEnabled}
+                label="Tethered capture"
+                checkedLabel="Enabled"
+                uncheckedLabel="Enable"
                 title={
                   tetheredEnabled
                     ? "Disable tethered capture"
                     : "Enable tethered capture"
                 }
-                onClick={handleTetheredEnableToggle}
-                className="publish-state-toggle"
-                data-state={tetheredEnabled ? "published" : "unpublished"}
-              >
-                <span
-                  className="publish-state-toggle__track"
-                  aria-hidden="true"
-                >
-                  <span className="publish-state-toggle__thumb" />
-                </span>
-                <span className="publish-state-toggle__label">
-                  {tetheredEnabled ? "Enabled" : "Enable"}
-                </span>
-              </button>
+                onCheckedChange={() => handleTetheredEnableToggle()}
+              />
               {tetheredEnabled && (
                 <span
                   className={cn(
@@ -2328,69 +2309,93 @@ export default function GalleryDetailPage({
                 </span>
               </div>
             )}
-            {editingTitle ? (
-              <input
-                type="text"
-                value={draftTitle}
-                onChange={(e) => setDraftTitle(e.target.value)}
-                onBlur={async () => {
-                  if (
-                    draftTitle.trim() &&
-                    draftTitle.trim() !== gallery.title
-                  ) {
-                    const t = getStoredAccessToken();
-                    if (t) {
-                      try {
-                        const updated = await updateGallery(t, id, {
-                          title: draftTitle.trim(),
-                        });
-                        setGallery(updated);
-                      } catch (err) {
-                        setError(
-                          err instanceof Error
-                            ? err.message
-                            : "Failed to update title",
-                        );
+            <div className="flex flex-wrap items-center gap-3">
+              {editingTitle ? (
+                <input
+                  type="text"
+                  value={draftTitle}
+                  onChange={(e) => setDraftTitle(e.target.value)}
+                  onBlur={async () => {
+                    if (
+                      draftTitle.trim() &&
+                      draftTitle.trim() !== gallery.title
+                    ) {
+                      const t = getStoredAccessToken();
+                      if (t) {
+                        try {
+                          const updated = await updateGallery(t, id, {
+                            title: draftTitle.trim(),
+                          });
+                          setGallery(updated);
+                        } catch (err) {
+                          setError(
+                            err instanceof Error
+                              ? err.message
+                              : "Failed to update title",
+                          );
+                        }
                       }
                     }
-                  }
-                  setEditingTitle(false);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                  if (e.key === "Escape") {
                     setEditingTitle(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter")
+                      (e.target as HTMLInputElement).blur();
+                    if (e.key === "Escape") {
+                      setEditingTitle(false);
+                      setDraftTitle(gallery.title);
+                    }
+                  }}
+                  className="min-w-0 flex-1 basis-full border-b-2 border-accent-primary bg-transparent text-2xl font-semibold text-text-primary focus:outline-none sm:basis-auto"
+                  autoFocus
+                />
+              ) : (
+                <h1
+                  className="min-w-0 text-2xl font-semibold text-text-primary transition-colors hover:text-accent-primary cursor-pointer group"
+                  onClick={() => {
                     setDraftTitle(gallery.title);
-                  }
-                }}
-                className="text-2xl font-semibold text-text-primary bg-transparent border-b-2 border-accent-primary focus:outline-none w-full"
-                autoFocus
-              />
-            ) : (
-              <h1
-                className="text-2xl font-semibold text-text-primary cursor-pointer hover:text-accent-primary transition-colors group"
-                onClick={() => {
-                  setDraftTitle(gallery.title);
-                  setEditingTitle(true);
-                }}
-                title="Click to edit title"
-              >
-                {gallery.title}
-                <svg
-                  className="inline-block w-4 h-4 ml-2 text-text-tertiary opacity-0 group-hover:opacity-100 transition-opacity"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
+                    setEditingTitle(true);
+                  }}
+                  title="Click to edit title"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"
-                  />
-                </svg>
-              </h1>
-            )}
+                  {gallery.title}
+                  <svg
+                    className="ml-2 inline-block h-4 w-4 text-text-tertiary opacity-0 transition-opacity group-hover:opacity-100"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={1.5}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"
+                    />
+                  </svg>
+                </h1>
+              )}
+              {/* Single publish-state toggle button — shows current state
+                  and acts as the action. Collapsed from the previous two-
+                  element layout (status badge + separate action button). */}
+              <ToggleSwitch
+                checked={gallery.is_published}
+                label="Gallery publish state"
+                checkedLabel="Published"
+                uncheckedLabel="Unpublished"
+                busy={publishing}
+                className="shrink-0"
+                // S5-G1: marks this as a mutating control so it visually disables
+                // under an impersonation (read-only) session — the server would
+                // 403 the updateGallery call anyway.
+                data-mutation
+                onCheckedChange={() => void togglePublishState()}
+                title={
+                  gallery.is_published
+                    ? "Unpublish - client links will stop working"
+                    : "Publish - clients will be able to view this gallery"
+                }
+              />
+            </div>
             {editingDesc ? (
               <textarea
                 value={draftDesc}
@@ -2458,45 +2463,6 @@ export default function GalleryDetailPage({
                 Settings
               </Link>
             </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Single publish-state toggle button — shows current state
-                and acts as the action. Collapsed from the previous two-
-                element layout (status badge + separate action button). */}
-            <button
-              type="button"
-              role="switch"
-              aria-checked={gallery.is_published}
-              aria-label={
-                gallery.is_published
-                  ? "Gallery is published. Switch to unpublished."
-                  : "Gallery is unpublished. Switch to published."
-              }
-              disabled={publishing}
-              // S5-G1: marks this as a mutating control so it visually disables
-              // under an impersonation (read-only) session — the server would
-              // 403 the updateGallery call anyway.
-              data-mutation
-              onClick={togglePublishState}
-              className="publish-state-toggle"
-              data-state={gallery.is_published ? "published" : "unpublished"}
-              title={
-                gallery.is_published
-                  ? "Unpublish - client links will stop working"
-                  : "Publish - clients will be able to view this gallery"
-              }
-            >
-              <span className="publish-state-toggle__track" aria-hidden="true">
-                <span className="publish-state-toggle__thumb" />
-              </span>
-              <span className="publish-state-toggle__label">
-                {publishing
-                  ? "Saving..."
-                  : gallery.is_published
-                    ? "Published"
-                    : "Unpublished"}
-              </span>
-            </button>
           </div>
         </div>
 
@@ -2641,21 +2607,6 @@ export default function GalleryDetailPage({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setManagingAlbums((value) => !value);
-                      cancelEditingAlbum();
-                    }}
-                    aria-pressed={managingAlbums}
-                    className={cn(
-                      "btn-tertiary px-3 py-1.5 text-xs",
-                      managingAlbums &&
-                        "border-accent-primary bg-accent-subtle text-accent-primary",
-                    )}
-                  >
-                    {managingAlbums ? "Done" : "Manage sub-galleries"}
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => setShowAlbumCreate(true)}
                     className="btn-primary px-3 py-1.5 text-xs"
                   >
@@ -2743,32 +2694,38 @@ export default function GalleryDetailPage({
                   const selectedLabel = selectedAlbum
                     ? selectedAlbum.name
                     : "All Photos";
+                  const selectedIsShareable =
+                    !selectedAlbum || albumIsEditable(selectedAlbum);
                   return (
                     <>
-                      <GlassIconButton
-                        type="button"
-                        size="md"
-                        variant="ghost"
-                        onClick={() => copyShareUrl(selectedAlbum?.id)}
-                        label={`Copy ${selectedLabel} share link`}
-                        aria-disabled={!gallery.is_published}
-                        className="shrink-0 border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
-                      >
-                        <Share />
-                      </GlassIconButton>
-                      <GlassIconButton
-                        type="button"
-                        size="md"
-                        variant="ghost"
-                        onClick={() =>
-                          openShareLink(selectedAlbum?.id, selectedLabel)
-                        }
-                        label={`Email ${selectedLabel} share link`}
-                        aria-disabled={!gallery.is_published}
-                        className="shrink-0 border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
-                      >
-                        <Envelope />
-                      </GlassIconButton>
+                      {selectedIsShareable && (
+                        <>
+                          <GlassIconButton
+                            type="button"
+                            size="md"
+                            variant="ghost"
+                            onClick={() => copyShareUrl(selectedAlbum?.id)}
+                            label={`Copy ${selectedLabel} share link`}
+                            aria-disabled={!gallery.is_published}
+                            className="shrink-0 border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
+                          >
+                            <Share />
+                          </GlassIconButton>
+                          <GlassIconButton
+                            type="button"
+                            size="md"
+                            variant="ghost"
+                            onClick={() =>
+                              openShareLink(selectedAlbum?.id, selectedLabel)
+                            }
+                            label={`Email ${selectedLabel} share link`}
+                            aria-disabled={!gallery.is_published}
+                            className="shrink-0 border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
+                          >
+                            <Envelope />
+                          </GlassIconButton>
+                        </>
+                      )}
                       {selectedAlbum && albumIsEditable(selectedAlbum) && (
                         <GlassIconButton
                           type="button"
@@ -2855,7 +2812,6 @@ export default function GalleryDetailPage({
                   const assetCount =
                     albumAssetIdsByAlbum[album.id]?.length ?? 0;
                   const isEditableAlbum = albumIsEditable(album);
-                  const isEditingAlbum = editingAlbumId === album.id;
                   const isSavingAlbum = savingAlbumId === album.id;
                   // QA #18: per-album drop target. When a user drags selected
                   // assets (or a native file list) onto an album chip, assign
@@ -2879,6 +2835,8 @@ export default function GalleryDetailPage({
                   return (
                     <div
                       key={album.id}
+                      // Smart utility albums stay filter-only; editable custom
+                      // albums keep share/email/delete actions.
                       className={cn(
                         "group flex shrink-0 items-stretch overflow-hidden rounded-xl border transition-all",
                         isActive
@@ -2929,97 +2887,31 @@ export default function GalleryDetailPage({
                         }
                       }}
                     >
-                      {isEditingAlbum ? (
-                        <div className="flex min-w-[16rem] items-center gap-2 px-2 py-1.5">
-                          <input
-                            type="text"
-                            value={editingAlbumName}
-                            onChange={(event) =>
-                              setEditingAlbumName(event.target.value)
-                            }
-                            onClick={(event) => event.stopPropagation()}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter")
-                                void handleRenameAlbum(album);
-                              if (event.key === "Escape") cancelEditingAlbum();
-                            }}
-                            className="input-base h-9 min-w-0 flex-1 text-xs"
-                            aria-label={`Rename ${album.name}`}
-                            autoFocus
-                          />
-                          <button
-                            type="button"
-                            onClick={() => void handleRenameAlbum(album)}
-                            disabled={isSavingAlbum || !editingAlbumName.trim()}
-                            className="btn-primary px-3 py-2 text-xs disabled:opacity-50"
-                          >
-                            {isSavingAlbum ? "Saving..." : "Save"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={cancelEditingAlbum}
-                            className="btn-tertiary px-3 py-2 text-xs"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setActiveAlbum(album.id)}
+                      <button
+                        type="button"
+                        onClick={() => setActiveAlbum(album.id)}
+                        className={cn(
+                          "flex max-w-[14rem] items-center gap-2 px-3 py-1.5 text-xs font-semibold transition-colors",
+                          isActive
+                            ? "text-accent-primary"
+                            : "text-text-secondary hover:text-text-primary",
+                        )}
+                        title={album.name}
+                      >
+                        <span className="truncate">{album.name}</span>
+                        <span
                           className={cn(
-                            "flex max-w-[14rem] items-center gap-2 px-3 py-1.5 text-xs font-semibold transition-colors",
+                            "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
                             isActive
-                              ? "text-accent-primary"
-                              : "text-text-secondary hover:text-text-primary",
+                              ? "bg-accent-primary/15 text-accent-primary"
+                              : "bg-surface-sunken text-text-tertiary",
                           )}
-                          title={album.name}
                         >
-                          <span className="truncate">{album.name}</span>
-                          <span
-                            className={cn(
-                              "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
-                              isActive
-                                ? "bg-accent-primary/15 text-accent-primary"
-                                : "bg-surface-sunken text-text-tertiary",
-                            )}
-                          >
-                            {assetCount}
-                          </span>
-                        </button>
-                      )}
-                      <div className="flex items-center border-l border-border-subtle">
-                        {managingAlbums ? (
-                          isEditableAlbum ? (
-                            <div className="flex items-center gap-1 px-1">
-                              <GlassIconButton
-                                type="button"
-                                size="md"
-                                variant="ghost"
-                                label={`Rename ${album.name}`}
-                                onClick={() => startEditingAlbum(album)}
-                                disabled={isSavingAlbum}
-                                className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
-                              >
-                                <Pencil />
-                              </GlassIconButton>
-                              <GlassIconButton
-                                type="button"
-                                size="md"
-                                variant="danger"
-                                label={`Delete ${album.name}`}
-                                onClick={() => void handleDeleteAlbum(album)}
-                                disabled={isSavingAlbum}
-                              >
-                                <Trash />
-                              </GlassIconButton>
-                            </div>
-                          ) : (
-                            <span className="px-3 py-2 text-[11px] font-medium text-text-tertiary">
-                              Built-in
-                            </span>
-                          )
-                        ) : (
+                          {assetCount}
+                        </span>
+                      </button>
+                      {isEditableAlbum && (
+                        <div className="flex items-center border-l border-border-subtle">
                           <div className="flex items-center gap-1 px-1">
                             <GlassIconButton
                               type="button"
@@ -3045,21 +2937,19 @@ export default function GalleryDetailPage({
                             >
                               <Envelope />
                             </GlassIconButton>
-                            {isEditableAlbum && (
-                              <GlassIconButton
-                                type="button"
-                                size="sm"
-                                variant="danger"
-                                label={`Delete ${album.name}`}
-                                onClick={() => void handleDeleteAlbum(album)}
-                                disabled={isSavingAlbum}
-                              >
-                                <Trash />
-                              </GlassIconButton>
-                            )}
+                            <GlassIconButton
+                              type="button"
+                              size="sm"
+                              variant="danger"
+                              label={`Delete ${album.name}`}
+                              onClick={() => void handleDeleteAlbum(album)}
+                              disabled={isSavingAlbum}
+                            >
+                              <Trash />
+                            </GlassIconButton>
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -3110,6 +3000,20 @@ export default function GalleryDetailPage({
               </p>
             </div>
 
+            {visibleAssets.length > 0 && (
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <span className="text-xs text-text-tertiary">
+                  {visibleAssets.length} photo
+                  {visibleAssets.length === 1 ? "" : "s"}
+                </span>
+                <GalleryViewSwitcher
+                  value={photoViewMode}
+                  onChange={setPhotoViewMode}
+                  size="sm"
+                />
+              </div>
+            )}
+
             {assets.length === 0 && upload.items.length === 0 ? (
               <p className="text-center text-xs text-text-tertiary py-4">
                 Upload your first photos to get started with this gallery.
@@ -3123,7 +3027,7 @@ export default function GalleryDetailPage({
                     : "No photos match the current filter."}
               </p>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className={cn(PHOTO_VIEW_CONTAINER[photoViewMode])}>
                 {pagedAssets.map((entry) => {
                   // A freshly-uploaded asset lands in the listing instantly
                   // (POST /galleries/{id}/assets → 201) but the thumbnail
@@ -3155,6 +3059,7 @@ export default function GalleryDetailPage({
                       key={entry.id}
                       className={cn(
                         "surface-panel relative cursor-pointer overflow-hidden transition-shadow hover:shadow-lg group",
+                        PHOTO_VIEW_TILE[photoViewMode],
                         bulkMode &&
                           entry.asset &&
                           isSelected &&
@@ -3216,7 +3121,7 @@ export default function GalleryDetailPage({
                             "absolute left-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 transition-colors",
                             isSelected
                               ? "border-accent-primary bg-accent-primary text-text-inverse"
-                              : "border-border-strong bg-surface-overlay text-text-secondary backdrop-blur-md",
+                              : "border-border-strong bg-surface-overlay text-text-secondary glass-blur-medium",
                           )}
                         >
                           {isSelected && <CheckCircle className="h-4 w-4" />}
@@ -3224,7 +3129,7 @@ export default function GalleryDetailPage({
                       )}
                       {favoriteCount > 0 && (
                         <div
-                          className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-xs font-medium text-white backdrop-blur-sm"
+                          className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-full bg-surface-scrim-strong/60 px-2 py-0.5 text-xs font-medium text-text-media glass-blur-subtle"
                           aria-label={`${favoriteCount} guest favorite${favoriteCount === 1 ? "" : "s"}`}
                         >
                           <svg
@@ -3243,6 +3148,14 @@ export default function GalleryDetailPage({
                           asset={entry.asset}
                           token={token}
                           isProcessing={isProcessing}
+                          aspectRatio={
+                            (photoViewMode === "masonry" ||
+                              photoViewMode === "justified") &&
+                            entry.asset?.width &&
+                            entry.asset?.height
+                              ? entry.asset.width / entry.asset.height
+                              : null
+                          }
                         />
                         {!bulkMode && entry.asset && !isProcessing && (
                           <div
@@ -3262,7 +3175,7 @@ export default function GalleryDetailPage({
                                   : `Share ${entry.asset.filename}`
                               }
                               className={cn(
-                                "!text-white shadow-elevation-1 ring-2 ring-surface-raised/60 hover:!text-white",
+                                "!text-text-media shadow-elevation-1 ring-2 ring-surface-raised/60 hover:!text-text-media",
                                 copiedAssetId === entry.asset.id
                                   ? "!bg-feedback-success hover:!bg-feedback-success/90"
                                   : "!bg-accent-primary hover:!bg-accent-primary/90",
@@ -3278,7 +3191,7 @@ export default function GalleryDetailPage({
                               size="md"
                               variant="danger"
                               label={`Delete ${entry.asset.filename}`}
-                              className="!bg-feedback-error !text-white shadow-elevation-1 ring-2 ring-surface-raised/60 hover:!bg-feedback-error/90 hover:!text-white"
+                              className="!bg-feedback-error !text-text-media shadow-elevation-1 ring-2 ring-surface-raised/60 hover:!bg-feedback-error/90 hover:!text-text-media"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setDeleteConfirm({
@@ -3356,7 +3269,7 @@ export default function GalleryDetailPage({
 
       {uploadDialogOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-surface-scrim p-2 backdrop-blur-md sm:p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-surface-scrim p-2 glass-blur-medium sm:p-4"
           onClick={(e) => {
             if (e.currentTarget === e.target && uploadDialogCanClose)
               setShowUploadDialog(false);
@@ -3839,36 +3752,14 @@ export default function GalleryDetailPage({
                       : "This gallery is unpublished. Uploaded photos stay private until you publish it."}
                   </p>
                   <div className="mt-4 flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={gallery.is_published}
-                      aria-label={
-                        gallery.is_published
-                          ? "Unpublish gallery"
-                          : "Publish gallery"
-                      }
-                      disabled={publishing}
-                      onClick={togglePublishState}
-                      className="publish-state-toggle"
-                      data-state={
-                        gallery.is_published ? "published" : "unpublished"
-                      }
-                    >
-                      <span
-                        className="publish-state-toggle__track"
-                        aria-hidden="true"
-                      >
-                        <span className="publish-state-toggle__thumb" />
-                      </span>
-                      <span className="publish-state-toggle__label">
-                        {publishing
-                          ? "Saving..."
-                          : gallery.is_published
-                            ? "Published"
-                            : "Publish gallery"}
-                      </span>
-                    </button>
+                    <ToggleSwitch
+                      checked={gallery.is_published}
+                      label="Gallery visibility"
+                      checkedLabel="Published"
+                      uncheckedLabel="Publish gallery"
+                      busy={publishing}
+                      onCheckedChange={() => void togglePublishState()}
+                    />
                   </div>
                   <div
                     data-testid="visibility-share-links"
@@ -3912,11 +3803,11 @@ export default function GalleryDetailPage({
       {/* Delete confirmation modal */}
       {deleteConfirm && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-surface-scrim-strong/50 glass-blur-subtle"
           onClick={() => setDeleteConfirm(null)}
         >
           <div
-            className="mx-4 w-full max-w-sm rounded-2xl border border-white/[0.08] bg-surface-container-high p-6 shadow-2xl"
+            className="mx-4 w-full max-w-sm rounded-2xl border border-text-media/10 bg-surface-container-high p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-semibold text-on-surface">
@@ -3931,7 +3822,7 @@ export default function GalleryDetailPage({
             </p>
             <div className="mt-6 flex justify-end gap-3">
               <button
-                className="rounded-xl px-4 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-white/[0.06]"
+                className="rounded-xl px-4 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-overlay/10"
                 onClick={() => setDeleteConfirm(null)}
               >
                 Cancel
@@ -4044,8 +3935,8 @@ export default function GalleryDetailPage({
           aria-live="polite"
           className={cn(
             "fixed top-6 right-6 z-50 min-w-[280px] max-w-sm",
-            "rounded-xl border border-border-default bg-surface-raised/95 backdrop-blur-md",
-            "shadow-xl shadow-black/20 px-4 py-3",
+            "rounded-xl border border-border-default bg-surface-raised/95 glass-blur-medium",
+            "shadow-xl px-4 py-3",
             "transition-all duration-500 ease-out",
             uploadToast.visible
               ? "translate-x-0 opacity-100"
@@ -4135,8 +4026,8 @@ export default function GalleryDetailPage({
           aria-live="polite"
           className={cn(
             "fixed right-6 z-50 min-w-[300px] max-w-md",
-            "rounded-xl border border-border-default bg-surface-raised/95 backdrop-blur-md",
-            "shadow-xl shadow-black/20 px-4 py-3",
+            "rounded-xl border border-border-default bg-surface-raised/95 glass-blur-medium",
+            "shadow-xl px-4 py-3",
             "transition-all duration-500 ease-out",
             // If the upload-complete toast is currently visible, stack
             // beneath it. Otherwise occupy the same top-6 anchor.

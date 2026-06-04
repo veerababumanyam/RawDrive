@@ -68,11 +68,13 @@ function validate(state: FormState): FieldErrors {
   const errs: FieldErrors = {};
   const title = state.title.trim();
   if (title.length < 3) errs.title = "Title must be at least 3 characters";
-  else if (title.length > 120) errs.title = "Title must be 120 characters or fewer";
+  else if (title.length > 120)
+    errs.title = "Title must be 120 characters or fewer";
 
   const dur = Number(state.expected_duration_minutes);
   if (!Number.isFinite(dur) || !Number.isInteger(dur) || dur < 5 || dur > 720) {
-    errs.expected_duration_minutes = "Duration must be between 5 and 720 minutes";
+    errs.expected_duration_minutes =
+      "Duration must be between 5 and 720 minutes";
   }
 
   if (!isValidTimezone(state.timezone)) {
@@ -95,7 +97,10 @@ export interface CreateStreamFormProps {
 
 export function CreateStreamForm({ initial }: CreateStreamFormProps = {}) {
   const router = useRouter();
-  const [state, setState] = useState<FormState>({ ...DEFAULT_STATE, ...initial });
+  const [state, setState] = useState<FormState>({
+    ...DEFAULT_STATE,
+    ...initial,
+  });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -143,14 +148,19 @@ export function CreateStreamForm({ initial }: CreateStreamFormProps = {}) {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        if (res.status === 402) { setInsufficientCredits(true); return; }
+        if (res.status === 402) {
+          setInsufficientCredits(true);
+          return;
+        }
         throw new Error(body.error || `Failed to create stream: ${res.status}`);
       }
       const created = await res.json();
       const id = (created as { id?: string } | null)?.id;
       if (id) router.push(`/streams/${id}/invite`);
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Failed to create stream");
+      setFormError(
+        err instanceof Error ? err.message : "Failed to create stream",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -182,7 +192,9 @@ export function CreateStreamForm({ initial }: CreateStreamFormProps = {}) {
           data-testid="insufficient-credits"
           className="rounded-xl border border-feedback-warning/20 bg-feedback-warning/10 px-4 py-3 text-sm text-text-primary"
         >
-          <p className="mb-2 font-medium">You don&apos;t have enough credits for this stream.</p>
+          <p className="mb-2 font-medium">
+            You don&apos;t have enough credits for this stream.
+          </p>
           <GlassIconButton
             type="button"
             size="sm"
@@ -197,7 +209,9 @@ export function CreateStreamForm({ initial }: CreateStreamFormProps = {}) {
       )}
 
       <div>
-        <label htmlFor="title" className={labelClass}>Title *</label>
+        <label htmlFor="title" className={labelClass}>
+          Title *
+        </label>
         <input
           id="title"
           data-testid="field-title"
@@ -206,11 +220,17 @@ export function CreateStreamForm({ initial }: CreateStreamFormProps = {}) {
           onChange={(e) => update("title", e.target.value)}
           className={inputClass}
         />
-        {errors.title && <p data-testid="error-title" className={errClass}>{errors.title}</p>}
+        {errors.title && (
+          <p data-testid="error-title" className={errClass}>
+            {errors.title}
+          </p>
+        )}
       </div>
 
       <div>
-        <label htmlFor="description" className={labelClass}>Description</label>
+        <label htmlFor="description" className={labelClass}>
+          Description
+        </label>
         <textarea
           id="description"
           data-testid="field-description"
@@ -223,7 +243,9 @@ export function CreateStreamForm({ initial }: CreateStreamFormProps = {}) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label htmlFor="package_id" className={labelClass}>Package</label>
+          <label htmlFor="package_id" className={labelClass}>
+            Package
+          </label>
           <select
             id="package_id"
             data-testid="field-package_id"
@@ -239,7 +261,9 @@ export function CreateStreamForm({ initial }: CreateStreamFormProps = {}) {
         </div>
 
         <div>
-          <label htmlFor="expected_duration_minutes" className={labelClass}>Expected duration (minutes)</label>
+          <label htmlFor="expected_duration_minutes" className={labelClass}>
+            Expected duration (minutes)
+          </label>
           <input
             id="expected_duration_minutes"
             data-testid="field-expected_duration_minutes"
@@ -247,11 +271,16 @@ export function CreateStreamForm({ initial }: CreateStreamFormProps = {}) {
             min={5}
             max={720}
             value={state.expected_duration_minutes}
-            onChange={(e) => update("expected_duration_minutes", e.target.value)}
+            onChange={(e) =>
+              update("expected_duration_minutes", e.target.value)
+            }
             className={inputClass}
           />
           {errors.expected_duration_minutes && (
-            <p data-testid="error-expected_duration_minutes" className={errClass}>
+            <p
+              data-testid="error-expected_duration_minutes"
+              className={errClass}
+            >
               {errors.expected_duration_minutes}
             </p>
           )}
@@ -260,12 +289,16 @@ export function CreateStreamForm({ initial }: CreateStreamFormProps = {}) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label htmlFor="access_policy" className={labelClass}>Access policy</label>
+          <label htmlFor="access_policy" className={labelClass}>
+            Access policy
+          </label>
           <select
             id="access_policy"
             data-testid="field-access_policy"
             value={state.access_policy}
-            onChange={(e) => update("access_policy", e.target.value as AccessPolicy)}
+            onChange={(e) =>
+              update("access_policy", e.target.value as AccessPolicy)
+            }
             className={inputClass}
           >
             <option value="link">Link (public)</option>
@@ -275,12 +308,16 @@ export function CreateStreamForm({ initial }: CreateStreamFormProps = {}) {
         </div>
 
         <div>
-          <label htmlFor="chat_policy" className={labelClass}>Chat policy</label>
+          <label htmlFor="chat_policy" className={labelClass}>
+            Chat policy
+          </label>
           <select
             id="chat_policy"
             data-testid="field-chat_policy"
             value={state.chat_policy}
-            onChange={(e) => update("chat_policy", e.target.value as ChatPolicy)}
+            onChange={(e) =>
+              update("chat_policy", e.target.value as ChatPolicy)
+            }
             className={inputClass}
           >
             <option value="open">Open</option>
@@ -291,7 +328,9 @@ export function CreateStreamForm({ initial }: CreateStreamFormProps = {}) {
       </div>
 
       <div>
-        <label htmlFor="calendar_event_url" className={labelClass}>Calendar event URL</label>
+        <label htmlFor="calendar_event_url" className={labelClass}>
+          Calendar event URL
+        </label>
         <input
           id="calendar_event_url"
           data-testid="field-calendar_event_url"
@@ -302,13 +341,17 @@ export function CreateStreamForm({ initial }: CreateStreamFormProps = {}) {
           className={inputClass}
         />
         {errors.calendar_event_url && (
-          <p data-testid="error-calendar_event_url" className={errClass}>{errors.calendar_event_url}</p>
+          <p data-testid="error-calendar_event_url" className={errClass}>
+            {errors.calendar_event_url}
+          </p>
         )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label htmlFor="client_profile_id" className={labelClass}>Client profile (optional)</label>
+          <label htmlFor="client_profile_id" className={labelClass}>
+            Client profile (optional)
+          </label>
           <input
             id="client_profile_id"
             data-testid="field-client_profile_id"
@@ -320,7 +363,9 @@ export function CreateStreamForm({ initial }: CreateStreamFormProps = {}) {
         </div>
 
         <div>
-          <label htmlFor="deal_link" className={labelClass}>Deal link (optional)</label>
+          <label htmlFor="deal_link" className={labelClass}>
+            Deal link (optional)
+          </label>
           <input
             id="deal_link"
             data-testid="field-deal_link"
@@ -331,13 +376,17 @@ export function CreateStreamForm({ initial }: CreateStreamFormProps = {}) {
             className={inputClass}
           />
           {errors.deal_link && (
-            <p data-testid="error-deal_link" className={errClass}>{errors.deal_link}</p>
+            <p data-testid="error-deal_link" className={errClass}>
+              {errors.deal_link}
+            </p>
           )}
         </div>
       </div>
 
       <div>
-        <label htmlFor="timezone" className={labelClass}>Timezone (IANA)</label>
+        <label htmlFor="timezone" className={labelClass}>
+          Timezone (IANA)
+        </label>
         <input
           id="timezone"
           data-testid="field-timezone"
@@ -352,7 +401,11 @@ export function CreateStreamForm({ initial }: CreateStreamFormProps = {}) {
             <option key={z} value={z} />
           ))}
         </datalist>
-        {errors.timezone && <p data-testid="error-timezone" className={errClass}>{errors.timezone}</p>}
+        {errors.timezone && (
+          <p data-testid="error-timezone" className={errClass}>
+            {errors.timezone}
+          </p>
+        )}
       </div>
 
       <div className="flex items-center justify-end gap-3 pt-2">

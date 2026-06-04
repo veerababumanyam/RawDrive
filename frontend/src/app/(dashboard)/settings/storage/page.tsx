@@ -2,7 +2,21 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import {
+  BarChart3,
+  Cloud,
+  HardDrive,
+  LineChart,
+  PieChart,
+  Zap,
+  type LucideIcon,
+} from "@/components/icons";
 import { getStoredAccessToken } from "@/lib/auth";
+import {
+  SettingsPageHeader,
+  SettingsPageShell,
+  SettingsPanel,
+} from "../_components/settings-page-shell";
 
 // ──────────────────────── Types ────────────────────────
 
@@ -21,8 +35,16 @@ interface StorageAnalytics {
     percent_used: number;
     warning_level: string;
   };
-  top_galleries: { gallery_id: string; gallery_name: string; used_bytes: number }[];
-  type_breakdown: { originals_bytes: number; derivatives_bytes: number; thumbnails_bytes: number };
+  top_galleries: {
+    gallery_id: string;
+    gallery_name: string;
+    used_bytes: number;
+  }[];
+  type_breakdown: {
+    originals_bytes: number;
+    derivatives_bytes: number;
+    thumbnails_bytes: number;
+  };
 }
 
 function formatBytes(bytes: number): string {
@@ -30,6 +52,38 @@ function formatBytes(bytes: number): string {
   const units = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+}
+
+function StorageMetricCard({
+  icon: Icon,
+  label,
+  value,
+  progress,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  progress?: number;
+}) {
+  return (
+    <div className="settings-metric-card">
+      <div className="settings-metric-card__header">
+        <span className="settings-metric-icon" aria-hidden="true">
+          <Icon />
+        </span>
+        <p className="settings-metric-label">{label}</p>
+      </div>
+      <p className="settings-metric-value">{value}</p>
+      {typeof progress === "number" ? (
+        <div className="settings-metric-track" aria-hidden="true">
+          <div
+            className="settings-metric-fill"
+            style={{ width: `${Math.min(Math.max(progress, 0), 100)}%` }}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 // ──────────────────────── Page ────────────────────────
@@ -52,8 +106,10 @@ export default function StorageSettingsPage() {
     fetch(`${apiUrl}/api/v1/storage/analytics`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     })
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => { if (data?.data) setAnalytics(data.data); })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.data) setAnalytics(data.data);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -67,7 +123,7 @@ export default function StorageSettingsPage() {
     fetch(`${apiUrl}/api/v1/workspaces/current/plan`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     })
-      .then((r) => r.ok ? r.json() : null)
+      .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         const tier = data?.plan_tier as PlanTier | undefined;
         setPlanTier(tier ?? "standard");
@@ -82,101 +138,242 @@ export default function StorageSettingsPage() {
   const usedDisplay = usage ? formatBytes(headlineBytes) : "—";
   const quotaDisplay = usage ? formatBytes(usage.quota_bytes) : "—";
   const pctUsed = usage?.percent_used ?? 0;
+  const safePctUsed = Math.min(Math.max(pctUsed, 0), 100);
   const warningLevel = usage?.warning_level ?? "none";
+  const statusLabel =
+    warningLevel === "critical"
+      ? "Storage Critical"
+      : warningLevel === "warning"
+        ? "Storage Warning"
+        : "Active";
+  const statusBadgeClass =
+    warningLevel === "critical"
+      ? "status-badge status-badge--danger"
+      : warningLevel === "warning"
+        ? "status-badge status-badge--warning"
+        : "status-badge status-badge--success";
+  const progressClass =
+    warningLevel === "critical"
+      ? "settings-progress-bar settings-progress-bar--critical"
+      : warningLevel === "warning"
+        ? "settings-progress-bar settings-progress-bar--warning"
+        : "settings-progress-bar";
+  const planLabel = planLoaded
+    ? `${(planTier || "standard").charAt(0).toUpperCase()}${(planTier || "standard").slice(1)}`
+    : "Loading";
+  const typeBreakdown = analytics?.type_breakdown;
+  const breakdownTotal =
+    (typeBreakdown?.originals_bytes ?? 0) +
+    (typeBreakdown?.derivatives_bytes ?? 0) +
+    (typeBreakdown?.thumbnails_bytes ?? 0);
+  const originalsPct =
+    breakdownTotal > 0
+      ? Math.round(
+          ((typeBreakdown?.originals_bytes ?? 0) / breakdownTotal) * 100,
+        )
+      : 0;
+  const derivativesPct =
+    breakdownTotal > 0
+      ? Math.round(
+          ((typeBreakdown?.derivatives_bytes ?? 0) / breakdownTotal) * 100,
+        )
+      : 0;
+  const thumbnailsPct =
+    breakdownTotal > 0 ? 100 - originalsPct - derivativesPct : 0;
+  const breakdownRows = [
+    {
+      key: "originals",
+      label: "Originals",
+      value: formatBytes(typeBreakdown?.originals_bytes ?? 0),
+      pct: originalsPct,
+    },
+    {
+      key: "derivatives",
+      label: "Derivatives",
+      value: formatBytes(typeBreakdown?.derivatives_bytes ?? 0),
+      pct: derivativesPct,
+    },
+    {
+      key: "thumbnails",
+      label: "Thumbnails",
+      value: formatBytes(typeBreakdown?.thumbnails_bytes ?? 0),
+      pct: thumbnailsPct,
+    },
+  ] as const;
+  const storageMetrics = [
+    {
+      key: "used",
+      label: "Used",
+      value: loading ? "Loading" : usedDisplay,
+      icon: HardDrive,
+    },
+    {
+      key: "quota",
+      label: "Quota",
+      value: quotaDisplay,
+      icon: Cloud,
+    },
+    {
+      key: "usage",
+      label: "Usage",
+      value: `${Math.round(pctUsed)}%`,
+      icon: BarChart3,
+      progress: safePctUsed,
+    },
+    {
+      key: "derivatives",
+      label: "Derivatives",
+      value: usage ? formatBytes(usage.derivative_bytes) : "—",
+      icon: Zap,
+    },
+  ];
 
   return (
-    <div className="min-h-screen bg-surface text-on-surface p-8">
-      <div className="max-w-4xl mx-auto">
-        <nav className="text-xs text-on-surface-variant mb-2">Settings <span className="mx-1">&rsaquo;</span> Storage</nav>
-        <h1 className="text-2xl font-semibold font-headline mb-8">Storage Settings</h1>
-
-        {/* ────────── Current Storage Usage (all plans) ────────── */}
-        <div className="rounded-2xl backdrop-blur-md bg-white/[0.04] border border-white/10 p-6 mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm text-on-surface-variant">Storage Used</p>
-            <span className={`text-xs px-3 py-1 rounded-full ${warningLevel === "critical" ? "bg-feedback-error/10 text-feedback-error" : warningLevel === "warning" ? "bg-feedback-warning/10 text-feedback-warning" : "bg-primary/10 text-primary"}`}>
-              {warningLevel === "critical" ? "Storage Critical" : warningLevel === "warning" ? "Storage Warning" : "Active"}
+    <SettingsPageShell>
+      <SettingsPageHeader
+        eyebrow="Storage"
+        title="Storage Settings"
+        badge={<span className={statusBadgeClass}>{statusLabel}</span>}
+        description="Review workspace storage usage, distribution, and upgrade options."
+        meta={
+          <>
+            <span className="status-badge status-badge--neutral">
+              {planLabel} plan
             </span>
-          </div>
-          <div className="h-2 rounded-full bg-surface-container overflow-hidden">
-            <div className={`h-full rounded-full ${warningLevel === "critical" ? "bg-feedback-error" : warningLevel === "warning" ? "bg-feedback-warning" : "bg-gradient-to-r from-primary to-primary-container"}`} style={{ width: `${Math.min(pctUsed, 100)}%` }} />
-          </div>
-          <p className="text-xs text-on-surface-variant mt-2">{loading ? "Loading..." : `${usedDisplay} / ${quotaDisplay} used`}</p>
-        </div>
+            <span className="status-badge status-badge--accent">
+              Managed B2 storage
+            </span>
+          </>
+        }
+      />
 
-        {/* ────────── Upgrade prompt (non-enterprise only) ────────── */}
-        {planLoaded && !isEnterprise && (
-          <div className="rounded-2xl backdrop-blur-md bg-white/[0.04] border border-white/10 p-6 mb-8">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center text-lg">⚡</div>
-              <div>
-                <h3 className="text-sm font-semibold">Need more storage?</h3>
-                <p className="text-xs text-on-surface-variant">Upgrade your plan to unlock additional storage and features.</p>
-              </div>
-            </div>
+      <div className="settings-metric-grid settings-metric-grid--storage">
+        {storageMetrics.map((metric) => (
+          <StorageMetricCard
+            key={metric.key}
+            icon={metric.icon}
+            label={metric.label}
+            value={metric.value}
+            progress={metric.progress}
+          />
+        ))}
+      </div>
+
+      <SettingsPanel
+        title="Current Storage Usage"
+        description="Usage includes originals plus generated WebP derivatives, matching billable object storage."
+        icon={<HardDrive />}
+        actions={<span className={statusBadgeClass}>{statusLabel}</span>}
+      >
+        <div className="settings-progress-track">
+          <div className={progressClass} style={{ width: `${safePctUsed}%` }} />
+        </div>
+        <p className="settings-panel-note">
+          {loading ? "Loading..." : `${usedDisplay} / ${quotaDisplay} used`}
+        </p>
+      </SettingsPanel>
+
+      {planLoaded && !isEnterprise && (
+        <SettingsPanel
+          title="Need more storage?"
+          description="Upgrade your plan to unlock additional storage and production features."
+          icon={<Zap />}
+          actions={
             <Link
               href="/settings/plans"
-              className="inline-block px-5 py-2 text-xs font-medium rounded-xl border border-primary/30 text-primary hover:bg-primary/5 transition-colors"
+              className="glass-button glass-button--md glass-button--surface"
             >
               Upgrade Plan
             </Link>
-          </div>
-        )}
+          }
+        >
+          <p className="settings-panel-copy">
+            Your workspace stays on managed Backblaze B2 storage. Enterprise
+            workspaces can add bring-your-own-storage overrides.
+          </p>
+        </SettingsPanel>
+      )}
 
-        {/* ────────── Storage Analytics (all plans) ────────── */}
-        <h2 className="text-lg font-semibold mt-4 mb-4">Storage Analytics</h2>
-        <div className="grid grid-cols-2 gap-6">
-          <div className="rounded-2xl backdrop-blur-md bg-white/[0.04] border border-white/10 p-5">
-            <h3 className="text-sm font-medium mb-4">Top Galleries by Size</h3>
-            {analytics?.top_galleries && analytics.top_galleries.length > 0 ? (
-              analytics.top_galleries.map((g) => {
+      <div className="settings-analytics-grid">
+        <SettingsPanel
+          title="Top Galleries by Size"
+          description="Largest galleries help you spot storage-heavy client work."
+          icon={<LineChart />}
+        >
+          {analytics?.top_galleries && analytics.top_galleries.length > 0 ? (
+            <div className="settings-form-grid">
+              {analytics.top_galleries.map((gallery) => {
                 const maxBytes = analytics.top_galleries[0]?.used_bytes || 1;
-                const pct = Math.round((g.used_bytes / maxBytes) * 100);
+                const pct = Math.round((gallery.used_bytes / maxBytes) * 100);
                 return (
-                  <div key={g.gallery_id} className="mb-3">
-                    <div className="flex justify-between text-xs mb-1"><span>{g.gallery_name}</span><span className="text-on-surface-variant">{formatBytes(g.used_bytes)}</span></div>
-                    <div className="h-1.5 rounded-full bg-surface-container"><div className="h-full rounded-full bg-primary/60" style={{ width: `${pct}%` }} /></div>
+                  <div
+                    key={gallery.gallery_id}
+                    className="settings-storage-row"
+                  >
+                    <div className="settings-storage-row__meta">
+                      <span className="settings-storage-row__name">
+                        {gallery.gallery_name}
+                      </span>
+                      <span>{formatBytes(gallery.used_bytes)}</span>
+                    </div>
+                    <div className="settings-storage-track">
+                      <div
+                        className="settings-storage-bar"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
                   </div>
                 );
-              })
-            ) : (
-              <p className="text-xs text-on-surface-variant">{loading ? "Loading..." : "No gallery data yet"}</p>
-            )}
-          </div>
-          <div className="rounded-2xl backdrop-blur-md bg-white/[0.04] border border-white/10 p-5">
-            <h3 className="text-sm font-medium mb-4">Storage Distribution</h3>
-            {(() => {
-              const tb = analytics?.type_breakdown;
-              const total = (tb?.originals_bytes ?? 0) + (tb?.derivatives_bytes ?? 0) + (tb?.thumbnails_bytes ?? 0);
-              const origPct = total > 0 ? Math.round(((tb?.originals_bytes ?? 0) / total) * 100) : 0;
-              const derivPct = total > 0 ? Math.round(((tb?.derivatives_bytes ?? 0) / total) * 100) : 0;
-              const thumbPct = total > 0 ? 100 - origPct - derivPct : 0;
-              return (
-                <>
-                  <div className="flex items-center justify-center h-32">
-                    <div className="w-28 h-28 rounded-full border-[12px] border-primary/60 border-t-secondary/60 border-r-tertiary/40" />
+              })}
+            </div>
+          ) : (
+            <p className="settings-panel-copy">
+              {loading ? "Loading..." : "No gallery data yet"}
+            </p>
+          )}
+        </SettingsPanel>
+
+        <SettingsPanel
+          title="Storage Distribution"
+          description="Original files, WebP derivatives, and thumbnails are tracked separately."
+          icon={<PieChart />}
+        >
+          {breakdownTotal > 0 ? (
+            <>
+              <div className="settings-storage-stack" aria-hidden="true">
+                <div
+                  className="settings-storage-segment settings-storage-segment--originals"
+                  style={{ width: `${originalsPct}%` }}
+                />
+                <div
+                  className="settings-storage-segment settings-storage-segment--derivatives"
+                  style={{ width: `${derivativesPct}%` }}
+                />
+                <div
+                  className="settings-storage-segment settings-storage-segment--thumbnails"
+                  style={{ width: `${thumbnailsPct}%` }}
+                />
+              </div>
+              <div className="settings-legend-list settings-legend-list--spaced">
+                {breakdownRows.map((row) => (
+                  <div key={row.key} className="settings-legend-row">
+                    <span
+                      className={`settings-legend-dot settings-storage-segment--${row.key}`}
+                    />
+                    <span>{row.label}</span>
+                    <span>{row.value}</span>
+                    <span>{row.pct}%</span>
                   </div>
-                  <div className="space-y-2 mt-4">
-                    {[
-                      { label: "Originals", value: formatBytes(tb?.originals_bytes ?? 0), pct: `${origPct}%`, color: "bg-primary/60" },
-                      { label: "Derivatives", value: formatBytes(tb?.derivatives_bytes ?? 0), pct: `${derivPct}%`, color: "bg-secondary/60" },
-                      { label: "Thumbnails", value: formatBytes(tb?.thumbnails_bytes ?? 0), pct: `${thumbPct}%`, color: "bg-tertiary/40" },
-                    ].map((t) => (
-                      <div key={t.label} className="flex items-center gap-2 text-xs">
-                        <div className={`w-2.5 h-2.5 rounded-full ${t.color}`} />
-                        <span className="text-on-surface-variant">{t.label}</span>
-                        <span className="ml-auto text-on-surface-variant">{t.value}</span>
-                        <span className="w-8 text-right">{t.pct}</span>
-                      </div>
-                    ))}
-                    {total === 0 && !loading && <p className="text-xs text-on-surface-variant text-center mt-2">No storage data yet</p>}
-                  </div>
-                </>
-              );
-            })()}
-          </div>
-        </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="settings-panel-copy">
+              {loading ? "Loading..." : "No storage data yet"}
+            </p>
+          )}
+        </SettingsPanel>
       </div>
-    </div>
+    </SettingsPageShell>
   );
 }

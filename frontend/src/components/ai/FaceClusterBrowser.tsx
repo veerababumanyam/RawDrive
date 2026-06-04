@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getFaceClusters, renameCluster, type ClusterSummary } from "@/lib/api/ai";
+import {
+  getFaceClusters,
+  renameCluster,
+  type ClusterSummary,
+} from "@/lib/api/ai";
 
 interface FaceClusterBrowserProps {
   token: string;
@@ -9,7 +13,11 @@ interface FaceClusterBrowserProps {
   onSelectCluster?: (clusterLabel: string) => void;
 }
 
-export function FaceClusterBrowser({ token, galleryId, onSelectCluster }: FaceClusterBrowserProps) {
+export function FaceClusterBrowser({
+  token,
+  galleryId,
+  onSelectCluster,
+}: FaceClusterBrowserProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const requestKey = galleryId || "__all__";
@@ -77,7 +85,9 @@ export function FaceClusterBrowser({ token, galleryId, onSelectCluster }: FaceCl
   if (clusters.length === 0) {
     return (
       <div className="rounded-xl border border-border-default bg-surface-raised p-8 text-center">
-        <p className="text-text-secondary text-sm">No people detected yet. Upload photos to get started.</p>
+        <p className="text-text-secondary text-sm">
+          No people detected yet. Upload photos to get started.
+        </p>
       </div>
     );
   }
@@ -100,7 +110,9 @@ export function FaceClusterBrowser({ token, galleryId, onSelectCluster }: FaceCl
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
               onBlur={() => handleRename(cluster.cluster_label)}
-              onKeyDown={(e) => e.key === "Enter" && handleRename(cluster.cluster_label)}
+              onKeyDown={(e) =>
+                e.key === "Enter" && handleRename(cluster.cluster_label)
+              }
               className="w-full rounded border border-border-default bg-surface-base px-2 py-1 text-sm text-text-primary text-center"
             />
           ) : (

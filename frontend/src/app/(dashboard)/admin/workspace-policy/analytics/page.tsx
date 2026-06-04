@@ -68,8 +68,8 @@ export default function UploadModerationAnalyticsPage() {
           Upload Screening Analytics
         </h1>
         <p className="mt-2 text-sm text-text-secondary">
-          Block rate, desktop escalation, and Tier D causes over the
-          configured analytics window.
+          Block rate, desktop escalation, and Tier D causes over the configured
+          analytics window.
         </p>
       </div>
 

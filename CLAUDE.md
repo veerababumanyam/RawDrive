@@ -57,6 +57,10 @@ These are **load-bearing**. Violations have caused real production bugs. `AGENTS
   - **TOTP (RFC 6238)** → opt-in login step-up after password. `/auth/login` returns `{mfa_required, mfa_token, challenge:"totp"}`; client calls `/auth/verify-totp`.
   - TOTP secrets are envelope-encrypted with `PLATFORM_SETTINGS_KEK`. Recovery codes are bcrypt-hashed. `mfa_verified` claim preserved across refresh via `refresh_sessions.mfa_verified`.
 - **Upload UX:** Lives inside a gallery/sub-gallery/album. No `/upload` route in sidebar nav. A legacy `/upload/page.tsx` may exist but must not be linked.
+- **Performance hot paths:** Gallery/media work must batch asset hydration, window
+  large filmstrips/grids, avoid double full-file upload reads, and claim queued
+  jobs atomically with `FOR UPDATE SKIP LOCKED`. See `AGENTS.md` for the full
+  playbook before changing gallery, upload, storage, or worker paths.
 
 ### UI & Design Tokens
 - **`design-tokens.json` is the single source of truth.** Edit it, then run `node tools/cobolt-sync-tokens.js sync` to regenerate `frontend/src/index.css`, `frontend/src/lib/tokens.ts`, `.stitch/DESIGN.md`, `component-registry.json`. Never edit downstream files directly for token values.
@@ -83,6 +87,8 @@ These are **load-bearing**. Violations have caused real production bugs. `AGENTS
 - Placing `STORAGE_DRIVER=local` fallback paths anywhere.
 - Mocking the dashboard storage widget — it reads from `workspace_storage`.
 - Showing the BYOS wizard to standard/pro users. The managed-B2 row is read-only for all tiers; the BYOS wizard is enterprise-only and offers AWS S3, MinIO, and Backblaze B2 as override providers.
+- Reintroducing gallery N+1 asset fetches, full-size lightbox filmstrips, fake
+  chunked hashes that buffer the whole file, or list-then-mark worker claims.
 - Working in sibling `RawDrive*` directories — the active project is **RawDriveCobolt** only.
 
 ---

@@ -23,7 +23,13 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import type { GalleryProduct, PrintPreflightResult } from "@/lib/api/commerce";
 
 // Mock the commerce API so the component never hits the network. The mock
@@ -54,7 +60,9 @@ function makeProduct(overrides: Partial<GalleryProduct> = {}): GalleryProduct {
   } as GalleryProduct;
 }
 
-function makePreflight(quality: PrintPreflightResult["quality"]): PrintPreflightResult {
+function makePreflight(
+  quality: PrintPreflightResult["quality"],
+): PrintPreflightResult {
   return {
     quality,
     effective_dpi: 300,
@@ -76,7 +84,9 @@ describe("ProductPreview — F-088 semantic feedback tokens", () => {
     // path deterministically by submitting without a client email.
     render(
       <ProductPreview
-        product={makeProduct({ product_type: "digital" as GalleryProduct["product_type"] })}
+        product={makeProduct({
+          product_type: "digital" as GalleryProduct["product_type"],
+        })}
         slug="studio-x"
       />,
     );

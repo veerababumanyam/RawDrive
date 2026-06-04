@@ -81,7 +81,7 @@ func (r *GalleryAssetRepo) Add(ctx context.Context, galleryID, assetID, workspac
 
 // sqlGalleryAssetLinkServer is the server-side finalize-time link used by the
 // chunked upload path (S3-G4 / AREA-UPLOADER-3). It differs from
-// sqlGalleryAssetAdd in two load-bearing ways:
+// sqlGalleryAssetAdd in three load-bearing ways:
 //
 //   - sort_order is assigned server-side as COALESCE(MAX(sort_order),0)+1 within
 //     the gallery (S3-G5) so newly finalized assets append deterministically to
@@ -91,13 +91,18 @@ func (r *GalleryAssetRepo) Add(ctx context.Context, galleryID, assetID, workspac
 //     server-side link is a harmless no-op that must NOT clobber the existing
 //     sort_order. This is what makes the dual-path (server + legacy client)
 //     linkage idempotent.
+//   - if the gallery has no valid cover_asset_id yet, the query sets it to the
+//     first active gallery asset by sort_order/added_at. This makes the first
+//     uploaded photo the persistent default cover while preserving any
+//     photographer-set cover that still points at a live asset.
 //
 // The same workspace-join tenant guard as sqlGalleryAssetAdd is retained: the
 // row is pruned to zero unless the gallery and asset resolve to the SAME
 // workspace_id, so a cross-workspace asset can never be linked even via this
 // path. The MAX subquery is correlated to the gallery so it scans only that
 // gallery's link rows (idx_gallery_assets_gallery_id).
-const sqlGalleryAssetLinkServer = `INSERT INTO gallery_assets (id, gallery_id, asset_id, sort_order, added_at)
+const sqlGalleryAssetLinkServer = `WITH inserted AS (
+		 INSERT INTO gallery_assets (id, gallery_id, asset_id, sort_order, added_at)
 		 SELECT $1, g.id, a.id,
 		        COALESCE((SELECT MAX(ga.sort_order) FROM gallery_assets ga WHERE ga.gallery_id = g.id), 0) + 1,
 		        $4
@@ -105,7 +110,58 @@ const sqlGalleryAssetLinkServer = `INSERT INTO gallery_assets (id, gallery_id, a
 		 JOIN assets a ON a.workspace_id = g.workspace_id
 		 WHERE g.id = $2 AND a.id = $3 AND a.deleted_at IS NULL
 		   AND g.workspace_id = $5
-		 ON CONFLICT (gallery_id, asset_id) DO NOTHING`
+		 ON CONFLICT (gallery_id, asset_id) DO NOTHING
+		 RETURNING gallery_id, asset_id, sort_order, added_at
+		),
+		linked AS (
+		 SELECT gallery_id, asset_id FROM inserted
+		 UNION ALL
+		 SELECT ga.gallery_id, ga.asset_id
+		 FROM gallery_assets ga
+		 JOIN galleries g ON g.id = ga.gallery_id
+		 JOIN assets a ON a.id = ga.asset_id AND a.workspace_id = g.workspace_id
+		 WHERE ga.gallery_id = $2
+		   AND ga.asset_id = $3
+		   AND g.workspace_id = $5
+		   AND a.deleted_at IS NULL
+		   AND NOT EXISTS (SELECT 1 FROM inserted)
+		),
+		cover_candidates AS (
+		 SELECT gallery_id, asset_id, sort_order, added_at FROM inserted
+		 UNION ALL
+		 SELECT ga.gallery_id, ga.asset_id, ga.sort_order, ga.added_at
+		 FROM gallery_assets ga
+		 JOIN galleries g ON g.id = ga.gallery_id
+		 JOIN assets a ON a.id = ga.asset_id AND a.workspace_id = g.workspace_id
+		 WHERE ga.gallery_id = $2
+		   AND g.workspace_id = $5
+		   AND a.deleted_at IS NULL
+		),
+		default_cover AS (
+		 UPDATE galleries g
+		 SET cover_asset_id = (
+		       SELECT cc.asset_id
+		       FROM cover_candidates cc
+		       WHERE cc.gallery_id = g.id
+		       ORDER BY cc.sort_order ASC, cc.added_at ASC, cc.asset_id ASC
+		       LIMIT 1
+		     ),
+		     updated_at = $4
+		 WHERE g.id = $2
+		   AND g.workspace_id = $5
+		   AND NOT EXISTS (
+		     SELECT 1
+		     FROM assets current_cover
+		     WHERE current_cover.id = g.cover_asset_id
+		       AND current_cover.workspace_id = g.workspace_id
+		       AND current_cover.deleted_at IS NULL
+		   )
+		   AND EXISTS (SELECT 1 FROM linked)
+		 RETURNING g.id
+		)
+		SELECT EXISTS (SELECT 1 FROM inserted),
+		       EXISTS (SELECT 1 FROM linked),
+		       EXISTS (SELECT 1 FROM default_cover)`
 
 // LinkFinalizedAsset links a just-finalized upload asset into a gallery
 // server-side, assigning the next sort_order within the gallery and treating an
@@ -116,33 +172,22 @@ const sqlGalleryAssetLinkServer = `INSERT INTO gallery_assets (id, gallery_id, a
 //
 // Unlike Add, a no-op caused by an existing link is NOT an error: ON CONFLICT
 // DO NOTHING means the legacy client link winning the race still leaves this
-// call successful. We therefore distinguish "nothing inserted because already
-// linked" (success) from "nothing inserted because the asset is foreign/missing"
-// (ErrAssetNotInWorkspace) by re-checking existence of the link row.
+// call successful. The SQL returns whether the asset is now linked (new insert
+// or pre-existing active link); if neither is true, the asset was foreign,
+// missing, or deleted.
 func (r *GalleryAssetRepo) LinkFinalizedAsset(ctx context.Context, galleryID, assetID, workspaceID uuid.UUID) error {
-	tag, err := r.pool.Exec(ctx, sqlGalleryAssetLinkServer,
+	var inserted bool
+	var linked bool
+	var defaulted bool
+	err := r.pool.QueryRow(ctx, sqlGalleryAssetLinkServer,
 		uuid.New(), galleryID, assetID, time.Now(), workspaceID,
-	)
+	).Scan(&inserted, &linked, &defaulted)
 	if err != nil {
 		return fmt.Errorf("gallery asset link finalized: %w", err)
 	}
-	if tag.RowsAffected() > 0 {
-		// A new link row was inserted.
+	_ = defaulted // scanned so the data-modifying CTE is part of the query contract.
+	if inserted || linked {
 		return nil
-	}
-	// Zero rows affected: either the asset is foreign/missing (the workspace
-	// join pruned the row) OR the link already exists (ON CONFLICT DO NOTHING).
-	// Disambiguate so a genuine cross-tenant attempt is rejected while an
-	// idempotent re-link is treated as success.
-	var exists bool
-	if err := r.pool.QueryRow(ctx,
-		`SELECT EXISTS (SELECT 1 FROM gallery_assets WHERE gallery_id = $1 AND asset_id = $2)`,
-		galleryID, assetID,
-	).Scan(&exists); err != nil {
-		return fmt.Errorf("gallery asset link finalized existence check: %w", err)
-	}
-	if exists {
-		return nil // already linked — idempotent no-op
 	}
 	return ErrAssetNotInWorkspace
 }

@@ -16,7 +16,14 @@ export default function RentalsMarketplacePage() {
       previewAlt="RawDrive camera rentals marketplace preview"
       primaryCta={{ href: "/contact", label: "Request a rental" }}
       secondaryCta={{ href: "/register", label: "Join RawDrive" }}
-      filters={["Sony", "Canon", "Lights", "Lenses", "Mumbai", "Insurance ready"]}
+      filters={[
+        "Sony",
+        "Canon",
+        "Lights",
+        "Lenses",
+        "Mumbai",
+        "Insurance ready",
+      ]}
       answer="RawDrive camera rentals are best for studios that need production-ready cameras, lenses, lights, audio, and support kits from verified regional partners."
       cards={[
         {

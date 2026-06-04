@@ -61,7 +61,10 @@ export default function PhotoTrailPage() {
         const res = await authFetch("/api/v1/photo-trail?limit=50", {
           signal: controller.signal,
         });
-        if (res.status === 403) throw new Error("Photo Trail requires a Pro plan. Please upgrade to access this feature.");
+        if (res.status === 403)
+          throw new Error(
+            "Photo Trail requires a Pro plan. Please upgrade to access this feature.",
+          );
         if (!res.ok) throw new Error(`Failed to load trail: ${res.status}`);
         const body = (await res.json()) as PhotoTrailResponse;
         setEvents(Array.isArray(body.events) ? body.events : []);
@@ -76,11 +79,14 @@ export default function PhotoTrailPage() {
     return () => controller.abort();
   }, []);
 
-  const grouped = events.reduce<Record<string, PhotoTrailEvent[]>>((acc, ev) => {
-    const key = groupLabel(ev.created_at);
-    (acc[key] ||= []).push(ev);
-    return acc;
-  }, {});
+  const grouped = events.reduce<Record<string, PhotoTrailEvent[]>>(
+    (acc, ev) => {
+      const key = groupLabel(ev.created_at);
+      (acc[key] ||= []).push(ev);
+      return acc;
+    },
+    {},
+  );
 
   return (
     <main className="max-w-3xl mx-auto p-6">
@@ -100,7 +106,9 @@ export default function PhotoTrailPage() {
 
       {!loading && !error && events.length === 0 && (
         <div className="rounded-lg border border-border-subtle p-8 text-center">
-          <p className="text-text-secondary">No activity yet in the last 30 days.</p>
+          <p className="text-text-secondary">
+            No activity yet in the last 30 days.
+          </p>
         </div>
       )}
 
@@ -114,10 +122,17 @@ export default function PhotoTrailPage() {
             </h2>
             <ul className="divide-y divide-border-subtle border border-border-subtle rounded-md overflow-hidden">
               {items.map((ev) => (
-                <li key={ev.id} className="px-4 py-3 flex items-center justify-between">
+                <li
+                  key={ev.id}
+                  className="px-4 py-3 flex items-center justify-between"
+                >
                   <div>
-                    <p className="text-sm font-medium">{actionLabel(ev.action)}</p>
-                    <p className="text-xs text-text-tertiary font-mono">{ev.resource_id}</p>
+                    <p className="text-sm font-medium">
+                      {actionLabel(ev.action)}
+                    </p>
+                    <p className="text-xs text-text-tertiary font-mono">
+                      {ev.resource_id}
+                    </p>
                   </div>
                   <time className="text-xs text-text-tertiary">
                     {new Date(ev.created_at).toLocaleString()}

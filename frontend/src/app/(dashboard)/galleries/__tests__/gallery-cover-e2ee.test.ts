@@ -32,4 +32,16 @@ describe("gallery cover editor E2EE preview contracts", () => {
       expect(readFileSync(path, "utf8")).not.toContain("getAssetPreviewUrl");
     }
   });
+
+  it("keeps owner gallery preview surfaces explicit about missing encrypted keys", () => {
+    for (const path of [
+      "src/app/(dashboard)/galleries/page.tsx",
+      "src/app/(dashboard)/dashboard/page.tsx",
+    ].map((sourcePath) => join(process.cwd(), sourcePath))) {
+      const source = readFileSync(path, "utf8");
+      expect(source).toContain("MEDIA_KEY_UNAVAILABLE_MESSAGE");
+      expect(source).toContain("Encrypted cover key unavailable");
+      expect(source).toContain("<Lock");
+    }
+  });
 });

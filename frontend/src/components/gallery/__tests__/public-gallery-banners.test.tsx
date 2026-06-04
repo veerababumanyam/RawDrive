@@ -7,7 +7,10 @@ import type { GalleryBanner } from "@/lib/api/commerce";
 // listPublicBanners is stubbed to satisfy the client-side fetch
 // fallback; trackGalleryEvent is the target of assertions.
 vi.mock("@/lib/api/commerce", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/api/commerce")>("@/lib/api/commerce");
+  const actual =
+    await vi.importActual<typeof import("@/lib/api/commerce")>(
+      "@/lib/api/commerce",
+    );
   return {
     ...actual,
     listPublicBanners: vi.fn(),
@@ -112,9 +115,10 @@ describe("PublicGalleryBanners — CTA URL scheme hardening (F-050)", () => {
         initialBanners={[fakeBanner({ cta_url: "https://example.com/prints" })]}
       />,
     );
-    expect(
-      screen.getByRole("link", { name: /shop prints/i }),
-    ).toHaveAttribute("href", "https://example.com/prints");
+    expect(screen.getByRole("link", { name: /shop prints/i })).toHaveAttribute(
+      "href",
+      "https://example.com/prints",
+    );
   });
 
   it("renders the CTA for a safe http URL", () => {
@@ -124,7 +128,9 @@ describe("PublicGalleryBanners — CTA URL scheme hardening (F-050)", () => {
         initialBanners={[fakeBanner({ cta_url: "http://example.com/prints" })]}
       />,
     );
-    expect(screen.getByRole("link", { name: /shop prints/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /shop prints/i }),
+    ).toBeInTheDocument();
   });
 
   it("renders the CTA for a site-relative path", () => {
@@ -134,16 +140,19 @@ describe("PublicGalleryBanners — CTA URL scheme hardening (F-050)", () => {
         initialBanners={[fakeBanner({ cta_url: "/galleries/my-slug/shop" })]}
       />,
     );
-    expect(
-      screen.getByRole("link", { name: /shop prints/i }),
-    ).toHaveAttribute("href", "/galleries/my-slug/shop");
+    expect(screen.getByRole("link", { name: /shop prints/i })).toHaveAttribute(
+      "href",
+      "/galleries/my-slug/shop",
+    );
   });
 
   it("drops the CTA for a javascript: URI (stored XSS) but keeps the banner", () => {
     render(
       <PublicGalleryBanners
         slug="my-slug"
-        initialBanners={[fakeBanner({ cta_url: "javascript:alert(document.cookie)" })]}
+        initialBanners={[
+          fakeBanner({ cta_url: "javascript:alert(document.cookie)" }),
+        ]}
       />,
     );
     // The banner content still renders; only the dangerous CTA is removed.

@@ -46,8 +46,10 @@ export function PINEntry({ streamId, onAuthenticated }: PINEntryProps) {
       onAuthenticated(pair);
     } catch (err) {
       if (err instanceof ViewerApiError) {
-        if (err.status === 401) setError("That PIN is invalid. Please try again.");
-        else if (err.status === 429) setError("Too many attempts. Please wait and retry.");
+        if (err.status === 401)
+          setError("That PIN is invalid. Please try again.");
+        else if (err.status === 429)
+          setError("Too many attempts. Please wait and retry.");
         else setError("Could not verify PIN. Please try again.");
       } else {
         setError("Network error. Please try again.");
@@ -66,14 +68,20 @@ export function PINEntry({ streamId, onAuthenticated }: PINEntryProps) {
       data-testid="pin-entry"
     >
       <div className="space-y-1">
-        <h1 className="text-lg font-semibold text-text-primary">Enter stream PIN</h1>
+        <h1 className="text-lg font-semibold text-text-primary">
+          Enter stream PIN
+        </h1>
         <p className="text-sm text-text-secondary">
-          This stream is PIN-protected. Enter the code your host shared with you.
+          This stream is PIN-protected. Enter the code your host shared with
+          you.
         </p>
       </div>
 
       <div>
-        <label htmlFor={inputId} className="block text-sm font-medium text-text-primary mb-1.5">
+        <label
+          htmlFor={inputId}
+          className="block text-sm font-medium text-text-primary mb-1.5"
+        >
           PIN
         </label>
         <input
@@ -84,12 +92,18 @@ export function PINEntry({ streamId, onAuthenticated }: PINEntryProps) {
           autoComplete="off"
           autoFocus
           value={pin}
-          onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
+          onChange={(e) =>
+            setPin(e.target.value.replace(/\D/g, "").slice(0, 8))
+          }
           maxLength={8}
           className="w-full rounded-xl border border-border-primary bg-surface-base px-4 py-3 text-base tracking-[0.5em] text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 min-h-[44px]"
         />
         {error && (
-          <p data-testid="pin-error" role="alert" className="mt-2 text-sm text-feedback-error">
+          <p
+            data-testid="pin-error"
+            role="alert"
+            className="mt-2 text-sm text-feedback-error"
+          >
             {error}
           </p>
         )}

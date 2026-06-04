@@ -81,7 +81,9 @@ export default function SecuritySettingsPage() {
         window.location.assign("/dealer");
       }
     } catch (err) {
-      setPwError(err instanceof Error ? err.message : "Password change failed.");
+      setPwError(
+        err instanceof Error ? err.message : "Password change failed.",
+      );
     } finally {
       setPwBusy(false);
     }
@@ -119,7 +121,10 @@ export default function SecuritySettingsPage() {
     authedFetch("/auth/mfa/status")
       .then(async (res) => {
         if (cancelled) return;
-        if (!res.ok) { setError("Could not load MFA status."); return; }
+        if (!res.ok) {
+          setError("Could not load MFA status.");
+          return;
+        }
         const body = (await res.json()) as StatusResponse;
         if (!cancelled) setStatus(body);
       })
@@ -129,7 +134,9 @@ export default function SecuritySettingsPage() {
       .finally(() => {
         if (!cancelled) setStatusLoading(false);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function handleStartEnrollment() {
@@ -144,7 +151,9 @@ export default function SecuritySettingsPage() {
             "MFA is not configured on this server. Ask your administrator to set PLATFORM_SETTINGS_KEK.",
           );
         } else if (res.status === 409) {
-          setError("MFA is already enrolled. Remove the existing enrollment first.");
+          setError(
+            "MFA is already enrolled. Remove the existing enrollment first.",
+          );
         } else {
           setError(body.error || "Could not start enrollment.");
         }
@@ -194,7 +203,9 @@ export default function SecuritySettingsPage() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      setError("Clipboard copy failed. Please write these codes down manually.");
+      setError(
+        "Clipboard copy failed. Please write these codes down manually.",
+      );
     }
   }
 
@@ -235,7 +246,9 @@ export default function SecuritySettingsPage() {
             <Lock className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="font-headline text-xl font-bold text-text-primary">Change Password</h2>
+            <h2 className="font-headline text-xl font-bold text-text-primary">
+              Change Password
+            </h2>
             {changeRequired && (
               <p className="mt-0.5 text-sm text-feedback-warning font-medium">
                 You must set a new password before continuing.
@@ -245,18 +258,27 @@ export default function SecuritySettingsPage() {
         </div>
 
         {pwDone ? (
-          <div role="alert" className="rounded-2xl border border-feedback-success/20 bg-feedback-success/10 px-4 py-3 text-sm text-feedback-success">
+          <div
+            role="alert"
+            className="rounded-2xl border border-feedback-success/20 bg-feedback-success/10 px-4 py-3 text-sm text-feedback-success"
+          >
             Password updated successfully.
           </div>
         ) : (
           <form onSubmit={handleChangePassword} className="space-y-4">
             {pwError && (
-              <div role="alert" className="rounded-2xl border border-feedback-error/20 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error">
+              <div
+                role="alert"
+                className="rounded-2xl border border-feedback-error/20 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error"
+              >
                 {pwError}
               </div>
             )}
             <div>
-              <label htmlFor="pw-current" className="block text-sm font-medium text-text-secondary mb-1">
+              <label
+                htmlFor="pw-current"
+                className="block text-sm font-medium text-text-secondary mb-1"
+              >
                 Current Password *
               </label>
               <input
@@ -271,7 +293,10 @@ export default function SecuritySettingsPage() {
               />
             </div>
             <div>
-              <label htmlFor="pw-new" className="block text-sm font-medium text-text-secondary mb-1">
+              <label
+                htmlFor="pw-new"
+                className="block text-sm font-medium text-text-secondary mb-1"
+              >
                 New Password *
               </label>
               <input
@@ -287,7 +312,10 @@ export default function SecuritySettingsPage() {
               />
             </div>
             <div>
-              <label htmlFor="pw-confirm" className="block text-sm font-medium text-text-secondary mb-1">
+              <label
+                htmlFor="pw-confirm"
+                className="block text-sm font-medium text-text-secondary mb-1"
+              >
                 Confirm New Password *
               </label>
               <input
@@ -327,8 +355,9 @@ export default function SecuritySettingsPage() {
             Two-factor authentication (TOTP)
           </h2>
           <p className="mt-2 text-sm text-text-secondary">
-            Add a second factor using an authenticator app such as 1Password, Authy, or Google
-            Authenticator. After enrollment, every sign-in requires a fresh 6-digit code.
+            Add a second factor using an authenticator app such as 1Password,
+            Authy, or Google Authenticator. After enrollment, every sign-in
+            requires a fresh 6-digit code.
           </p>
 
           <div className="mt-6 rounded-2xl border border-border bg-surface-container-low p-5">
@@ -338,10 +367,13 @@ export default function SecuritySettingsPage() {
               <div className="flex items-start gap-3">
                 <CheckCircle2 className="mt-0.5 h-5 w-5 text-feedback-success" />
                 <div>
-                  <p className="text-sm font-semibold text-text-primary">MFA is active</p>
+                  <p className="text-sm font-semibold text-text-primary">
+                    MFA is active
+                  </p>
                   <p className="mt-1 text-sm text-text-secondary">
                     You have {status.active_recovery_codes} active recovery{" "}
-                    {status.active_recovery_codes === 1 ? "code" : "codes"} remaining.
+                    {status.active_recovery_codes === 1 ? "code" : "codes"}{" "}
+                    remaining.
                   </p>
                 </div>
               </div>
@@ -379,8 +411,8 @@ export default function SecuritySettingsPage() {
             Step 1 — Add to your authenticator
           </h2>
           <p className="mt-2 text-sm text-text-secondary">
-            Open your authenticator app and add a new entry using the secret below, then enter
-            the current 6-digit code to confirm.
+            Open your authenticator app and add a new entry using the secret
+            below, then enter the current 6-digit code to confirm.
           </p>
 
           <dl className="mt-6 space-y-4">
@@ -388,7 +420,9 @@ export default function SecuritySettingsPage() {
               <dt className="text-xs font-semibold uppercase tracking-[0.24em] text-text-tertiary">
                 Issuer
               </dt>
-              <dd className="mt-1 font-mono text-sm text-text-primary">{enrollment.issuer}</dd>
+              <dd className="mt-1 font-mono text-sm text-text-primary">
+                {enrollment.issuer}
+              </dd>
             </div>
             <div>
               <dt className="text-xs font-semibold uppercase tracking-[0.24em] text-text-tertiary">
@@ -423,7 +457,9 @@ export default function SecuritySettingsPage() {
               autoComplete="one-time-code"
               maxLength={6}
               value={code}
-              onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
+              onChange={(event) =>
+                setCode(event.target.value.replace(/\D/g, ""))
+              }
               placeholder="000000"
               className="input-base w-full py-4 text-center font-mono text-2xl tracking-[0.5em]"
               required
@@ -446,9 +482,9 @@ export default function SecuritySettingsPage() {
             Step 2 — Save your recovery codes
           </h2>
           <p className="mt-2 text-sm text-text-secondary">
-            Store these codes in a password manager or print them. Each code works exactly{" "}
-            <strong>once</strong> if you lose access to your authenticator. You will NOT see
-            them again after leaving this page.
+            Store these codes in a password manager or print them. Each code
+            works exactly <strong>once</strong> if you lose access to your
+            authenticator. You will NOT see them again after leaving this page.
           </p>
 
           <ul className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-5">
@@ -490,8 +526,8 @@ export default function SecuritySettingsPage() {
               className="mt-1 h-4 w-4 rounded border-border text-accent focus:ring-accent"
             />
             <span className="text-sm text-text-secondary">
-              I have saved my recovery codes in a safe place and understand I will not see them
-              again.
+              I have saved my recovery codes in a safe place and understand I
+              will not see them again.
             </span>
           </label>
 

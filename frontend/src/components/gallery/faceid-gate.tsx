@@ -97,15 +97,18 @@ export function FaceIDGate({ slug, onMatched, onFallback }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface-scrim-strong/80 glass-blur-medium p-4">
       <div className="w-full max-w-lg rounded-3xl bg-surface-raised border border-border-subtle p-6 shadow-2xl">
         {step === "consent" && (
           <>
-            <h2 className="text-xl font-semibold text-text-primary">Find yourself in these photos</h2>
+            <h2 className="text-xl font-semibold text-text-primary">
+              Find yourself in these photos
+            </h2>
             <p className="mt-2 text-sm text-text-secondary">
-              We can show you only the photos you appear in. To do this, we&rsquo;ll take a
-              selfie on your device, compute a mathematical fingerprint locally, and send
-              that fingerprint (not the photo) to match against faces in this gallery.
+              We can show you only the photos you appear in. To do this,
+              we&rsquo;ll take a selfie on your device, compute a mathematical
+              fingerprint locally, and send that fingerprint (not the photo) to
+              match against faces in this gallery.
             </p>
             <ul className="mt-4 space-y-2 text-sm text-text-secondary">
               <li>• Your photo never leaves your device.</li>
@@ -133,11 +136,13 @@ export function FaceIDGate({ slug, onMatched, onFallback }: Props) {
 
         {step === "camera" && (
           <>
-            <h2 className="text-lg font-semibold text-text-primary">Take a selfie</h2>
+            <h2 className="text-lg font-semibold text-text-primary">
+              Take a selfie
+            </h2>
             <p className="mt-1 text-sm text-text-secondary">
               Look at the camera. Your photo stays on your device.
             </p>
-            <div className="mt-4 overflow-hidden rounded-2xl bg-black aspect-[4/3]">
+            <div className="mt-4 overflow-hidden rounded-2xl bg-surface-scrim-strong aspect-[4/3]">
               <video
                 ref={videoRef}
                 className="h-full w-full object-cover"
@@ -170,15 +175,20 @@ export function FaceIDGate({ slug, onMatched, onFallback }: Props) {
         {step === "matching" && (
           <div className="flex flex-col items-center py-8">
             <div className="h-10 w-10 animate-spin rounded-full border-2 border-accent-primary border-t-transparent" />
-            <p className="mt-4 text-sm text-text-secondary">Matching your face against this gallery…</p>
+            <p className="mt-4 text-sm text-text-secondary">
+              Matching your face against this gallery…
+            </p>
           </div>
         )}
 
         {step === "error" && (
           <>
-            <h2 className="text-lg font-semibold text-text-primary">We couldn&rsquo;t match your face</h2>
+            <h2 className="text-lg font-semibold text-text-primary">
+              We couldn&rsquo;t match your face
+            </h2>
             <p className="mt-2 text-sm text-text-secondary">
-              {error || "Something went wrong. You can still browse all photos in this gallery."}
+              {error ||
+                "Something went wrong. You can still browse all photos in this gallery."}
             </p>
             <div className="mt-4 flex gap-3">
               <button
@@ -216,7 +226,9 @@ export function FaceIDGate({ slug, onMatched, onFallback }: Props) {
  *      testable without shipping a 3 MB model. Studios in production wire
  *      face-api.js via a script tag or bundler import.
  */
-async function extractEmbeddingFromVideo(video: HTMLVideoElement): Promise<number[]> {
+async function extractEmbeddingFromVideo(
+  video: HTMLVideoElement,
+): Promise<number[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fa = (window as any).faceapi;
   if (fa && typeof fa.computeFaceDescriptor === "function") {

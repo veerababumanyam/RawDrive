@@ -42,16 +42,21 @@ export default function AboutPage() {
           </span>
           <div className="space-y-5">
             <h1 className="font-headline text-4xl font-extrabold tracking-[-0.03em] text-text-primary md:text-6xl">
-              Built to make photography businesses feel as premium as the work they deliver.
+              Built to make photography businesses feel as premium as the work
+              they deliver.
             </h1>
             <p className="max-w-2xl text-lg leading-8 text-text-secondary">
-              RawDrive exists to give studios a real operating system: galleries, client proofing,
-              invoicing, scheduling, AI workflows, and marketplaces in one polished environment.
+              RawDrive exists to give studios a real operating system:
+              galleries, client proofing, invoicing, scheduling, AI workflows,
+              and marketplaces in one polished environment.
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {teamHighlights.map((item) => (
-              <div key={item} className="surface-panel p-5 text-sm leading-7 text-text-secondary">
+              <div
+                key={item}
+                className="surface-panel p-5 text-sm leading-7 text-text-secondary"
+              >
                 {item}
               </div>
             ))}
@@ -82,7 +87,9 @@ export default function AboutPage() {
               <h2 className="mt-6 font-headline text-2xl font-bold text-text-primary">
                 {principle.title}
               </h2>
-              <p className="mt-3 leading-7 text-text-secondary">{principle.description}</p>
+              <p className="mt-3 leading-7 text-text-secondary">
+                {principle.description}
+              </p>
             </article>
           ))}
         </div>
@@ -99,9 +106,10 @@ export default function AboutPage() {
               We design for the entire studio lifecycle, not just file storage.
             </h2>
             <p className="leading-8 text-text-secondary">
-              From lead capture to final delivery, every part of the product is meant to feel
-              intentional. RawDrive brings the business layer and the client experience into the
-              same workspace so studios can grow without stitching together generic tools.
+              From lead capture to final delivery, every part of the product is
+              meant to feel intentional. RawDrive brings the business layer and
+              the client experience into the same workspace so studios can grow
+              without stitching together generic tools.
             </p>
           </div>
         </div>

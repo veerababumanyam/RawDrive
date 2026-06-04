@@ -57,8 +57,13 @@ export function StreamAnalyticsPanel({
       .catch((e) => {
         if (!alive) return;
         const isForbidden =
-          e instanceof AnalyticsAccessError && (e.status === 403 || e.status === 404);
-        setState({ data: null, error: isForbidden ? "forbidden" : "error", loading: false });
+          e instanceof AnalyticsAccessError &&
+          (e.status === 403 || e.status === 404);
+        setState({
+          data: null,
+          error: isForbidden ? "forbidden" : "error",
+          loading: false,
+        });
       });
     return () => {
       alive = false;
@@ -70,7 +75,10 @@ export function StreamAnalyticsPanel({
       <div
         role="status"
         aria-label="Loading analytics"
-        className={["grid grid-cols-2 gap-3 sm:grid-cols-3", className ?? ""].join(" ")}
+        className={[
+          "grid grid-cols-2 gap-3 sm:grid-cols-3",
+          className ?? "",
+        ].join(" ")}
       >
         {[0, 1, 2, 3, 4, 5].map((i) => (
           <div
@@ -128,7 +136,10 @@ export function StreamAnalyticsPanel({
     >
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatTile label="Peak Viewers" value={formatNumber(data.peakViewers)} />
-        <StatTile label="Unique Viewers" value={formatNumber(data.uniqueViewers)} />
+        <StatTile
+          label="Unique Viewers"
+          value={formatNumber(data.uniqueViewers)}
+        />
         <StatTile
           label="Avg Watch Time"
           value={formatDuration(data.avgWatchTimeSec)}
@@ -144,7 +155,9 @@ export function StreamAnalyticsPanel({
       </div>
 
       <div className="rounded-2xl border border-border-subtle bg-surface-elevated p-4">
-        <div className="mb-3 text-sm font-medium text-text-primary">Viewer trend</div>
+        <div className="mb-3 text-sm font-medium text-text-primary">
+          Viewer trend
+        </div>
         <Sparkline
           points={trendPoints}
           ariaLabel="viewer trend over the live window"
@@ -156,7 +169,9 @@ export function StreamAnalyticsPanel({
       </div>
 
       <div className="rounded-2xl border border-border-subtle bg-surface-elevated p-4">
-        <div className="mb-3 text-sm font-medium text-text-primary">Conversion by source</div>
+        <div className="mb-3 text-sm font-medium text-text-primary">
+          Conversion by source
+        </div>
         <BarList items={conversionItems} ariaLabel="conversion by source" />
       </div>
     </section>

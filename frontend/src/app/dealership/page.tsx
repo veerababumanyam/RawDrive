@@ -40,8 +40,9 @@ export default function DealershipPage() {
               Become the local growth engine for RawDrive in your market.
             </h1>
             <p className="max-w-2xl text-lg leading-8 text-text-secondary">
-              Help studios in your region adopt RawDrive, support onboarding, and build recurring
-              relationships around gallery delivery, CRM, AI workflows, and marketplace growth.
+              Help studios in your region adopt RawDrive, support onboarding,
+              and build recurring relationships around gallery delivery, CRM, AI
+              workflows, and marketplace growth.
             </p>
           </div>
 
@@ -54,7 +55,9 @@ export default function DealershipPage() {
                 <h2 className="mt-5 font-headline text-xl font-bold text-text-primary">
                   {benefit.title}
                 </h2>
-                <p className="mt-2 text-sm leading-7 text-text-secondary">{benefit.description}</p>
+                <p className="mt-2 text-sm leading-7 text-text-secondary">
+                  {benefit.description}
+                </p>
               </article>
             ))}
           </div>
@@ -65,14 +68,18 @@ export default function DealershipPage() {
               Registration flow
             </div>
             <div className="mt-5 grid gap-4 sm:grid-cols-3">
-              {["Business details", "Tax and legal", "Banking and payout"].map((step, index) => (
-                <div key={step} className="surface-panel p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-text-tertiary">
-                    Step {index + 1}
-                  </p>
-                  <p className="mt-3 font-headline text-lg font-bold text-text-primary">{step}</p>
-                </div>
-              ))}
+              {["Business details", "Tax and legal", "Banking and payout"].map(
+                (step, index) => (
+                  <div key={step} className="surface-panel p-4">
+                    <p className="text-xs font-bold uppercase tracking-[0.22em] text-text-tertiary">
+                      Step {index + 1}
+                    </p>
+                    <p className="mt-3 font-headline text-lg font-bold text-text-primary">
+                      {step}
+                    </p>
+                  </div>
+                ),
+              )}
             </div>
           </div>
 

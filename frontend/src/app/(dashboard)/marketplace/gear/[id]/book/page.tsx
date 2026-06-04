@@ -5,7 +5,11 @@ import { use, useEffect, useMemo, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
 import { createGearBooking, getGear, type GearListing } from "@/lib/api/gear";
 
-export default function GearBookingPage({ params }: { params: Promise<{ id: string }> }) {
+export default function GearBookingPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = use(params);
   const [gear, setGear] = useState<GearListing | null>(null);
   const [startDate, setStartDate] = useState("");
@@ -31,7 +35,11 @@ export default function GearBookingPage({ params }: { params: Promise<{ id: stri
       } catch (loadError) {
         if (!cancelled) {
           setGear(null);
-          setError(loadError instanceof Error ? loadError.message : "Failed to load gear listing.");
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "Failed to load gear listing.",
+          );
         }
       } finally {
         if (!cancelled) {
@@ -55,7 +63,11 @@ export default function GearBookingPage({ params }: { params: Promise<{ id: stri
     const start = new Date(startDate);
     const end = new Date(endDate);
 
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+    if (
+      Number.isNaN(start.getTime()) ||
+      Number.isNaN(end.getTime()) ||
+      end < start
+    ) {
       return 0;
     }
 
@@ -96,7 +108,11 @@ export default function GearBookingPage({ params }: { params: Promise<{ id: stri
       });
       setSuccess(true);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Failed to create booking request.");
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Failed to create booking request.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -116,8 +132,13 @@ export default function GearBookingPage({ params }: { params: Promise<{ id: stri
   if (!gear) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-16 text-center">
-        <p className="text-sm text-text-secondary">{error || "Gear listing not found."}</p>
-        <Link href="/marketplace/gear" className="btn-tertiary mt-4 px-3 py-2 text-sm">
+        <p className="text-sm text-text-secondary">
+          {error || "Gear listing not found."}
+        </p>
+        <Link
+          href="/marketplace/gear"
+          className="btn-tertiary mt-4 px-3 py-2 text-sm"
+        >
           Back to gear
         </Link>
       </div>
@@ -128,14 +149,22 @@ export default function GearBookingPage({ params }: { params: Promise<{ id: stri
     return (
       <div className="mx-auto max-w-3xl px-4 py-16">
         <div className="surface-panel space-y-4 p-8 text-center">
-          <span className="status-badge status-badge--success">Request submitted</span>
-          <h1 className="text-2xl font-semibold text-text-primary">Booking request sent</h1>
+          <span className="status-badge status-badge--success">
+            Request submitted
+          </span>
+          <h1 className="text-2xl font-semibold text-text-primary">
+            Booking request sent
+          </h1>
           <p className="text-sm leading-relaxed text-text-secondary">
-            RawDrive created the booking request and reserved the date range in the workflow. Deposit
-            handling is still manual, so the owner can confirm those details in follow-up.
+            RawDrive created the booking request and reserved the date range in
+            the workflow. Deposit handling is still manual, so the owner can
+            confirm those details in follow-up.
           </p>
           <div className="flex flex-wrap justify-center gap-3">
-            <Link href={`/marketplace/gear/${gear.id}`} className="btn-primary px-4 py-2.5 text-sm">
+            <Link
+              href={`/marketplace/gear/${gear.id}`}
+              className="btn-primary px-4 py-2.5 text-sm"
+            >
               Back to listing
             </Link>
             <Link href="/messages" className="surface-button text-sm">
@@ -150,10 +179,15 @@ export default function GearBookingPage({ params }: { params: Promise<{ id: stri
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
       <div className="space-y-2">
-        <Link href={`/marketplace/gear/${gear.id}`} className="btn-tertiary px-0 py-0 text-sm">
+        <Link
+          href={`/marketplace/gear/${gear.id}`}
+          className="btn-tertiary px-0 py-0 text-sm"
+        >
           Back to listing
         </Link>
-        <h1 className="text-2xl font-semibold text-text-primary">Book {gear.title}</h1>
+        <h1 className="text-2xl font-semibold text-text-primary">
+          Book {gear.title}
+        </h1>
         <p className="text-sm text-text-secondary">
           Request this rental directly from the protected marketplace workflow.
         </p>
@@ -162,7 +196,11 @@ export default function GearBookingPage({ params }: { params: Promise<{ id: stri
       {error && (
         <div
           className="surface-panel p-4 text-sm"
-          style={{ borderColor: "color-mix(in srgb, var(--feedback-error) 24%, transparent)", color: "var(--feedback-error)" }}
+          style={{
+            borderColor:
+              "color-mix(in srgb, var(--feedback-error) 24%, transparent)",
+            color: "var(--feedback-error)",
+          }}
         >
           {error}
         </div>
@@ -172,7 +210,9 @@ export default function GearBookingPage({ params }: { params: Promise<{ id: stri
         <form onSubmit={handleSubmit} className="surface-panel space-y-6 p-6">
           <div className="grid gap-5 md:grid-cols-2">
             <label className="space-y-2">
-              <span className="text-sm font-medium text-text-primary">Start date</span>
+              <span className="text-sm font-medium text-text-primary">
+                Start date
+              </span>
               <input
                 type="date"
                 value={startDate}
@@ -183,7 +223,9 @@ export default function GearBookingPage({ params }: { params: Promise<{ id: stri
             </label>
 
             <label className="space-y-2">
-              <span className="text-sm font-medium text-text-primary">End date</span>
+              <span className="text-sm font-medium text-text-primary">
+                End date
+              </span>
               <input
                 type="date"
                 value={endDate}
@@ -195,7 +237,9 @@ export default function GearBookingPage({ params }: { params: Promise<{ id: stri
           </div>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-text-primary">Message to owner</span>
+            <span className="text-sm font-medium text-text-primary">
+              Message to owner
+            </span>
             <textarea
               value={message}
               onChange={(event) => setMessage(event.target.value)}
@@ -205,17 +249,26 @@ export default function GearBookingPage({ params }: { params: Promise<{ id: stri
           </label>
 
           <div className="flex flex-wrap gap-3">
-            <button type="submit" disabled={submitting} className="btn-primary px-4 py-2.5 text-sm">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="btn-primary px-4 py-2.5 text-sm"
+            >
               {submitting ? "Submitting request..." : "Request booking"}
             </button>
-            <Link href={`/marketplace/gear/${gear.id}`} className="surface-button text-sm">
+            <Link
+              href={`/marketplace/gear/${gear.id}`}
+              className="surface-button text-sm"
+            >
               Cancel
             </Link>
           </div>
         </form>
 
         <aside className="surface-panel space-y-4 p-5">
-          <h2 className="text-lg font-semibold text-text-primary">Booking summary</h2>
+          <h2 className="text-lg font-semibold text-text-primary">
+            Booking summary
+          </h2>
           <div className="space-y-2 text-sm text-text-secondary">
             <div className="flex items-center justify-between">
               <span>Daily rate</span>
@@ -225,7 +278,9 @@ export default function GearBookingPage({ params }: { params: Promise<{ id: stri
             </div>
             <div className="flex items-center justify-between">
               <span>Rental days</span>
-              <span className="font-medium text-text-primary">{totalDays || "Select dates"}</span>
+              <span className="font-medium text-text-primary">
+                {totalDays || "Select dates"}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span>Estimated total</span>
@@ -235,8 +290,9 @@ export default function GearBookingPage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
           <div className="rounded-2xl bg-surface-container-low p-4 text-sm leading-relaxed text-text-secondary">
-            Deposits are not collected through this flow yet, so RawDrive sends the booking request with a
-            zero deposit and lets the owner confirm that manually.
+            Deposits are not collected through this flow yet, so RawDrive sends
+            the booking request with a zero deposit and lets the owner confirm
+            that manually.
           </div>
         </aside>
       </div>

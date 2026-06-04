@@ -11,7 +11,11 @@ vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: vi.fn(() => "test-token"),
 }));
 
-import { getSystemMetrics, listPlatformSettings, savePlatformSetting } from "@/lib/api/admin";
+import {
+  getSystemMetrics,
+  listPlatformSettings,
+  savePlatformSetting,
+} from "@/lib/api/admin";
 import AdminSystemPage from "../system/page";
 
 const mockMetrics = vi.mocked(getSystemMetrics);
@@ -140,7 +144,9 @@ describe("AdminSystemPage", () => {
     const input = await screen.findByLabelText(/PhonePe Client ID/i);
 
     fireEvent.change(input, { target: { value: "pp-client" } });
-    fireEvent.click(screen.getByRole("button", { name: /save payment settings/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /save payment settings/i }),
+    );
 
     await waitFor(() => {
       expect(mockSavePlatformSetting).toHaveBeenCalledWith(

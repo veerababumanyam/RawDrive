@@ -46,19 +46,25 @@ describe("Filmstrip", () => {
     Element.prototype.scrollIntoView = vi.fn();
     mocks.getStoredAccessToken.mockClear();
     mocks.useDecryptedAssetUrl.mockReset();
-    mocks.useDecryptedAssetUrl.mockImplementation((inputAsset: Asset, variants: readonly string[]) => ({
-      src: variants[0] === "display_webp"
-        ? `blob:display-${inputAsset.id}`
-        : `blob:thumb-${inputAsset.id}`,
-      loading: false,
-      error: null,
-    }));
+    mocks.useDecryptedAssetUrl.mockImplementation(
+      (inputAsset: Asset, variants: readonly string[]) => ({
+        src:
+          variants[0] === "display_webp"
+            ? `blob:display-${inputAsset.id}`
+            : `blob:thumb-${inputAsset.id}`,
+        loading: false,
+        error: null,
+      }),
+    );
   });
 
   it("uses the smallest WebP thumbnail variant first for quick lightbox navigation", () => {
     render(
       <Filmstrip
-        assets={[asset("asset-1", "DSC_6231.JPG"), asset("asset-2", "DSC_7152.JPG")]}
+        assets={[
+          asset("asset-1", "DSC_6231.JPG"),
+          asset("asset-2", "DSC_7152.JPG"),
+        ]}
         activeId="asset-1"
         onSelect={vi.fn()}
       />,
@@ -69,7 +75,9 @@ describe("Filmstrip", () => {
       expect.arrayContaining(["thumb_sm_webp"]),
       "test-token",
     );
-    expect(mocks.useDecryptedAssetUrl.mock.calls[0]?.[1]?.[0]).toBe("thumb_sm_webp");
+    expect(mocks.useDecryptedAssetUrl.mock.calls[0]?.[1]?.[0]).toBe(
+      "thumb_sm_webp",
+    );
   });
 
   it("PERF-25: renders only a bounded window of thumbs around the active photo, not the full strip", () => {
@@ -99,7 +107,10 @@ describe("Filmstrip", () => {
   it("falls back to display WebP when a thumbnail derivative decodes as a broken image", async () => {
     render(
       <Filmstrip
-        assets={[asset("asset-1", "DSC_6231.JPG"), asset("asset-2", "DSC_7152.JPG")]}
+        assets={[
+          asset("asset-1", "DSC_6231.JPG"),
+          asset("asset-2", "DSC_7152.JPG"),
+        ]}
         activeId="asset-1"
         onSelect={vi.fn()}
       />,
@@ -112,7 +123,10 @@ describe("Filmstrip", () => {
     fireEvent.error(thumbImage);
 
     await waitFor(() => {
-      expect(activeThumb.querySelector("img")).toHaveAttribute("src", "blob:display-asset-1");
+      expect(activeThumb.querySelector("img")).toHaveAttribute(
+        "src",
+        "blob:display-asset-1",
+      );
     });
   });
 });

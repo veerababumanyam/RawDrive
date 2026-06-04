@@ -11,13 +11,13 @@ import { GlassIconButton } from "@/components/ui/glass-icon-button";
  *        NOT the in-app data-theme toggle (liquid-glass / liquid-glass-dark /
  *        midnight). Theming must be token/data-theme driven.
  *
- * F-041: hover states must use semantic tokens (feedback-error,
- *        feedback-success, accent-secondary) — NOT Tailwind color primitives
- *        (red-*, green-*, blue-*) which are absent from the theme color map
- *        and therefore do not adapt per theme.
+ * F-041: hover states must use semantic token-backed component classes,
+ *        not Tailwind color primitives or arbitrary opacity/color utilities.
  */
 
-function classNamesFor(variant: Parameters<typeof GlassIconButton>[0]["variant"]) {
+function classNamesFor(
+  variant: Parameters<typeof GlassIconButton>[0]["variant"],
+) {
   const { getByRole, unmount } = render(
     <GlassIconButton variant={variant} label={`${variant} action`}>
       <svg />
@@ -28,7 +28,14 @@ function classNamesFor(variant: Parameters<typeof GlassIconButton>[0]["variant"]
   return className;
 }
 
-const ALL_VARIANTS = ["glass", "solid", "ghost", "danger", "success", "accent"] as const;
+const ALL_VARIANTS = [
+  "glass",
+  "solid",
+  "ghost",
+  "danger",
+  "success",
+  "accent",
+] as const;
 
 describe("GlassIconButton — theme-aware token usage", () => {
   it("renders an accessible button with the provided label", () => {
@@ -55,32 +62,30 @@ describe("GlassIconButton — theme-aware token usage", () => {
     "variant %s uses no Tailwind color primitives (red-/green-/blue-)",
     (variant) => {
       const className = classNamesFor(variant);
-      expect(className).not.toMatch(/\b(?:bg|border|text)-(?:red|green|blue)-\d/);
+      expect(className).not.toMatch(
+        /\b(?:bg|border|text)-(?:red|green|blue)-\d/,
+      );
     },
   );
 
-  it("danger hover uses the feedback-error token (matching its base/active)", () => {
+  it("danger variant uses the token-backed danger component class", () => {
     const className = classNamesFor("danger");
-    expect(className).toContain("hover:bg-feedback-error/[0.25]");
-    expect(className).toContain("hover:border-feedback-error/[0.35]");
+    expect(className).toContain("glass-icon-button--danger");
   });
 
-  it("success hover uses the feedback-success token (matching its base/active)", () => {
+  it("success variant uses the token-backed success component class", () => {
     const className = classNamesFor("success");
-    expect(className).toContain("hover:bg-feedback-success/[0.25]");
-    expect(className).toContain("hover:border-feedback-success/[0.35]");
+    expect(className).toContain("glass-icon-button--success");
   });
 
-  it("accent hover uses the accent-secondary token (matching its base/active)", () => {
+  it("accent variant uses the token-backed accent component class", () => {
     const className = classNamesFor("accent");
-    expect(className).toContain("hover:bg-accent-secondary/[0.25]");
-    expect(className).toContain("hover:border-accent-secondary/[0.35]");
+    expect(className).toContain("glass-icon-button--accent");
   });
 
   it("meets the WCAG 44px touch target at the default size", () => {
     const className = classNamesFor("glass");
-    // md = h-11 w-11 = 44px
-    expect(className).toContain("h-11");
-    expect(className).toContain("w-11");
+    // md = 44px through the component token CSS.
+    expect(className).toContain("glass-icon-button--md");
   });
 });

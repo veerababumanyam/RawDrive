@@ -21,15 +21,18 @@ describe("ViewerCount", () => {
   });
 
   it("renders current viewer count from the API", async () => {
-    const fetchMock = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) =>
-      jsonResponse({ current: 42, as_of: "2026-04-14T10:00:00Z" })
+    const fetchMock = vi.fn(
+      async (_url: RequestInfo | URL, _init?: RequestInit) =>
+        jsonResponse({ current: 42, as_of: "2026-04-14T10:00:00Z" }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
     render(<ViewerCount shortlink="abc" token="vjwt" />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("viewer-count-value").textContent).toMatch(/42/);
+      expect(screen.getByTestId("viewer-count-value").textContent).toMatch(
+        /42/,
+      );
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const url = String(fetchMock.mock.calls[0][0]);
@@ -39,7 +42,7 @@ describe("ViewerCount", () => {
   it("polls every 5s and updates the count", async () => {
     let n = 1;
     const fetchMock = vi.fn(async () =>
-      jsonResponse({ current: n++, as_of: "2026-04-14T10:00:00Z" })
+      jsonResponse({ current: n++, as_of: "2026-04-14T10:00:00Z" }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -58,19 +61,24 @@ describe("ViewerCount", () => {
   });
 
   it("handles 404 without throwing and surfaces error state", async () => {
-    const fetchMock = vi.fn(async () => jsonResponse({ error: "not_found" }, 404));
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ error: "not_found" }, 404),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     render(<ViewerCount shortlink="missing" token="vjwt" />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("viewer-count")).toHaveAttribute("data-state", "error");
+      expect(screen.getByTestId("viewer-count")).toHaveAttribute(
+        "data-state",
+        "error",
+      );
     });
   });
 
   it("pauses polling while the document is hidden", async () => {
     const fetchMock = vi.fn(async () =>
-      jsonResponse({ current: 7, as_of: "2026-04-14T10:00:00Z" })
+      jsonResponse({ current: 7, as_of: "2026-04-14T10:00:00Z" }),
     );
     vi.stubGlobal("fetch", fetchMock);
 

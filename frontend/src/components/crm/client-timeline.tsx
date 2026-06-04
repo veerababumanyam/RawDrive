@@ -10,17 +10,17 @@ import { cn } from "@/lib/utils";
  */
 
 const typeConfig: Record<string, { dot: string; label: string }> = {
-  deal_created:    { dot: "bg-accent-primary",  label: "Deal" },
-  invoice_sent:    { dot: "bg-info",            label: "Invoice Sent" },
-  invoice_paid:    { dot: "bg-success",         label: "Invoice Paid" },
-  booking_created: { dot: "bg-warning",         label: "Booking" },
-  gallery_shared:  { dot: "bg-accent-primary",  label: "Gallery" },
-  gallery_selection: { dot: "bg-success",       label: "Selection" },
-  gallery_review:  { dot: "bg-info",            label: "Review" },
+  deal_created: { dot: "bg-accent-primary", label: "Deal" },
+  invoice_sent: { dot: "bg-info", label: "Invoice Sent" },
+  invoice_paid: { dot: "bg-feedback-success", label: "Invoice Paid" },
+  booking_created: { dot: "bg-warning", label: "Booking" },
+  gallery_shared: { dot: "bg-accent-primary", label: "Gallery" },
+  gallery_selection: { dot: "bg-feedback-success", label: "Selection" },
+  gallery_review: { dot: "bg-info", label: "Review" },
   gallery_accessed: { dot: "bg-accent-primary", label: "Gallery" },
-  gallery_order:   { dot: "bg-success",         label: "Order" },
-  gallery_download: { dot: "bg-warning",        label: "Download" },
-  album_approved:  { dot: "bg-success",         label: "Approval" },
+  gallery_order: { dot: "bg-feedback-success", label: "Order" },
+  gallery_download: { dot: "bg-warning", label: "Download" },
+  album_approved: { dot: "bg-feedback-success", label: "Approval" },
 };
 
 function formatDate(iso: string): string {
@@ -89,14 +89,19 @@ export function ClientTimeline({ entries, loading }: ClientTimelineProps) {
       <div className="absolute left-[5px] top-0 bottom-0 w-px bg-border-default" />
 
       {timelineRows.map(({ entry, idx, dateStr, showDateHeader }) => {
-        const cfg = typeConfig[entry.type] || { dot: "bg-text-tertiary", label: entry.type };
+        const cfg = typeConfig[entry.type] || {
+          dot: "bg-text-tertiary",
+          label: entry.type,
+        };
         const meta = entry.metadata || {};
 
         return (
           <div key={`${entry.type}-${entry.timestamp}-${idx}`}>
             {showDateHeader && (
               <div className="relative -ml-6 mb-3 mt-4 first:mt-0">
-                <p className="text-xs font-medium text-text-tertiary pl-6">{dateStr}</p>
+                <p className="text-xs font-medium text-text-tertiary pl-6">
+                  {dateStr}
+                </p>
               </div>
             )}
             <div className="relative mb-4 last:mb-0">
@@ -109,35 +114,48 @@ export function ClientTimeline({ entries, loading }: ClientTimelineProps) {
               />
 
               <div>
-                <p className="text-sm font-medium text-text-primary">{entry.title}</p>
+                <p className="text-sm font-medium text-text-primary">
+                  {entry.title}
+                </p>
                 <div className="flex flex-wrap items-center gap-2 mt-1">
-                  <span className="text-xs text-text-tertiary">{formatTime(entry.timestamp)}</span>
+                  <span className="text-xs text-text-tertiary">
+                    {formatTime(entry.timestamp)}
+                  </span>
                   <span className="text-xs text-text-tertiary px-1.5 py-0.5 bg-surface-sunken rounded">
                     {cfg.label}
                   </span>
-                  {meta.amount_paisa != null && typeof meta.amount_paisa === "number" && (
-                    <span className="text-xs text-text-secondary">
-                      {formatPaisa(meta.amount_paisa)}
-                    </span>
-                  )}
-                  {meta.total_paisa != null && typeof meta.total_paisa === "number" && (
-                    <span className="text-xs text-text-secondary">
-                      {formatPaisa(meta.total_paisa)}
-                    </span>
-                  )}
-                  {meta.amount_paid_paisa != null && typeof meta.amount_paid_paisa === "number" && (
-                    <span className="text-xs text-text-secondary">
-                      {formatPaisa(meta.amount_paid_paisa)}
-                    </span>
-                  )}
+                  {meta.amount_paisa != null &&
+                    typeof meta.amount_paisa === "number" && (
+                      <span className="text-xs text-text-secondary">
+                        {formatPaisa(meta.amount_paisa)}
+                      </span>
+                    )}
+                  {meta.total_paisa != null &&
+                    typeof meta.total_paisa === "number" && (
+                      <span className="text-xs text-text-secondary">
+                        {formatPaisa(meta.total_paisa)}
+                      </span>
+                    )}
+                  {meta.amount_paid_paisa != null &&
+                    typeof meta.amount_paid_paisa === "number" && (
+                      <span className="text-xs text-text-secondary">
+                        {formatPaisa(meta.amount_paid_paisa)}
+                      </span>
+                    )}
                   {typeof meta.stage === "string" && (
-                    <span className="text-xs text-text-secondary capitalize">{meta.stage as string}</span>
+                    <span className="text-xs text-text-secondary capitalize">
+                      {meta.stage as string}
+                    </span>
                   )}
                   {typeof meta.event_type === "string" && (
-                    <span className="text-xs text-text-secondary capitalize">{meta.event_type as string}</span>
+                    <span className="text-xs text-text-secondary capitalize">
+                      {meta.event_type as string}
+                    </span>
                   )}
                   {typeof meta.location === "string" && (
-                    <span className="text-xs text-text-secondary">{meta.location as string}</span>
+                    <span className="text-xs text-text-secondary">
+                      {meta.location as string}
+                    </span>
                   )}
                 </div>
               </div>

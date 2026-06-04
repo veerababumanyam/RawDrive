@@ -7,6 +7,10 @@ export const metadata: Metadata = createNoIndexMetadata(
   "/reset-password",
 );
 
-export default function ResetPasswordLayout({ children }: { children: React.ReactNode }) {
+export default function ResetPasswordLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return children;
 }

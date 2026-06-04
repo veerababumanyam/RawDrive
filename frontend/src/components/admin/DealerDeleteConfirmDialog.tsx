@@ -48,15 +48,15 @@ export default function DealerDeleteConfirmDialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby="delete-dealer-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-surface-scrim-strong/40 glass-blur-subtle"
     >
       <div className="w-full max-w-md rounded-lg bg-surface-container p-6 shadow-lg border border-border-subtle">
         <h2 id="delete-dealer-title" className="text-xl font-semibold mb-2">
           Delete dealer?
         </h2>
         <p className="text-sm text-text-secondary mb-4">
-          This will soft-delete <strong>{dealerName}</strong>. They will no longer appear in the
-          admin list. Historical audit entries remain.
+          This will soft-delete <strong>{dealerName}</strong>. They will no
+          longer appear in the admin list. Historical audit entries remain.
         </p>
         {error && (
           <p role="alert" className="text-feedback-error text-sm mb-3">

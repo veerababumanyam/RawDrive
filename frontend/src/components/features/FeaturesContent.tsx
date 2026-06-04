@@ -34,7 +34,8 @@ const featureSections = [
     id: "client-proofing",
     icon: CheckCircle,
     title: "Client Proofing",
-    description: "Let clients select, favourite, and approve photos in real time.",
+    description:
+      "Let clients select, favourite, and approve photos in real time.",
     bullets: [
       "Real-time photo selection and favouriting",
       "Comment and annotation tools",
@@ -47,7 +48,8 @@ const featureSections = [
     id: "ai-culling",
     icon: Sparkles,
     title: "AI Culling",
-    description: "Automatically sort thousands of photos — save hours of editing.",
+    description:
+      "Automatically sort thousands of photos — save hours of editing.",
     bullets: [
       "Automatic quality scoring and ranking",
       "Duplicate and near-duplicate detection",
@@ -99,7 +101,8 @@ const featureSections = [
     id: "analytics",
     icon: BarChart3,
     title: "Analytics & Insights",
-    description: "Understand your business performance with detailed analytics.",
+    description:
+      "Understand your business performance with detailed analytics.",
     bullets: [
       "Gallery view and download analytics",
       "Revenue and booking trends",
@@ -162,7 +165,7 @@ export function FeaturesContent() {
           }
         }
       },
-      { rootMargin: "-20% 0px -60% 0px", threshold: 0 }
+      { rootMargin: "-20% 0px -60% 0px", threshold: 0 },
     );
 
     sectionRefs.current.forEach((el) => {
@@ -181,16 +184,20 @@ export function FeaturesContent() {
           </span>
           <div className="space-y-5">
             <h1 className="font-headline text-4xl font-extrabold tracking-[-0.03em] text-text-primary md:text-6xl">
-              Every core workflow a photography studio needs to book, deliver, and grow.
+              Every core workflow a photography studio needs to book, deliver,
+              and grow.
             </h1>
             <p className="max-w-2xl text-lg leading-8 text-text-secondary">
-              Explore the product surfaces that matter most to Indian photography businesses:
-              gallery delivery, proofing, AI culling, CRM, streaming, analytics, privacy, and
-              local operations.
+              Explore the product surfaces that matter most to Indian
+              photography businesses: gallery delivery, proofing, AI culling,
+              CRM, streaming, analytics, privacy, and local operations.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Link href="/register" className="btn-primary px-6 py-3 text-sm font-semibold">
+            <Link
+              href="/register"
+              className="btn-primary px-6 py-3 text-sm font-semibold"
+            >
               Start free trial
             </Link>
             <Link
@@ -240,7 +247,7 @@ export function FeaturesContent() {
                     "block rounded-lg px-3 py-2 text-sm transition-colors",
                     activeSection === s.id
                       ? "bg-accent-subtle text-accent font-medium"
-                      : "text-text-secondary hover:bg-accent-subtle hover:text-accent"
+                      : "text-text-secondary hover:bg-accent-subtle hover:text-accent",
                   )}
                   style={{
                     transitionDuration: "var(--duration-fast)",
@@ -269,9 +276,12 @@ export function FeaturesContent() {
                     "inline-flex shrink-0 items-center rounded-full px-3 py-2 text-xs font-medium transition-colors",
                     activeSection === s.id
                       ? "bg-accent text-text-inverse"
-                      : "bg-surface-elevated text-text-secondary border border-border"
+                      : "bg-surface-elevated text-text-secondary border border-border",
                   )}
-                  style={{ transitionDuration: "var(--duration-fast)", minHeight: "36px" }}
+                  style={{
+                    transitionDuration: "var(--duration-fast)",
+                    minHeight: "36px",
+                  }}
                 >
                   {s.title}
                 </a>
@@ -292,11 +302,18 @@ export function FeaturesContent() {
               >
                 <div className="flex items-start gap-4">
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent-subtle">
-                    <section.icon className="h-6 w-6 text-accent" aria-hidden="true" />
+                    <section.icon
+                      className="h-6 w-6 text-accent"
+                      aria-hidden="true"
+                    />
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold text-text-primary">{section.title}</h2>
-                    <p className="mt-2 text-text-secondary">{section.description}</p>
+                    <h2 className="text-2xl font-bold text-text-primary">
+                      {section.title}
+                    </h2>
+                    <p className="mt-2 text-text-secondary">
+                      {section.description}
+                    </p>
                   </div>
                 </div>
                 <ul className="mt-6 space-y-3 pl-16">
@@ -317,7 +334,10 @@ export function FeaturesContent() {
                   <Link
                     href="/register"
                     className="inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-text-inverse transition-colors hover:bg-accent-hover"
-                    style={{ minHeight: "var(--touch-target-min)", transitionDuration: "var(--duration-fast)" }}
+                    style={{
+                      minHeight: "var(--touch-target-min)",
+                      transitionDuration: "var(--duration-fast)",
+                    }}
                   >
                     Try {section.title} Free
                   </Link>
@@ -337,14 +357,20 @@ export function FeaturesContent() {
                 <Link
                   href="/register"
                   className="inline-flex items-center justify-center rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-text-inverse transition-colors hover:bg-accent-hover"
-                  style={{ minHeight: "var(--touch-target-min)", transitionDuration: "var(--duration-fast)" }}
+                  style={{
+                    minHeight: "var(--touch-target-min)",
+                    transitionDuration: "var(--duration-fast)",
+                  }}
                 >
                   Get Started Free
                 </Link>
                 <Link
                   href="/pricing"
                   className="inline-flex items-center justify-center rounded-lg border border-border bg-surface-elevated px-6 py-3 text-sm font-semibold text-text-primary transition-colors hover:bg-accent-subtle hover:text-accent"
-                  style={{ minHeight: "var(--touch-target-min)", transitionDuration: "var(--duration-fast)" }}
+                  style={{
+                    minHeight: "var(--touch-target-min)",
+                    transitionDuration: "var(--duration-fast)",
+                  }}
                 >
                   View Pricing
                 </Link>

@@ -45,7 +45,9 @@ const sections: Section[] = [
 ];
 
 function resolveHref(section: Section, base: string): string {
-  return "absoluteHref" in section ? section.absoluteHref : `${base}${section.path}`;
+  return "absoluteHref" in section
+    ? section.absoluteHref
+    : `${base}${section.path}`;
 }
 
 function isActive(section: Section, pathname: string, base: string): boolean {

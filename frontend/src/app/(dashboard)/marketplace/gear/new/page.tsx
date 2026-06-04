@@ -56,7 +56,11 @@ export default function GearListingEditorPage() {
 
       window.location.assign(`/marketplace/gear/${listing.id}`);
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Failed to create listing.");
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Failed to create listing.",
+      );
       setSaving(false);
     }
   };
@@ -65,16 +69,23 @@ export default function GearListingEditorPage() {
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
       <BackButton href="/marketplace/gear" label="Back to gear" />
       <div className="space-y-2">
-        <h1 className="text-2xl font-semibold text-text-primary">List Your Gear</h1>
+        <h1 className="text-2xl font-semibold text-text-primary">
+          List Your Gear
+        </h1>
         <p className="text-sm text-text-secondary">
-          Create a rental or sale listing that can be discovered directly from the protected marketplace.
+          Create a rental or sale listing that can be discovered directly from
+          the protected marketplace.
         </p>
       </div>
 
       {error && (
         <div
           className="surface-panel p-4 text-sm"
-          style={{ borderColor: "color-mix(in srgb, var(--feedback-error) 24%, transparent)", color: "var(--feedback-error)" }}
+          style={{
+            borderColor:
+              "color-mix(in srgb, var(--feedback-error) 24%, transparent)",
+            color: "var(--feedback-error)",
+          }}
         >
           {error}
         </div>
@@ -83,7 +94,9 @@ export default function GearListingEditorPage() {
       <form onSubmit={handleSubmit} className="surface-panel space-y-6 p-6">
         <div className="grid gap-5 md:grid-cols-2">
           <label className="space-y-2">
-            <span className="text-sm font-medium text-text-primary">Listing type</span>
+            <span className="text-sm font-medium text-text-primary">
+              Listing type
+            </span>
             <select
               value={listingType}
               onChange={(event) => setListingType(event.target.value)}
@@ -95,7 +108,9 @@ export default function GearListingEditorPage() {
           </label>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-text-primary">Category</span>
+            <span className="text-sm font-medium text-text-primary">
+              Category
+            </span>
             <select
               value={category}
               onChange={(event) => setCategory(event.target.value)}
@@ -144,7 +159,9 @@ export default function GearListingEditorPage() {
           </label>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-text-primary">Condition</span>
+            <span className="text-sm font-medium text-text-primary">
+              Condition
+            </span>
             <select
               value={condition}
               onChange={(event) => setCondition(event.target.value)}
@@ -187,7 +204,9 @@ export default function GearListingEditorPage() {
           </label>
 
           <label className="space-y-2 md:col-span-2">
-            <span className="text-sm font-medium text-text-primary">Description</span>
+            <span className="text-sm font-medium text-text-primary">
+              Description
+            </span>
             <textarea
               value={description}
               onChange={(event) => setDescription(event.target.value)}
@@ -208,7 +227,11 @@ export default function GearListingEditorPage() {
         </label>
 
         <div className="flex flex-wrap gap-3">
-          <button type="submit" disabled={saving} className="btn-primary px-4 py-2.5 text-sm">
+          <button
+            type="submit"
+            disabled={saving}
+            className="btn-primary px-4 py-2.5 text-sm"
+          >
             {saving ? "Creating listing..." : "Create listing"}
           </button>
           <button

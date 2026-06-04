@@ -12,7 +12,13 @@ interface GalleryAIPanelProps {
 
 type ScanState =
   | { kind: "idle" }
-  | { kind: "scanning"; jobId: string; processed: number; total: number; facesFound: number }
+  | {
+      kind: "scanning";
+      jobId: string;
+      processed: number;
+      total: number;
+      facesFound: number;
+    }
   | { kind: "complete"; processed: number; total: number; facesFound: number }
   | { kind: "error"; message: string };
 
@@ -95,11 +101,19 @@ export function GalleryAIPanel({ galleryId, token }: GalleryAIPanelProps) {
       .catch(() => {
         // No existing scan — that's fine, stay idle
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [galleryId, token, startPolling]);
 
   const handleScan = async () => {
-    setState({ kind: "scanning", jobId: "", processed: 0, total: 0, facesFound: 0 });
+    setState({
+      kind: "scanning",
+      jobId: "",
+      processed: 0,
+      total: 0,
+      facesFound: 0,
+    });
     try {
       const result = await triggerFaceScan(token, galleryId);
       setState((prev) =>
@@ -109,7 +123,8 @@ export function GalleryAIPanel({ galleryId, token }: GalleryAIPanelProps) {
     } catch (err) {
       setState({
         kind: "error",
-        message: err instanceof Error ? err.message : "Failed to start face scan",
+        message:
+          err instanceof Error ? err.message : "Failed to start face scan",
       });
     }
   };
@@ -129,9 +144,13 @@ export function GalleryAIPanel({ galleryId, token }: GalleryAIPanelProps) {
       {state.kind === "idle" && (
         <>
           <p className="text-sm text-text-secondary">
-            Scan this gallery for faces to enable FaceID matching, auto-tagging, and face-based filtering.
+            Scan this gallery for faces to enable FaceID matching, auto-tagging,
+            and face-based filtering.
           </p>
-          <button onClick={handleScan} className="btn-primary px-4 py-2.5 text-sm">
+          <button
+            onClick={handleScan}
+            className="btn-primary px-4 py-2.5 text-sm"
+          >
             Scan for Faces
           </button>
         </>
@@ -161,11 +180,15 @@ export function GalleryAIPanel({ galleryId, token }: GalleryAIPanelProps) {
         <div className="space-y-3">
           <div className="grid grid-cols-3 gap-3">
             <div className="rounded-xl bg-surface-container-low p-3 text-center">
-              <p className="text-lg font-semibold text-text-primary">{state.processed}</p>
+              <p className="text-lg font-semibold text-text-primary">
+                {state.processed}
+              </p>
               <p className="text-xs text-text-tertiary">Photos scanned</p>
             </div>
             <div className="rounded-xl bg-surface-container-low p-3 text-center">
-              <p className="text-lg font-semibold text-text-primary">{state.facesFound}</p>
+              <p className="text-lg font-semibold text-text-primary">
+                {state.facesFound}
+              </p>
               <p className="text-xs text-text-tertiary">Faces found</p>
             </div>
             <div className="rounded-xl bg-surface-container-low p-3 text-center">
@@ -174,7 +197,10 @@ export function GalleryAIPanel({ galleryId, token }: GalleryAIPanelProps) {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={handleScan} className="btn-tertiary px-4 py-2 text-sm">
+            <button
+              onClick={handleScan}
+              className="btn-tertiary px-4 py-2 text-sm"
+            >
               Re-scan
             </button>
             <Link
@@ -190,7 +216,10 @@ export function GalleryAIPanel({ galleryId, token }: GalleryAIPanelProps) {
       {state.kind === "error" && (
         <div className="space-y-3">
           <p className="text-sm text-feedback-error">{state.message}</p>
-          <button onClick={handleScan} className="btn-primary px-4 py-2.5 text-sm">
+          <button
+            onClick={handleScan}
+            className="btn-primary px-4 py-2.5 text-sm"
+          >
             Try Again
           </button>
         </div>

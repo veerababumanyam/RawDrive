@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
-import { CheckCircle2, ImageIcon, ShieldCheck, Smartphone } from "lucide-react";
+import {
+  CheckCircle2,
+  ImageIcon,
+  ShieldCheck,
+  Smartphone,
+} from "@/components/icons";
 import { SolutionShowcasePage } from "@/components/marketing/SolutionShowcasePage";
 import { createPageMetadata } from "@/lib/seo";
 

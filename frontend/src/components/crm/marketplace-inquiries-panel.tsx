@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { listInquiries, replyToInquiry, type MarketplaceInquiry } from "@/lib/api/marketplace";
+import {
+  listInquiries,
+  replyToInquiry,
+  type MarketplaceInquiry,
+} from "@/lib/api/marketplace";
 import { getStoredAccessToken, getStoredAccessTokenClaims } from "@/lib/auth";
 
 const STATUS_CLASSES: Record<string, string> = {
@@ -36,7 +40,9 @@ export function MarketplaceInquiriesPanel() {
 
   const [inquiries, setInquiries] = useState<MarketplaceInquiry[]>([]);
   const [loading, setLoading] = useState(() => Boolean(token));
-  const [error, setError] = useState<string | null>(() => (token ? null : "Not authenticated"));
+  const [error, setError] = useState<string | null>(() =>
+    token ? null : "Not authenticated",
+  );
   const [selected, setSelected] = useState<MarketplaceInquiry | null>(null);
   const [replyText, setReplyText] = useState("");
   const [replying, setReplying] = useState(false);
@@ -55,12 +61,16 @@ export function MarketplaceInquiriesPanel() {
     listInquiries(token)
       .then((data) => {
         if (ignore) return;
-        setInquiries((data ?? []).filter((inq) => inq.to_user_id === currentUserID));
+        setInquiries(
+          (data ?? []).filter((inq) => inq.to_user_id === currentUserID),
+        );
         setLoading(false);
       })
       .catch((err: unknown) => {
         if (ignore) return;
-        setError(err instanceof Error ? err.message : "Failed to load inquiries");
+        setError(
+          err instanceof Error ? err.message : "Failed to load inquiries",
+        );
         setLoading(false);
       });
     return () => {
@@ -94,10 +104,16 @@ export function MarketplaceInquiriesPanel() {
         ),
       );
       setSelected((prev) =>
-        prev ? { ...prev, status: "replied", reply_message: replyText.trim() } : prev,
+        prev
+          ? { ...prev, status: "replied", reply_message: replyText.trim() }
+          : prev,
       );
     } catch (err) {
-      setReplyError(err instanceof Error ? err.message : "Failed to send reply. Please try again.");
+      setReplyError(
+        err instanceof Error
+          ? err.message
+          : "Failed to send reply. Please try again.",
+      );
     } finally {
       setReplying(false);
     }
@@ -124,9 +140,12 @@ export function MarketplaceInquiriesPanel() {
   if (inquiries.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-border-default p-10 text-center">
-        <p className="font-medium text-text-primary">No marketplace inquiries yet</p>
+        <p className="font-medium text-text-primary">
+          No marketplace inquiries yet
+        </p>
         <p className="mt-1 text-sm text-text-secondary">
-          When a potential client sends you an inquiry from your marketplace profile, it will appear here.
+          When a potential client sends you an inquiry from your marketplace
+          profile, it will appear here.
         </p>
       </div>
     );
@@ -135,7 +154,8 @@ export function MarketplaceInquiriesPanel() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-text-secondary">
-        {inquiries.length} {inquiries.length === 1 ? "inquiry" : "inquiries"} received
+        {inquiries.length} {inquiries.length === 1 ? "inquiry" : "inquiries"}{" "}
+        received
       </p>
 
       <div className="rounded-2xl border border-border-default bg-surface-raised overflow-hidden">
@@ -154,11 +174,19 @@ export function MarketplaceInquiriesPanel() {
             className="grid grid-cols-[1fr_auto] gap-3 px-4 py-3 border-b border-border-default last:border-b-0 hover:bg-surface-sunken/40 transition-colors cursor-pointer"
           >
             <div>
-              <p className="text-sm font-medium text-text-primary">{senderLabel(inq)}</p>
-              <p className="mt-0.5 text-xs text-text-secondary line-clamp-1">{inq.message}</p>
-              <p className="mt-0.5 text-xs text-text-tertiary">{formatDate(inq.created_at)}</p>
+              <p className="text-sm font-medium text-text-primary">
+                {senderLabel(inq)}
+              </p>
+              <p className="mt-0.5 text-xs text-text-secondary line-clamp-1">
+                {inq.message}
+              </p>
+              <p className="mt-0.5 text-xs text-text-tertiary">
+                {formatDate(inq.created_at)}
+              </p>
             </div>
-            <span className={`self-center capitalize ${STATUS_CLASSES[inq.status] ?? "status-badge status-badge--neutral"}`}>
+            <span
+              className={`self-center capitalize ${STATUS_CLASSES[inq.status] ?? "status-badge status-badge--neutral"}`}
+            >
               {inq.status}
             </span>
           </div>
@@ -173,7 +201,7 @@ export function MarketplaceInquiriesPanel() {
           aria-label="Inquiry detail"
         >
           <div
-            className="flex-1 bg-black/40 backdrop-blur-sm"
+            className="flex-1 bg-surface-scrim-strong/40 glass-blur-subtle"
             onClick={() => setSelected(null)}
             aria-hidden
           />
@@ -189,13 +217,17 @@ export function MarketplaceInquiriesPanel() {
               </button>
             </div>
 
-            <span className={`capitalize ${STATUS_CLASSES[selected.status] ?? "status-badge status-badge--neutral"}`}>
+            <span
+              className={`capitalize ${STATUS_CLASSES[selected.status] ?? "status-badge status-badge--neutral"}`}
+            >
               {selected.status}
             </span>
 
             {/* Sender info */}
             <div className="rounded-xl border border-border-default bg-surface-container-low p-4 space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-widest text-text-tertiary">From</p>
+              <p className="text-xs font-semibold uppercase tracking-widest text-text-tertiary">
+                From
+              </p>
               <p className="font-medium text-on-surface">
                 {selected.from_user_name ?? "Client"}
               </p>
@@ -212,38 +244,56 @@ export function MarketplaceInquiriesPanel() {
             <dl className="text-sm space-y-3">
               <div>
                 <dt className="text-xs text-text-tertiary mb-1">Message</dt>
-                <dd className="text-text-primary whitespace-pre-wrap">{selected.message}</dd>
+                <dd className="text-text-primary whitespace-pre-wrap">
+                  {selected.message}
+                </dd>
               </div>
               {selected.event_date && (
                 <div>
-                  <dt className="text-xs text-text-tertiary mb-1">Event Date</dt>
-                  <dd className="text-text-primary">{formatDate(selected.event_date)}</dd>
+                  <dt className="text-xs text-text-tertiary mb-1">
+                    Event Date
+                  </dt>
+                  <dd className="text-text-primary">
+                    {formatDate(selected.event_date)}
+                  </dd>
                 </div>
               )}
               <div>
                 <dt className="text-xs text-text-tertiary mb-1">Received</dt>
-                <dd className="text-text-primary text-xs">{formatDate(selected.created_at)}</dd>
+                <dd className="text-text-primary text-xs">
+                  {formatDate(selected.created_at)}
+                </dd>
               </div>
             </dl>
 
             {/* Existing reply (if already replied) */}
             {selected.reply_message && (
               <div className="rounded-xl border border-feedback-success/30 bg-feedback-success/10 p-4">
-                <p className="text-xs font-semibold uppercase tracking-widest text-feedback-success mb-1">Your reply</p>
-                <p className="text-sm text-text-primary whitespace-pre-wrap">{selected.reply_message}</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-feedback-success mb-1">
+                  Your reply
+                </p>
+                <p className="text-sm text-text-primary whitespace-pre-wrap">
+                  {selected.reply_message}
+                </p>
               </div>
             )}
 
             {/* Reply form — shown when not yet replied, or after reply was just sent */}
             {replySent ? (
               <div className="flex items-start gap-3 rounded-xl bg-feedback-success/10 border border-feedback-success/30 p-4">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-feedback-success/20 text-feedback-success text-xs">✓</span>
-                <p className="text-sm text-text-primary">Reply sent! The client will see your response.</p>
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-feedback-success/20 text-feedback-success text-xs">
+                  ✓
+                </span>
+                <p className="text-sm text-text-primary">
+                  Reply sent! The client will see your response.
+                </p>
               </div>
             ) : (
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-widest text-text-tertiary">
-                  {selected.status === "replied" ? "Send another reply" : "Reply"}
+                  {selected.status === "replied"
+                    ? "Send another reply"
+                    : "Reply"}
                 </label>
                 {replyError && (
                   <p className="rounded-lg border border-feedback-error/30 bg-feedback-error/10 px-3 py-2 text-sm text-feedback-error">

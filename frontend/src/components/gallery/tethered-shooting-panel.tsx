@@ -12,7 +12,13 @@
 // Firefox/Safari: single-file fallback picker offered instead.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Trash } from "@/components/icons";
+import {
+  Camera,
+  ChevronLeft,
+  ChevronRight,
+  Trash,
+  XMark,
+} from "@/components/icons";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import {
   createGalleryAlbum,
@@ -66,7 +72,7 @@ type FSADirHandle = {
 };
 type FSAEntry =
   | { kind: "file"; name: string; getFile(): Promise<File> }
-  | { kind: "directory"; name: string } & FSADirHandle;
+  | ({ kind: "directory"; name: string } & FSADirHandle);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -144,7 +150,8 @@ async function uploadJpgDirectly(file: File, apiUrl: string): Promise<string> {
       },
       body: chunk,
     });
-    if (!patchRes.ok) throw new Error(`Chunk upload failed: ${patchRes.status}`);
+    if (!patchRes.ok)
+      throw new Error(`Chunk upload failed: ${patchRes.status}`);
     offset = end;
     if (offset >= file.size) {
       const body = (await patchRes.json().catch(() => ({}))) as {
@@ -154,7 +161,8 @@ async function uploadJpgDirectly(file: File, apiUrl: string): Promise<string> {
     }
   }
 
-  if (!assetId) throw new Error("Upload completed but backend returned no assetId");
+  if (!assetId)
+    throw new Error("Upload completed but backend returned no assetId");
   return assetId;
 }
 
@@ -167,7 +175,10 @@ interface TetheredShootingPanelProps {
   apiUrl: string;
 }
 
-export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPanelProps) {
+export function TetheredShootingPanel({
+  galleryId,
+  apiUrl,
+}: TetheredShootingPanelProps) {
   const [status, setStatus] = useState<TetherStatus>("idle");
   const [photos, setPhotos] = useState<TetheredPhoto[]>([]);
   const [folderName, setFolderName] = useState<string | null>(null);
@@ -221,11 +232,21 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
   const albumRef = useRef<GalleryAlbum | null>(null);
 
   // Keep refs in sync with state.
-  useEffect(() => { recursiveRef.current = recursive; }, [recursive]);
-  useEffect(() => { newestFirstRef.current = newestFirst; }, [newestFirst]);
-  useEffect(() => { soundOnRef.current = soundOn; }, [soundOn]);
-  useEffect(() => { pollIntervalMsRef.current = pollIntervalMs; }, [pollIntervalMs]);
-  useEffect(() => { albumRef.current = album; }, [album]);
+  useEffect(() => {
+    recursiveRef.current = recursive;
+  }, [recursive]);
+  useEffect(() => {
+    newestFirstRef.current = newestFirst;
+  }, [newestFirst]);
+  useEffect(() => {
+    soundOnRef.current = soundOn;
+  }, [soundOn]);
+  useEffect(() => {
+    pollIntervalMsRef.current = pollIntervalMs;
+  }, [pollIntervalMs]);
+  useEffect(() => {
+    albumRef.current = album;
+  }, [album]);
 
   // Tick clock for relative timestamps.
   useEffect(() => {
@@ -235,8 +256,9 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
 
   // Revoke all object URLs on unmount.
   useEffect(() => {
+    const seen = seenRef.current;
     return () => {
-      seenRef.current.forEach((v) => v.url && URL.revokeObjectURL(v.url));
+      seen.forEach((v) => v.url && URL.revokeObjectURL(v.url));
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     };
   }, []);
@@ -280,10 +302,14 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
     setAlbumCreating(true);
     setAlbumError(null);
     try {
-      const created = await createGalleryAlbum(currentToken, galleryId, { name });
+      const created = await createGalleryAlbum(currentToken, galleryId, {
+        name,
+      });
       setAlbum(created);
     } catch (err) {
-      setAlbumError(err instanceof Error ? err.message : "Failed to create sub-gallery");
+      setAlbumError(
+        err instanceof Error ? err.message : "Failed to create sub-gallery",
+      );
     } finally {
       setAlbumCreating(false);
     }
@@ -326,7 +352,9 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
       setAlbum(null);
       setAlbumName("");
     } catch (err) {
-      setAlbumError(err instanceof Error ? err.message : "Failed to delete sub-gallery");
+      setAlbumError(
+        err instanceof Error ? err.message : "Failed to delete sub-gallery",
+      );
     } finally {
       setAlbumDeleting(false);
     }
@@ -427,29 +455,26 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
     [],
   );
 
-  const addPhoto = useCallback(
-    (path: string, file: File, isNew: boolean) => {
-      const url = URL.createObjectURL(file);
-      const entry = seenRef.current.get(path);
-      if (entry) entry.url = url;
+  const addPhoto = useCallback((path: string, file: File, isNew: boolean) => {
+    const url = URL.createObjectURL(file);
+    const entry = seenRef.current.get(path);
+    if (entry) entry.url = url;
 
-      const photo: TetheredPhoto = {
-        id: ++idSeqRef.current,
-        name: path,
-        shortName: path.split("/").pop() ?? path,
-        url,
-        sizeBytes: file.size,
-        capturedAt: new Date(file.lastModified || Date.now()),
-        isNew,
-      };
-      photosRef.current = newestFirstRef.current
-        ? [photo, ...photosRef.current]
-        : [...photosRef.current, photo];
-      setPhotos([...photosRef.current]);
-      return photo;
-    },
-    [],
-  );
+    const photo: TetheredPhoto = {
+      id: ++idSeqRef.current,
+      name: path,
+      shortName: path.split("/").pop() ?? path,
+      url,
+      sizeBytes: file.size,
+      capturedAt: new Date(file.lastModified || Date.now()),
+      isNew,
+    };
+    photosRef.current = newestFirstRef.current
+      ? [photo, ...photosRef.current]
+      : [...photosRef.current, photo];
+    setPhotos([...photosRef.current]);
+    return photo;
+  }, []);
 
   const scanOnce = useCallback(
     async (initial: boolean) => {
@@ -519,19 +544,19 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
       inp.multiple = true;
       inp.accept = "image/*";
       inp.onchange = () => {
-        Array.from(inp.files ?? []).forEach((f) =>
-          addPhoto(f.name, f, false),
-        );
+        Array.from(inp.files ?? []).forEach((f) => addPhoto(f.name, f, false));
       };
       inp.click();
       return;
     }
     try {
-      const handle = await (window as unknown as FSAWindow).showDirectoryPicker({
-        id: "rawdrive-tether",
-        mode: "read",
-        startIn: "pictures",
-      });
+      const handle = await (window as unknown as FSAWindow).showDirectoryPicker(
+        {
+          id: "rawdrive-tether",
+          mode: "read",
+          startIn: "pictures",
+        },
+      );
       dirHandleRef.current = handle;
       setFolderName(handle.name);
       setStatus("live");
@@ -548,7 +573,7 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
         console.warn("[tethered-shooting] folder picker failed:", e);
       }
     }
-  }, [scanOnce, schedulePoll, pollIntervalMs, addPhoto]);
+  }, [scanOnce, schedulePoll, pollIntervalMs, addPhoto, loadExistingAlbums]);
 
   const handlePauseResume = useCallback(() => {
     if (status === "live") {
@@ -612,9 +637,7 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") setLightboxIndex(null);
       if (e.key === "ArrowRight")
-        setLightboxIndex((i) =>
-          i !== null ? (i + 1) % photos.length : null,
-        );
+        setLightboxIndex((i) => (i !== null ? (i + 1) % photos.length : null));
       if (e.key === "ArrowLeft")
         setLightboxIndex((i) =>
           i !== null ? (i - 1 + photos.length) % photos.length : null,
@@ -654,9 +677,7 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
 
           {/* Status pill */}
           <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-border-default bg-surface-sunken px-3 py-1.5 text-xs font-semibold text-text-secondary">
-            <span
-              className={`h-2 w-2 rounded-full ${statusDot[status]}`}
-            />
+            <span className={`h-2 w-2 rounded-full ${statusDot[status]}`} />
             {statusLabel[status]}
           </span>
         </header>
@@ -672,15 +693,15 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
                 Pick a folder to start watching
               </p>
               <p className="max-w-sm text-xs text-text-tertiary">
-                Point your camera&apos;s tethered output folder here. New
-                photos appear within 2 seconds. Everything stays on your
-                device — nothing uploads.
+                Point your camera&apos;s tethered output folder here. New photos
+                appear within 2 seconds. Everything stays on your device —
+                nothing uploads.
               </p>
             </div>
             <button
               type="button"
               onClick={() => void handleChooseFolder()}
-              className="inline-flex items-center gap-2 rounded-xl bg-accent-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-primary/90 min-h-[44px]"
+              className="inline-flex items-center gap-2 rounded-xl bg-accent-primary px-5 py-2.5 text-sm font-medium text-text-inverse transition-colors hover:bg-accent-primary/90 touch-min"
             >
               <svg
                 className="h-4 w-4"
@@ -837,9 +858,7 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
                   max={5000}
                   step={500}
                   value={pollIntervalMs}
-                  onChange={(e) =>
-                    handleIntervalChange(Number(e.target.value))
-                  }
+                  onChange={(e) => handleIntervalChange(Number(e.target.value))}
                   className="w-28 accent-accent-primary"
                   aria-label="Poll interval"
                 />
@@ -877,23 +896,41 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
                 /* ── Linked state ── */
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2 text-sm text-feedback-success min-w-0">
-                    <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <svg
+                      className="h-4 w-4 shrink-0"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden
+                    >
                       <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                       <path d="M9 12l2 2 4-4" />
                     </svg>
                     <span className="truncate">
-                      Pushing to <strong className="text-text-primary">{album.name}</strong>{" "}
+                      Pushing to{" "}
+                      <strong className="text-text-primary">
+                        {album.name}
+                      </strong>{" "}
                       <span className="text-text-tertiary text-xs">
                         — {pollIntervalMs / 1000 + 1}s after each scan
                         {uploading && " · uploading…"}
-                        {!uploading && uploadedCount > 0 && ` · ${uploadedCount} pushed`}
+                        {!uploading &&
+                          uploadedCount > 0 &&
+                          ` · ${uploadedCount} pushed`}
                       </span>
                     </span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       type="button"
-                      onClick={() => { setAlbum(null); setAlbumName(""); setSelectedAlbumId(""); }}
+                      onClick={() => {
+                        setAlbum(null);
+                        setAlbumName("");
+                        setSelectedAlbumId("");
+                      }}
                       disabled={albumDeleting}
                       className="text-xs text-text-tertiary hover:text-text-secondary underline disabled:opacity-50"
                     >
@@ -903,7 +940,11 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
                       onClick={() => void handleDeleteAlbum()}
                       variant="danger"
                       size="sm"
-                      label={albumDeleting ? "Deleting…" : `Delete sub-gallery "${album.name}"`}
+                      label={
+                        albumDeleting
+                          ? "Deleting…"
+                          : `Delete sub-gallery "${album.name}"`
+                      }
                       disabled={albumDeleting}
                     >
                       <Trash />
@@ -920,7 +961,7 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
                       onClick={() => setAlbumMode("select")}
                       className={`flex-1 px-3 py-2 transition-colors ${
                         albumMode === "select"
-                          ? "bg-accent-primary text-white"
+                          ? "bg-accent-primary text-text-inverse"
                           : "bg-surface-raised text-text-secondary hover:bg-surface-sunken"
                       }`}
                     >
@@ -931,7 +972,7 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
                       onClick={() => setAlbumMode("create")}
                       className={`flex-1 px-3 py-2 transition-colors ${
                         albumMode === "create"
-                          ? "bg-accent-primary text-white"
+                          ? "bg-accent-primary text-text-inverse"
                           : "bg-surface-raised text-text-secondary hover:bg-surface-sunken"
                       }`}
                     >
@@ -945,7 +986,7 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
                       <select
                         value={selectedAlbumId}
                         onChange={(e) => setSelectedAlbumId(e.target.value)}
-                        className="flex-1 min-w-0 rounded-xl border border-border-default bg-surface-raised px-3 py-2 text-sm text-text-primary focus:border-accent-primary focus:outline-none min-h-[40px]"
+                        className="flex-1 min-w-0 rounded-xl border border-border-default bg-surface-raised px-3 py-2 text-sm text-text-primary focus:border-accent-primary focus:outline-none touch-min"
                         disabled={albumsLoading}
                       >
                         <option value="">
@@ -965,7 +1006,7 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
                         type="button"
                         onClick={handleSelectAlbum}
                         disabled={!selectedAlbumId || albumsLoading}
-                        className="shrink-0 rounded-xl bg-accent-primary px-4 py-2 text-sm font-medium text-white hover:bg-accent-primary/90 disabled:opacity-50 disabled:cursor-not-allowed min-h-[40px]"
+                        className="shrink-0 rounded-xl bg-accent-primary px-4 py-2 text-sm font-medium text-text-inverse hover:bg-accent-primary/90 disabled:opacity-50 disabled:cursor-not-allowed touch-min"
                       >
                         Use
                       </button>
@@ -973,7 +1014,7 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
                         type="button"
                         onClick={() => void loadExistingAlbums()}
                         disabled={albumsLoading}
-                        className="shrink-0 rounded-xl border border-border-default bg-surface-raised px-3 py-2 text-sm text-text-tertiary hover:text-text-primary hover:bg-surface-sunken disabled:opacity-50 min-h-[40px]"
+                        className="shrink-0 rounded-xl border border-border-default bg-surface-raised px-3 py-2 text-sm text-text-tertiary hover:text-text-primary hover:bg-surface-sunken disabled:opacity-50 touch-min"
                         title="Refresh sub-gallery list"
                       >
                         ↻
@@ -982,15 +1023,21 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
                   ) : (
                     /* ── Create a new album ── */
                     <form
-                      onSubmit={(e) => { e.preventDefault(); void handleCreateAlbum(); }}
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void handleCreateAlbum();
+                      }}
                       className="flex items-center gap-2"
                     >
                       <input
                         type="text"
                         value={albumName}
-                        onChange={(e) => { setAlbumName(e.target.value); if (albumError) setAlbumError(null); }}
+                        onChange={(e) => {
+                          setAlbumName(e.target.value);
+                          if (albumError) setAlbumError(null);
+                        }}
                         placeholder="New sub-gallery name…"
-                        className="flex-1 min-w-0 rounded-xl border border-border-default bg-surface-raised px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-accent-primary focus:outline-none min-h-[40px]"
+                        className="flex-1 min-w-0 rounded-xl border border-border-default bg-surface-raised px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-accent-primary focus:outline-none touch-min"
                         maxLength={80}
                         disabled={albumCreating}
                         autoFocus
@@ -998,7 +1045,7 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
                       <button
                         type="submit"
                         disabled={!albumName.trim() || albumCreating}
-                        className="shrink-0 rounded-xl bg-accent-primary px-4 py-2 text-sm font-medium text-white hover:bg-accent-primary/90 disabled:opacity-50 disabled:cursor-not-allowed min-h-[40px]"
+                        className="shrink-0 rounded-xl bg-accent-primary px-4 py-2 text-sm font-medium text-text-inverse hover:bg-accent-primary/90 disabled:opacity-50 disabled:cursor-not-allowed touch-min"
                       >
                         {albumCreating ? "Creating…" : "Create"}
                       </button>
@@ -1014,7 +1061,8 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
               )}
               {!album && (
                 <p className="text-[11px] text-text-tertiary">
-                  New JPGs are uploaded {pollIntervalMs / 1000 + 1}s after each scan. Upload credit and B2 storage are required.
+                  New JPGs are uploaded {pollIntervalMs / 1000 + 1}s after each
+                  scan. Upload credit and B2 storage are required.
                 </p>
               )}
             </div>
@@ -1040,11 +1088,10 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
                     >
                       {/* New badge */}
                       {photo.isNew && (
-                        <span className="absolute left-2 top-2 z-10 rounded-full bg-accent-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow-lg">
+                        <span className="absolute left-2 top-2 z-10 rounded-full bg-accent-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-text-inverse shadow-lg">
                           New
                         </span>
                       )}
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={photo.url}
                         alt={photo.shortName}
@@ -1052,11 +1099,11 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
                         loading="lazy"
                       />
                       {/* Hover overlay */}
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-                        <p className="truncate text-xs font-medium text-white">
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-surface-scrim-strong/70 to-transparent px-3 py-2 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                        <p className="truncate text-xs font-medium text-text-media">
                           {photo.shortName}
                         </p>
-                        <p className="text-[10px] text-white/70">
+                        <p className="text-[10px] text-text-media/70">
                           {fmtTime(photo.capturedAt)} ·{" "}
                           {fmtSize(photo.sizeBytes)}
                         </p>
@@ -1078,60 +1125,50 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
         <div
           role="dialog"
           aria-label="Photo preview"
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-md"
+          className="media-viewer-shell fixed inset-0 z-50 flex items-center justify-center"
           onClick={() => setLightboxIndex(null)}
         >
           {/* Close */}
-          <button
-            type="button"
-            aria-label="Close preview"
+          <GlassIconButton
+            size="md"
+            variant="ghost"
+            label="Close preview"
             onClick={() => setLightboxIndex(null)}
-            className="absolute right-5 top-5 flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-sm hover:bg-white/20"
+            className="absolute right-5 top-5"
           >
-            <svg
-              className="h-5 w-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-            >
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
+            <XMark />
+          </GlassIconButton>
 
           {/* Prev */}
           {photos.length > 1 && (
-            <button
-              type="button"
-              aria-label="Previous photo"
+            <GlassIconButton
+              size="md"
+              label="Previous photo"
               onClick={(e) => {
                 e.stopPropagation();
                 setLightboxIndex(
                   (i) => ((i ?? 0) - 1 + photos.length) % photos.length,
                 );
               }}
-              className="absolute left-5 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-sm hover:bg-white/20"
+              className="absolute left-5 top-1/2 -translate-y-1/2"
             >
-              ‹
-            </button>
+              <ChevronLeft />
+            </GlassIconButton>
           )}
 
           {/* Next */}
           {photos.length > 1 && (
-            <button
-              type="button"
-              aria-label="Next photo"
+            <GlassIconButton
+              size="md"
+              label="Next photo"
               onClick={(e) => {
                 e.stopPropagation();
                 setLightboxIndex((i) => ((i ?? 0) + 1) % photos.length);
               }}
-              className="absolute right-5 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-sm hover:bg-white/20"
+              className="absolute right-5 top-1/2 -translate-y-1/2"
             >
-              ›
-            </button>
+              <ChevronRight />
+            </GlassIconButton>
           )}
 
           {/* Image */}
@@ -1139,7 +1176,6 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
             className="max-h-[calc(100vh-120px)] max-w-[calc(100vw-120px)]"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={photos[lightboxIndex].url}
               alt={photos[lightboxIndex].shortName}
@@ -1148,13 +1184,13 @@ export function TetheredShootingPanel({ galleryId, apiUrl }: TetheredShootingPan
           </div>
 
           {/* Meta bar */}
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full border border-white/20 bg-black/60 px-4 py-2 text-xs text-white/80 backdrop-blur-sm whitespace-nowrap">
-            <strong className="text-white">
+          <div className="cover-media-chip absolute bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap px-4 py-2 text-xs text-text-media/80">
+            <strong className="text-text-media">
               {photos[lightboxIndex].shortName}
             </strong>{" "}
             · {fmtTime(photos[lightboxIndex].capturedAt)} ·{" "}
-            {fmtSize(photos[lightboxIndex].sizeBytes)} ·{" "}
-            {lightboxIndex + 1}/{photos.length}
+            {fmtSize(photos[lightboxIndex].sizeBytes)} · {lightboxIndex + 1}/
+            {photos.length}
           </div>
         </div>
       )}

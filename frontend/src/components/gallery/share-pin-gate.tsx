@@ -33,6 +33,8 @@
 
 import { useState } from "react";
 
+import { Lock } from "@/components/icons";
+
 interface Props {
   slug: string;
   shareToken: string;
@@ -48,7 +50,13 @@ function absoluteApiUrl(url?: string | null) {
   return `${base}${url}`;
 }
 
-export function SharePinGate({ slug, shareToken, ws, brandName, logoUrl }: Props) {
+export function SharePinGate({
+  slug,
+  shareToken,
+  ws,
+  brandName,
+  logoUrl,
+}: Props) {
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -64,10 +72,13 @@ export function SharePinGate({ slug, shareToken, ws, brandName, logoUrl }: Props
       params.set("share", shareToken);
       params.set("pin", pin);
       if (ws) params.set("ws", ws);
-      const res = await fetch(`/api/v1/public/galleries/${slug}?${params.toString()}`, {
-        method: "GET",
-        credentials: "include",
-      });
+      const res = await fetch(
+        `/api/v1/public/galleries/${slug}?${params.toString()}`,
+        {
+          method: "GET",
+          credentials: "include",
+        },
+      );
 
       // tryBindShareSession only emits X-Gallery-Session on a successful mint;
       // its absence means the PIN/link was rejected even on a 200 locked shell.
@@ -91,7 +102,9 @@ export function SharePinGate({ slug, shareToken, ws, brandName, logoUrl }: Props
       if (res.status === 429) {
         setError("Too many attempts. Please wait a few minutes.");
       } else {
-        setError("Incorrect PIN. Please check the link your photographer sent you.");
+        setError(
+          "Incorrect PIN. Please check the link your photographer sent you.",
+        );
       }
     } catch {
       setError("Something went wrong. Please try again.");
@@ -111,14 +124,20 @@ export function SharePinGate({ slug, shareToken, ws, brandName, logoUrl }: Props
           />
         ) : (
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-sunken">
-            <svg className="h-7 w-7 text-text-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-            </svg>
+            <Lock className="h-7 w-7 text-text-tertiary" aria-hidden="true" />
           </div>
         )}
-        {brandName && <p className="mb-2 text-xs uppercase tracking-[0.18em] text-text-tertiary">{brandName}</p>}
-        <h1 className="text-xl font-semibold text-text-primary">Enter your access PIN</h1>
-        <p className="mt-2 text-sm text-text-secondary">This gallery link is protected with a PIN.</p>
+        {brandName && (
+          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-text-tertiary">
+            {brandName}
+          </p>
+        )}
+        <h1 className="text-xl font-semibold text-text-primary">
+          Enter your access PIN
+        </h1>
+        <p className="mt-2 text-sm text-text-secondary">
+          This gallery link is protected with a PIN.
+        </p>
         <form onSubmit={handleSubmit} className="mt-6 space-y-3">
           <input
             type="text"
@@ -131,7 +150,11 @@ export function SharePinGate({ slug, shareToken, ws, brandName, logoUrl }: Props
             autoFocus
             aria-label="Gallery access PIN"
           />
-          {error && <p className="text-xs text-error" role="alert">{error}</p>}
+          {error && (
+            <p className="text-xs text-error" role="alert">
+              {error}
+            </p>
+          )}
           <button
             type="submit"
             disabled={!pin || loading}

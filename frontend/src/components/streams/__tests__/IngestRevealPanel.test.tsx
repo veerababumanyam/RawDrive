@@ -4,11 +4,14 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { IngestRevealPanel } from "../IngestRevealPanel";
 
 function fixedFetcher(status: number, body?: unknown) {
-  return vi.fn(async () => ({
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => body ?? {},
-  }) as unknown as Response);
+  return vi.fn(
+    async () =>
+      ({
+        ok: status >= 200 && status < 300,
+        status,
+        json: async () => body ?? {},
+      }) as unknown as Response,
+  );
 }
 
 const scheduled = new Date("2026-05-01T18:00:00.000Z");
@@ -65,7 +68,9 @@ describe("IngestRevealPanel", () => {
     await waitFor(() => {
       expect(screen.getByTestId("revealed-state")).toBeTruthy();
     });
-    expect(screen.getByTestId("value-stream-key").textContent).toBe("live_abcdef");
+    expect(screen.getByTestId("value-stream-key").textContent).toBe(
+      "live_abcdef",
+    );
     expect(screen.getByTestId("copy-stream-key")).toBeTruthy();
     expect(fetcher).toHaveBeenCalledWith(
       "/api/v1/streaming/streams/s-1/reveal-ingest",
@@ -100,7 +105,10 @@ describe("IngestRevealPanel", () => {
   it("displays revealed-at timestamp", async () => {
     const now = new Date("2026-05-01T17:45:00.000Z");
     const fetcher = fixedFetcher(200, {
-      rtmps_url: "u", stream_key: "k", srt_url: "s", srt_passkey: "p",
+      rtmps_url: "u",
+      stream_key: "k",
+      srt_url: "s",
+      srt_passkey: "p",
       revealed_at: now.toISOString(),
     });
     render(
@@ -150,7 +158,9 @@ describe("IngestRevealPanel", () => {
     );
     fireEvent.click(screen.getByTestId("reveal-button"));
     await waitFor(() => screen.getByTestId("error-message"));
-    expect(screen.getByTestId("error-message").textContent).toMatch(/cannot be revealed yet/i);
+    expect(screen.getByTestId("error-message").textContent).toMatch(
+      /cannot be revealed yet/i,
+    );
     expect(screen.queryByTestId("revealed-state")).toBeNull();
   });
 });

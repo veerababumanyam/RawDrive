@@ -8,8 +8,10 @@ import {
   getAuditLogDetail,
   type AuditLogEntry,
 } from "@/lib/api/admin";
-import { Calendar, Clock, Download, Filter, X } from "lucide-react";
+import { Calendar, Clock, Download, Filter, X } from "@/components/icons";
 import { DataTable, type ColumnDef } from "@/components/ui/data-table";
+import { GlassButton } from "@/components/ui/glass-button";
+import { GlassIconButton } from "@/components/ui/glass-icon-button";
 
 /* ------------------------------------------------------------------ */
 /*  Severity badge                                                     */
@@ -17,15 +19,35 @@ import { DataTable, type ColumnDef } from "@/components/ui/data-table";
 
 function SeverityBadge({ severity }: { severity: string }) {
   const colors: Record<string, { bg: string; text: string; dot: string }> = {
-    info: { bg: "bg-feedback-success/10", text: "text-feedback-success", dot: "bg-feedback-success" },
-    low: { bg: "bg-feedback-success/10", text: "text-feedback-success", dot: "bg-feedback-success" },
-    medium: { bg: "bg-feedback-warning/10", text: "text-feedback-warning", dot: "bg-feedback-warning" },
-    high: { bg: "bg-feedback-error/10", text: "text-feedback-error", dot: "bg-feedback-error" },
-    critical: { bg: "bg-feedback-error/20", text: "text-feedback-error/70", dot: "bg-feedback-error/50" },
+    info: {
+      bg: "bg-feedback-success/10",
+      text: "text-feedback-success",
+      dot: "bg-feedback-success",
+    },
+    low: {
+      bg: "bg-feedback-success/10",
+      text: "text-feedback-success",
+      dot: "bg-feedback-success",
+    },
+    medium: {
+      bg: "bg-feedback-warning/10",
+      text: "text-feedback-warning",
+      dot: "bg-feedback-warning",
+    },
+    high: {
+      bg: "bg-feedback-error/10",
+      text: "text-feedback-error",
+      dot: "bg-feedback-error",
+    },
+    critical: {
+      bg: "bg-feedback-error/20",
+      text: "text-feedback-error",
+      dot: "bg-feedback-error",
+    },
   };
   const c = colors[severity] || colors.low;
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ${c.bg} ${c.text} text-[10px] font-bold uppercase`}>
+    <span className={`micro-badge ${c.bg} ${c.text}`}>
       <span className={`w-1 h-1 rounded-full ${c.dot}`} />
       {severity}
     </span>
@@ -41,11 +63,15 @@ function formatTimestamp(iso: string) {
 }
 
 function JsonBlock({ data, label }: { data: unknown; label: string }) {
-  if (!data || (typeof data === "object" && Object.keys(data as object).length === 0)) return null;
+  if (
+    !data ||
+    (typeof data === "object" && Object.keys(data as object).length === 0)
+  )
+    return null;
   return (
     <div>
-      <p className="text-[10px] font-label uppercase tracking-[0.1em] text-text-tertiary mb-1">{label}</p>
-      <pre className="bg-surface-container-lowest rounded-xl p-3 text-xs font-mono text-text-secondary overflow-x-auto max-h-48 overflow-y-auto border border-white/[0.04]">
+      <p className="text-caption mb-1 font-label uppercase">{label}</p>
+      <pre className="max-h-48 overflow-x-auto overflow-y-auto rounded-xl border border-border-subtle bg-surface-container-low p-3 font-mono text-xs text-text-secondary">
         {JSON.stringify(data, null, 2)}
       </pre>
     </div>
@@ -76,7 +102,7 @@ function DetailPanel({
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+        className="modal-backdrop fixed inset-0 z-40"
         onClick={onClose}
         aria-hidden
       />
@@ -85,24 +111,29 @@ function DetailPanel({
         ref={panelRef}
         role="dialog"
         aria-label="Audit log detail"
-        className="fixed right-0 top-0 z-50 h-full w-full max-w-lg overflow-y-auto surface-panel shadow-2xl border-l border-white/[0.06] animate-in slide-in-from-right duration-200"
+        className="surface-panel fixed right-0 top-0 z-50 h-full w-full max-w-lg overflow-y-auto border-l border-border-subtle shadow-2xl animate-in slide-in-from-right duration-200"
       >
-        <div className="sticky top-0 z-10 bg-surface border-b border-border flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
-          <h3 className="font-headline text-lg font-bold text-on-surface">Audit Log Detail</h3>
-          <button
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border-subtle bg-surface px-6 py-4">
+          <h3 className="font-headline text-lg font-bold text-text-primary">
+            Audit Log Detail
+          </h3>
+          <GlassIconButton
             type="button"
             onClick={onClose}
-            aria-label="Close detail panel"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-text-secondary hover:bg-surface-container-high hover:text-on-surface transition-colors"
+            label="Close detail panel"
+            size="sm"
+            variant="ghost"
           >
             <X className="h-4 w-4" />
-          </button>
+          </GlassIconButton>
         </div>
 
         <div className="p-6 space-y-5">
           {/* Timestamp + Severity */}
           <div className="flex items-center justify-between">
-            <span className="text-sm text-text-secondary">{formatTimestamp(entry.inserted_at)}</span>
+            <span className="text-sm text-text-secondary">
+              {formatTimestamp(entry.inserted_at)}
+            </span>
             <SeverityBadge severity={entry.severity} />
           </div>
 
@@ -112,14 +143,27 @@ function DetailPanel({
               the very data an admin is auditing. Use the mono (break-all)
               variant so the full value wraps within the cell. */}
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Actor" value={entry.actor_email || entry.actor_id} mono />
+            <Field
+              label="Actor"
+              value={entry.actor_email || entry.actor_id}
+              mono
+            />
             <Field label="Actor Type" value={entry.actor_type || "—"} />
             <Field label="Action" value={entry.action} mono />
             <Field label="Resource Type" value={entry.resource_type || "—"} />
             <Field label="Resource ID" value={entry.resource_id || "—"} mono />
-            <Field label="Workspace ID" value={entry.workspace_id || "—"} mono />
+            <Field
+              label="Workspace ID"
+              value={entry.workspace_id || "—"}
+              mono
+            />
             <Field label="IP Address" value={entry.ip_address || "—"} mono />
-            <Field label="User Agent" value={entry.user_agent || "—"} mono className="col-span-2" />
+            <Field
+              label="User Agent"
+              value={entry.user_agent || "—"}
+              mono
+              className="col-span-2"
+            />
           </div>
 
           {/* Metadata */}
@@ -151,8 +195,13 @@ function Field({
 }) {
   return (
     <div className={className}>
-      <p className="text-[10px] font-label uppercase tracking-[0.1em] text-text-tertiary mb-0.5">{label}</p>
-      <p className={`text-sm text-text-primary ${mono ? "font-mono break-all" : "truncate"}`} title={value}>{value}</p>
+      <p className="text-caption mb-0.5 font-label uppercase">{label}</p>
+      <p
+        className={`text-sm text-text-primary ${mono ? "font-mono break-all" : "truncate"}`}
+        title={value}
+      >
+        {value}
+      </p>
     </div>
   );
 }
@@ -169,7 +218,13 @@ interface FilterState {
   severity: string;
 }
 
-const emptyFilters: FilterState = { dateFrom: "", dateTo: "", actorId: "", ipAddress: "", severity: "" };
+const emptyFilters: FilterState = {
+  dateFrom: "",
+  dateTo: "",
+  actorId: "",
+  ipAddress: "",
+  severity: "",
+};
 
 function AdvancedFilters({
   filters,
@@ -183,18 +238,23 @@ function AdvancedFilters({
   const hasFilters = Object.values(filters).some(Boolean);
 
   return (
-    <div className="bg-surface-container-low/40 backdrop-blur-md border border-white/[0.03] p-4 rounded-2xl shadow-xl">
+    <div className="table-toolbar-panel p-4">
       <div className="flex items-center gap-2 mb-3">
         <Filter className="h-4 w-4 text-text-tertiary" />
-        <span className="text-xs font-label uppercase tracking-[0.1em] text-text-tertiary">Advanced Filters</span>
+        <span className="text-caption font-label uppercase">
+          Advanced Filters
+        </span>
         {hasFilters && (
-          <button
+          <GlassButton
+            type="button"
             onClick={onClear}
-            className="ml-auto inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-text-secondary hover:text-on-surface hover:bg-white/[0.06] transition-colors"
+            className="ml-auto"
+            variant="quiet"
+            size="sm"
+            icon={<X className="h-3 w-3" />}
           >
-            <X className="h-3 w-3" />
             Clear all
-          </button>
+          </GlassButton>
         )}
       </div>
       <div className="flex flex-wrap items-end gap-3">
@@ -234,11 +294,13 @@ function AdvancedFilters({
           placeholder="e.g. 192.168"
         />
         <div>
-          <label className="block text-[10px] font-label uppercase tracking-[0.1em] text-text-tertiary mb-1">Severity</label>
+          <label className="text-caption mb-1 block font-label uppercase">
+            Severity
+          </label>
           <select
             value={filters.severity}
             onChange={(e) => onChange({ ...filters, severity: e.target.value })}
-            className="appearance-none bg-surface-container-lowest border border-white/[0.06] rounded-xl px-3 py-2 text-sm text-on-surface focus:ring-2 focus:ring-secondary/50 outline-none cursor-pointer min-w-[120px]"
+            className="input-base min-w-32 cursor-pointer appearance-none px-3 py-2 text-sm"
           >
             <option value="">All</option>
             <option value="info">Info</option>
@@ -270,15 +332,21 @@ function FilterInput({
 }) {
   return (
     <div>
-      <label className="block text-[10px] font-label uppercase tracking-[0.1em] text-text-tertiary mb-1">{label}</label>
+      <label className="text-caption mb-1 block font-label uppercase">
+        {label}
+      </label>
       <div className="relative">
-        {icon && <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none">{icon}</span>}
+        {icon && (
+          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none">
+            {icon}
+          </span>
+        )}
         <input
           type={type}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className={`bg-surface-container-lowest border border-white/[0.06] rounded-xl ${icon ? "pl-8" : "pl-3"} pr-3 py-2 text-sm text-on-surface focus:ring-2 focus:ring-secondary/50 outline-none placeholder:text-text-tertiary/50 min-w-[140px]`}
+          className={`input-base min-w-36 ${icon ? "pl-8" : "pl-3"} pr-3 py-2 text-sm placeholder:text-text-tertiary/70`}
         />
       </div>
     </div>
@@ -316,7 +384,7 @@ const columns: ColumnDef<AuditLogRow>[] = [
     label: "Action",
     sortable: true,
     render: (value) => (
-      <span className="text-sm font-mono text-secondary">{value as string}</span>
+      <span className="font-mono text-sm text-accent">{value as string}</span>
     ),
   },
   {
@@ -324,7 +392,9 @@ const columns: ColumnDef<AuditLogRow>[] = [
     label: "Actor Type",
     sortable: true,
     render: (value) => (
-      <span className="text-sm text-text-tertiary capitalize">{(value as string) || "—"}</span>
+      <span className="text-sm text-text-tertiary capitalize">
+        {(value as string) || "—"}
+      </span>
     ),
   },
   {
@@ -332,7 +402,9 @@ const columns: ColumnDef<AuditLogRow>[] = [
     label: "Resource Type",
     sortable: true,
     render: (value) => (
-      <span className="text-sm text-text-tertiary">{(value as string) || "—"}</span>
+      <span className="text-sm text-text-tertiary">
+        {(value as string) || "—"}
+      </span>
     ),
   },
   {
@@ -340,7 +412,10 @@ const columns: ColumnDef<AuditLogRow>[] = [
     label: "Workspace",
     sortable: true,
     render: (value) => (
-      <span className="text-xs font-mono text-text-tertiary" title={value as string}>
+      <span
+        className="text-xs font-mono text-text-tertiary"
+        title={value as string}
+      >
         {(value as string)?.slice(0, 8) || "—"}
       </span>
     ),
@@ -389,52 +464,64 @@ export default function AdminAuditLogsPage() {
   // Debounce timer for text filters
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const fetchLogs = useCallback(async (f: FilterState, cursor?: string, append = false) => {
-    let token = getStoredAccessToken();
-    if (!token) {
-      const { refreshAuthSession } = await import("@/lib/auth");
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
-      token = await refreshAuthSession(API_BASE);
-    }
-    if (!token) { setError("Session expired. Please log in again."); setLoading(false); return; }
-    if (append) setLoadingMore(true); else setLoading(true);
-    const params: Record<string, string> = { limit: String(AUDIT_PAGE_SIZE) };
-    if (cursor) params.cursor = cursor;
-    if (f.dateFrom) params.date_from = f.dateFrom;
-    if (f.dateTo) params.date_to = f.dateTo;
-    if (f.actorId) params.actor_id = f.actorId;
-    if (f.ipAddress) params.ip_address = f.ipAddress;
-    if (f.severity) params.severity = f.severity;
-    // QA #59: one-shot retry on transient failure. The admin audit log
-    // endpoint occasionally 5xx's under load (Valkey rate-limit false
-    // positive, pgxpool saturation). Single 500ms-delayed retry catches
-    // most of those without compounding load; persistent failures fall
-    // through to the existing error banner.
-    const fetchOnce = () => listAuditLogs(token!, params);
-    try {
-      let res;
+  const fetchLogs = useCallback(
+    async (f: FilterState, cursor?: string, append = false) => {
+      let token = getStoredAccessToken();
+      if (!token) {
+        const { refreshAuthSession } = await import("@/lib/auth");
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+        token = await refreshAuthSession(API_BASE);
+      }
+      if (!token) {
+        setError("Session expired. Please log in again.");
+        setLoading(false);
+        return;
+      }
+      if (append) setLoadingMore(true);
+      else setLoading(true);
+      const params: Record<string, string> = { limit: String(AUDIT_PAGE_SIZE) };
+      if (cursor) params.cursor = cursor;
+      if (f.dateFrom) params.date_from = f.dateFrom;
+      if (f.dateTo) params.date_to = f.dateTo;
+      if (f.actorId) params.actor_id = f.actorId;
+      if (f.ipAddress) params.ip_address = f.ipAddress;
+      if (f.severity) params.severity = f.severity;
+      // QA #59: one-shot retry on transient failure. The admin audit log
+      // endpoint occasionally 5xx's under load (Valkey rate-limit false
+      // positive, pgxpool saturation). Single 500ms-delayed retry catches
+      // most of those without compounding load; persistent failures fall
+      // through to the existing error banner.
+      const fetchOnce = () => listAuditLogs(token!, params);
       try {
-        res = await fetchOnce();
-      } catch (firstErr) {
-        await new Promise((r) => setTimeout(r, 500));
+        let res;
         try {
           res = await fetchOnce();
-        } catch {
-          throw firstErr;
+        } catch (firstErr) {
+          await new Promise((r) => setTimeout(r, 500));
+          try {
+            res = await fetchOnce();
+          } catch {
+            throw firstErr;
+          }
         }
+        setLogs((prev) =>
+          append
+            ? [...prev, ...(res.items as AuditLogRow[])]
+            : (res.items as AuditLogRow[]),
+        );
+        setTotal(res.total_count);
+        setNextCursor(res.next_cursor);
+        setError(null);
+      } catch {
+        setError("Failed to load audit logs. Try refreshing the page.");
+        if (!append) setLogs([]);
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
       }
-      setLogs((prev) => append ? [...prev, ...res.items as AuditLogRow[]] : res.items as AuditLogRow[]);
-      setTotal(res.total_count);
-      setNextCursor(res.next_cursor);
-      setError(null);
-    } catch {
-      setError("Failed to load audit logs. Try refreshing the page.");
-      if (!append) setLogs([]);
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-    }
-  }, []);
+    },
+    [],
+  );
 
   // Initial fetch — defined inline so the compiler sees a locally-scoped
   // async function rather than an external setState-containing callback.
@@ -447,11 +534,14 @@ export default function AdminAuditLogsPage() {
   }, []);
 
   // Re-fetch when filters change (debounced for text inputs)
-  const handleFilterChange = useCallback((f: FilterState) => {
-    setFilters(f);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => fetchLogs(f), 400);
-  }, [fetchLogs]);
+  const handleFilterChange = useCallback(
+    (f: FilterState) => {
+      setFilters(f);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => fetchLogs(f), 400);
+    },
+    [fetchLogs],
+  );
 
   const handleClearFilters = useCallback(() => {
     setFilters(emptyFilters);
@@ -522,32 +612,29 @@ export default function AdminAuditLogsPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h2 className="font-headline text-4xl font-extrabold tracking-tight text-on-surface flex items-center gap-4">
+          <h2 className="font-headline flex items-center gap-4 text-4xl font-extrabold text-text-primary">
             Audit Logs
-            <span className="text-xs font-label uppercase tracking-[0.15em] bg-surface-container-high px-3 py-1 rounded-full text-primary border border-white/5">
+            <span className="micro-badge border border-border-subtle bg-surface-container-high text-accent">
               {total} entries
             </span>
           </h2>
           <p className="text-text-secondary mt-2 font-body text-sm">
             Immutable record of every administrative action.
-            <span className="ml-3 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-surface-container-high text-[10px] font-label uppercase tracking-[0.1em] text-text-tertiary border border-white/5">
+            <span className="micro-badge ml-3 border border-border-subtle bg-surface-container-high text-text-tertiary">
               <Clock className="h-3 w-3" />
               90-day retention
             </span>
           </p>
         </div>
-        <button
+        <GlassButton
           type="button"
           onClick={() => setShowFilters((p) => !p)}
-          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors ${
-            showFilters
-              ? "bg-primary/10 text-primary"
-              : "bg-surface-container-lowest text-text-secondary hover:bg-surface-container-high hover:text-on-surface"
-          }`}
+          variant={showFilters ? "primary" : "surface"}
+          size="md"
+          icon={<Filter className="h-4 w-4" />}
         >
-          <Filter className="h-4 w-4" />
           {showFilters ? "Hide Filters" : "Advanced Filters"}
-        </button>
+        </GlassButton>
       </div>
 
       {/* Advanced filters */}
@@ -576,7 +663,8 @@ export default function AdminAuditLogsPage() {
         initialSort={{ key: "inserted_at", direction: "desc" }}
         compareFns={{
           inserted_at: (a, b) =>
-            new Date(a.inserted_at).getTime() - new Date(b.inserted_at).getTime(),
+            new Date(a.inserted_at).getTime() -
+            new Date(b.inserted_at).getTime(),
         }}
         pageSize={25}
         loading={loading}
@@ -584,29 +672,31 @@ export default function AdminAuditLogsPage() {
         emptyMessage="No audit logs match your filters."
         onRowClick={handleRowClick}
         toolbarActions={
-          <button
+          <GlassButton
             type="button"
             onClick={handleExport}
             disabled={exporting || logs.length === 0}
-            className="inline-flex items-center gap-2 rounded-xl bg-surface-container-lowest px-4 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-container-high hover:text-on-surface disabled:opacity-40 disabled:pointer-events-none"
+            variant="surface"
+            size="md"
+            icon={<Download className="h-4 w-4" />}
           >
-            <Download className="h-4 w-4" />
             {exporting ? "Exporting..." : "Export CSV"}
-          </button>
+          </GlassButton>
         }
       />
 
       {/* Load more — cursor pagination */}
       {(nextCursor || loadingMore) && (
         <div className="flex items-center justify-center gap-3 pt-1">
-          <button
+          <GlassButton
             type="button"
             onClick={handleLoadMore}
             disabled={loadingMore}
-            className="inline-flex items-center gap-2 rounded-xl bg-surface-container-low/60 border border-white/[0.05] px-5 py-2.5 text-sm text-on-surface hover:border-primary/40 disabled:opacity-50"
+            variant="surface"
+            size="md"
           >
             {loadingMore ? "Loading…" : `Load next ${AUDIT_PAGE_SIZE} entries`}
-          </button>
+          </GlassButton>
           <span className="text-xs text-text-tertiary">
             {logs.length.toLocaleString()} of {total.toLocaleString()} loaded
           </span>
@@ -614,15 +704,14 @@ export default function AdminAuditLogsPage() {
       )}
 
       {/* Detail slide-over */}
-      <DetailPanel
-        entry={detailEntry}
-        onClose={() => setDetailEntry(null)}
-      />
+      <DetailPanel entry={detailEntry} onClose={() => setDetailEntry(null)} />
 
       {/* Detail loading overlay */}
       {detailLoading && detailEntry && (
         <div className="fixed right-0 top-0 z-50 h-full w-full max-w-lg flex items-center justify-center">
-          <div className="animate-pulse text-text-tertiary text-sm">Loading details...</div>
+          <div className="animate-pulse text-text-tertiary text-sm">
+            Loading details...
+          </div>
         </div>
       )}
     </div>

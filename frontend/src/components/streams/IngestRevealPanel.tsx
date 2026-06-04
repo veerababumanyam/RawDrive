@@ -17,7 +17,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
-import { CheckCircle, InfoCircle } from "@/components/icons";
+import { CheckCircle, Copy, InfoCircle } from "@/components/icons";
+import { GlassButton } from "@/components/ui/glass-button";
 
 const REVEAL_WINDOW_MS = 30 * 60 * 1000;
 
@@ -38,7 +39,13 @@ export interface IngestRevealPanelProps {
   fetcher?: (url: string, init?: RequestInit) => Promise<Response>;
 }
 
-type Status = "locked" | "ready" | "revealing" | "revealed" | "error" | "too-early";
+type Status =
+  | "locked"
+  | "ready"
+  | "revealing"
+  | "revealed"
+  | "error"
+  | "too-early";
 
 export function IngestRevealPanel({
   streamId,
@@ -48,7 +55,10 @@ export function IngestRevealPanel({
   fetcher,
 }: IngestRevealPanelProps) {
   const doFetch = fetcher ?? ((u, i) => fetch(u, i));
-  const scheduled = useMemo(() => new Date(scheduledStartAt), [scheduledStartAt]);
+  const scheduled = useMemo(
+    () => new Date(scheduledStartAt),
+    [scheduledStartAt],
+  );
 
   const [currentTime, setCurrentTime] = useState<Date>(() => now ?? new Date());
   useEffect(() => {
@@ -57,10 +67,13 @@ export function IngestRevealPanel({
     return () => clearInterval(t);
   }, [now]);
 
-  const msUntilWindow = scheduled.getTime() - REVEAL_WINDOW_MS - currentTime.getTime();
+  const msUntilWindow =
+    scheduled.getTime() - REVEAL_WINDOW_MS - currentTime.getTime();
   const windowOpen = msUntilWindow <= 0;
 
-  const [revealPhase, setRevealPhase] = useState<"idle" | "revealing" | "revealed" | "error" | "too-early">("idle");
+  const [revealPhase, setRevealPhase] = useState<
+    "idle" | "revealing" | "revealed" | "error" | "too-early"
+  >("idle");
   const [creds, setCreds] = useState<IngestRevealCredentials | null>(null);
   const [errorMsg, setErrorMsg] = useState<string>("");
 
@@ -78,13 +91,18 @@ export function IngestRevealPanel({
     setRevealPhase("revealing");
     setErrorMsg("");
     try {
-      const res = await doFetch(`/api/v1/streaming/streams/${streamId}/reveal-ingest`, {
-        method: "POST",
-        credentials: "include",
-      });
+      const res = await doFetch(
+        `/api/v1/streaming/streams/${streamId}/reveal-ingest`,
+        {
+          method: "POST",
+          credentials: "include",
+        },
+      );
       if (res.status === 425) {
         setRevealPhase("too-early");
-        setErrorMsg("Ingest credentials cannot be revealed yet — try again closer to the start time.");
+        setErrorMsg(
+          "Ingest credentials cannot be revealed yet — try again closer to the start time.",
+        );
         return;
       }
       if (!res.ok) {
@@ -111,15 +129,17 @@ export function IngestRevealPanel({
     <section
       data-testid="ingest-reveal-panel"
       aria-label="Ingest credentials"
-      className="rounded-2xl border border-white/10 bg-white/5 p-5"
+      className="surface-panel p-5"
     >
       <header className="mb-3 flex items-center justify-between">
-        <h3 className="text-base font-medium text-white/90">Ingest credentials</h3>
+        <h3 className="text-base font-medium text-text-primary">
+          Ingest credentials
+        </h3>
         {isSuperAdmin && (
           <a
             href={`/admin/streaming/${streamId}/reveal-audit`}
             data-testid="audit-link"
-            className="inline-flex items-center gap-1 text-sm text-white/70 hover:text-white"
+            className="touch-target-link items-center gap-1 text-sm text-text-secondary hover:text-text-primary"
           >
             <InfoCircle />
             Audit log
@@ -128,10 +148,10 @@ export function IngestRevealPanel({
       </header>
 
       {status === "locked" && (
-        <div data-testid="locked-state" className="text-sm text-white/70">
+        <div data-testid="locked-state" className="text-sm text-text-secondary">
           <p>Credentials unlock 30 minutes before the scheduled start.</p>
           <p
-            className="mt-2 font-mono text-xs text-white/60"
+            className="mt-2 font-mono text-xs text-text-tertiary"
             data-testid="countdown"
           >
             {formatCountdown(msUntilWindow)}
@@ -139,19 +159,26 @@ export function IngestRevealPanel({
         </div>
       )}
 
-      {(status === "ready" || status === "revealing" || status === "error" || status === "too-early") && (
+      {(status === "ready" ||
+        status === "revealing" ||
+        status === "error" ||
+        status === "too-early") && (
         <div className="flex items-center gap-3">
-          <button
+          <GlassButton
             type="button"
             onClick={onReveal}
             disabled={status === "revealing" || !windowOpen}
             data-testid="reveal-button"
-            className="rounded-xl bg-white/15 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            variant="surface"
+            size="md"
           >
             {status === "revealing" ? "Revealing…" : "Reveal ingest key"}
-          </button>
+          </GlassButton>
           {errorMsg && (
-            <span data-testid="error-message" className="text-sm text-red-300">
+            <span
+              data-testid="error-message"
+              className="text-sm text-feedback-error"
+            >
               {errorMsg}
             </span>
           )}
@@ -160,13 +187,27 @@ export function IngestRevealPanel({
 
       {status === "revealed" && creds && (
         <div data-testid="revealed-state" className="space-y-3">
-          <CredentialRow label="RTMPS URL" value={creds.rtmps_url} onCopy={copy} />
-          <CredentialRow label="Stream key" value={creds.stream_key} onCopy={copy} sensitive />
+          <CredentialRow
+            label="RTMPS URL"
+            value={creds.rtmps_url}
+            onCopy={copy}
+          />
+          <CredentialRow
+            label="Stream key"
+            value={creds.stream_key}
+            onCopy={copy}
+            sensitive
+          />
           <CredentialRow label="SRT URL" value={creds.srt_url} onCopy={copy} />
-          <CredentialRow label="SRT passkey" value={creds.srt_passkey} onCopy={copy} sensitive />
+          <CredentialRow
+            label="SRT passkey"
+            value={creds.srt_passkey}
+            onCopy={copy}
+            sensitive
+          />
           <p
             data-testid="revealed-at"
-            className="flex items-center gap-2 text-xs text-white/60"
+            className="flex items-center gap-2 text-xs text-text-tertiary"
           >
             <CheckCircle />
             Revealed {new Date(creds.revealed_at).toLocaleString()}
@@ -201,9 +242,9 @@ function CredentialRow({
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="min-w-0 flex-1">
-        <div className="text-xs uppercase tracking-wider text-white/50">{label}</div>
+        <div className="text-caption uppercase">{label}</div>
         <div
-          className="truncate font-mono text-sm text-white/90"
+          className="truncate font-mono text-sm text-text-primary"
           data-testid={`value-${slug(label)}`}
           data-sensitive={sensitive ? "true" : undefined}
         >
@@ -221,20 +262,9 @@ function CredentialRow({
         data-testid={`copy-${slug(label)}`}
         data-copied={copied ? "true" : undefined}
       >
-        {copied ? <CheckCircle /> : <CopyIcon />}
+        {copied ? <CheckCircle /> : <Copy />}
       </GlassIconButton>
     </div>
-  );
-}
-
-function CopyIcon() {
-  // Local inline SVG — identical stroke/cap conventions as icons/index.tsx.
-  // Upstreaming to the registry is tracked as frontend tech-debt.
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="9" y="9" width="11" height="11" rx="2" ry="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
   );
 }
 

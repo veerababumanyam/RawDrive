@@ -49,7 +49,9 @@ describe("ActivateForm", () => {
       target: { value: "123456" },
     });
     await act(async () => {
-      fireEvent.click(getByRole("button", { name: /send new activation code/i }));
+      fireEvent.click(
+        getByRole("button", { name: /send new activation code/i }),
+      );
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -62,13 +64,17 @@ describe("ActivateForm", () => {
     );
     expect(getByRole("status").textContent).toContain("Use the newest code");
     expect(getByLabelText(/activation code/i)).toHaveValue("");
-    expect(getByRole("button", { name: /send new code in 30s/i })).toBeDisabled();
+    expect(
+      getByRole("button", { name: /send new code in 30s/i }),
+    ).toBeDisabled();
 
     act(() => {
       vi.advanceTimersByTime(30_000);
     });
 
-    expect(getByRole("button", { name: /send new activation code/i })).not.toBeDisabled();
+    expect(
+      getByRole("button", { name: /send new activation code/i }),
+    ).not.toBeDisabled();
   });
 
   it("activates the account with a valid OTP and stores the access token", async () => {
@@ -90,7 +96,10 @@ describe("ActivateForm", () => {
         "/auth/verify-otp",
         expect.objectContaining({
           method: "POST",
-          body: JSON.stringify({ email: "photo@rawdrive.test", code: "123456" }),
+          body: JSON.stringify({
+            email: "photo@rawdrive.test",
+            code: "123456",
+          }),
         }),
       );
       expect(auth.persistAuthTokens).toHaveBeenCalledWith("access-token");

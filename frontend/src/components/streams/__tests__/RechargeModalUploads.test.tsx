@@ -120,8 +120,14 @@ describe("RechargeModal — uploads tab", () => {
   it("hides streaming-specific controls when uploads tab is active", async () => {
     global.fetch = vi
       .fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ packages: [] }) } as Response)
-      .mockResolvedValueOnce({ ok: true, json: async () => fakeUploadPackages } as Response);
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ packages: [] }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => fakeUploadPackages,
+      } as Response);
 
     render(<RechargeModal open onClose={vi.fn()} />);
     fireEvent.click(screen.getByTestId("recharge-tab-uploads"));
@@ -139,7 +145,9 @@ describe("RechargeModal — uploads tab", () => {
 
     // Coming-soon notice is visible so the user knows why there's no CTA.
     expect(screen.getByTestId("upload-order-init-unavailable")).toBeDefined();
-    expect(screen.getByTestId("upload-order-init-unavailable")).toHaveTextContent(
+    expect(
+      screen.getByTestId("upload-order-init-unavailable"),
+    ).toHaveTextContent(
       "Upload credit checkout is unavailable because the order endpoint is not live yet.",
     );
   });
@@ -169,17 +177,30 @@ describe("RechargeModal — uploads tab", () => {
       expect(screen.getByTestId("upload-package-starter")).toBeDefined();
     });
     // The uploads tab element has aria-selected="true" (HTML attribute).
-    expect(screen.getByTestId("recharge-tab-uploads").getAttribute("aria-selected")).toBe("true");
-    expect(screen.getByTestId("recharge-tab-streaming").getAttribute("aria-selected")).toBe("false");
+    expect(
+      screen.getByTestId("recharge-tab-uploads").getAttribute("aria-selected"),
+    ).toBe("true");
+    expect(
+      screen
+        .getByTestId("recharge-tab-streaming")
+        .getAttribute("aria-selected"),
+    ).toBe("false");
   });
 
   it("shows error state when upload packages fetch fails", async () => {
     global.fetch = vi
       .fn()
       // Streaming fetch on initial mount
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ packages: [] }) } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ packages: [] }),
+      } as Response)
       // Uploads fetch fails
-      .mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({}) } as Response);
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        json: async () => ({}),
+      } as Response);
 
     render(<RechargeModal open onClose={vi.fn()} />);
     fireEvent.click(screen.getByTestId("recharge-tab-uploads"));

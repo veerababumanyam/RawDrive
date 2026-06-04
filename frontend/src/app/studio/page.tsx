@@ -37,7 +37,9 @@ function studioAddress(studio: PublicStudioProfile): string {
     studio.address_line2,
     studio.city,
     studio.postal_code,
-  ].filter(Boolean).join(", ");
+  ]
+    .filter(Boolean)
+    .join(", ");
 }
 
 function StudioLogo({ studio }: { studio: PublicStudioProfile }) {
@@ -85,11 +87,15 @@ function GalleryCard({ gallery }: { gallery: PublicStudioGallery }) {
       </div>
       <div className="space-y-2 p-5">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-text-primary">{gallery.title}</h2>
+          <h2 className="text-lg font-semibold text-text-primary">
+            {gallery.title}
+          </h2>
           <span className="status-badge status-badge--success">Published</span>
         </div>
         {gallery.description ? (
-          <p className="line-clamp-2 text-sm text-text-secondary">{gallery.description}</p>
+          <p className="line-clamp-2 text-sm text-text-secondary">
+            {gallery.description}
+          </p>
         ) : null}
       </div>
     </a>
@@ -124,7 +130,7 @@ export default async function StudioLandingPage({ searchParams }: Props) {
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : null}
-        <div className="absolute inset-0 bg-surface-overlay backdrop-blur-sm" />
+        <div className="absolute inset-0 bg-surface-overlay glass-blur-subtle" />
         <div className="absolute inset-0 bg-surface-sunken/70" />
 
         <div className="relative mx-auto flex min-h-[72vh] max-w-7xl flex-col justify-end px-6 py-10 sm:px-8 lg:px-10">
@@ -155,7 +161,7 @@ export default async function StudioLandingPage({ searchParams }: Props) {
               {studio.website ? (
                 <a
                   href={studio.website}
-                  className="inline-flex min-h-[44px] items-center rounded-xl border border-border-subtle bg-surface-elevated/70 px-5 py-3 text-sm font-semibold text-text-primary backdrop-blur transition hover:bg-surface-raised focus:outline-none focus:ring-2 focus:ring-border-focus"
+                  className="inline-flex min-h-[44px] items-center rounded-xl border border-border-subtle bg-surface-elevated/70 px-5 py-3 text-sm font-semibold text-text-primary glass-blur-soft transition hover:bg-surface-raised focus:outline-none focus:ring-2 focus:ring-border-focus"
                 >
                   Visit website
                 </a>
@@ -165,7 +171,7 @@ export default async function StudioLandingPage({ searchParams }: Props) {
         </div>
       </section>
 
-      <section className="border-y border-border-subtle bg-surface-elevated/70 px-6 py-6 backdrop-blur sm:px-8 lg:px-10">
+      <section className="border-y border-border-subtle bg-surface-elevated/70 px-6 py-6 glass-blur-soft sm:px-8 lg:px-10">
         <div className="mx-auto grid max-w-7xl gap-4 md:grid-cols-4">
           <div>
             <p className="text-sm text-text-tertiary">Published galleries</p>
@@ -174,27 +180,42 @@ export default async function StudioLandingPage({ searchParams }: Props) {
             </p>
           </div>
           {studio.phone ? (
-            <a className="rounded-xl p-3 text-text-secondary hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-border-focus" href={`tel:${studio.phone}`}>
+            <a
+              className="rounded-xl p-3 text-text-secondary hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-border-focus"
+              href={`tel:${studio.phone}`}
+            >
               <span className="block text-sm text-text-tertiary">Phone</span>
-              <span className="mt-1 block font-medium text-text-primary">{studio.phone}</span>
+              <span className="mt-1 block font-medium text-text-primary">
+                {studio.phone}
+              </span>
             </a>
           ) : null}
           {studio.email ? (
-            <a className="rounded-xl p-3 text-text-secondary hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-border-focus" href={`mailto:${studio.email}`}>
+            <a
+              className="rounded-xl p-3 text-text-secondary hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-border-focus"
+              href={`mailto:${studio.email}`}
+            >
               <span className="block text-sm text-text-tertiary">Email</span>
-              <span className="mt-1 block font-medium text-text-primary">{studio.email}</span>
+              <span className="mt-1 block font-medium text-text-primary">
+                {studio.email}
+              </span>
             </a>
           ) : null}
           {address ? (
             <div className="rounded-xl p-3">
               <span className="block text-sm text-text-tertiary">Studio</span>
-              <span className="mt-1 block font-medium text-text-primary">{address}</span>
+              <span className="mt-1 block font-medium text-text-primary">
+                {address}
+              </span>
             </div>
           ) : null}
         </div>
       </section>
 
-      <section id="galleries" className="mx-auto max-w-7xl px-6 py-12 sm:px-8 lg:px-10">
+      <section
+        id="galleries"
+        className="mx-auto max-w-7xl px-6 py-12 sm:px-8 lg:px-10"
+      >
         <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-medium uppercase tracking-[0.18em] text-text-tertiary">

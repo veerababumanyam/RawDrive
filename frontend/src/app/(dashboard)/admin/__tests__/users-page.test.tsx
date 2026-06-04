@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  fireEvent,
+  within,
+} from "@testing-library/react";
 
 vi.mock("@/lib/api/admin", () => ({
   listUsers: vi.fn(),
@@ -22,14 +28,26 @@ const mockReactivateUser = vi.mocked(reactivateUser);
 const sampleUsers = {
   items: [
     {
-      id: "u1", email: "alice@example.com", full_name: "Alice Sharma",
-      platform_role: "photographer", status: "active" as const, workspace_count: 2,
-      state_name: "Karnataka", tier_name: "Pro", created_at: "2026-01-15T00:00:00Z",
+      id: "u1",
+      email: "alice@example.com",
+      full_name: "Alice Sharma",
+      platform_role: "photographer",
+      status: "active" as const,
+      workspace_count: 2,
+      state_name: "Karnataka",
+      tier_name: "Pro",
+      created_at: "2026-01-15T00:00:00Z",
     },
     {
-      id: "u2", email: "bob@example.com", full_name: "Bob Verma",
-      platform_role: "photographer", status: "suspended" as const, workspace_count: 1,
-      state_name: "Maharashtra", tier_name: "Free", created_at: "2026-02-20T00:00:00Z",
+      id: "u2",
+      email: "bob@example.com",
+      full_name: "Bob Verma",
+      platform_role: "photographer",
+      status: "suspended" as const,
+      workspace_count: 1,
+      state_name: "Maharashtra",
+      tier_name: "Free",
+      created_at: "2026-02-20T00:00:00Z",
     },
   ],
   total_count: 2,
@@ -67,7 +85,9 @@ describe("AdminUsersPage", () => {
     // (tier) is not a filter option ("Free"/"Starter"/… are), so it stays an
     // unambiguous lookup that confirms the tier renders.
     await waitFor(() => screen.getByText("Alice Sharma"));
-    const aliceRow = screen.getByText("Alice Sharma").closest("tr") as HTMLTableRowElement;
+    const aliceRow = screen
+      .getByText("Alice Sharma")
+      .closest("tr") as HTMLTableRowElement;
     expect(aliceRow).not.toBeNull();
     expect(within(aliceRow).getByText("Karnataka")).toBeTruthy();
     expect(within(aliceRow).getByText("Pro")).toBeTruthy();
@@ -108,7 +128,11 @@ describe("AdminUsersPage", () => {
     const suspendBtns = screen.getAllByRole("button", { name: /suspend/i });
     fireEvent.click(suspendBtns[0]);
     await waitFor(() => {
-      expect(mockSuspendUser).toHaveBeenCalledWith("test-token", "u1", expect.any(String));
+      expect(mockSuspendUser).toHaveBeenCalledWith(
+        "test-token",
+        "u1",
+        expect.any(String),
+      );
     });
   });
 
@@ -116,7 +140,9 @@ describe("AdminUsersPage", () => {
     mockReactivateUser.mockResolvedValue(undefined);
     render(<AdminUsersPage />);
     await waitFor(() => screen.getByText("Bob Verma"));
-    const reactivateBtns = screen.getAllByRole("button", { name: /reactivate/i });
+    const reactivateBtns = screen.getAllByRole("button", {
+      name: /reactivate/i,
+    });
     fireEvent.click(reactivateBtns[0]);
     await waitFor(() => {
       expect(mockReactivateUser).toHaveBeenCalledWith("test-token", "u2");
@@ -140,7 +166,10 @@ describe("AdminUsersPage", () => {
   it("calls listUsers on mount", async () => {
     render(<AdminUsersPage />);
     await waitFor(() => {
-      expect(mockListUsers).toHaveBeenCalledWith("test-token", expect.any(Object));
+      expect(mockListUsers).toHaveBeenCalledWith(
+        "test-token",
+        expect.any(Object),
+      );
     });
   });
 

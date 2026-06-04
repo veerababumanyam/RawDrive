@@ -7,12 +7,12 @@ import { cn } from "@/lib/utils";
 // Why inline SVG (not a PNG or a CSS tricolor)?
 //  - Crisp at every pixel density (navbar, mobile menu, retina screens).
 //  - The Ashoka Chakra renders correctly at ~14px without aliasing.
-//  - Colors live in the component, not scattered across design tokens —
-//    these are official national colors and must not be themed.
+//  - Colors are fixed official values, exposed as named tokens so the
+//    component does not inline visual constants.
 //
 // Official specification (Flag Code of India):
-//   3:2 aspect ratio · saffron #FF9933 · white #FFFFFF · india-green #138808
-//   navy-blue Ashoka Chakra #000080 with 24 evenly-spaced spokes
+//   3:2 aspect ratio · saffron · white · india-green
+//   navy-blue Ashoka Chakra with 24 evenly-spaced spokes
 //
 // Decorative-only: the wrapper is aria-hidden so the adjacent "RawDrive
 // home" link keeps a clean accessible name. Sighted users still get the
@@ -36,7 +36,7 @@ export function IndianFlag({
         // Tiny rounded badge with a soft ring that works across all three
         // themes (liquid-glass light/dark + midnight AMOLED gold) and on
         // top of the photographic hero on the landing page.
-        "inline-flex shrink-0 overflow-hidden rounded-[3px] shadow-[0_1px_2px_rgba(0,0,0,0.12)] ring-1 ring-black/10 transition-transform duration-300 ease-out hover:scale-[1.08] dark:ring-white/15",
+        "national-flag-frame inline-flex shrink-0 overflow-hidden",
         className,
       )}
     >
@@ -49,20 +49,20 @@ export function IndianFlag({
         focusable="false"
       >
         {/* Tricolor bands */}
-        <rect width="90" height="20" y="0" fill="#FF9933" />
-        <rect width="90" height="20" y="20" fill="#FFFFFF" />
-        <rect width="90" height="20" y="40" fill="#138808" />
+        <rect width="90" height="20" y="0" fill="var(--india-flag-saffron)" />
+        <rect width="90" height="20" y="20" fill="var(--india-flag-white)" />
+        <rect width="90" height="20" y="40" fill="var(--india-flag-green)" />
 
         {/* Ashoka Chakra — 24 spokes, navy blue, centered in white band */}
         <g
           transform="translate(45 30)"
           fill="none"
-          stroke="#000080"
+          stroke="var(--india-flag-chakra)"
           strokeWidth="0.55"
           strokeLinecap="round"
         >
           <circle r="7.5" />
-          <circle r="1.1" fill="#000080" />
+          <circle r="1.1" fill="var(--india-flag-chakra)" />
           {Array.from({ length: 24 }).map((_, i) => (
             <line
               key={i}

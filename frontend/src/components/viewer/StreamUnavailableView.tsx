@@ -13,9 +13,12 @@ export function StreamUnavailableView() {
       className="mx-auto flex w-full max-w-xl flex-col items-center gap-3 rounded-2xl glass-card p-8 text-center"
       aria-label="Stream unavailable"
     >
-      <h1 className="text-2xl font-semibold text-text-primary">Stream unavailable</h1>
+      <h1 className="text-2xl font-semibold text-text-primary">
+        Stream unavailable
+      </h1>
       <p className="text-sm text-text-secondary">
-        We couldn&apos;t load this stream right now. Please refresh the page in a moment.
+        We couldn&apos;t load this stream right now. Please refresh the page in
+        a moment.
       </p>
     </section>
   );

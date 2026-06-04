@@ -15,7 +15,9 @@ describe("CRM taxonomy", () => {
       "vendor",
       "collaborator",
     ]);
-    expect(CONTACT_TYPE_OPTIONS.map((option) => option.value)).not.toContain("lead");
+    expect(CONTACT_TYPE_OPTIONS.map((option) => option.value)).not.toContain(
+      "lead",
+    );
   });
 
   it("keeps calendar event types aligned to the database constraint", () => {

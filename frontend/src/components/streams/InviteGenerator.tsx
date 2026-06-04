@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState } from "react";
 import QRCodeLib from "qrcode";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
-import { CheckCircle, QRCode, Sparkle } from "@/components/icons";
+import { CheckCircle, Copy, QRCode, Sparkle } from "@/components/icons";
 
 export interface InviteResponse {
   code: string;
@@ -53,11 +53,14 @@ export function InviteGenerator({ streamId, fetcher }: InviteGeneratorProps) {
     setPhase("generating");
     setErrorMsg("");
     try {
-      const res = await doFetch(`/api/v1/streaming/streams/${streamId}/invites`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-      });
+      const res = await doFetch(
+        `/api/v1/streaming/streams/${streamId}/invites`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+        },
+      );
       if (!res.ok) {
         setPhase("error");
         setErrorMsg(`Generate failed (${res.status})`);
@@ -85,10 +88,10 @@ export function InviteGenerator({ streamId, fetcher }: InviteGeneratorProps) {
     <section
       data-testid="invite-generator"
       aria-label="Stream invite generator"
-      className="rounded-2xl border border-white/10 bg-white/5 p-5"
+      className="rounded-2xl border border-text-media/10 bg-surface-overlay/5 p-5"
     >
       <header className="mb-4 flex items-center justify-between">
-        <h3 className="text-base font-medium text-white/90">Stream invite</h3>
+        <h3 className="text-base font-medium text-text-media/90">Stream invite</h3>
       </header>
 
       {phase !== "ready" && (
@@ -96,7 +99,9 @@ export function InviteGenerator({ streamId, fetcher }: InviteGeneratorProps) {
           <GlassIconButton
             type="button"
             variant="accent"
-            label={phase === "generating" ? "Generating invite" : "Generate invite"}
+            label={
+              phase === "generating" ? "Generating invite" : "Generate invite"
+            }
             onClick={onGenerate}
             disabled={phase === "generating"}
             data-testid="generate-button"
@@ -104,7 +109,10 @@ export function InviteGenerator({ streamId, fetcher }: InviteGeneratorProps) {
             {phase === "generating" ? <Sparkle /> : <QRCode />}
           </GlassIconButton>
           {errorMsg && (
-            <span data-testid="error-message" className="text-sm text-feedback-error">
+            <span
+              data-testid="error-message"
+              className="text-sm text-feedback-error"
+            >
               {errorMsg}
             </span>
           )}
@@ -114,10 +122,12 @@ export function InviteGenerator({ streamId, fetcher }: InviteGeneratorProps) {
       {phase === "ready" && invite && (
         <div className="space-y-4">
           <div>
-            <div className="text-xs uppercase tracking-wider text-white/50">Code</div>
+            <div className="text-xs uppercase tracking-wider text-text-media/50">
+              Code
+            </div>
             <div
               data-testid="invite-code"
-              className="font-mono text-sm text-white/90"
+              className="font-mono text-sm text-text-media/90"
             >
               {invite.code}
             </div>
@@ -125,12 +135,12 @@ export function InviteGenerator({ streamId, fetcher }: InviteGeneratorProps) {
 
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div className="text-xs uppercase tracking-wider text-white/50">
+              <div className="text-xs uppercase tracking-wider text-text-media/50">
                 Short URL
               </div>
               <div
                 data-testid="invite-short-url"
-                className="truncate font-mono text-sm text-white/90"
+                className="truncate font-mono text-sm text-text-media/90"
               >
                 {invite.short_url}
               </div>
@@ -143,17 +153,19 @@ export function InviteGenerator({ streamId, fetcher }: InviteGeneratorProps) {
               data-testid="copy-button"
               data-copied={copied ? "true" : undefined}
             >
-              {copied ? <CheckCircle /> : <CopyIcon />}
+              {copied ? <CheckCircle /> : <Copy />}
             </GlassIconButton>
           </div>
 
           <div>
-            <div className="text-xs uppercase tracking-wider text-white/50">QR</div>
+            <div className="text-xs uppercase tracking-wider text-text-media/50">
+              QR
+            </div>
             <div
               data-testid="invite-qr"
               role="img"
               aria-label={`QR code for ${invite.short_url}`}
-              className="mt-1 inline-flex items-center justify-center rounded-xl border border-white/10 bg-white p-2"
+              className="mt-1 inline-flex items-center justify-center rounded-xl border border-text-media/10 bg-white p-2"
             >
               <canvas
                 ref={qrCanvasRef}
@@ -168,21 +180,5 @@ export function InviteGenerator({ streamId, fetcher }: InviteGeneratorProps) {
         </div>
       )}
     </section>
-  );
-}
-
-function CopyIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="9" y="9" width="11" height="11" rx="2" ry="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
   );
 }

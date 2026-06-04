@@ -2,7 +2,11 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { getMyGearListings, deleteGearListing, type GearListing } from "@/lib/api/gear";
+import {
+  getMyGearListings,
+  deleteGearListing,
+  type GearListing,
+} from "@/lib/api/gear";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -36,10 +40,19 @@ export default function MyGearPage() {
     if (!token) return;
     let cancelled = false;
     getMyGearListings(token)
-      .then((data) => { if (!cancelled) setGear(data); })
-      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load gear"); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .then((data) => {
+        if (!cancelled) setGear(data);
+      })
+      .catch((err) => {
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : "Failed to load gear");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   const handleDelete = async (id: string) => {
@@ -60,7 +73,10 @@ export default function MyGearPage() {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8 space-y-4">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-28 rounded-2xl bg-surface-sunken animate-pulse" />
+          <div
+            key={i}
+            className="h-28 rounded-2xl bg-surface-sunken animate-pulse"
+          />
         ))}
       </div>
     );
@@ -75,7 +91,10 @@ export default function MyGearPage() {
             Manage your gear listings for rental
           </p>
         </div>
-        <Link href="/marketplace/gear/new" className="btn-primary px-4 py-2.5 text-sm">
+        <Link
+          href="/marketplace/gear/new"
+          className="btn-primary px-4 py-2.5 text-sm"
+        >
           List New Gear
         </Link>
       </div>
@@ -90,9 +109,13 @@ export default function MyGearPage() {
         <div className="rounded-2xl border border-dashed border-border-default p-10 text-center space-y-4">
           <p className="font-medium text-text-primary">No gear listed yet</p>
           <p className="text-sm text-text-secondary">
-            List your cameras, lenses, and accessories to rent them out to other photographers.
+            List your cameras, lenses, and accessories to rent them out to other
+            photographers.
           </p>
-          <Link href="/marketplace/gear/new" className="btn-primary px-5 py-2.5 text-sm">
+          <Link
+            href="/marketplace/gear/new"
+            className="btn-primary px-5 py-2.5 text-sm"
+          >
             List Your First Gear
           </Link>
         </div>
@@ -112,7 +135,9 @@ export default function MyGearPage() {
                     <span
                       className={cn(
                         "status-badge",
-                        entry.is_published ? "status-badge--success" : "status-badge--neutral",
+                        entry.is_published
+                          ? "status-badge--success"
+                          : "status-badge--neutral",
                       )}
                     >
                       {entry.is_published ? "Published" : "Draft"}
@@ -123,7 +148,9 @@ export default function MyGearPage() {
                       {CATEGORY_LABELS[entry.category] ?? entry.category}
                     </span>
                     {entry.brand && (
-                      <span className="status-badge status-badge--neutral">{entry.brand}</span>
+                      <span className="status-badge status-badge--neutral">
+                        {entry.brand}
+                      </span>
                     )}
                     {entry.condition && (
                       <span className="status-badge status-badge--neutral">
@@ -133,14 +160,18 @@ export default function MyGearPage() {
                     <span
                       className={cn(
                         "status-badge",
-                        entry.is_available ? "status-badge--success" : "status-badge--warning",
+                        entry.is_available
+                          ? "status-badge--success"
+                          : "status-badge--warning",
                       )}
                     >
                       {entry.is_available ? "Available" : "Booked"}
                     </span>
                   </div>
                   {entry.city && (
-                    <p className="text-xs text-text-tertiary mt-1">{entry.city}</p>
+                    <p className="text-xs text-text-tertiary mt-1">
+                      {entry.city}
+                    </p>
                   )}
                 </div>
 
@@ -164,7 +195,9 @@ export default function MyGearPage() {
 
                 {confirmDeleteId === entry.id ? (
                   <div className="flex items-center gap-2 ml-auto">
-                    <span className="text-sm text-text-secondary">Remove this listing?</span>
+                    <span className="text-sm text-text-secondary">
+                      Remove this listing?
+                    </span>
                     <button
                       type="button"
                       onClick={() => handleDelete(entry.id)}

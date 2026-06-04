@@ -45,7 +45,9 @@ describe("MFAVerifyForm", () => {
 
     const { getByLabelText, getByRole } = render(<MFAVerifyForm />);
 
-    fireEvent.change(getByLabelText(/6-digit code/i), { target: { value: "123456" } });
+    fireEvent.change(getByLabelText(/6-digit code/i), {
+      target: { value: "123456" },
+    });
     fireEvent.click(getByRole("button", { name: /verify & sign in/i }));
 
     await waitFor(() => {
@@ -73,7 +75,9 @@ describe("MFAVerifyForm", () => {
 
     const { getByLabelText, getByRole } = render(<MFAVerifyForm />);
 
-    fireEvent.change(getByLabelText(/6-digit code/i), { target: { value: "654321" } });
+    fireEvent.change(getByLabelText(/6-digit code/i), {
+      target: { value: "654321" },
+    });
     fireEvent.click(getByRole("button", { name: /verify & sign in/i }));
 
     await waitFor(() => {
@@ -96,11 +100,15 @@ describe("MFAVerifyForm", () => {
 
     const { getByLabelText, getByRole } = render(<MFAVerifyForm />);
 
-    fireEvent.change(getByLabelText(/6-digit code/i), { target: { value: "123456" } });
+    fireEvent.change(getByLabelText(/6-digit code/i), {
+      target: { value: "123456" },
+    });
     fireEvent.click(getByRole("button", { name: /verify & sign in/i }));
 
     await waitFor(() => {
-      expect(getByRole("alert").textContent).toContain("sign-in session expired");
+      expect(getByRole("alert").textContent).toContain(
+        "sign-in session expired",
+      );
     });
   });
 });

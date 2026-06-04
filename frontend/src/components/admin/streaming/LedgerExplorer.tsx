@@ -105,7 +105,9 @@ export function LedgerExplorer() {
   );
 
   useEffect(() => {
-    async function initialFetch() { await load(EMPTY_DRAFT); }
+    async function initialFetch() {
+      await load(EMPTY_DRAFT);
+    }
     void initialFetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -166,7 +168,7 @@ export function LedgerExplorer() {
           onApply();
         }}
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-4 rounded-2xl
-          bg-surface-container-low/40 border border-white/[0.03]"
+          bg-surface-container-low/40 border border-border-subtle"
       >
         <Field label="Workspace ID" htmlFor="ledger-workspace">
           <input
@@ -221,7 +223,10 @@ export function LedgerExplorer() {
             className="ledger-input"
           />
         </Field>
-        <Field label="Search (id / stream / reservation)" htmlFor="ledger-search">
+        <Field
+          label="Search (id / stream / reservation)"
+          htmlFor="ledger-search"
+        >
           <input
             id="ledger-search"
             type="text"
@@ -241,11 +246,7 @@ export function LedgerExplorer() {
           >
             <XMark />
           </GlassIconButton>
-          <GlassIconButton
-            type="submit"
-            variant="accent"
-            label="Apply filter"
-          >
+          <GlassIconButton type="submit" variant="accent" label="Apply filter">
             <Funnel />
           </GlassIconButton>
           <GlassIconButton
@@ -264,7 +265,7 @@ export function LedgerExplorer() {
         <div
           role="status"
           className="text-sm px-4 py-3 rounded-xl bg-surface-container-low/60
-            border border-white/[0.05] text-on-surface"
+            border border-border-subtle text-on-surface"
         >
           {exportNotice}
         </div>
@@ -281,49 +282,83 @@ export function LedgerExplorer() {
       )}
 
       {/* Table */}
-      <div className="rounded-2xl border border-white/[0.03] bg-surface-container-low/40 overflow-hidden">
+      <div className="rounded-2xl border border-border-subtle bg-surface-container-low/40 overflow-hidden">
         <div className="overflow-x-auto overflow-y-auto max-h-[75vh]">
           <table className="w-full table-auto text-sm">
             <thead className="text-[10px] uppercase tracking-[0.1em] text-text-secondary">
               <tr>
-                <th className="text-left p-3 sticky top-0 z-10 bg-surface-container-low/90 backdrop-blur-sm">Created at</th>
-                <th className="text-left p-3 sticky top-0 z-10 bg-surface-container-low/90 backdrop-blur-sm">Workspace</th>
-                <th className="text-left p-3 sticky top-0 z-10 bg-surface-container-low/90 backdrop-blur-sm">Actor</th>
-                <th className="text-left p-3 sticky top-0 z-10 bg-surface-container-low/90 backdrop-blur-sm">Entry type</th>
-                <th className="text-right p-3 sticky top-0 z-10 bg-surface-container-low/90 backdrop-blur-sm">Δ Minutes</th>
-                <th className="text-right p-3 sticky top-0 z-10 bg-surface-container-low/90 backdrop-blur-sm">Amount (paise)</th>
-                <th className="text-left p-3 sticky top-0 z-10 bg-surface-container-low/90 backdrop-blur-sm">Stream</th>
-                <th className="text-left p-3 sticky top-0 z-10 bg-surface-container-low/90 backdrop-blur-sm">Reference</th>
-                <th className="text-left p-3 sticky top-0 z-10 bg-surface-container-low/90 backdrop-blur-sm">Notes</th>
+                <th className="text-left p-3 sticky top-0 z-10 bg-surface-container-low/90 glass-blur-subtle">
+                  Created at
+                </th>
+                <th className="text-left p-3 sticky top-0 z-10 bg-surface-container-low/90 glass-blur-subtle">
+                  Workspace
+                </th>
+                <th className="text-left p-3 sticky top-0 z-10 bg-surface-container-low/90 glass-blur-subtle">
+                  Actor
+                </th>
+                <th className="text-left p-3 sticky top-0 z-10 bg-surface-container-low/90 glass-blur-subtle">
+                  Entry type
+                </th>
+                <th className="text-right p-3 sticky top-0 z-10 bg-surface-container-low/90 glass-blur-subtle">
+                  Δ Minutes
+                </th>
+                <th className="text-right p-3 sticky top-0 z-10 bg-surface-container-low/90 glass-blur-subtle">
+                  Amount (paise)
+                </th>
+                <th className="text-left p-3 sticky top-0 z-10 bg-surface-container-low/90 glass-blur-subtle">
+                  Stream
+                </th>
+                <th className="text-left p-3 sticky top-0 z-10 bg-surface-container-low/90 glass-blur-subtle">
+                  Reference
+                </th>
+                <th className="text-left p-3 sticky top-0 z-10 bg-surface-container-low/90 glass-blur-subtle">
+                  Notes
+                </th>
               </tr>
             </thead>
             <tbody>
-              {rows.slice(tablePage * LEDGER_TABLE_PAGE_SIZE, (tablePage + 1) * LEDGER_TABLE_PAGE_SIZE).map((r) => (
-                <tr key={r.id} className="border-t border-white/[0.04]">
-                  <td className="p-3 text-text-secondary whitespace-nowrap">
-                    {formatDateTime(r.created_at)}
-                  </td>
-                  <td className="p-3 font-mono text-xs">{r.workspace}</td>
-                  <td className="p-3 font-mono text-xs" title={r.created_by ?? ""}>
-                    {shortId(r.created_by)}
-                  </td>
-                  <td className="p-3">{r.type}</td>
-                  <td className="p-3 text-right font-mono">{r.minutes_delta}</td>
-                  <td className="p-3 text-right font-mono">{r.amount}</td>
-                  <td className="p-3 font-mono text-xs" title={r.stream_id ?? ""}>
-                    {shortId(r.stream_id)}
-                  </td>
-                  <td className="p-3 font-mono text-xs">
-                    {shortId(r.reservation_id ?? r.purchase_id)}
-                  </td>
-                  <td className="p-3 font-mono text-xs text-text-secondary">
-                    {r.idempotency_key ?? "—"}
-                  </td>
-                </tr>
-              ))}
+              {rows
+                .slice(
+                  tablePage * LEDGER_TABLE_PAGE_SIZE,
+                  (tablePage + 1) * LEDGER_TABLE_PAGE_SIZE,
+                )
+                .map((r) => (
+                  <tr key={r.id} className="border-t border-border-subtle">
+                    <td className="p-3 text-text-secondary whitespace-nowrap">
+                      {formatDateTime(r.created_at)}
+                    </td>
+                    <td className="p-3 font-mono text-xs">{r.workspace}</td>
+                    <td
+                      className="p-3 font-mono text-xs"
+                      title={r.created_by ?? ""}
+                    >
+                      {shortId(r.created_by)}
+                    </td>
+                    <td className="p-3">{r.type}</td>
+                    <td className="p-3 text-right font-mono">
+                      {r.minutes_delta}
+                    </td>
+                    <td className="p-3 text-right font-mono">{r.amount}</td>
+                    <td
+                      className="p-3 font-mono text-xs"
+                      title={r.stream_id ?? ""}
+                    >
+                      {shortId(r.stream_id)}
+                    </td>
+                    <td className="p-3 font-mono text-xs">
+                      {shortId(r.reservation_id ?? r.purchase_id)}
+                    </td>
+                    <td className="p-3 font-mono text-xs text-text-secondary">
+                      {r.idempotency_key ?? "—"}
+                    </td>
+                  </tr>
+                ))}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="p-8 text-center text-text-secondary">
+                  <td
+                    colSpan={9}
+                    className="p-8 text-center text-text-secondary"
+                  >
                     No ledger entries match the current filters.
                   </td>
                 </tr>
@@ -332,22 +367,29 @@ export function LedgerExplorer() {
           </table>
         </div>
         {Math.ceil(rows.length / LEDGER_TABLE_PAGE_SIZE) > 1 && (
-          <div className="flex items-center justify-between border-t border-white/[0.04] bg-surface-container-low/40 px-4 py-3 text-sm text-text-secondary">
-            <span>Page {tablePage + 1} of {Math.ceil(rows.length / LEDGER_TABLE_PAGE_SIZE)} ({rows.length} loaded)</span>
+          <div className="flex items-center justify-between border-t border-border-subtle bg-surface-container-low/40 px-4 py-3 text-sm text-text-secondary">
+            <span>
+              Page {tablePage + 1} of{" "}
+              {Math.ceil(rows.length / LEDGER_TABLE_PAGE_SIZE)} ({rows.length}{" "}
+              loaded)
+            </span>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setTablePage((p) => p - 1)}
                 disabled={tablePage === 0}
-                className="rounded-lg border border-white/[0.06] px-3 py-1.5 text-xs hover:bg-white/[0.06] disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                className="rounded-lg border border-border-subtle px-3 py-1.5 text-xs hover:bg-accent-subtle disabled:opacity-40 disabled:pointer-events-none transition-colors"
               >
                 Previous
               </button>
               <button
                 type="button"
                 onClick={() => setTablePage((p) => p + 1)}
-                disabled={tablePage >= Math.ceil(rows.length / LEDGER_TABLE_PAGE_SIZE) - 1}
-                className="rounded-lg border border-white/[0.06] px-3 py-1.5 text-xs hover:bg-white/[0.06] disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                disabled={
+                  tablePage >=
+                  Math.ceil(rows.length / LEDGER_TABLE_PAGE_SIZE) - 1
+                }
+                className="rounded-lg border border-border-subtle px-3 py-1.5 text-xs hover:bg-accent-subtle disabled:opacity-40 disabled:pointer-events-none transition-colors"
               >
                 Next
               </button>
@@ -368,7 +410,7 @@ export function LedgerExplorer() {
             onClick={onLoadMore}
             disabled={loading}
             className="px-4 py-2 rounded-xl bg-surface-container-low/60
-              border border-white/[0.05] text-on-surface hover:border-primary/40
+              border border-border-subtle text-on-surface hover:border-primary/40
               disabled:opacity-50"
           >
             Load more
@@ -380,8 +422,12 @@ export function LedgerExplorer() {
         .ledger-input {
           width: 100%;
           padding: 0.5rem 0.75rem;
-          background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(255,255,255,0.08);
+          background: color-mix(
+            in srgb,
+            var(--surface-container-low) 68%,
+            transparent
+          );
+          border: 1px solid var(--border-subtle);
           border-radius: 0.75rem;
           color: inherit;
           font: inherit;

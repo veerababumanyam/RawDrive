@@ -15,7 +15,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { loadViewerSession } from "@/lib/viewer/session";
 
-export type ReactionKind = "thumbs_up" | "heart" | "celebrate" | "laugh" | "wow";
+export type ReactionKind =
+  | "thumbs_up"
+  | "heart"
+  | "celebrate"
+  | "laugh"
+  | "wow";
 
 const REACTIONS: { kind: ReactionKind; label: string; glyph: string }[] = [
   { kind: "heart", label: "Heart reaction", glyph: "❤" },
@@ -31,7 +36,11 @@ export interface ReactionsBarProps {
   debounceMs?: number;
 }
 
-export function ReactionsBar({ streamId, disabled, debounceMs = 200 }: ReactionsBarProps) {
+export function ReactionsBar({
+  streamId,
+  disabled,
+  debounceMs = 200,
+}: ReactionsBarProps) {
   const pendingRef = useRef<Record<string, number>>({});
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [flushing, setFlushing] = useState(false);
@@ -42,19 +51,26 @@ export function ReactionsBar({ streamId, disabled, debounceMs = 200 }: Reactions
     timerRef.current = null;
     const entries = Object.entries(snapshot)
       .filter(([, count]) => count > 0)
-      .map(([kind, count]) => ({ kind: kind as ReactionKind, count, client_ts: new Date().toISOString() }));
+      .map(([kind, count]) => ({
+        kind: kind as ReactionKind,
+        count,
+        client_ts: new Date().toISOString(),
+      }));
     if (entries.length === 0) return;
     setFlushing(true);
     try {
       const token = loadViewerSession(streamId)?.access_token;
-      await fetch(`/api/v1/public/streams/${encodeURIComponent(streamId)}/reactions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      await fetch(
+        `/api/v1/public/streams/${encodeURIComponent(streamId)}/reactions`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ entries }),
         },
-        body: JSON.stringify({ entries }),
-      });
+      );
     } catch {
       // Reactions are fire-and-forget: a network blip drops the burst.
     } finally {
@@ -85,7 +101,7 @@ export function ReactionsBar({ streamId, disabled, debounceMs = 200 }: Reactions
       data-testid="reactions-bar"
       role="group"
       aria-label="Reactions"
-      className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2 py-1.5 backdrop-blur"
+      className="flex items-center gap-2 rounded-full border border-text-media/10 bg-surface-overlay/5 px-2 py-1.5 glass-blur-soft"
     >
       {REACTIONS.map((r) => (
         <GlassIconButton

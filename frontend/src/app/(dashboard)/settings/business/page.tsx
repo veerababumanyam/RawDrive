@@ -3,6 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
 import {
+  ArrowUpTray,
+  Banknote,
+  Building2,
+  CheckCircle,
+  Palette,
+  ReceiptText,
+  Trash,
+} from "@/components/icons";
+import {
   EMPTY_WORKSPACE_PROFILE,
   getWorkspaceProfile,
   updateWorkspaceProfile,
@@ -10,11 +19,22 @@ import {
   type WorkspaceProfile,
 } from "@/lib/api/workspace-profile";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
+import { viewportThemeColors } from "@/lib/tokens";
+import { GlassButton } from "@/components/ui/glass-button";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import {
+  SettingsAlert,
+  SettingsPageHeader,
+  SettingsPageShell,
+  SettingsPanel,
+} from "../_components/settings-page-shell";
 
-const inputClass = "input-base w-full";
+const inputClass = "input-base settings-input";
 
 export default function BusinessProfilePage() {
-  const [profile, setProfile] = useState<WorkspaceProfile>(EMPTY_WORKSPACE_PROFILE);
+  const [profile, setProfile] = useState<WorkspaceProfile>(
+    EMPTY_WORKSPACE_PROFILE,
+  );
   const [loading, setLoading] = useState(() => Boolean(getStoredAccessToken()));
   const [saving, setSaving] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
@@ -41,7 +61,9 @@ export default function BusinessProfilePage() {
       const token = getStoredAccessToken();
       if (!token) throw new Error("Your session expired. Please log in again.");
       await updateWorkspaceProfile(token, profile);
-      setSavedNotice("Saved. Gallery, invoice, email, and share previews now use this studio identity.");
+      setSavedNotice(
+        "Saved. Gallery, invoice, email, and share previews now use this studio identity.",
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
     } finally {
@@ -49,13 +71,10 @@ export default function BusinessProfilePage() {
     }
   };
 
-  const setText = (key: keyof WorkspaceProfile) => (
-    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) => setProfile((current) => ({ ...current, [key]: event.target.value }));
-
-  const setBool = (key: keyof WorkspaceProfile) => (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => setProfile((current) => ({ ...current, [key]: event.target.checked }));
+  const setText =
+    (key: keyof WorkspaceProfile) =>
+    (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setProfile((current) => ({ ...current, [key]: event.target.value }));
 
   const uploadLogo = async (file: File | undefined) => {
     if (!file) return;
@@ -88,7 +107,12 @@ export default function BusinessProfilePage() {
     setError(null);
     try {
       await updateWorkspaceProfile(token, { logo_asset_id: "" });
-      setProfile((current) => ({ ...current, logo_asset_id: "", logo_url: "", logo_metadata: {} }));
+      setProfile((current) => ({
+        ...current,
+        logo_asset_id: "",
+        logo_url: "",
+        logo_metadata: {},
+      }));
       setSavedNotice("Studio logo removed from public branding.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove logo");
@@ -98,257 +122,421 @@ export default function BusinessProfilePage() {
   };
 
   const studioBrandName = profile.brand_name || profile.name || "Your Studio";
-  const accentColor = profile.brand_accent_color || "#2563EB";
-  const logoFilename = profile.logo_metadata?.filename || (profile.logo_asset_id ? "Uploaded logo" : "");
-  const logoPreviewSource = profile.logo_url || profile.logo_metadata?.storage_key || "";
-  const logoPreviewUrl = logoPreviewSource ? getStorageBackedUrl(logoPreviewSource, getStoredAccessToken()) : "";
-  const businessSubdomain = profile.business_profile_slug && profile.business_unique_code
-    ? `${profile.business_profile_slug}-${profile.business_unique_code}.rawdrive.in`
+  const accentColor =
+    profile.brand_accent_color || viewportThemeColors.publicGallery;
+  const logoFilename =
+    profile.logo_metadata?.filename ||
+    (profile.logo_asset_id ? "Uploaded logo" : "");
+  const logoPreviewSource =
+    profile.logo_url || profile.logo_metadata?.storage_key || "";
+  const logoPreviewUrl = logoPreviewSource
+    ? getStorageBackedUrl(logoPreviewSource, getStoredAccessToken())
     : "";
-  const businessSubdomainUrl = businessSubdomain ? `https://${businessSubdomain}` : "";
+  const businessSubdomain =
+    profile.business_profile_slug && profile.business_unique_code
+      ? `${profile.business_profile_slug}-${profile.business_unique_code}.rawdrive.in`
+      : "";
+  const businessSubdomainUrl = businessSubdomain
+    ? `https://${businessSubdomain}`
+    : "";
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-8">
-        <div className="h-96 animate-pulse rounded-xl bg-surface-sunken" />
-      </div>
+      <SettingsPageShell>
+        <div className="settings-panel settings-loading-panel settings-loading-panel--large" />
+      </SettingsPageShell>
     );
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
-      {error && (
-        <div className="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
-          {error}
-        </div>
-      )}
+    <SettingsPageShell>
+      <SettingsPageHeader
+        eyebrow="Business"
+        title="Business Profile"
+        badge={
+          <span
+            className={
+              profile.public_branding_enabled
+                ? "status-badge status-badge--success"
+                : "status-badge status-badge--neutral"
+            }
+          >
+            {profile.public_branding_enabled ? "Branding visible" : "Private"}
+          </span>
+        }
+        description="Keep one studio identity for CRM, galleries, invoices, email, and share links."
+        actions={
+          <GlassButton
+            type="button"
+            variant="primary"
+            icon={<CheckCircle />}
+            disabled={saving}
+            onClick={save}
+          >
+            {saving ? "Saving" : "Save"}
+          </GlassButton>
+        }
+      />
+
+      {error && <SettingsAlert tone="error">{error}</SettingsAlert>}
       {savedNotice && (
-        <div className="rounded-xl border border-success/20 bg-success/10 px-4 py-3 text-sm text-success">
-          {savedNotice}
-        </div>
+        <SettingsAlert tone="success">{savedNotice}</SettingsAlert>
       )}
 
-      <div>
-        <h1 className="text-2xl font-semibold text-text-primary">Business Profile</h1>
-        <p className="mt-1 text-sm text-text-secondary">
-          Keep one studio identity for CRM, galleries, invoices, email, and share links.
-        </p>
-      </div>
-
-      <section className="space-y-4 rounded-2xl border border-border-default bg-surface-raised p-6">
-        <h2 className="text-lg font-semibold text-text-primary">Studio Identity</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
+      <SettingsPanel
+        title="Studio Identity"
+        description="These details travel into public galleries, invoices, client emails, and share previews."
+        icon={<Building2 />}
+      >
+        <div className="settings-form-grid settings-form-grid--two">
+          <label className="settings-form-field">
             Studio name
-            <input type="text" value={profile.name} onChange={setText("name")} className={inputClass} placeholder="e.g. Pho Pro Studio" />
+            <input
+              type="text"
+              value={profile.name}
+              onChange={setText("name")}
+              className={inputClass}
+              placeholder="e.g. Pho Pro Studio"
+            />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
+          <label className="settings-form-field">
             GSTIN
-            <input type="text" value={profile.gstin} onChange={setText("gstin")} className={inputClass} placeholder="15-char GSTIN" maxLength={15} />
+            <input
+              type="text"
+              value={profile.gstin}
+              onChange={setText("gstin")}
+              className={inputClass}
+              placeholder="15-char GSTIN"
+              maxLength={15}
+            />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
+          <label className="settings-form-field">
             Address line 1
-            <input type="text" value={profile.address_line1} onChange={setText("address_line1")} className={inputClass} />
+            <input
+              type="text"
+              value={profile.address_line1}
+              onChange={setText("address_line1")}
+              className={inputClass}
+            />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
+          <label className="settings-form-field">
             Address line 2
-            <input type="text" value={profile.address_line2} onChange={setText("address_line2")} className={inputClass} />
+            <input
+              type="text"
+              value={profile.address_line2}
+              onChange={setText("address_line2")}
+              className={inputClass}
+            />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
+          <label className="settings-form-field">
             City / State
-            <input type="text" value={profile.city} onChange={setText("city")} className={inputClass} placeholder="Hyderabad, Telangana" />
+            <input
+              type="text"
+              value={profile.city}
+              onChange={setText("city")}
+              className={inputClass}
+              placeholder="Hyderabad, Telangana"
+            />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
+          <label className="settings-form-field">
             Postal code
-            <input type="text" value={profile.postal_code} onChange={setText("postal_code")} className={inputClass} />
+            <input
+              type="text"
+              value={profile.postal_code}
+              onChange={setText("postal_code")}
+              className={inputClass}
+            />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
+          <label className="settings-form-field">
             Phone
-            <input type="tel" value={profile.phone} onChange={setText("phone")} className={inputClass} />
+            <input
+              type="tel"
+              value={profile.phone}
+              onChange={setText("phone")}
+              className={inputClass}
+            />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
+          <label className="settings-form-field">
             Billing email
-            <input type="email" value={profile.email} onChange={setText("email")} className={inputClass} />
+            <input
+              type="email"
+              value={profile.email}
+              onChange={setText("email")}
+              className={inputClass}
+            />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-text-secondary sm:col-span-2">
+          <label className="settings-form-field settings-form-field--full">
             Website
-            <input type="url" value={profile.website} onChange={setText("website")} className={inputClass} placeholder="https://example.com" />
+            <input
+              type="url"
+              value={profile.website}
+              onChange={setText("website")}
+              className={inputClass}
+              placeholder="https://example.com"
+            />
           </label>
           {businessSubdomainUrl && (
-            <div className="rounded-2xl border border-border-default bg-surface-sunken px-4 py-3 sm:col-span-2">
-              <p className="text-xs font-medium text-text-primary">Public subdomain address</p>
-              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="settings-inset-panel settings-form-field--full">
+              <p className="settings-panel-label">Public subdomain address</p>
+              <div className="settings-control-row settings-control-row--compact">
                 <a
                   href={businessSubdomainUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="break-all text-sm font-medium text-accent hover:text-accent-hover focus:outline-none focus:ring-2 focus:ring-border-focus"
+                  className="settings-link"
                 >
                   {businessSubdomainUrl}
                 </a>
-                <span className="text-xs text-text-tertiary">
+                <span className="settings-panel-caption">
                   Published galleries appear under this address.
                 </span>
               </div>
             </div>
           )}
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
+          <label className="settings-form-field">
             Public brand name
-            <input type="text" value={profile.brand_name} onChange={setText("brand_name")} className={inputClass} placeholder={profile.name || "Studio name shown to clients"} />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
-            Brand accent color
-            <input type="text" value={profile.brand_accent_color} onChange={setText("brand_accent_color")} className={inputClass} placeholder="#B7791F" />
-          </label>
-          <label className="flex items-center gap-3 rounded-xl border border-border-default bg-surface-sunken px-4 py-3 text-xs text-text-secondary sm:col-span-2">
             <input
-              type="checkbox"
-              checked={profile.public_branding_enabled}
-              onChange={setBool("public_branding_enabled")}
-              className="h-4 w-4 accent-primary"
+              type="text"
+              value={profile.brand_name}
+              onChange={setText("brand_name")}
+              className={inputClass}
+              placeholder={profile.name || "Studio name shown to clients"}
             />
-            Show studio branding on public galleries
           </label>
-          <div className="rounded-2xl border border-border-default bg-surface-sunken p-4 sm:col-span-2">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-border-default bg-surface-raised">
+          <label className="settings-form-field">
+            Brand accent color
+            <input
+              type="text"
+              value={profile.brand_accent_color}
+              onChange={setText("brand_accent_color")}
+              className={inputClass}
+              placeholder={viewportThemeColors.publicGallery}
+            />
+          </label>
+          <div className="settings-inset-panel settings-control-row settings-form-field--full">
+            <div>
+              <p className="settings-panel-label settings-panel-label--sm">
+                Public gallery branding
+              </p>
+              <p className="settings-panel-note settings-panel-note--compact">
+                Show the studio identity on public gallery headers and shares.
+              </p>
+            </div>
+            <ToggleSwitch
+              checked={profile.public_branding_enabled}
+              label="Show studio branding on public galleries"
+              checkedLabel="Visible"
+              uncheckedLabel="Hidden"
+              onCheckedChange={(enabled) =>
+                setProfile((current) => ({
+                  ...current,
+                  public_branding_enabled: enabled,
+                }))
+              }
+            />
+          </div>
+          <div className="settings-inset-panel settings-form-field--full">
+            <div className="settings-control-row">
+              <div className="settings-business-logo-row">
+                <div className="settings-logo-preview">
                   {logoPreviewUrl ? (
                     <img
                       src={logoPreviewUrl}
                       alt={`${studioBrandName} logo preview`}
-                      className="h-full w-full object-contain p-2"
+                      className="settings-logo-image"
                     />
                   ) : (
-                    <span className="text-2xl font-semibold text-text-tertiary" aria-hidden="true">
+                    <span
+                      className="settings-logo-placeholder"
+                      aria-hidden="true"
+                    >
                       {studioBrandName.slice(0, 1).toUpperCase()}
                     </span>
                   )}
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-text-primary">Studio logo</p>
-                  <p className="mt-1 text-xs text-text-secondary">
-                    {logoFilename || "Upload a transparent PNG, JPEG, WebP, or SVG logo. It is stored as an authenticated asset."}
+                  <p className="settings-panel-label">Studio logo</p>
+                  <p className="settings-panel-note settings-panel-note--compact">
+                    {logoFilename ||
+                      "Upload a transparent PNG, JPEG, WebP, or SVG logo. It is stored as an authenticated asset."}
                   </p>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="settings-action-row">
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                  className="hidden"
+                  className="settings-file-input"
                   onChange={(event) => void uploadLogo(event.target.files?.[0])}
                 />
-                <button
+                <GlassButton
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={logoUploading}
-                  className="btn-tertiary px-4 py-2 text-sm"
+                  variant="surface"
+                  icon={<ArrowUpTray />}
                 >
                   {logoUploading ? "Uploading..." : "Upload studio logo"}
-                </button>
+                </GlassButton>
                 {profile.logo_asset_id && (
-                  <button
+                  <GlassButton
                     type="button"
                     onClick={() => void removeLogo()}
                     disabled={logoUploading}
-                    className="btn-tertiary px-4 py-2 text-sm text-danger"
+                    variant="danger"
+                    icon={<Trash />}
                   >
                     Remove logo
-                  </button>
+                  </GlassButton>
                 )}
               </div>
             </div>
           </div>
         </div>
-      </section>
+      </SettingsPanel>
 
-      <section className="space-y-4 rounded-2xl border border-border-default bg-surface-raised p-6">
-        <div>
-          <h2 className="text-lg font-semibold text-text-primary">Brand Preview</h2>
-          <p className="text-xs text-text-secondary">
-            One identity propagates to the client-facing gallery workspace and transactional surfaces.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <SettingsPanel
+        title="Brand Preview"
+        description="One identity propagates to the client-facing gallery workspace and transactional surfaces."
+        icon={<Palette />}
+      >
+        <div className="settings-card-grid settings-card-grid--two">
           {[
-            ["Gallery preview", `${studioBrandName} presents a polished public gallery header.`],
-            ["Invoice preview", `${studioBrandName} appears above GST, terms, and payment instructions.`],
-            ["Email signature", `Delivery emails sign off as ${studioBrandName}.`],
-            ["Share card", `WhatsApp and email shares inherit the gallery cover and studio name.`],
+            [
+              "Gallery preview",
+              `${studioBrandName} presents a polished public gallery header.`,
+            ],
+            [
+              "Invoice preview",
+              `${studioBrandName} appears above GST, terms, and payment instructions.`,
+            ],
+            [
+              "Email signature",
+              `Delivery emails sign off as ${studioBrandName}.`,
+            ],
+            [
+              "Share card",
+              `WhatsApp and email shares inherit the gallery cover and studio name.`,
+            ],
           ].map(([title, body]) => (
-            <article key={title} className="rounded-2xl border border-border-default bg-surface-sunken p-4">
-              <div className="mb-3 h-1.5 rounded-full" style={{ backgroundColor: accentColor }} />
-              <p className="text-sm font-semibold text-text-primary">{title}</p>
-              <p className="mt-2 text-xs leading-relaxed text-text-secondary">{body}</p>
+            <article key={title} className="settings-preview-card">
+              <div
+                className="settings-preview-accent"
+                style={{ backgroundColor: accentColor }}
+              />
+              <p className="settings-preview-title">{title}</p>
+              <p className="settings-preview-body">{body}</p>
             </article>
           ))}
         </div>
-      </section>
+      </SettingsPanel>
 
-      <section className="space-y-4 rounded-2xl border border-border-default bg-surface-raised p-6">
-        <h2 className="text-lg font-semibold text-text-primary">Bank Details</h2>
-        <p className="text-xs text-text-secondary">
-          Shown on invoices only. These private tax and banking fields never appear in public gallery branding.
-        </p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
+      <SettingsPanel
+        title="Bank Details"
+        description="Shown on invoices only. These private tax and banking fields never appear in public gallery branding."
+        icon={<Banknote />}
+      >
+        <div className="settings-form-grid settings-form-grid--two">
+          <label className="settings-form-field">
             Bank name
-            <input type="text" value={profile.bank_name} onChange={setText("bank_name")} className={inputClass} />
+            <input
+              type="text"
+              value={profile.bank_name}
+              onChange={setText("bank_name")}
+              className={inputClass}
+            />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
+          <label className="settings-form-field">
             Account holder
-            <input type="text" value={profile.bank_account_holder} onChange={setText("bank_account_holder")} className={inputClass} />
+            <input
+              type="text"
+              value={profile.bank_account_holder}
+              onChange={setText("bank_account_holder")}
+              className={inputClass}
+            />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
+          <label className="settings-form-field">
             Account number
-            <input type="text" value={profile.bank_account_number} onChange={setText("bank_account_number")} className={inputClass} />
+            <input
+              type="text"
+              value={profile.bank_account_number}
+              onChange={setText("bank_account_number")}
+              className={inputClass}
+            />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
+          <label className="settings-form-field">
             IFSC
-            <input type="text" value={profile.bank_ifsc} onChange={setText("bank_ifsc")} className={inputClass} />
+            <input
+              type="text"
+              value={profile.bank_ifsc}
+              onChange={setText("bank_ifsc")}
+              className={inputClass}
+            />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-text-secondary sm:col-span-2">
+          <label className="settings-form-field settings-form-field--full">
             Branch
-            <input type="text" value={profile.bank_branch} onChange={setText("bank_branch")} className={inputClass} />
+            <input
+              type="text"
+              value={profile.bank_branch}
+              onChange={setText("bank_branch")}
+              className={inputClass}
+            />
           </label>
         </div>
-      </section>
+      </SettingsPanel>
 
-      <section className="space-y-4 rounded-2xl border border-border-default bg-surface-raised p-6">
-        <h2 className="text-lg font-semibold text-text-primary">Invoice Customization</h2>
-        <div className="grid grid-cols-1 gap-3">
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
+      <SettingsPanel
+        title="Invoice Customization"
+        description="Tune the private invoice copy that clients see after bookings and payments."
+        icon={<ReceiptText />}
+      >
+        <div className="settings-form-grid">
+          <label className="settings-form-field">
             Signature name
-            <input type="text" value={profile.signature_name} onChange={setText("signature_name")} className={inputClass} placeholder="Authorized Signatory" />
+            <input
+              type="text"
+              value={profile.signature_name}
+              onChange={setText("signature_name")}
+              className={inputClass}
+              placeholder="Authorized Signatory"
+            />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
+          <label className="settings-form-field">
             Terms & conditions
             <textarea
               value={profile.invoice_terms}
               onChange={setText("invoice_terms")}
-              className={`${inputClass} min-h-32 resize-y`}
-              placeholder={"Payment due within 15 days.\n18% GST applicable.\nDisputes subject to local jurisdiction."}
+              className={`${inputClass} settings-textarea`}
+              placeholder={
+                "Payment due within 15 days.\n18% GST applicable.\nDisputes subject to local jurisdiction."
+              }
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
+          <label className="settings-form-field">
             Invoice footer note
-            <input type="text" value={profile.invoice_footer} onChange={setText("invoice_footer")} className={inputClass} placeholder="Thank you for your business." />
+            <input
+              type="text"
+              value={profile.invoice_footer}
+              onChange={setText("invoice_footer")}
+              className={inputClass}
+              placeholder="Thank you for your business."
+            />
           </label>
         </div>
-      </section>
+      </SettingsPanel>
 
-      <div className="flex justify-end">
-        <button
+      <div className="settings-action-row settings-action-row--end">
+        <GlassButton
           type="button"
           onClick={save}
           disabled={saving}
-          className="btn-primary px-6 py-3 text-sm"
+          variant="primary"
+          icon={<CheckCircle />}
         >
           {saving ? "Saving..." : "Save business profile"}
-        </button>
+        </GlassButton>
       </div>
-    </div>
+    </SettingsPageShell>
   );
 }

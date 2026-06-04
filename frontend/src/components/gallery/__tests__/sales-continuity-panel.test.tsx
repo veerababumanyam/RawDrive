@@ -4,7 +4,14 @@ import { SalesContinuityPanel } from "../sales-continuity-panel";
 
 describe("SalesContinuityPanel", () => {
   it("renders a working invoice link when invoiceId is set", () => {
-    render(<SalesContinuityPanel invoiceId="inv-42" dealId="deal-1" projectId="proj-1" cartCount={3} />);
+    render(
+      <SalesContinuityPanel
+        invoiceId="inv-42"
+        dealId="deal-1"
+        projectId="proj-1"
+        cartCount={3}
+      />,
+    );
     const link = screen.getByTestId("sales-invoice-link");
     expect(link.getAttribute("href")).toBe("/invoices/inv-42");
     expect(screen.getByTestId("sales-cart-count")).toHaveTextContent("3");

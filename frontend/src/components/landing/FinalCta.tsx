@@ -15,29 +15,26 @@ export function FinalCta() {
     >
       <h2
         id="final-cta-heading"
-        className="font-headline text-4xl font-bold leading-[1.05] tracking-tight text-text-primary sm:text-5xl lg:text-6xl"
+        className="font-headline text-4xl font-bold text-text-primary sm:text-5xl lg:text-6xl"
       >
         Your studio, finally in one place.
       </h2>
       <div className="mt-12 flex flex-wrap items-center justify-center gap-6">
         <Link
           href="/register"
-          className="btn-primary px-8 text-base font-semibold"
-          style={{
-            minHeight: "var(--touch-target-min)",
-            paddingTop: "1rem",
-            paddingBottom: "1rem",
-          }}
+          className="btn-primary touch-min px-8 py-4 text-base font-semibold"
         >
           Start free trial
         </Link>
         <Link
           href="/pricing"
-          className="inline-flex items-center gap-2 text-base font-semibold text-text-secondary transition-opacity hover:opacity-80"
-          style={{ minHeight: "var(--touch-target-min)" }}
+          className="landing-hero__secondary px-6 text-base"
         >
           See pricing
-          <span aria-hidden="true" className="inline-block text-xl leading-none">
+          <span
+            aria-hidden="true"
+            className="inline-block text-xl leading-none"
+          >
             →
           </span>
         </Link>

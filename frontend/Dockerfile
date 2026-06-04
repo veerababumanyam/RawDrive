@@ -37,6 +37,20 @@ RUN npm install -g corepack@0.35.0 \
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
+# ---------- dev stage ----------
+# Used by docker-compose.dev.yml. The source tree is bind-mounted at /app so
+# the container serves the local repo instead of a baked standalone build.
+FROM deps AS dev
+
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+
+EXPOSE 3000
+
+CMD ["sh", "-lc", "pnpm config set store-dir /pnpm/store && CI=true pnpm install --frozen-lockfile && pnpm dev --hostname 0.0.0.0 --port 3000"]
+
 # ---------- build stage ----------
 FROM deps AS build
 

@@ -29,7 +29,10 @@ function formatRemaining(expiresAt: string): string {
   return days === 1 ? "1 day" : `${days} days`;
 }
 
-export function ExpiryBanner({ expiresAt, variant = "warning" }: ExpiryBannerProps) {
+export function ExpiryBanner({
+  expiresAt,
+  variant = "warning",
+}: ExpiryBannerProps) {
   const remaining = useMemo(() => formatRemaining(expiresAt), [expiresAt]);
 
   const message =

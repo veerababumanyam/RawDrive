@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
-import { acceptTerms, getCurrentTerms, type TermsCurrent } from "@/lib/api/legal";
+import {
+  acceptTerms,
+  getCurrentTerms,
+  type TermsCurrent,
+} from "@/lib/api/legal";
 import { XMark } from "@/components/icons";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 
@@ -26,7 +30,12 @@ interface TermsAcceptanceModalProps {
  * Token-surface styling mirrors RechargeModal so it renders correctly across
  * liquid-glass / liquid-glass-dark / midnight without theme-specific overrides.
  */
-export function TermsAcceptanceModal({ open, token, onAccepted, onCancel }: TermsAcceptanceModalProps) {
+export function TermsAcceptanceModal({
+  open,
+  token,
+  onAccepted,
+  onCancel,
+}: TermsAcceptanceModalProps) {
   const [terms, setTerms] = useState<TermsCurrent | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [checked, setChecked] = useState(false);
@@ -101,11 +110,11 @@ export function TermsAcceptanceModal({ open, token, onAccepted, onCancel }: Term
       onClick={(e) => {
         if (e.target === e.currentTarget) onCancel();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-surface-scrim-strong/60 glass-blur-subtle p-4"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-2xl border border-white/10 bg-surface-base/95 text-content-primary shadow-xl"
+        className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-2xl border border-text-media/10 bg-surface-base/95 text-content-primary shadow-xl"
       >
         <header className="flex items-start justify-between gap-4 p-6 pb-4">
           <div>
@@ -113,7 +122,8 @@ export function TermsAcceptanceModal({ open, token, onAccepted, onCancel }: Term
               Accept the Terms of Service
             </h2>
             <p className="mt-1 text-sm text-content-secondary">
-              Before you upload, please review and accept how content and copyright are handled on RawDrive.
+              Before you upload, please review and accept how content and
+              copyright are handled on RawDrive.
             </p>
           </div>
           <GlassIconButton
@@ -133,14 +143,17 @@ export function TermsAcceptanceModal({ open, token, onAccepted, onCancel }: Term
         <div className="min-h-0 flex-1 overflow-y-auto px-6">
           {loadError ? (
             <p className="rounded-lg bg-error/10 px-4 py-3 text-sm text-error">
-              Could not load the terms ({loadError}). Please close and try again.
+              Could not load the terms ({loadError}). Please close and try
+              again.
             </p>
           ) : terms ? (
             <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-content-secondary">
               {terms.text}
             </pre>
           ) : (
-            <p className="text-sm text-content-secondary">Loading the latest terms…</p>
+            <p className="text-sm text-content-secondary">
+              Loading the latest terms…
+            </p>
           )}
         </div>
 
@@ -155,11 +168,19 @@ export function TermsAcceptanceModal({ open, token, onAccepted, onCancel }: Term
             />
             <span className="text-sm text-content-primary">
               I accept the{" "}
-              <Link href="/terms" target="_blank" className="font-semibold text-accent underline underline-offset-2">
+              <Link
+                href="/terms"
+                target="_blank"
+                className="font-semibold text-accent underline underline-offset-2"
+              >
                 Terms of Service
               </Link>{" "}
               and{" "}
-              <Link href="/privacy" target="_blank" className="font-semibold text-accent underline underline-offset-2">
+              <Link
+                href="/privacy"
+                target="_blank"
+                className="font-semibold text-accent underline underline-offset-2"
+              >
                 Privacy Policy
               </Link>
               , and I confirm I own or am licensed to use all content I upload.
@@ -177,7 +198,7 @@ export function TermsAcceptanceModal({ open, token, onAccepted, onCancel }: Term
               type="button"
               onClick={handleAccept}
               disabled={!checked || submitting || !terms}
-              className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl bg-accent px-5 py-3 font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+              className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl bg-accent px-5 py-3 font-medium text-text-media transition-opacity disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             >
               {submitting ? "Recording…" : "Accept & Continue"}
             </button>
@@ -185,7 +206,7 @@ export function TermsAcceptanceModal({ open, token, onAccepted, onCancel }: Term
               type="button"
               onClick={onCancel}
               disabled={submitting}
-              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/10 bg-surface-container-high px-5 py-3 text-sm text-text-secondary transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-text-media/10 bg-surface-container-high px-5 py-3 text-sm text-text-secondary transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             >
               Cancel
             </button>

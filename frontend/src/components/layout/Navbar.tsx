@@ -4,10 +4,11 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { ChevronDown, Menu, X } from "lucide-react";
+import { ChevronDown, Menu, XMark } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { ThemeToggleButton } from "@/components/theme/ThemeToggleButton";
 import { IndianFlag } from "@/components/layout/IndianFlag";
+import { GlassIconButton } from "@/components/ui/glass-icon-button";
 
 const solutionsLinks = [
   { href: "/solutions/galleries", label: "Client Galleries" },
@@ -27,9 +28,11 @@ const companyLinks = [
   { href: "/contact", label: "Contact Us" },
 ];
 
+type DropdownKey = "solutions" | "marketplaces" | "company";
+
 export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [openDropdown, setOpenDropdown] = useState<DropdownKey | null>(null);
   // Hero-overlay variant: on the landing page ("/"), the navbar floats over
   // a full-bleed photographic hero instead of sitting on a solid surface.
   // We apply a reduced-opacity glass backdrop (.landing-navbar-overlay in
@@ -42,12 +45,22 @@ export function Navbar() {
   // bit-for-bit unchanged.
   const pathname = usePathname();
   const isHeroOverlay = pathname === "/";
+  const dropdownButtonClass =
+    "touch-target-link gap-1 px-1 text-sm font-medium text-text-primary transition-colors hover:text-accent";
+  const dropdownLinkClass =
+    "touch-target-link w-full rounded-lg px-4 text-sm text-text-secondary transition-colors hover:bg-surface-container-high hover:text-text-primary";
+
+  function toggleDropdown(key: DropdownKey) {
+    setOpenDropdown((current) => (current === key ? null : key));
+  }
 
   return (
     <header
       className={cn(
         "sticky top-0 z-[var(--z-sticky)]",
-        isHeroOverlay ? "landing-navbar-overlay" : "bg-surface border-b border-border",
+        isHeroOverlay
+          ? "landing-navbar-overlay"
+          : "bg-surface border-b border-border",
       )}
       style={{ height: "var(--navbar-height)" }}
       data-variant={isHeroOverlay ? "hero-overlay" : "default"}
@@ -55,7 +68,7 @@ export function Navbar() {
       <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-4 lg:px-8">
         <Link
           href="/"
-          className="group flex items-center gap-2 text-xl font-bold text-text-primary"
+          className="touch-target-link group gap-2 text-xl font-bold text-text-primary"
           aria-label="RawDrive home"
         >
           <Image
@@ -71,22 +84,48 @@ export function Navbar() {
           <IndianFlag className="ml-1 self-center group-hover:scale-[1.08]" />
         </Link>
 
-        <nav className="hidden h-full items-center gap-6 lg:flex" aria-label="Main navigation">
+        <nav
+          className="hidden h-full items-center gap-6 lg:flex"
+          aria-label="Main navigation"
+        >
           <div
             className="group relative flex h-full items-center"
             onMouseEnter={() => setOpenDropdown("solutions")}
             onMouseLeave={() => setOpenDropdown(null)}
+            onBlur={(event) => {
+              if (
+                !event.currentTarget.contains(
+                  event.relatedTarget as Node | null,
+                )
+              ) {
+                setOpenDropdown(null);
+              }
+            }}
           >
-            <button className="flex items-center gap-1 text-sm font-medium text-text-primary transition-colors hover:text-accent group-hover:text-accent">
+            <button
+              type="button"
+              className={dropdownButtonClass}
+              aria-haspopup="true"
+              aria-expanded={openDropdown === "solutions"}
+              aria-controls="navbar-solutions-menu"
+              onClick={() => toggleDropdown("solutions")}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setOpenDropdown(null);
+              }}
+            >
               Products & Solutions <ChevronDown className="h-4 w-4" />
             </button>
             {openDropdown === "solutions" && (
-              <div className="surface-panel absolute left-0 top-full z-50 w-56 p-2">
+              <div
+                id="navbar-solutions-menu"
+                className="surface-panel absolute left-0 top-full z-50 w-56 p-2"
+              >
                 {solutionsLinks.map((link) => (
                   <Link
                     key={link.href}
                     href={link.href}
-                    className="block rounded-lg px-4 py-2 text-sm text-text-secondary hover:bg-surface-container-high hover:text-text-primary"
+                    className={dropdownLinkClass}
+                    onClick={() => setOpenDropdown(null)}
                   >
                     {link.label}
                   </Link>
@@ -99,17 +138,40 @@ export function Navbar() {
             className="group relative flex h-full items-center"
             onMouseEnter={() => setOpenDropdown("marketplaces")}
             onMouseLeave={() => setOpenDropdown(null)}
+            onBlur={(event) => {
+              if (
+                !event.currentTarget.contains(
+                  event.relatedTarget as Node | null,
+                )
+              ) {
+                setOpenDropdown(null);
+              }
+            }}
           >
-            <button className="flex items-center gap-1 text-sm font-medium text-text-primary transition-colors hover:text-accent group-hover:text-accent">
+            <button
+              type="button"
+              className={dropdownButtonClass}
+              aria-haspopup="true"
+              aria-expanded={openDropdown === "marketplaces"}
+              aria-controls="navbar-marketplaces-menu"
+              onClick={() => toggleDropdown("marketplaces")}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setOpenDropdown(null);
+              }}
+            >
               Marketplaces <ChevronDown className="h-4 w-4" />
             </button>
             {openDropdown === "marketplaces" && (
-              <div className="surface-panel absolute left-0 top-full z-50 w-48 p-2">
+              <div
+                id="navbar-marketplaces-menu"
+                className="surface-panel absolute left-0 top-full z-50 w-48 p-2"
+              >
                 {marketplacesLinks.map((link) => (
                   <Link
                     key={link.href}
                     href={link.href}
-                    className="block rounded-lg px-4 py-2 text-sm text-text-secondary hover:bg-surface-container-high hover:text-text-primary"
+                    className={dropdownLinkClass}
+                    onClick={() => setOpenDropdown(null)}
                   >
                     {link.label}
                   </Link>
@@ -120,14 +182,14 @@ export function Navbar() {
 
           <Link
             href="/dealership"
-            className="text-sm font-medium text-text-primary transition-colors hover:text-accent"
+            className="touch-target-link text-sm font-medium text-text-primary transition-colors hover:text-accent"
           >
             Partner Program
           </Link>
 
           <Link
             href="/pricing"
-            className="text-sm font-medium text-text-primary transition-colors hover:text-accent"
+            className="touch-target-link text-sm font-medium text-text-primary transition-colors hover:text-accent"
           >
             Pricing
           </Link>
@@ -136,17 +198,40 @@ export function Navbar() {
             className="group relative flex h-full items-center"
             onMouseEnter={() => setOpenDropdown("company")}
             onMouseLeave={() => setOpenDropdown(null)}
+            onBlur={(event) => {
+              if (
+                !event.currentTarget.contains(
+                  event.relatedTarget as Node | null,
+                )
+              ) {
+                setOpenDropdown(null);
+              }
+            }}
           >
-            <button className="flex items-center gap-1 text-sm font-medium text-text-primary transition-colors hover:text-accent group-hover:text-accent">
+            <button
+              type="button"
+              className={dropdownButtonClass}
+              aria-haspopup="true"
+              aria-expanded={openDropdown === "company"}
+              aria-controls="navbar-company-menu"
+              onClick={() => toggleDropdown("company")}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setOpenDropdown(null);
+              }}
+            >
               Company <ChevronDown className="h-4 w-4" />
             </button>
             {openDropdown === "company" && (
-              <div className="surface-panel absolute left-0 top-full z-50 w-40 p-2">
+              <div
+                id="navbar-company-menu"
+                className="surface-panel absolute left-0 top-full z-50 w-40 p-2"
+              >
                 {companyLinks.map((link) => (
                   <Link
                     key={link.href}
                     href={link.href}
-                    className="block rounded-lg px-4 py-2 text-sm text-text-secondary hover:bg-surface-container-high hover:text-text-primary"
+                    className={dropdownLinkClass}
+                    onClick={() => setOpenDropdown(null)}
                   >
                     {link.label}
                   </Link>
@@ -161,8 +246,7 @@ export function Navbar() {
 
           <Link
             href="/login"
-            className="inline-flex items-center text-sm font-medium text-text-primary transition-colors hover:text-accent"
-            style={{ minHeight: "var(--touch-target-min)" }}
+            className="touch-target-link text-sm font-medium text-text-primary transition-colors hover:text-accent"
           >
             Login
           </Link>
@@ -178,16 +262,15 @@ export function Navbar() {
         <div className="flex items-center gap-2 lg:hidden">
           <ThemeToggleButton />
 
-          <button
+          <GlassIconButton
             type="button"
-            className="inline-flex items-center justify-center rounded-lg p-2 text-text-secondary transition-colors hover:text-accent"
-            style={{ minWidth: "var(--touch-target-min)", minHeight: "var(--touch-target-min)" }}
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-expanded={mobileMenuOpen}
-            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+            label={mobileMenuOpen ? "Close menu" : "Open menu"}
+            variant="ghost"
           >
-            {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-          </button>
+            {mobileMenuOpen ? <XMark /> : <Menu />}
+          </GlassIconButton>
         </div>
       </div>
 
@@ -199,7 +282,10 @@ export function Navbar() {
         )}
         style={{ transitionDuration: "var(--duration-normal)" }}
       >
-        <nav className="flex flex-col gap-1 px-4 py-4" aria-label="Mobile navigation">
+        <nav
+          className="flex flex-col gap-1 px-4 py-4"
+          aria-label="Mobile navigation"
+        >
           <div className="py-2">
             <p className="px-3 text-xs font-bold uppercase tracking-wider text-text-tertiary">
               Products
@@ -208,7 +294,7 @@ export function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="block rounded-lg px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-container-high hover:text-text-primary"
+                className="touch-target-link w-full rounded-lg px-3 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-container-high hover:text-text-primary"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 {link.label}
@@ -226,7 +312,7 @@ export function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="block rounded-lg px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-container-high hover:text-text-primary"
+                className="touch-target-link w-full rounded-lg px-3 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-container-high hover:text-text-primary"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 {link.label}
@@ -238,14 +324,14 @@ export function Navbar() {
 
           <Link
             href="/dealership"
-            className="block rounded-lg px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-container-high hover:text-text-primary"
+            className="touch-target-link w-full rounded-lg px-3 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-container-high hover:text-text-primary"
             onClick={() => setMobileMenuOpen(false)}
           >
             Partner Program
           </Link>
           <Link
             href="/pricing"
-            className="block rounded-lg px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-container-high hover:text-text-primary"
+            className="touch-target-link w-full rounded-lg px-3 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-container-high hover:text-text-primary"
             onClick={() => setMobileMenuOpen(false)}
           >
             Pricing
@@ -261,7 +347,7 @@ export function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="block rounded-lg px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-container-high hover:text-text-primary"
+                className="touch-target-link w-full rounded-lg px-3 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-container-high hover:text-text-primary"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 {link.label}
@@ -272,7 +358,7 @@ export function Navbar() {
           <div className="mt-4 flex flex-col gap-2">
             <Link
               href="/login"
-              className="rounded-lg bg-surface-container-low px-3 py-3 text-center text-sm font-medium text-text-primary transition-colors hover:bg-surface-container-high"
+              className="touch-target-link w-full justify-center rounded-lg bg-surface-container-low px-3 text-center text-sm font-medium text-text-primary transition-colors hover:bg-surface-container-high"
               onClick={() => setMobileMenuOpen(false)}
             >
               Login

@@ -26,7 +26,7 @@ export function IngestHealthCard({ data }: IngestHealthCardProps) {
       <section
         data-testid="ingest-health-card"
         aria-label="Ingest health"
-        className="rounded-2xl border border-white/10 bg-white/5 p-5 text-white/70"
+        className="stream-panel p-5 text-text-media/70"
       >
         Loading ingest health...
       </section>
@@ -44,10 +44,10 @@ export function IngestHealthCard({ data }: IngestHealthCardProps) {
     <section
       data-testid="ingest-health-card"
       aria-label="Ingest health"
-      className="rounded-2xl border border-white/10 bg-white/5 p-5"
+      className="stream-panel p-5"
     >
       <header className="mb-3 flex items-center justify-between">
-        <h3 className="text-base font-medium text-white/90">Ingest health</h3>
+        <h3 className="text-base font-medium text-text-media">Ingest health</h3>
         <span
           data-testid="ingest-status"
           className={`text-xs uppercase tracking-wider ${statusTone}`}
@@ -55,21 +55,21 @@ export function IngestHealthCard({ data }: IngestHealthCardProps) {
           {data.status}
         </span>
       </header>
-      <dl className="grid grid-cols-2 gap-3 text-sm text-white/80">
+      <dl className="grid grid-cols-2 gap-3 text-sm text-text-media/80">
         <div>
-          <dt className="text-xs uppercase text-white/50">Bitrate</dt>
+          <dt className="text-xs uppercase text-text-media/50">Bitrate</dt>
           <dd data-testid="ingest-bitrate">{data.bitrate_kbps} kbps</dd>
         </div>
         <div>
-          <dt className="text-xs uppercase text-white/50">FPS</dt>
+          <dt className="text-xs uppercase text-text-media/50">FPS</dt>
           <dd data-testid="ingest-fps">{data.fps}</dd>
         </div>
         <div>
-          <dt className="text-xs uppercase text-white/50">Video</dt>
+          <dt className="text-xs uppercase text-text-media/50">Video</dt>
           <dd>{data.video_codec || "—"}</dd>
         </div>
         <div>
-          <dt className="text-xs uppercase text-white/50">Audio</dt>
+          <dt className="text-xs uppercase text-text-media/50">Audio</dt>
           <dd>{data.audio_codec || "—"}</dd>
         </div>
       </dl>

@@ -8,7 +8,9 @@ import DealerAdminReview from "@/features/dealer/DealerAdminReview";
 export default function AdminDealersPage() {
   return (
     <div>
-      <h2 className="text-2xl font-headline font-semibold text-text-primary mb-2">Dealer Network</h2>
+      <h2 className="text-2xl font-headline font-semibold text-text-primary mb-2">
+        Dealer Network
+      </h2>
       <p className="text-sm text-text-tertiary mb-6">
         Approve, suspend, and manage all dealers across the platform.
       </p>

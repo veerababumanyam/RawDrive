@@ -60,14 +60,18 @@ export default function AIDuplicatesPage() {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-text-primary mb-4">Duplicate Detection</h2>
+      <h2 className="text-xl font-semibold text-text-primary mb-4">
+        Duplicate Detection
+      </h2>
       <p className="text-sm text-text-secondary mb-6">
         AI-detected near-identical photos. Review and keep the best versions.
       </p>
 
       {groups.length === 0 ? (
         <div className="rounded-xl border border-border-default bg-surface-raised p-8 text-center">
-          <p className="text-text-secondary text-sm">No duplicate groups found. Run a scan from gallery settings.</p>
+          <p className="text-text-secondary text-sm">
+            No duplicate groups found. Run a scan from gallery settings.
+          </p>
         </div>
       ) : (
         <div className="space-y-4">

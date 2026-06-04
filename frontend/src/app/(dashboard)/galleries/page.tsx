@@ -13,17 +13,40 @@ import {
 } from "@/lib/api/galleries";
 import { getAsset, type Asset } from "@/lib/api/assets";
 import { createContactAuth, listContacts, type Contact } from "@/lib/api/crm";
-import { getWorkspaceProfile, type WorkspaceProfile } from "@/lib/api/workspace-profile";
+import {
+  getWorkspaceProfile,
+  type WorkspaceProfile,
+} from "@/lib/api/workspace-profile";
 import { authFetch } from "@/lib/api/authFetch";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { GRID_VARIANTS, type EncryptedAssetLike } from "@/lib/media-encryption/asset-media";
-import { appendStoredGalleryKeyFragment, setUrlSearchParamBeforeFragment } from "@/lib/media-encryption/share-url";
+import {
+  GRID_VARIANTS,
+  type EncryptedAssetLike,
+} from "@/lib/media-encryption/asset-media";
+import {
+  appendStoredGalleryKeyFragment,
+  setUrlSearchParamBeforeFragment,
+} from "@/lib/media-encryption/share-url";
+import { MEDIA_KEY_UNAVAILABLE_MESSAGE } from "@/lib/media-encryption/media-key-store";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { readGalleryCoverAssetId } from "@/lib/gallery-design-config";
 import { galleryShareExpiryDays } from "@/lib/gallery-share-expiry";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
-import { Camera, ClipboardList, Envelope, Grid, ListBullet, Phone, Trash, Share, XMark } from "@/components/icons";
+import { GlassButton } from "@/components/ui/glass-button";
+import {
+  ClipboardList,
+  Envelope,
+  Grid,
+  ListBullet,
+  Lock,
+  Phone,
+  Photo,
+  Plus,
+  Trash,
+  Share,
+  XMark,
+} from "@/components/icons";
 
 function GalleryCoverPreview({
   gallery,
@@ -32,25 +55,46 @@ function GalleryCoverPreview({
   alt,
 }: {
   gallery: Gallery;
-  coverAsset?: Asset;
+  coverAsset?: EncryptedAssetLike;
   token: string | null;
   alt: string;
 }) {
   const [failedSrc, setFailedSrc] = useState("");
-  const coverAssetId = readGalleryCoverAssetId(gallery.settings, gallery.cover_asset_id);
+  const coverAssetId =
+    gallery.cover_asset?.id ??
+    readGalleryCoverAssetId(gallery.settings, gallery.cover_asset_id);
   const fallbackAsset = useMemo<EncryptedAssetLike | null>(() => {
     if (coverAsset) return coverAsset;
-    if (!gallery.cover_thumbnails || Object.keys(gallery.cover_thumbnails).length === 0) return null;
+    if (gallery.cover_asset) return gallery.cover_asset;
+    if (
+      !gallery.cover_thumbnails ||
+      Object.keys(gallery.cover_thumbnails).length === 0
+    )
+      return null;
     return {
       id: coverAssetId,
       filename: gallery.title,
       thumbnail_urls: gallery.cover_thumbnails,
     };
-  }, [coverAsset, coverAssetId, gallery.cover_thumbnails, gallery.title]);
-  const media = useDecryptedAssetUrl(fallbackAsset, GRID_VARIANTS, token);
-
+  }, [
+    coverAsset,
+    coverAssetId,
+    gallery.cover_asset,
+    gallery.cover_thumbnails,
+    gallery.title,
+  ]);
+  const media = useDecryptedAssetUrl(
+    fallbackAsset,
+    GRID_VARIANTS,
+    token || getStoredAccessToken(),
+  );
   if (media.loading) {
-    return <div className="h-full w-full animate-pulse bg-surface-container-high" aria-hidden="true" />;
+    return (
+      <div
+        className="h-full w-full animate-pulse bg-surface-container-high"
+        aria-hidden="true"
+      />
+    );
   }
 
   if (media.src && media.src !== failedSrc) {
@@ -66,11 +110,21 @@ function GalleryCoverPreview({
     );
   }
 
+  if (media.error === MEDIA_KEY_UNAVAILABLE_MESSAGE) {
+    return (
+      <div
+        className="flex h-full w-full items-center justify-center bg-surface-container-low text-text-tertiary"
+        title="Encrypted cover key unavailable"
+      >
+        <Lock className="h-8 w-8" aria-hidden="true" />
+        <span className="sr-only">Encrypted cover key unavailable</span>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full w-full items-center justify-center">
-      <svg className="w-10 h-10 text-text-tertiary/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a2.25 2.25 0 002.25-2.25V5.25a2.25 2.25 0 00-2.25-2.25H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
-      </svg>
+      <Photo className="empty-state-icon" aria-hidden="true" />
     </div>
   );
 }
@@ -82,10 +136,17 @@ function GalleryPublishSwitch({
 }: {
   gallery: Gallery;
   busy: boolean;
-  onToggle: (event: React.MouseEvent<HTMLButtonElement>, gallery: Gallery) => void;
+  onToggle: (
+    event: React.MouseEvent<HTMLButtonElement>,
+    gallery: Gallery,
+  ) => void;
 }) {
   const archived = gallery.status === "archived";
-  const label = archived ? "Archived" : gallery.is_published ? "Published" : "Unpublished";
+  const label = archived
+    ? "Archived"
+    : gallery.is_published
+      ? "Published"
+      : "Unpublished";
 
   return (
     <button
@@ -121,7 +182,10 @@ function GalleryPublishSwitch({
   );
 }
 
-function buildGalleryCardShareUrl(gallery: Gallery, workspaceProfile: WorkspaceProfile | null): string {
+function buildGalleryCardShareUrl(
+  gallery: Gallery,
+  workspaceProfile: WorkspaceProfile | null,
+): string {
   if (!gallery.slug) return "";
   const base = galleryPublicUrl(gallery, workspaceProfile);
   return appendStoredGalleryKeyFragment(base, gallery.id);
@@ -152,7 +216,8 @@ type ShareCopyFallback = {
 type ShareActionResult = "copied" | "manual" | void;
 
 async function writeClipboardText(text: string): Promise<boolean> {
-  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) return false;
+  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText)
+    return false;
   try {
     await navigator.clipboard.writeText(text);
     return true;
@@ -182,24 +247,35 @@ function ShareCopyFallbackNotice({
   onDismiss: () => void;
 }) {
   return (
-    <div className="rounded-xl border border-border-default bg-surface-raised p-4 shadow-elevation-1" role="status">
+    <div
+      className="rounded-xl border border-border-default bg-surface-raised p-4 shadow-elevation-1"
+      role="status"
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-1">
-          <p className="text-sm font-semibold text-text-primary">Copy blocked by this browser</p>
-          <p className="text-sm text-text-secondary">
-            Select the link below or try copying again. This link opens {fallback.galleryTitle}.
+          <p className="text-sm font-semibold text-text-primary">
+            Copy blocked by this browser
           </p>
-          <p className="truncate text-xs text-text-tertiary" title={fallback.url}>
+          <p className="text-sm text-text-secondary">
+            Select the link below or try copying again. This link opens{" "}
+            {fallback.galleryTitle}.
+          </p>
+          <p
+            className="truncate text-xs text-text-tertiary"
+            title={fallback.url}
+          >
             {friendlyShareUrl(fallback.url)}
           </p>
         </div>
-        <button
+        <GlassButton
           type="button"
           onClick={onDismiss}
-          className="self-start rounded-full px-3 py-2 text-xs font-medium text-text-tertiary transition-colors hover:bg-surface-sunken hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-border-focus"
+          variant="quiet"
+          size="sm"
+          className="self-start"
         >
           Dismiss
-        </button>
+        </GlassButton>
       </div>
       <textarea
         aria-label="Share link"
@@ -210,20 +286,12 @@ function ShareCopyFallbackNotice({
         className="mt-3 w-full resize-none rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-border-focus"
       />
       <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={onRetry}
-          className="min-h-[44px] rounded-xl bg-accent-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-primary/90 focus:outline-none focus:ring-2 focus:ring-border-focus"
-        >
+        <GlassButton type="button" onClick={onRetry} variant="primary">
           Try copy again
-        </button>
-        <button
-          type="button"
-          onClick={onOpen}
-          className="min-h-[44px] rounded-xl border border-border-default px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-border-focus"
-        >
+        </GlassButton>
+        <GlassButton type="button" onClick={onOpen} variant="surface">
           Open link
-        </button>
+        </GlassButton>
       </div>
     </div>
   );
@@ -276,16 +344,12 @@ function GalleryShareMenu({
         size="md"
         variant={copied ? "success" : "solid"}
         active={open}
-        label={copied ? `${gallery.title} link copied` : `Share ${gallery.title}`}
+        label={
+          copied ? `${gallery.title} link copied` : `Share ${gallery.title}`
+        }
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={onToggle}
-        className={cn(
-          "shadow-elevation-1 ring-2 ring-surface-raised/60",
-          copied
-            ? "bg-feedback-success text-white hover:bg-feedback-success/90"
-            : "bg-accent-primary text-white hover:bg-accent-primary/90",
-        )}
       >
         <Share />
       </GlassIconButton>
@@ -294,7 +358,7 @@ function GalleryShareMenu({
         <div
           role="menu"
           aria-label={`Share ${gallery.title}`}
-          className="absolute right-0 top-full z-[var(--z-popover)] mt-2 w-56 rounded-2xl border border-border-default bg-surface-overlay p-2 shadow-xl backdrop-blur-md"
+          className="glass-menu absolute right-0 top-full z-[var(--z-popover)] mt-2 w-56 p-2"
         >
           {canShare ? (
             <div className="space-y-1">
@@ -303,7 +367,7 @@ function GalleryShareMenu({
                 role="menuitem"
                 onClick={(event) => runMenuAction(event, onCopy)}
                 disabled={busy}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-text-primary transition-colors hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-border-focus"
+                className="glass-menu-item"
               >
                 <ClipboardList className="h-5 w-5 shrink-0 text-text-secondary" />
                 <span>{busy ? "Preparing link..." : "Copy link"}</span>
@@ -313,7 +377,7 @@ function GalleryShareMenu({
                 role="menuitem"
                 onClick={(event) => runMenuAction(event, onEmail)}
                 disabled={busy}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-text-primary transition-colors hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-border-focus"
+                className="glass-menu-item"
               >
                 <Envelope className="h-5 w-5 shrink-0 text-text-secondary" />
                 <span>Email</span>
@@ -323,7 +387,7 @@ function GalleryShareMenu({
                 role="menuitem"
                 onClick={(event) => runMenuAction(event, onWhatsApp)}
                 disabled={busy}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-text-primary transition-colors hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-border-focus"
+                className="glass-menu-item"
               >
                 <Phone className="h-5 w-5 shrink-0 text-text-secondary" />
                 <span>WhatsApp</span>
@@ -394,24 +458,26 @@ function GalleryCardActions({
         <div
           role="alertdialog"
           aria-label="Confirm gallery deletion"
-          className="flex items-center gap-1.5 rounded-full bg-surface-overlay/95 backdrop-blur-md px-2 py-1 border border-border-default shadow-elevation-1"
+          className="glass-confirm-bar"
         >
-          <span className="px-1.5 text-[11px] font-medium text-text-primary">Delete?</span>
-          <button
+          <span className="glass-confirm-bar__label">Delete?</span>
+          <GlassButton
             type="button"
             onClick={onCancelDelete}
-            className="rounded-full px-2.5 py-1 text-[11px] font-medium text-text-secondary hover:bg-surface-sunken hover:text-text-primary transition-colors"
+            variant="quiet"
+            size="sm"
           >
             Cancel
-          </button>
-          <button
+          </GlassButton>
+          <GlassButton
             type="button"
             autoFocus
             onClick={onConfirmDelete}
-            className="rounded-full bg-feedback-error px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-feedback-error/90 transition-colors"
+            variant="danger"
+            size="sm"
           >
             Confirm
-          </button>
+          </GlassButton>
         </div>
       ) : (
         <GlassIconButton
@@ -420,7 +486,6 @@ function GalleryCardActions({
           variant="danger"
           label={`Delete ${gallery.title}`}
           onClick={onArmDelete}
-          className="bg-feedback-error text-white shadow-elevation-1 ring-2 ring-surface-raised/60 hover:bg-feedback-error/90 focus-visible:ring-feedback-error/50"
         >
           <Trash />
         </GlassIconButton>
@@ -466,18 +531,20 @@ export default function GalleriesPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   // ID of the gallery whose share link was just copied — cleared after 1.5s.
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [shareMenuGalleryId, setShareMenuGalleryId] = useState<string | null>(null);
+  const [shareMenuGalleryId, setShareMenuGalleryId] = useState<string | null>(
+    null,
+  );
   const [sharingGalleryId, setSharingGalleryId] = useState<string | null>(null);
-  const [shareCopyFallback, setShareCopyFallback] = useState<ShareCopyFallback | null>(null);
+  const [shareCopyFallback, setShareCopyFallback] =
+    useState<ShareCopyFallback | null>(null);
   const [coverAssets, setCoverAssets] = useState<Record<string, Asset>>({});
   // Gallery ID currently being published/unpublished — prevents double-clicks.
   // Backs the GalleryPublishSwitch `busy` state via toggleGalleryPublish.
-  const [publishingGalleryId, setPublishingGalleryId] = useState<string | null>(null);
-  const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile | null>(null);
-  // M23: tethering toggle state — persists while the create panel is open.
-  const [tetheringMode, setTetheringMode] = useState(false);
-  const [tetherDir, setTetherDir] = useState("");
-
+  const [publishingGalleryId, setPublishingGalleryId] = useState<string | null>(
+    null,
+  );
+  const [workspaceProfile, setWorkspaceProfile] =
+    useState<WorkspaceProfile | null>(null);
   const openCreateForm = useCallback(() => {
     setError(null);
     setShareCopyFallback(null);
@@ -495,8 +562,6 @@ export default function GalleriesPage() {
     setLinkedProjectId("");
     setNewClientName("");
     setNewClientEmail("");
-    setTetheringMode(false);
-    setTetherDir("");
   }, []);
 
   const filteredGalleries = useMemo(() => {
@@ -511,7 +576,8 @@ export default function GalleriesPage() {
       if (filterStatus) {
         const isArchived = g.status === "archived";
         if (filterStatus === "published" && !g.is_published) return false;
-        if (filterStatus === "unpublished" && (g.is_published || isArchived)) return false;
+        if (filterStatus === "unpublished" && (g.is_published || isArchived))
+          return false;
         if (filterStatus === "archived" && !isArchived) return false;
       }
       if (searchQuery.trim()) {
@@ -528,7 +594,15 @@ export default function GalleriesPage() {
     return Array.from(
       new Set(
         galleries
-          .map((g) => readGalleryCoverAssetId(g.settings, g.cover_asset_id))
+          .map((g) => {
+            if (g.cover_asset) return "";
+            const coverAssetId = readGalleryCoverAssetId(
+              g.settings,
+              g.cover_asset_id,
+            );
+            if (!coverAssetId || coverAssets[coverAssetId]) return "";
+            return coverAssetId;
+          })
           .filter((id): id is string => Boolean(id && !coverAssets[id])),
       ),
     );
@@ -544,7 +618,10 @@ export default function GalleriesPage() {
     setConfirmDeleteId(galleryId);
   };
 
-  const createWorkingShareUrl = async (gallery: Gallery, channel: "copy" | "email" | "whatsapp") => {
+  const createWorkingShareUrl = async (
+    gallery: Gallery,
+    channel: "copy" | "email" | "whatsapp",
+  ) => {
     if (!token) {
       throw new Error("Sign in again to create a share link.");
     }
@@ -585,7 +662,11 @@ export default function GalleriesPage() {
       }
       setShareMenuGalleryId(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create gallery share link");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to create gallery share link",
+      );
     } finally {
       setSharingGalleryId(null);
     }
@@ -609,7 +690,9 @@ export default function GalleriesPage() {
     setError(null);
     const copied = await writeClipboardText(shareCopyFallback.url);
     if (!copied) {
-      setError("This browser is still blocking clipboard access. Select the link field and copy it manually.");
+      setError(
+        "This browser is still blocking clipboard access. Select the link field and copy it manually.",
+      );
       return;
     }
     const galleryId = shareCopyFallback.galleryId;
@@ -636,7 +719,11 @@ export default function GalleriesPage() {
 
   const whatsAppShareLink = (gallery: Gallery) => {
     void runShareAction(gallery, "whatsapp", (url) => {
-      window.open(buildGalleryWhatsAppHref(gallery, url), "_blank", "noopener,noreferrer");
+      window.open(
+        buildGalleryWhatsAppHref(gallery, url),
+        "_blank",
+        "noopener,noreferrer",
+      );
     });
   };
 
@@ -655,28 +742,41 @@ export default function GalleriesPage() {
     }
   };
 
-  const toggleGalleryPublish = async (event: React.MouseEvent<HTMLButtonElement>, gallery: Gallery) => {
+  const toggleGalleryPublish = async (
+    event: React.MouseEvent<HTMLButtonElement>,
+    gallery: Gallery,
+  ) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!token || publishingGalleryId === gallery.id || gallery.status === "archived") return;
+    if (
+      !token ||
+      publishingGalleryId === gallery.id ||
+      gallery.status === "archived"
+    )
+      return;
 
     setPublishingGalleryId(gallery.id);
     setError(null);
     try {
-      const updated = await updateGallery(token, gallery.id, { is_published: !gallery.is_published });
+      const updated = await updateGallery(token, gallery.id, {
+        is_published: !gallery.is_published,
+      });
       setGalleries((prev) =>
         prev.map((item) =>
           item.id === gallery.id
             ? {
                 ...item,
                 ...updated,
-                cover_thumbnails: updated.cover_thumbnails || item.cover_thumbnails,
+                cover_thumbnails:
+                  updated.cover_thumbnails || item.cover_thumbnails,
               }
             : item,
         ),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update publish state");
+      setError(
+        err instanceof Error ? err.message : "Failed to update publish state",
+      );
     } finally {
       setPublishingGalleryId(null);
     }
@@ -728,7 +828,10 @@ export default function GalleriesPage() {
         return [];
       })
       .then(setGalleries)
-      .catch((err) => { setError(err?.message || "Failed to load galleries"); setGalleries([]); })
+      .catch((err) => {
+        setError(err?.message || "Failed to load galleries");
+        setGalleries([]);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -809,16 +912,12 @@ export default function GalleriesPage() {
         gallery_type: newType,
         primary_contact_id: linkedContactId || undefined,
         project_id: linkedProjectId || undefined,
-        tethering_enabled: tetheringMode,
-        tether_directory: tetheringMode && tetherDir.trim() ? tetherDir.trim() : null,
       });
       setShowCreate(false);
       setNewTitle("");
       setNewType("proofing");
       setLinkedContactId("");
       setLinkedProjectId("");
-      setTetheringMode(false);
-      setTetherDir("");
       // Open the new gallery immediately rather than leaving the user to hunt
       // for it in the list (fixes the "new gallery inaccessible after creation"
       // UX gap). Fall back to a list refresh if the id is somehow absent.
@@ -878,14 +977,16 @@ export default function GalleriesPage() {
   return (
     <div className="space-y-6 py-8">
       {error && (
-        <div className="mb-4 rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
+        <div className="mb-4 rounded-xl border border-feedback-error/20 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error">
           {error}
         </div>
       )}
       {shareCopyFallback && (
         <ShareCopyFallbackNotice
           fallback={shareCopyFallback}
-          onRetry={() => { void retryShareFallbackCopy(); }}
+          onRetry={() => {
+            void retryShareFallbackCopy();
+          }}
           onOpen={openShareFallbackLink}
           onDismiss={dismissShareFallback}
         />
@@ -906,7 +1007,9 @@ export default function GalleriesPage() {
           shortfall splits the label. */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold text-text-primary">Galleries</h1>
+          <h1 className="text-2xl font-semibold text-text-primary">
+            Galleries
+          </h1>
           <p className="text-sm text-text-secondary mt-1">
             {filteredGalleries.length === galleries.length
               ? `${galleries.length} ${galleries.length === 1 ? "gallery" : "galleries"}`
@@ -919,29 +1022,18 @@ export default function GalleriesPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search galleries…"
-            className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary min-h-[44px] flex-1 min-w-0 sm:flex-none sm:w-48 lg:w-64"
+            className="input-base min-w-0 flex-1 text-sm sm:w-48 sm:flex-none lg:w-64"
             aria-label="Search galleries"
           />
-          <GlassIconButton
-            onClick={() => {
-              setTetheringMode((v) => !v);
-              if (!showCreate) openCreateForm();
-            }}
-            variant={tetheringMode ? "accent" : "glass"}
-            active={tetheringMode}
-            label={tetheringMode ? "Tethering enabled — click to disable" : "Enable tethering"}
-            size="md"
-          >
-            <Camera />
-          </GlassIconButton>
-          <button
+          <GlassButton
             onClick={openCreateForm}
-            className="shrink-0 whitespace-nowrap rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px] inline-flex items-center justify-center gap-1"
+            variant="primary"
+            className="shrink-0 whitespace-nowrap"
             aria-label="Create new gallery"
+            icon={<Plus className="h-4 w-4" aria-hidden="true" />}
           >
-            <span aria-hidden="true">+</span>
             <span className="sm:inline">New Gallery</span>
-          </button>
+          </GlassButton>
           <GlassIconButton
             onClick={() => setViewMode("grid")}
             variant="accent"
@@ -966,57 +1058,71 @@ export default function GalleriesPage() {
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-text-tertiary">Filtered by:</span>
           {filterType && (
-            <button
+            <GlassButton
               onClick={() => setFilterType(null)}
-              className="inline-flex items-center gap-1 rounded-full bg-accent-primary/10 px-3 py-1 text-xs font-medium text-accent-primary hover:bg-accent-primary/20"
+              variant="quiet"
+              size="sm"
+              icon={<XMark className="h-3 w-3" aria-hidden="true" />}
             >
               {filterType}
-              <XMark className="w-3 h-3" aria-hidden="true" />
-            </button>
+            </GlassButton>
           )}
           {filterStatus && (
-            <button
+            <GlassButton
               onClick={() => setFilterStatus(null)}
-              className="inline-flex items-center gap-1 rounded-full bg-accent-primary/10 px-3 py-1 text-xs font-medium text-accent-primary hover:bg-accent-primary/20"
+              variant="quiet"
+              size="sm"
+              icon={<XMark className="h-3 w-3" aria-hidden="true" />}
             >
               {/* Display proper-cased label to match the per-card badge.
                   filterStatus values are publish-state buckets
                   (published / unpublished / archived) since 2026-05-18. */}
               {filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1)}
-              <XMark className="w-3 h-3" aria-hidden="true" />
-            </button>
+            </GlassButton>
           )}
           {searchQuery.trim() && (
-            <button
+            <GlassButton
               onClick={() => setSearchQuery("")}
-              className="inline-flex items-center gap-1 rounded-full bg-accent-primary/10 px-3 py-1 text-xs font-medium text-accent-primary hover:bg-accent-primary/20"
+              variant="quiet"
+              size="sm"
+              icon={<XMark className="h-3 w-3" aria-hidden="true" />}
             >
               &quot;{searchQuery.trim()}&quot;
-              <XMark className="w-3 h-3" aria-hidden="true" />
-            </button>
+            </GlassButton>
           )}
-          <button
-            onClick={() => { setFilterType(null); setFilterStatus(null); setSearchQuery(""); }}
-            className="text-xs text-text-tertiary hover:text-text-primary underline"
+          <GlassButton
+            onClick={() => {
+              setFilterType(null);
+              setFilterStatus(null);
+              setSearchQuery("");
+            }}
+            variant="quiet"
+            size="sm"
           >
             Clear all
-          </button>
+          </GlassButton>
         </div>
       )}
 
       {showCreate && (
-        <div className="rounded-2xl border border-border-default bg-surface-raised p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-text-primary">New Gallery</h2>
+        <div className="surface-panel space-y-4 p-6">
+          <h2 className="text-lg font-semibold text-text-primary">
+            New Gallery
+          </h2>
           <div className="space-y-3">
             <div>
-              <label className="text-xs text-text-tertiary uppercase tracking-wider">Title</label>
+              <label className="form-label">Title</label>
               <input
                 type="text"
                 value={newTitle}
-                onChange={(e) => { setNewTitle(e.target.value); if (titleError) setTitleError(""); if (error) setError(null); }}
+                onChange={(e) => {
+                  setNewTitle(e.target.value);
+                  if (titleError) setTitleError("");
+                  if (error) setError(null);
+                }}
                 className={cn(
-                  "mt-1 w-full rounded-xl border bg-surface-sunken px-4 py-2.5 text-text-primary focus:outline-none",
-                  titleError ? "border-error focus:border-error" : "border-border-default focus:border-accent-primary",
+                  "input-base mt-1 w-full",
+                  titleError ? "border-feedback-error" : null,
                 )}
                 placeholder="e.g. Sharma Wedding 2026"
                 autoFocus
@@ -1024,122 +1130,113 @@ export default function GalleriesPage() {
                 aria-describedby={titleError ? "title-error" : undefined}
               />
               {titleError && (
-                <p id="title-error" className="mt-1 text-xs text-error">{titleError}</p>
+                <p
+                  id="title-error"
+                  className="mt-1 text-xs text-feedback-error"
+                >
+                  {titleError}
+                </p>
               )}
             </div>
             <div>
-              <label className="text-xs text-text-tertiary uppercase tracking-wider">Type</label>
+              <label className="form-label">Type</label>
               <select
                 value={newType}
-                onChange={(e) => setNewType(e.target.value as "proofing" | "delivery")}
-                className="mt-1 w-full rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
+                onChange={(e) =>
+                  setNewType(e.target.value as "proofing" | "delivery")
+                }
+                className="input-base mt-1 w-full"
               >
-                <option value="proofing">Proofing — client selects favorites</option>
+                <option value="proofing">
+                  Proofing — client selects favorites
+                </option>
                 <option value="delivery">Delivery — final hand-off</option>
               </select>
             </div>
-            {/* M23: tethering directory — visible when the tethering toggle is on */}
-            {tetheringMode && (
-              <div className="rounded-xl border border-accent-primary/30 bg-accent-primary/5 p-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  <Camera className="w-4 h-4 text-accent-primary shrink-0" />
-                  <span className="text-xs font-medium text-accent-primary uppercase tracking-wider">
-                    Tethering enabled
-                  </span>
-                </div>
-                <label className="text-xs text-text-tertiary">Watch directory</label>
-                <input
-                  type="text"
-                  value={tetherDir}
-                  onChange={(e) => setTetherDir(e.target.value)}
-                  placeholder="/Users/you/Camera Imports"
-                  className="w-full rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-accent-primary"
-                  aria-label="Local directory for tethered camera output"
-                />
-                <p className="text-xs text-text-tertiary">
-                  The RawDrive desktop app watches this folder and auto-uploads every new shot into this gallery.
-                </p>
-              </div>
-            )}
-            <div className="rounded-xl border border-border-default bg-surface-sunken/40 p-4">
-              <label className="text-xs text-text-tertiary uppercase tracking-wider">Linked client</label>
+            <div className="rounded-xl border border-border-default bg-surface-container-low p-4">
+              <label className="form-label">Linked client</label>
               <select
                 value={linkedContactId}
                 onChange={(e) => setLinkedContactId(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
+                className="input-base mt-1 w-full"
               >
                 <option value="">No client linked yet</option>
                 {contacts.map((contact) => (
                   <option key={contact.id} value={contact.id}>
-                    {contact.name}{contact.email ? ` - ${contact.email}` : ""}
+                    {contact.name}
+                    {contact.email ? ` - ${contact.email}` : ""}
                   </option>
                 ))}
               </select>
               {linkedProjectId && (
                 <p className="mt-2 text-xs text-text-secondary">
-                  This gallery will also stay attached to project {linkedProjectId.slice(0, 8)}.
+                  This gallery will also stay attached to project{" "}
+                  {linkedProjectId.slice(0, 8)}.
                 </p>
               )}
-              <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+              <div className="gallery-client-grid mt-4">
                 <input
                   type="text"
                   value={newClientName}
                   onChange={(e) => setNewClientName(e.target.value)}
                   placeholder="New client name"
-                  className="rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-sm text-text-primary"
+                  className="input-base text-sm"
                 />
                 <input
                   type="email"
                   value={newClientEmail}
                   onChange={(e) => setNewClientEmail(e.target.value)}
                   placeholder="Email optional"
-                  className="rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-sm text-text-primary"
+                  className="input-base text-sm"
                 />
-                <button
+                <GlassButton
                   type="button"
                   onClick={handleCreateClient}
                   disabled={creatingClient || !newClientName.trim()}
-                  className="btn-tertiary px-3 py-2 text-sm disabled:opacity-50"
+                  variant="surface"
+                  size="md"
                 >
                   {creatingClient ? "Adding..." : "Add client"}
-                </button>
+                </GlassButton>
               </div>
             </div>
           </div>
           <div className="flex gap-2 justify-end">
-            <button
+            <GlassButton
               onClick={resetCreateForm}
-              className="rounded-xl border border-border-default px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-sunken min-h-[44px]"
+              variant="surface"
               disabled={creating}
             >
               Cancel
-            </button>
-            <button
+            </GlassButton>
+            <GlassButton
               onClick={handleCreate}
               disabled={creating}
-              className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 disabled:opacity-50 min-h-[44px]"
+              variant="primary"
             >
               {creating ? "Creating…" : "Create Gallery"}
-            </button>
+            </GlassButton>
           </div>
         </div>
       )}
 
       {galleries.length === 0 ? (
         <div className="text-center py-16 space-y-3">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-surface-sunken flex items-center justify-center">
-            <svg className="w-8 h-8 text-text-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a2.25 2.25 0 002.25-2.25V5.25a2.25 2.25 0 00-2.25-2.25H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
-            </svg>
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-sunken">
+            <Photo className="empty-state-icon" aria-hidden="true" />
           </div>
-          <p className="text-text-secondary">No galleries yet. Create your first gallery to get started.</p>
+          <p className="text-text-secondary">
+            No galleries yet. Create your first gallery to get started.
+          </p>
           {!showCreate && (
-            <button
+            <GlassButton
               onClick={() => setShowCreate(true)}
-              className="mt-4 rounded-xl bg-accent-primary px-5 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 min-h-[44px]"
+              variant="primary"
+              className="mt-4"
+              icon={<Plus className="h-4 w-4" aria-hidden="true" />}
             >
-              + Create your first gallery
-            </button>
+              Create your first gallery
+            </GlassButton>
           )}
         </div>
       ) : (
@@ -1151,8 +1248,13 @@ export default function GalleriesPage() {
           }
         >
           {filteredGalleries.map((g) => {
-            const coverAssetId = readGalleryCoverAssetId(g.settings, g.cover_asset_id);
-            const coverAsset = coverAssetId ? coverAssets[coverAssetId] : undefined;
+            const coverAssetId = readGalleryCoverAssetId(
+              g.settings,
+              g.cover_asset_id,
+            );
+            const coverAsset =
+              g.cover_asset ??
+              (coverAssetId ? coverAssets[coverAssetId] : undefined);
             const shareUrl = buildGalleryCardShareUrl(g, workspaceProfile);
 
             const galleryHref = `/galleries/${g.id}`;
@@ -1198,7 +1300,13 @@ export default function GalleriesPage() {
                   </Link>
                 )}
 
-                <div className={viewMode === "grid" ? "p-4 space-y-3" : "flex-1 min-w-0 py-4"}>
+                <div
+                  className={
+                    viewMode === "grid"
+                      ? "p-4 space-y-3"
+                      : "flex-1 min-w-0 py-4"
+                  }
+                >
                   {viewMode === "grid" ? (
                     <div className="flex items-start justify-between gap-3">
                       <h3 className="min-w-0 flex-1 truncate font-medium text-text-primary">
@@ -1220,7 +1328,9 @@ export default function GalleriesPage() {
                           event.preventDefault();
                           event.stopPropagation();
                           setConfirmDeleteId(null);
-                          setShareMenuGalleryId((current) => (current === g.id ? null : g.id));
+                          setShareMenuGalleryId((current) =>
+                            current === g.id ? null : g.id,
+                          );
                         }}
                         onCopyShare={() => copyShareLink(g)}
                         onEmailShare={() => emailShareLink(g)}
@@ -1280,10 +1390,12 @@ export default function GalleriesPage() {
                 </div>
 
                 {/* Date + list view actions */}
-                <div className={cn(
-                  "flex items-center gap-2",
-                  viewMode === "grid" ? "px-4 pb-4" : "pr-4",
-                )}>
+                <div
+                  className={cn(
+                    "flex items-center gap-2",
+                    viewMode === "grid" ? "px-4 pb-4" : "pr-4",
+                  )}
+                >
                   <span className="text-xs text-text-tertiary">
                     {new Date(g.created_at).toLocaleDateString("en-IN")}
                   </span>
@@ -1299,7 +1411,9 @@ export default function GalleriesPage() {
                         event.preventDefault();
                         event.stopPropagation();
                         setConfirmDeleteId(null);
-                        setShareMenuGalleryId((current) => (current === g.id ? null : g.id));
+                        setShareMenuGalleryId((current) =>
+                          current === g.id ? null : g.id,
+                        );
                       }}
                       onCopyShare={() => copyShareLink(g)}
                       onEmailShare={() => emailShareLink(g)}

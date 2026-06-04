@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { themeMetaColors } from "@/lib/tokens";
 
 /**
  * Theme names must match design-tokens.json keys exactly — these are
@@ -15,7 +16,10 @@ import {
  */
 export type ThemeMode = "liquid-glass" | "liquid-glass-dark" | "midnight";
 
-const DARK_THEMES: ReadonlySet<ThemeMode> = new Set(["liquid-glass-dark", "midnight"]);
+const DARK_THEMES: ReadonlySet<ThemeMode> = new Set([
+  "liquid-glass-dark",
+  "midnight",
+]);
 
 export function isDarkTheme(theme: ThemeMode): boolean {
   return DARK_THEMES.has(theme);
@@ -29,14 +33,12 @@ type ThemeContextValue = {
 };
 
 const STORAGE_KEY = "rawdrive-theme";
-const VALID_THEMES: ReadonlySet<string> = new Set(["liquid-glass", "liquid-glass-dark", "midnight"]);
+const VALID_THEMES: ReadonlySet<string> = new Set([
+  "liquid-glass",
+  "liquid-glass-dark",
+  "midnight",
+]);
 const DEFAULT_THEME: ThemeMode = "liquid-glass-dark";
-
-const META_COLORS: Record<ThemeMode, string> = {
-  "liquid-glass": "#f6f7f9",
-  "liquid-glass-dark": "#0f1219",
-  "midnight": "#070709",
-};
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
@@ -46,7 +48,9 @@ function isTheme(value: string | null | undefined): value is ThemeMode {
 
 function applyTheme(theme: ThemeMode) {
   document.documentElement.dataset.theme = theme;
-  document.documentElement.style.colorScheme = isDarkTheme(theme) ? "dark" : "light";
+  document.documentElement.style.colorScheme = isDarkTheme(theme)
+    ? "dark"
+    : "light";
 
   if (document.body) {
     document.body.dataset.theme = theme;
@@ -54,12 +58,15 @@ function applyTheme(theme: ThemeMode) {
 
   const metaTheme = document.querySelector('meta[name="theme-color"]');
   if (metaTheme) {
-    metaTheme.setAttribute("content", META_COLORS[theme]);
+    metaTheme.setAttribute("content", themeMetaColors[theme]);
   }
 }
 
 function readInitialTheme(): ThemeMode {
-  if (typeof document !== "undefined" && isTheme(document.documentElement.dataset.theme)) {
+  if (
+    typeof document !== "undefined" &&
+    isTheme(document.documentElement.dataset.theme)
+  ) {
     return document.documentElement.dataset.theme;
   }
 
@@ -109,12 +116,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       isDark: isDarkTheme(theme),
       setTheme: persistAndSet,
       toggleTheme: () =>
-        persistAndSet(isDarkTheme(theme) ? "liquid-glass" : "liquid-glass-dark"),
+        persistAndSet(
+          isDarkTheme(theme) ? "liquid-glass" : "liquid-glass-dark",
+        ),
     }),
     [theme],
   );
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  return (
+    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+  );
 }
 
 export function useTheme() {
@@ -147,7 +158,7 @@ export function useTheme() {
 // future SSR-string consumer, but the production runtime now loads the
 // same script via <script src="/theme-init.js" /> in src/app/layout.tsx
 // to avoid the React 19 "Encountered a script tag" warning. When the
-// constants above (STORAGE_KEY / VALID_THEMES / DARK_THEMES / META_COLORS
+// constants above (STORAGE_KEY / VALID_THEMES / DARK_THEMES / themeMetaColors
 // / DEFAULT_THEME) change, update frontend/public/theme-init.js too.
 export const rawDriveThemeInitScript = `
   (() => {
@@ -165,10 +176,10 @@ export const rawDriveThemeInitScript = `
       document.documentElement.dataset.theme = theme;
       const darkThemes = ${JSON.stringify([...DARK_THEMES])};
       document.documentElement.style.colorScheme = darkThemes.includes(theme) ? "dark" : "light";
-      const metaColors = ${JSON.stringify(META_COLORS)};
+      const metaColors = ${JSON.stringify(themeMetaColors)};
       const metaTheme = document.querySelector('meta[name="theme-color"]');
       if (metaTheme) {
-        metaTheme.setAttribute("content", metaColors[theme] || "${META_COLORS[DEFAULT_THEME]}");
+        metaTheme.setAttribute("content", metaColors[theme] || "${themeMetaColors[DEFAULT_THEME]}");
       }
     } catch (_error) {
       document.documentElement.dataset.theme = "${DEFAULT_THEME}";

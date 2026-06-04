@@ -103,7 +103,10 @@ export function GrantUploadCreditsDialog({
         idempotency_key: idempotencyKey,
         reason: reason.trim(),
       });
-      setSuccess({ amount: resp.amount_credits, ledgerEntryId: resp.ledger_entry_id });
+      setSuccess({
+        amount: resp.amount_credits,
+        ledgerEntryId: resp.ledger_entry_id,
+      });
       onGranted?.(resp.amount_credits);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Grant failed");
@@ -121,20 +124,26 @@ export function GrantUploadCreditsDialog({
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-surface-scrim-strong/60 glass-blur-subtle p-4"
     >
       <form
         onClick={(e) => e.stopPropagation()}
         onSubmit={handleSubmit}
-        className="w-full max-w-md rounded-2xl border border-white/10 bg-surface-base/95 shadow-xl p-6 space-y-4 text-text-primary"
+        className="w-full max-w-md rounded-2xl border border-text-media/10 bg-surface-base/95 shadow-xl p-6 space-y-4 text-text-primary"
       >
         <header className="flex items-start justify-between gap-4">
           <div>
-            <h2 id="grant-upload-credits-title" className="text-lg font-semibold">
+            <h2
+              id="grant-upload-credits-title"
+              className="text-lg font-semibold"
+            >
               Grant upload credits
             </h2>
             <p className="text-sm text-text-secondary">
-              Granting to <span className="font-medium text-text-primary">{workspaceName}</span>
+              Granting to{" "}
+              <span className="font-medium text-text-primary">
+                {workspaceName}
+              </span>
             </p>
           </div>
           {/* Same token-surface close pattern as the RechargeModal fix
@@ -147,7 +156,14 @@ export function GrantUploadCreditsDialog({
             data-testid="grant-upload-credits-close"
             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-container-high text-text-secondary transition-colors hover:bg-surface-container-highest hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" className="h-5 w-5">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              className="h-5 w-5"
+            >
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
           </button>
@@ -162,13 +178,16 @@ export function GrantUploadCreditsDialog({
               {success.amount.toLocaleString("en-IN")} credits granted.
             </p>
             <p className="text-xs text-text-secondary break-all">
-              Ledger entry: <span className="font-mono">{success.ledgerEntryId}</span>
+              Ledger entry:{" "}
+              <span className="font-mono">{success.ledgerEntryId}</span>
             </p>
           </div>
         ) : (
           <>
             <label className="block space-y-1 text-sm">
-              <span className="font-medium text-text-primary">Amount (credits)</span>
+              <span className="font-medium text-text-primary">
+                Amount (credits)
+              </span>
               <input
                 type="number"
                 inputMode="numeric"
@@ -228,7 +247,7 @@ export function GrantUploadCreditsDialog({
               type="submit"
               disabled={!canSubmit}
               data-testid="grant-upload-credits-submit"
-              className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+              className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-text-inverse transition-colors hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             >
               {busy ? "Granting…" : "Grant credits"}
             </button>

@@ -24,7 +24,13 @@ const UPGRADE_PLANS = pricingPlans
 
 type BillingInterval = "monthly" | "annual";
 
-const TIER_ORDER = ["free", "starter", "professional", "business", "enterprise"];
+const TIER_ORDER = [
+  "free",
+  "starter",
+  "professional",
+  "business",
+  "enterprise",
+];
 
 function tierIndex(tier: string): number {
   return TIER_ORDER.indexOf(tier);
@@ -43,10 +49,12 @@ function PlansPageContent() {
   const upgradeTo = searchParams.get("upgrade_to") ?? "";
   // Set when the user returns from a successful payment (chooser page
   // redirects here with ?success=1&tier=...).
-  const successTier = searchParams.get("success") === "1" ? (searchParams.get("tier") ?? "") : "";
+  const successTier =
+    searchParams.get("success") === "1" ? (searchParams.get("tier") ?? "") : "";
 
   const [currentTier, setCurrentTier] = useState<string>("free");
-  const [billingInterval, setBillingInterval] = useState<BillingInterval>("monthly");
+  const [billingInterval, setBillingInterval] =
+    useState<BillingInterval>("monthly");
   // Compute initial loading state synchronously — if there's no auth token,
   // there's nothing to fetch, so we start in the not-loading state. This
   // avoids the React 19 `react-hooks/set-state-in-effect` lint because the
@@ -75,11 +83,14 @@ function PlansPageContent() {
   // Navigate to the chooser page. Replacing the previous in-page payment
   // flow — the chooser owns all payment orchestration so this page stays
   // focused on tier selection.
-  const handleUpgrade = useCallback((tier: string) => {
-    router.push(
-      `/settings/plans/choose-payment?tier=${encodeURIComponent(tier)}&interval=${billingInterval}`,
-    );
-  }, [router, billingInterval]);
+  const handleUpgrade = useCallback(
+    (tier: string) => {
+      router.push(
+        `/settings/plans/choose-payment?tier=${encodeURIComponent(tier)}&interval=${billingInterval}`,
+      );
+    },
+    [router, billingInterval],
+  );
 
   // Auto-trigger upgrade when arriving from onboarding with upgrade_to param.
   useEffect(() => {
@@ -92,7 +103,7 @@ function PlansPageContent() {
 
   const isOnboardingUpgrade = Boolean(upgradeTo);
   const successPlanName = successTier
-    ? UPGRADE_PLANS.find((p) => p.tier === successTier)?.name ?? successTier
+    ? (UPGRADE_PLANS.find((p) => p.tier === successTier)?.name ?? successTier)
     : "";
 
   return (
@@ -107,7 +118,9 @@ function PlansPageContent() {
         </Link>
         <div>
           <h1 className="font-headline text-2xl font-extrabold tracking-tight text-text-primary">
-            {isOnboardingUpgrade ? "Complete Your Subscription" : "Choose a Plan"}
+            {isOnboardingUpgrade
+              ? "Complete Your Subscription"
+              : "Choose a Plan"}
           </h1>
           <p className="text-text-secondary text-sm mt-0.5">
             {isOnboardingUpgrade
@@ -119,13 +132,18 @@ function PlansPageContent() {
 
       {isOnboardingUpgrade && !successTier && (
         <div className="rounded-xl border border-accent/30 bg-accent/8 px-5 py-4 text-sm text-accent">
-          Your workspace is ready. Complete payment below to activate your <strong>{UPGRADE_PLANS.find((p) => p.tier === upgradeTo)?.name ?? upgradeTo}</strong> plan.
+          Your workspace is ready. Complete payment below to activate your{" "}
+          <strong>
+            {UPGRADE_PLANS.find((p) => p.tier === upgradeTo)?.name ?? upgradeTo}
+          </strong>{" "}
+          plan.
         </div>
       )}
 
       {successTier && (
         <div className="rounded-xl border border-success/30 bg-success/8 px-5 py-4 text-sm text-success">
-          Payment successful! Your plan has been upgraded to <strong>{successPlanName}</strong>.
+          Payment successful! Your plan has been upgraded to{" "}
+          <strong>{successPlanName}</strong>.
           <div className="mt-3">
             <Link
               href="/dashboard"
@@ -162,12 +180,14 @@ function PlansPageContent() {
           ].join(" ")}
         >
           Annual
-          <span className={[
-            "rounded-full px-2 py-0.5 text-[10px] font-bold",
-            billingInterval === "annual"
-              ? "bg-white/20 text-white"
-              : "bg-feedback-success/15 text-feedback-success",
-          ].join(" ")}>
+          <span
+            className={[
+              "rounded-full px-2 py-0.5 text-[10px] font-bold",
+              billingInterval === "annual"
+                ? "bg-surface-overlay/20 text-text-inverse"
+                : "bg-feedback-success/15 text-feedback-success",
+            ].join(" ")}
+          >
             Save ~17%
           </span>
         </button>
@@ -184,7 +204,10 @@ function PlansPageContent() {
             const isUpgrade = tierIndex(plan.tier) > tierIndex(currentTier);
             const isHighlighted = plan.highlighted && !isCurrent;
             const isAutoTarget = plan.tier === upgradeTo;
-            const displayPrice = billingInterval === "annual" ? plan.annualPrice : plan.monthlyPrice;
+            const displayPrice =
+              billingInterval === "annual"
+                ? plan.annualPrice
+                : plan.monthlyPrice;
 
             return (
               <div
@@ -220,7 +243,9 @@ function PlansPageContent() {
 
                 {/* Plan name & price */}
                 <div className="mb-4 space-y-1">
-                  <h2 className="text-base font-bold text-text-primary">{plan.name}</h2>
+                  <h2 className="text-base font-bold text-text-primary">
+                    {plan.name}
+                  </h2>
                   <div className="flex items-baseline gap-1">
                     <span className="text-3xl font-extrabold text-text-primary">
                       ₹{displayPrice.toLocaleString("en-IN")}
@@ -231,7 +256,11 @@ function PlansPageContent() {
                   </div>
                   {billingInterval === "annual" && (
                     <p className="text-[11px] text-text-tertiary">
-                      ₹{Math.round(plan.annualPrice / 12).toLocaleString("en-IN")} / mo effective
+                      ₹
+                      {Math.round(plan.annualPrice / 12).toLocaleString(
+                        "en-IN",
+                      )}{" "}
+                      / mo effective
                     </p>
                   )}
                 </div>
@@ -239,14 +268,19 @@ function PlansPageContent() {
                 {/* Storage callout */}
                 <div className="mb-4 flex items-center gap-2 rounded-lg bg-surface-container-high px-3 py-2">
                   <HardDrive className="h-4 w-4 shrink-0 text-text-tertiary" />
-                  <span className="text-sm font-semibold text-text-primary">{plan.storage}</span>
+                  <span className="text-sm font-semibold text-text-primary">
+                    {plan.storage}
+                  </span>
                   <span className="text-xs text-text-tertiary">storage</span>
                 </div>
 
                 {/* Feature list */}
                 <ul className="mb-6 flex-1 space-y-2">
                   {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-sm text-text-secondary">
+                    <li
+                      key={f}
+                      className="flex items-start gap-2 text-sm text-text-secondary"
+                    >
                       <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
                       {f}
                     </li>
@@ -279,13 +313,15 @@ function PlansPageContent() {
       )}
 
       <p className="text-center text-xs text-text-tertiary">
-        Prices in Indian Rupees (₹), billed {billingInterval === "annual" ? "annually" : "monthly"}. 18% GST applicable. Payments processed via Razorpay or PhonePe.{" "}
-        Enterprise pricing:{" "}
+        Prices in Indian Rupees (₹), billed{" "}
+        {billingInterval === "annual" ? "annually" : "monthly"}. 18% GST
+        applicable. Payments processed via Razorpay or PhonePe. Enterprise
+        pricing:{" "}
         <a
-          href="mailto:infor@rawdrive.in"
+          href="mailto:info@rawdrive.in"
           className="underline underline-offset-2 hover:text-text-secondary"
         >
-          infor@rawdrive.in
+          info@rawdrive.in
         </a>
       </p>
     </div>

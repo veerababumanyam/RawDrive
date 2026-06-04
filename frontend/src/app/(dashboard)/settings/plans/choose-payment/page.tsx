@@ -15,14 +15,27 @@
 // Adding a third provider (Stripe, Cashfree, …) is one entry in the
 // PROVIDERS array below.
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CreditCard, Loader2, Lock, ShieldCheck, Smartphone } from "lucide-react";
+import {
+  CreditCard,
+  Loader2,
+  Lock,
+  ShieldCheck,
+  Smartphone,
+} from "lucide-react";
 import { ChevronLeft } from "@/components/icons";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { getStoredAccessToken } from "@/lib/auth";
-import { pricingPlans } from "@/lib/tokens";
+import { pricingPlans, viewportThemeColors } from "@/lib/tokens";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -85,7 +98,11 @@ interface RazorpayOptions {
   order_id: string;
   name: string;
   description: string;
-  handler: (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => void;
+  handler: (response: {
+    razorpay_payment_id: string;
+    razorpay_order_id: string;
+    razorpay_signature: string;
+  }) => void;
   prefill?: { name?: string; email?: string; contact?: string };
   theme?: { color?: string };
   modal?: { ondismiss?: () => void };
@@ -114,7 +131,8 @@ function ChoosePaymentContent() {
   const router = useRouter();
   const searchParams = useSearchParams() ?? new URLSearchParams();
   const tier = searchParams.get("tier") ?? "";
-  const interval = searchParams.get("interval") === "annual" ? "annual" : "monthly";
+  const interval =
+    searchParams.get("interval") === "annual" ? "annual" : "monthly";
 
   const plan = useMemo(
     () => pricingPlans.find((p) => p.id === tier && p.id !== "free"),
@@ -125,11 +143,14 @@ function ChoosePaymentContent() {
   // Doesn't auto-select — the user still clicks deliberately each time.
   const [processing, setProcessing] = useState<ProviderId | null>(null);
   const [errorMsg, setErrorMsg] = useState<string>("");
-  const [providersLoading, setProvidersLoading] = useState(() => Boolean(getStoredAccessToken()));
+  const [providersLoading, setProvidersLoading] = useState(() =>
+    Boolean(getStoredAccessToken()),
+  );
   const [providersError, setProvidersError] = useState(() =>
     getStoredAccessToken() ? "" : "Session expired — please log in again.",
   );
-  const [providerAvailability, setProviderAvailability] = useState<ProviderAvailability>(NO_PROVIDERS);
+  const [providerAvailability, setProviderAvailability] =
+    useState<ProviderAvailability>(NO_PROVIDERS);
   const rzpScriptLoaded = useRef(false);
 
   const providers = ALL_PROVIDERS;
@@ -142,7 +163,9 @@ function ChoosePaymentContent() {
       if (v === "razorpay" || v === "phonepe") {
         return providerAvailability[v] ? v : null;
       }
-    } catch { /* private mode — non-critical */ }
+    } catch {
+      /* private mode — non-critical */
+    }
     return null;
   }, [providerAvailability]);
 
@@ -156,11 +179,16 @@ function ChoosePaymentContent() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(async (res) => {
-        const json = (await res.json().catch(() => ({}))) as PaymentProvidersResponse & { error?: string };
+        const json = (await res
+          .json()
+          .catch(() => ({}))) as PaymentProvidersResponse & { error?: string };
         if (!active) return;
         if (!res.ok) {
           setProviderAvailability(NO_PROVIDERS);
-          setProvidersError(json.error || `Could not check payment providers (HTTP ${res.status})`);
+          setProvidersError(
+            json.error ||
+              `Could not check payment providers (HTTP ${res.status})`,
+          );
           return;
         }
         const next: ProviderAvailability = { ...NO_PROVIDERS };
@@ -175,7 +203,11 @@ function ChoosePaymentContent() {
       .catch((err) => {
         if (!active) return;
         setProviderAvailability(NO_PROVIDERS);
-        setProvidersError(err instanceof Error ? err.message : "Could not check payment providers");
+        setProvidersError(
+          err instanceof Error
+            ? err.message
+            : "Could not check payment providers",
+        );
       })
       .finally(() => {
         if (active) setProvidersLoading(false);
@@ -189,7 +221,10 @@ function ChoosePaymentContent() {
   // user picks Razorpay. CSP must allow checkout.razorpay.com (see
   // frontend/next.config.ts script-src + frame-src).
   useEffect(() => {
-    if (rzpScriptLoaded.current || document.getElementById("razorpay-checkout-js")) {
+    if (
+      rzpScriptLoaded.current ||
+      document.getElementById("razorpay-checkout-js")
+    ) {
       rzpScriptLoaded.current = true;
       return;
     }
@@ -197,7 +232,9 @@ function ChoosePaymentContent() {
     script.id = "razorpay-checkout-js";
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
     script.async = true;
-    script.onload = () => { rzpScriptLoaded.current = true; };
+    script.onload = () => {
+      rzpScriptLoaded.current = true;
+    };
     script.onerror = () => {
       console.error(
         "[Razorpay] checkout.js failed to load — check CSP script-src + frame-src, ad blockers, or network.",
@@ -210,121 +247,164 @@ function ChoosePaymentContent() {
   const persistChoice = useCallback((id: ProviderId) => {
     try {
       window.localStorage.setItem("rawdrive-payment-provider", id);
-    } catch { /* private mode — non-critical */ }
+    } catch {
+      /* private mode — non-critical */
+    }
   }, []);
 
-  const startPayment = useCallback(async (provider: ProviderId) => {
-    if (!plan) return;
-    setErrorMsg("");
-    setProcessing(provider);
-    persistChoice(provider);
+  const startPayment = useCallback(
+    async (provider: ProviderId) => {
+      if (!plan) return;
+      setErrorMsg("");
+      setProcessing(provider);
+      persistChoice(provider);
 
-    try {
-      const token = getStoredAccessToken();
-      if (!token) throw new Error("Not authenticated — please log in again.");
+      try {
+        const token = getStoredAccessToken();
+        if (!token) throw new Error("Not authenticated — please log in again.");
 
-      const res = await fetch(`${API_BASE}/api/v1/workspace/subscription/upgrade`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ to_tier: plan.id, provider, billing_interval: interval }),
-      });
-      if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        if (res.status === 503) {
-          setProviderAvailability((prev) => ({ ...prev, [provider]: false }));
-        }
-        throw new Error(err.error ?? `HTTP ${res.status}`);
-      }
-      const order = (await res.json()) as UpgradeOrderResponse;
-
-      if (order.provider === "phonepe") {
-        if (!order.redirect_url) throw new Error("PhonePe order missing redirect URL");
-        // Scheme guard: only navigate to https URLs. Mirrors the guard in
-        // components/streams/RechargeModal.tsx. Blocks javascript:/data:/http:
-        // payloads in case the backend response is misconfigured or tampered
-        // with (open redirect / XSS defense-in-depth) before window.location.
-        if (!isAllowedPhonePeRedirect(order.redirect_url)) {
-          throw new Error("Invalid payment redirect URL");
-        }
-        try {
-          window.sessionStorage.setItem("rawdrive-pending-plan-name", plan.name);
-        } catch { /* non-critical */ }
-        window.location.assign(order.redirect_url);
-        return;
-      }
-
-      // Razorpay modal path.
-      if (!order.razorpay_order_id || !order.razorpay_key_id) {
-        throw new Error("Razorpay order missing required fields");
-      }
-      if (!window.Razorpay) {
-        await new Promise<void>((resolve, reject) => {
-          const t = setTimeout(() => reject(new Error("Razorpay script timeout")), 8000);
-          const poll = setInterval(() => {
-            if (window.Razorpay) { clearInterval(poll); clearTimeout(t); resolve(); }
-          }, 100);
-        });
-      }
-      const rzp = new window.Razorpay({
-        key: order.razorpay_key_id,
-        amount: order.amount_paise,
-        currency: order.currency,
-        order_id: order.razorpay_order_id,
-        name: "RawDrive",
-        description: `Upgrade to ${plan.name}`,
-        handler: async (response) => {
-          try {
-            const verifyRes = await fetch(`${API_BASE}/api/v1/workspace/subscription/verify`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_signature: response.razorpay_signature,
-              }),
-            });
-            if (!verifyRes.ok) {
-              const err = (await verifyRes.json().catch(() => ({}))) as { error?: string };
-              throw new Error(err.error ?? `Verification failed (HTTP ${verifyRes.status})`);
-            }
-            const verified = (await verifyRes.json()) as { status: string; plan_tier: string };
-            // Sidebar plan chip refresh — same pattern as the legacy plans page.
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(
-                new CustomEvent("rawdrive:plan-changed", {
-                  detail: { plan_tier: verified.plan_tier || plan.id },
-                }),
-              );
-            }
-            router.push(`/settings/plans?success=1&tier=${encodeURIComponent(verified.plan_tier || plan.id)}`);
-          } catch (err) {
-            setErrorMsg(
-              `Payment captured but plan upgrade could not be confirmed: ${err instanceof Error ? err.message : "unknown error"}. Refresh in a minute or contact support if it doesn't update.`,
-            );
-            setProcessing(null);
-          }
-        },
-        theme: { color: "var(--accent-default, #2d3435)" },
-        modal: {
-          ondismiss: () => {
-            // User closed the modal — stay on the chooser page so they can
-            // pick a different method or try again.
-            setProcessing(null);
+        const res = await fetch(
+          `${API_BASE}/api/v1/workspace/subscription/upgrade`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              to_tier: plan.id,
+              provider,
+              billing_interval: interval,
+            }),
           },
-        },
-      });
-      rzp.open();
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Could not start payment. Please try again.");
-      setProcessing(null);
-    }
-  }, [interval, plan, persistChoice, router]);
+        );
+        if (!res.ok) {
+          const err = (await res.json().catch(() => ({}))) as {
+            error?: string;
+          };
+          if (res.status === 503) {
+            setProviderAvailability((prev) => ({ ...prev, [provider]: false }));
+          }
+          throw new Error(err.error ?? `HTTP ${res.status}`);
+        }
+        const order = (await res.json()) as UpgradeOrderResponse;
+
+        if (order.provider === "phonepe") {
+          if (!order.redirect_url)
+            throw new Error("PhonePe order missing redirect URL");
+          // Scheme guard: only navigate to https URLs. Mirrors the guard in
+          // components/streams/RechargeModal.tsx. Blocks javascript:/data:/http:
+          // payloads in case the backend response is misconfigured or tampered
+          // with (open redirect / XSS defense-in-depth) before window.location.
+          if (!isAllowedPhonePeRedirect(order.redirect_url)) {
+            throw new Error("Invalid payment redirect URL");
+          }
+          try {
+            window.sessionStorage.setItem(
+              "rawdrive-pending-plan-name",
+              plan.name,
+            );
+          } catch {
+            /* non-critical */
+          }
+          window.location.assign(order.redirect_url);
+          return;
+        }
+
+        // Razorpay modal path.
+        if (!order.razorpay_order_id || !order.razorpay_key_id) {
+          throw new Error("Razorpay order missing required fields");
+        }
+        if (!window.Razorpay) {
+          await new Promise<void>((resolve, reject) => {
+            const t = setTimeout(
+              () => reject(new Error("Razorpay script timeout")),
+              8000,
+            );
+            const poll = setInterval(() => {
+              if (window.Razorpay) {
+                clearInterval(poll);
+                clearTimeout(t);
+                resolve();
+              }
+            }, 100);
+          });
+        }
+        const rzp = new window.Razorpay({
+          key: order.razorpay_key_id,
+          amount: order.amount_paise,
+          currency: order.currency,
+          order_id: order.razorpay_order_id,
+          name: "RawDrive",
+          description: `Upgrade to ${plan.name}`,
+          handler: async (response) => {
+            try {
+              const verifyRes = await fetch(
+                `${API_BASE}/api/v1/workspace/subscription/verify`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_signature: response.razorpay_signature,
+                  }),
+                },
+              );
+              if (!verifyRes.ok) {
+                const err = (await verifyRes.json().catch(() => ({}))) as {
+                  error?: string;
+                };
+                throw new Error(
+                  err.error ?? `Verification failed (HTTP ${verifyRes.status})`,
+                );
+              }
+              const verified = (await verifyRes.json()) as {
+                status: string;
+                plan_tier: string;
+              };
+              // Sidebar plan chip refresh — same pattern as the legacy plans page.
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                  new CustomEvent("rawdrive:plan-changed", {
+                    detail: { plan_tier: verified.plan_tier || plan.id },
+                  }),
+                );
+              }
+              router.push(
+                `/settings/plans?success=1&tier=${encodeURIComponent(verified.plan_tier || plan.id)}`,
+              );
+            } catch (err) {
+              setErrorMsg(
+                `Payment captured but plan upgrade could not be confirmed: ${err instanceof Error ? err.message : "unknown error"}. Refresh in a minute or contact support if it doesn't update.`,
+              );
+              setProcessing(null);
+            }
+          },
+          theme: { color: viewportThemeColors.publicGallery },
+          modal: {
+            ondismiss: () => {
+              // User closed the modal — stay on the chooser page so they can
+              // pick a different method or try again.
+              setProcessing(null);
+            },
+          },
+        });
+        rzp.open();
+      } catch (err) {
+        setErrorMsg(
+          err instanceof Error
+            ? err.message
+            : "Could not start payment. Please try again.",
+        );
+        setProcessing(null);
+      }
+    },
+    [interval, plan, persistChoice, router],
+  );
 
   // Invalid / missing tier — bounce back to /settings/plans.
   if (!plan) {
@@ -334,23 +414,27 @@ function ChoosePaymentContent() {
           <p className="text-sm text-text-secondary">
             That plan isn&apos;t available. Choose a plan first.
           </p>
-        <Link
-          href="/settings/plans"
-          className="mt-4 inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-text-inverse hover:opacity-90"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Back to plans
-        </Link>
+          <Link
+            href="/settings/plans"
+            className="mt-4 inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-text-inverse hover:opacity-90"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Back to plans
+          </Link>
         </div>
       </div>
     );
   }
 
-  const displayPrice = interval === "annual"
-    ? (plan.annualPrice as number)
-    : (plan.monthlyPrice as number);
+  const displayPrice =
+    interval === "annual"
+      ? (plan.annualPrice as number)
+      : (plan.monthlyPrice as number);
   const periodLabel = interval === "annual" ? "yr" : "mo";
-  const billingNote = interval === "annual" ? "Billed annually · Cancel anytime" : "Billed monthly · Cancel anytime";
+  const billingNote =
+    interval === "annual"
+      ? "Billed annually · Cancel anytime"
+      : "Billed monthly · Cancel anytime";
   // GST is backend-owned; keep this copy aligned with the order amount the
   // upgrade endpoint returns.
   return (
@@ -372,7 +456,8 @@ function ChoosePaymentContent() {
             Choose Payment Method
           </h1>
           <p className="text-text-secondary text-sm mt-0.5">
-            Pick how you&apos;d like to pay for the <strong>{plan.name}</strong> plan.
+            Pick how you&apos;d like to pay for the <strong>{plan.name}</strong>{" "}
+            plan.
           </p>
         </div>
       </header>
@@ -395,9 +480,14 @@ function ChoosePaymentContent() {
             <p className="text-xs text-text-tertiary">Total today</p>
             <p className="text-3xl font-extrabold text-text-primary">
               ₹{displayPrice.toLocaleString("en-IN")}
-              <span className="text-sm font-medium text-text-tertiary"> / {periodLabel}</span>
+              <span className="text-sm font-medium text-text-tertiary">
+                {" "}
+                / {periodLabel}
+              </span>
             </p>
-            <p className="text-[11px] text-text-tertiary">18% GST applicable at checkout</p>
+            <p className="text-[11px] text-text-tertiary">
+              18% GST applicable at checkout
+            </p>
           </div>
         </div>
       </section>
@@ -421,116 +511,133 @@ function ChoosePaymentContent() {
         </div>
       )}
 
-      {!providersLoading && !providersError && !Object.values(providerAvailability).some(Boolean) && (
-        <div className="surface-panel p-5 text-sm text-text-secondary">
-          Payments are not configured yet. Contact support to complete this upgrade.
-        </div>
-      )}
+      {!providersLoading &&
+        !providersError &&
+        !Object.values(providerAvailability).some(Boolean) && (
+          <div className="surface-panel p-5 text-sm text-text-secondary">
+            Payments are not configured yet. Contact support to complete this
+            upgrade.
+          </div>
+        )}
 
       {/* Payment method cards */}
       {!providersLoading && (
-      <section aria-label="Payment methods" className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {providers.map((provider) => {
-          const Icon = provider.icon;
-          const isConfigured = providerAvailability[provider.id] && !providersError;
-          const isProcessing = processing === provider.id;
-          const isOtherProcessing = processing !== null && processing !== provider.id;
-          const isUnavailable = !isConfigured;
-          return (
-            <button
-              key={provider.id}
-              type="button"
-              onClick={() => startPayment(provider.id)}
-              disabled={isProcessing || isOtherProcessing || isUnavailable}
-              aria-busy={isProcessing}
-              className={[
-                "group relative flex flex-col gap-4 rounded-2xl border bg-surface-container-low p-6 text-left transition-all",
-                "hover:border-accent hover:shadow-md focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-surface",
-                "disabled:cursor-not-allowed disabled:opacity-60",
-                isProcessing ? "border-accent ring-2 ring-accent/30" : "border-border-subtle",
-              ].join(" ")}
-            >
-              {lastUsed === provider.id && (
-                <span className="absolute -top-2.5 right-4 inline-flex items-center rounded-full bg-surface-container-highest border border-border-default px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
-                  Last used
-                </span>
-              )}
-              {isUnavailable && (
-                <span className="absolute -top-2.5 right-4 inline-flex items-center rounded-full bg-surface-container-highest border border-border-default px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">
-                  Not configured
-                </span>
-              )}
+        <section
+          aria-label="Payment methods"
+          className="grid grid-cols-1 gap-4 md:grid-cols-2"
+        >
+          {providers.map((provider) => {
+            const Icon = provider.icon;
+            const isConfigured =
+              providerAvailability[provider.id] && !providersError;
+            const isProcessing = processing === provider.id;
+            const isOtherProcessing =
+              processing !== null && processing !== provider.id;
+            const isUnavailable = !isConfigured;
+            return (
+              <button
+                key={provider.id}
+                type="button"
+                onClick={() => startPayment(provider.id)}
+                disabled={isProcessing || isOtherProcessing || isUnavailable}
+                aria-busy={isProcessing}
+                className={[
+                  "group relative flex flex-col gap-4 rounded-2xl border bg-surface-container-low p-6 text-left transition-all",
+                  "hover:border-accent hover:shadow-md focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-surface",
+                  "disabled:cursor-not-allowed disabled:opacity-60",
+                  isProcessing
+                    ? "border-accent ring-2 ring-accent/30"
+                    : "border-border-subtle",
+                ].join(" ")}
+              >
+                {lastUsed === provider.id && (
+                  <span className="absolute -top-2.5 right-4 inline-flex items-center rounded-full bg-surface-container-highest border border-border-default px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
+                    Last used
+                  </span>
+                )}
+                {isUnavailable && (
+                  <span className="absolute -top-2.5 right-4 inline-flex items-center rounded-full bg-surface-container-highest border border-border-default px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">
+                    Not configured
+                  </span>
+                )}
 
-              <div className="flex items-start gap-4">
-                <span
-                  className={[
-                    "inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl",
-                    provider.accentClass,
-                  ].join(" ")}
-                  aria-hidden
-                >
-                  <Icon className="h-6 w-6" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-base font-bold text-text-primary">{provider.name}</h3>
-                  <p className="text-xs font-medium text-text-tertiary">{provider.tagline}</p>
-                  <p className="mt-2 text-sm text-text-secondary">{provider.description}</p>
-                </div>
-              </div>
-
-              <ul className="flex flex-wrap gap-1.5">
-                {provider.methods.map((m) => (
-                  <li
-                    key={m}
-                    className="rounded-full bg-surface-container-high px-2.5 py-0.5 text-[11px] font-medium text-text-secondary"
+                <div className="flex items-start gap-4">
+                  <span
+                    className={[
+                      "inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl",
+                      provider.accentClass,
+                    ].join(" ")}
+                    aria-hidden
                   >
-                    {m}
-                  </li>
-                ))}
-              </ul>
+                    <Icon className="h-6 w-6" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-base font-bold text-text-primary">
+                      {provider.name}
+                    </h3>
+                    <p className="text-xs font-medium text-text-tertiary">
+                      {provider.tagline}
+                    </p>
+                    <p className="mt-2 text-sm text-text-secondary">
+                      {provider.description}
+                    </p>
+                  </div>
+                </div>
 
-              <div className="mt-auto flex flex-col items-stretch gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
-                <span className="text-xs text-text-tertiary">
-                  {isUnavailable
-                    ? "Unavailable right now"
-                    : provider.flow === "modal"
-                      ? "Opens secure popup"
-                      : "Redirects to PhonePe"}
-                </span>
-                <span
-                  className={[
-                    "inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-opacity",
-                    isUnavailable
-                      ? "bg-surface-container-high text-text-tertiary"
-                      : "bg-accent text-text-inverse group-hover:opacity-90",
-                    isProcessing ? "opacity-100" : "",
-                  ].join(" ")}
-                >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Starting…
-                    </>
-                  ) : (
-                    <>
-                      <Lock className="h-3.5 w-3.5" />
-                      {isUnavailable
-                        ? `${provider.name} not configured`
-                        : `Pay ₹${displayPrice.toLocaleString("en-IN")} with ${provider.name}`}
-                    </>
-                  )}
-                </span>
-              </div>
-            </button>
-          );
-        })}
-      </section>
+                <ul className="flex flex-wrap gap-1.5">
+                  {provider.methods.map((m) => (
+                    <li
+                      key={m}
+                      className="rounded-full bg-surface-container-high px-2.5 py-0.5 text-[11px] font-medium text-text-secondary"
+                    >
+                      {m}
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="mt-auto flex flex-col items-stretch gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="text-xs text-text-tertiary">
+                    {isUnavailable
+                      ? "Unavailable right now"
+                      : provider.flow === "modal"
+                        ? "Opens secure popup"
+                        : "Redirects to PhonePe"}
+                  </span>
+                  <span
+                    className={[
+                      "inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-opacity",
+                      isUnavailable
+                        ? "bg-surface-container-high text-text-tertiary"
+                        : "bg-accent text-text-inverse group-hover:opacity-90",
+                      isProcessing ? "opacity-100" : "",
+                    ].join(" ")}
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Starting…
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="h-3.5 w-3.5" />
+                        {isUnavailable
+                          ? `${provider.name} not configured`
+                          : `Pay ₹${displayPrice.toLocaleString("en-IN")} with ${provider.name}`}
+                      </>
+                    )}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </section>
       )}
 
       {/* Trust line */}
       <footer className="flex items-center justify-center gap-2 text-xs text-text-tertiary">
         <ShieldCheck className="h-3.5 w-3.5" />
-        Payments are encrypted and processed by RBI-licensed providers. Your card details never touch RawDrive servers.
+        Payments are encrypted and processed by RBI-licensed providers. Your
+        card details never touch RawDrive servers.
       </footer>
     </div>
   );
@@ -539,8 +646,11 @@ function ChoosePaymentContent() {
 function isAllowedPhonePeRedirect(rawUrl: string): boolean {
   try {
     const parsed = new URL(rawUrl);
-    return parsed.protocol === "https:" &&
-      (parsed.hostname === "phonepe.com" || parsed.hostname.endsWith(".phonepe.com"));
+    return (
+      parsed.protocol === "https:" &&
+      (parsed.hostname === "phonepe.com" ||
+        parsed.hostname.endsWith(".phonepe.com"))
+    );
   } catch {
     return false;
   }

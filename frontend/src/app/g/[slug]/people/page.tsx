@@ -30,7 +30,10 @@ export default function PublicPeoplePage({
         if (!cancelled) setPeople(next);
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load people");
+        if (!cancelled)
+          setError(
+            err instanceof Error ? err.message : "Failed to load people",
+          );
       });
     return () => {
       cancelled = true;
@@ -48,10 +51,15 @@ export default function PublicPeoplePage({
       </Link>
 
       <header className="space-y-3">
-        <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">People</p>
-        <h1 className="text-2xl font-semibold text-text-primary">People in this gallery</h1>
+        <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">
+          People
+        </p>
+        <h1 className="text-2xl font-semibold text-text-primary">
+          People in this gallery
+        </h1>
         <p className="max-w-2xl text-sm leading-relaxed text-text-secondary">
-          Photos grouped by the people who appear in them. Tap a person to see every photo they&apos;re in.
+          Photos grouped by the people who appear in them. Tap a person to see
+          every photo they&apos;re in.
         </p>
         {/* Photo Search entry — appears alongside the People list so
             guests don't have to know the URL. The page itself handles
@@ -82,10 +90,12 @@ export default function PublicPeoplePage({
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-surface-container-high">
             <UserRound className="h-6 w-6 text-text-tertiary" aria-hidden />
           </div>
-          <p className="text-sm font-medium text-text-primary">No people to show yet</p>
+          <p className="text-sm font-medium text-text-primary">
+            No people to show yet
+          </p>
           <p className="mt-1 text-xs text-text-secondary">
-            Either the photographer hasn&apos;t enabled face recognition for this gallery,
-            or detection is still processing.
+            Either the photographer hasn&apos;t enabled face recognition for
+            this gallery, or detection is still processing.
           </p>
         </div>
       )}
@@ -105,7 +115,13 @@ export default function PublicPeoplePage({
   );
 }
 
-function PublicPersonTile({ slug, person }: { slug: string; person: PublicPersonSummary }) {
+function PublicPersonTile({
+  slug,
+  person,
+}: {
+  slug: string;
+  person: PublicPersonSummary;
+}) {
   // Public asset thumbnails are served by the storage proxy at /storage/*.
   // For the cover we use the same path the studio People tab uses — the
   // thumbnails are public-readable (no token required because the storage
@@ -140,13 +156,15 @@ function PublicPersonTile({ slug, person }: { slug: string; person: PublicPerson
             (e.currentTarget as HTMLImageElement).style.display = "none";
           }}
         />
-        <span className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur">
+        <span className="absolute right-2 top-2 rounded-full bg-surface-scrim-strong/55 px-2 py-0.5 text-[11px] font-semibold text-text-media glass-blur-soft">
           {person.asset_count}
         </span>
       </div>
 
       <div className="mt-2 px-1">
-        <p className="truncate text-sm font-semibold text-text-primary">{displayName}</p>
+        <p className="truncate text-sm font-semibold text-text-primary">
+          {displayName}
+        </p>
         <p className="text-xs text-text-tertiary">
           {person.asset_count} {person.asset_count === 1 ? "photo" : "photos"}
         </p>

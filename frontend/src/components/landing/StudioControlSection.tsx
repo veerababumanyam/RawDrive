@@ -67,8 +67,8 @@ export function StudioControlSection() {
             <DuplicateMiniViz />
           </div>
           <p className="text-sm leading-relaxed text-text-secondary">
-            Near-identical frames from bursts grouped automatically. Review
-            one, not ten.
+            Near-identical frames from bursts grouped automatically. Review one,
+            not ten.
           </p>
         </article>
 
@@ -200,10 +200,9 @@ function DuplicateMiniViz() {
           background:
             "color-mix(in srgb, var(--surface-container-high) 80%, transparent)",
           border: "1px solid var(--border-subtle)",
-          opacity: 0.5,
         }}
       >
-        <span className="text-[10px] font-semibold text-text-tertiary line-through">
+        <span className="text-xs font-semibold text-text-secondary line-through">
           Dupe
         </span>
       </div>

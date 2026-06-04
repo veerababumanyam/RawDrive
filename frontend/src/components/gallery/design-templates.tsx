@@ -27,7 +27,10 @@ interface DesignTemplatesProps {
   currentConfig?: Record<string, unknown>;
 }
 
-export function DesignTemplates({ onApply, currentConfig }: DesignTemplatesProps) {
+export function DesignTemplates({
+  onApply,
+  currentConfig,
+}: DesignTemplatesProps) {
   const [templates, setTemplates] = useState<DesignTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [saveName, setSaveName] = useState("");
@@ -36,12 +39,16 @@ export function DesignTemplates({ onApply, currentConfig }: DesignTemplatesProps
 
   const fetchTemplates = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/design-templates`, { headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE}/api/v1/design-templates`, {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         setTemplates(data.data || []);
       }
-    } catch { /* ignore */ } finally {
+    } catch {
+      /* ignore */
+    } finally {
       setLoading(false);
     }
   }, []);
@@ -67,7 +74,9 @@ export function DesignTemplates({ onApply, currentConfig }: DesignTemplatesProps
         setShowSave(false);
         fetchTemplates();
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   };
 
   const handleApply = async (template: DesignTemplate) => {
@@ -82,10 +91,15 @@ export function DesignTemplates({ onApply, currentConfig }: DesignTemplatesProps
         headers: getAuthHeaders(),
       });
       fetchTemplates();
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   };
 
-  if (loading) return <div className="text-sm text-text-tertiary p-4">Loading templates...</div>;
+  if (loading)
+    return (
+      <div className="text-sm text-text-tertiary p-4">Loading templates...</div>
+    );
 
   return (
     <div className="space-y-3">
@@ -142,13 +156,13 @@ export function DesignTemplates({ onApply, currentConfig }: DesignTemplatesProps
             autoFocus
             placeholder="Template name…"
             maxLength={60}
-            className="input-base flex-1 text-sm min-h-[44px]"
+            className="input-base flex-1 text-sm touch-min"
             aria-label="Template name"
           />
           <button
             onClick={handleSave}
             disabled={!saveName.trim()}
-            className="relative shrink-0 px-5 py-2 text-sm font-semibold rounded-xl bg-accent text-text-inverse hover:bg-accent-hover disabled:bg-surface-container-high disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors min-h-[44px] whitespace-nowrap shadow-md ring-1 ring-accent-primary/40 hover:ring-accent-primary/70"
+            className="relative shrink-0 px-5 py-2 text-sm font-semibold rounded-xl bg-accent text-text-inverse hover:bg-accent-hover disabled:bg-surface-container-high disabled:text-text-tertiary disabled:cursor-not-allowed transition-colors touch-min whitespace-nowrap shadow-md ring-1 ring-accent-primary/40 hover:ring-accent-primary/70"
           >
             Save
           </button>
@@ -156,15 +170,26 @@ export function DesignTemplates({ onApply, currentConfig }: DesignTemplatesProps
       )}
 
       {templates.length === 0 && (
-        <p className="text-xs text-text-tertiary">No templates yet. Save your current design as a template.</p>
+        <p className="text-xs text-text-tertiary">
+          No templates yet. Save your current design as a template.
+        </p>
       )}
 
       <div className="space-y-2">
         {templates.map((t) => (
-          <div key={t.id} className="glass-card p-3 flex items-center justify-between group">
+          <div
+            key={t.id}
+            className="glass-card p-3 flex items-center justify-between group"
+          >
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-text-primary truncate">{t.name}</p>
-              {t.description && <p className="text-xs text-text-tertiary truncate">{t.description}</p>}
+              <p className="text-sm font-medium text-text-primary truncate">
+                {t.name}
+              </p>
+              {t.description && (
+                <p className="text-xs text-text-tertiary truncate">
+                  {t.description}
+                </p>
+              )}
               <p className="text-xs text-text-tertiary mt-0.5">
                 {new Date(t.updated_at).toLocaleDateString()}
               </p>
@@ -172,13 +197,33 @@ export function DesignTemplates({ onApply, currentConfig }: DesignTemplatesProps
             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               {confirmApply === t.id ? (
                 <>
-                  <button onClick={() => handleApply(t)} className="text-xs px-2 py-1 rounded bg-feedback-success text-text-inverse">Confirm</button>
-                  <button onClick={() => setConfirmApply(null)} className="text-xs px-2 py-1 rounded bg-surface-container">Cancel</button>
+                  <button
+                    onClick={() => handleApply(t)}
+                    className="text-xs px-2 py-1 rounded bg-feedback-success text-text-inverse"
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    onClick={() => setConfirmApply(null)}
+                    className="text-xs px-2 py-1 rounded bg-surface-container"
+                  >
+                    Cancel
+                  </button>
                 </>
               ) : (
-                <button onClick={() => setConfirmApply(t.id)} className="text-xs px-2 py-1 rounded bg-accent-subtle text-accent-primary">Apply</button>
+                <button
+                  onClick={() => setConfirmApply(t.id)}
+                  className="text-xs px-2 py-1 rounded bg-accent-subtle text-accent-primary"
+                >
+                  Apply
+                </button>
               )}
-              <button onClick={() => handleDelete(t.id)} className="text-xs px-2 py-1 rounded text-feedback-error hover:bg-feedback-error/10">Delete</button>
+              <button
+                onClick={() => handleDelete(t.id)}
+                className="text-xs px-2 py-1 rounded text-feedback-error hover:bg-feedback-error/10"
+              >
+                Delete
+              </button>
             </div>
           </div>
         ))}

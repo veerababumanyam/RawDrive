@@ -15,7 +15,9 @@ describe("AdminLayout (F-086 design-token regression)", () => {
   it("renders the admin nav links", () => {
     render(<AdminLayout>content</AdminLayout>);
     expect(screen.getByRole("link", { name: "Users" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Audit Logs" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Audit Logs" }),
+    ).toBeInTheDocument();
   });
 
   it("uses no forbidden Tailwind primitive color scales on nav links", () => {

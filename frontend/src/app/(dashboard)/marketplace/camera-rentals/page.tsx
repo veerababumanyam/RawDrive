@@ -2,7 +2,12 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { listGear, getMyGearListings, deleteGearListing, type GearListing } from "@/lib/api/gear";
+import {
+  listGear,
+  getMyGearListings,
+  deleteGearListing,
+  type GearListing,
+} from "@/lib/api/gear";
 import { getStoredAccessTokenClaims, getStoredAccessToken } from "@/lib/auth";
 import { availabilityClasses } from "@/lib/dashboard-ui";
 import { cn } from "@/lib/utils";
@@ -63,7 +68,8 @@ function GearRentalTab() {
     let ignore = false;
     listGear({ category: category || undefined })
       .then((data) => {
-        if (!ignore) setRequestState({ key: requestKey, gear: data, error: null });
+        if (!ignore)
+          setRequestState({ key: requestKey, gear: data, error: null });
       })
       .catch((err) => {
         if (!ignore)
@@ -73,7 +79,9 @@ function GearRentalTab() {
             error: err?.message || "Failed to load rental listings",
           });
       });
-    return () => { ignore = true; };
+    return () => {
+      ignore = true;
+    };
   }, [category, requestKey]);
 
   return (
@@ -104,7 +112,10 @@ function GearRentalTab() {
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="h-64 bg-surface-sunken rounded-xl animate-pulse" />
+            <div
+              key={i}
+              className="h-64 bg-surface-sunken rounded-xl animate-pulse"
+            />
           ))}
         </div>
       ) : gear.length === 0 ? (
@@ -138,22 +149,30 @@ function GearRentalTab() {
                   <span
                     className={cn(
                       "shrink-0",
-                      availabilityClasses[entry.is_available ? "available" : "unavailable"],
+                      availabilityClasses[
+                        entry.is_available ? "available" : "unavailable"
+                      ],
                     )}
                   >
                     {entry.is_available ? "Available" : "Booked"}
                   </span>
                 </div>
                 {entry.brand && (
-                  <span className="status-badge status-badge--neutral">{entry.brand}</span>
+                  <span className="status-badge status-badge--neutral">
+                    {entry.brand}
+                  </span>
                 )}
                 <div className="flex items-center justify-between pt-2">
                   <span className="text-base font-bold text-text-primary">
                     ₹{(entry.price_paisa / 100).toLocaleString("en-IN")}
-                    <span className="text-xs font-normal text-text-secondary">/day</span>
+                    <span className="text-xs font-normal text-text-secondary">
+                      /day
+                    </span>
                   </span>
                   {entry.city && (
-                    <span className="text-xs text-text-secondary">{entry.city}</span>
+                    <span className="text-xs text-text-secondary">
+                      {entry.city}
+                    </span>
                   )}
                 </div>
               </div>
@@ -179,10 +198,19 @@ function MyGearTab() {
     if (!token) return;
     let cancelled = false;
     getMyGearListings(token)
-      .then((data) => { if (!cancelled) setGear(data); })
-      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load gear"); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .then((data) => {
+        if (!cancelled) setGear(data);
+      })
+      .catch((err) => {
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : "Failed to load gear");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   const handleDelete = async (id: string) => {
@@ -203,7 +231,10 @@ function MyGearTab() {
     return (
       <div className="space-y-4">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-28 rounded-2xl bg-surface-sunken animate-pulse" />
+          <div
+            key={i}
+            className="h-28 rounded-2xl bg-surface-sunken animate-pulse"
+          />
         ))}
       </div>
     );
@@ -221,9 +252,13 @@ function MyGearTab() {
         <div className="rounded-2xl border border-dashed border-border-default p-10 text-center space-y-4">
           <p className="font-medium text-text-primary">No gear listed yet</p>
           <p className="text-sm text-text-secondary">
-            List your cameras, lenses, and accessories to rent them out to other photographers.
+            List your cameras, lenses, and accessories to rent them out to other
+            photographers.
           </p>
-          <Link href="/marketplace/gear/new" className="btn-primary px-5 py-2.5 text-sm">
+          <Link
+            href="/marketplace/gear/new"
+            className="btn-primary px-5 py-2.5 text-sm"
+          >
             List Your First Gear
           </Link>
         </div>
@@ -243,7 +278,9 @@ function MyGearTab() {
                     <span
                       className={cn(
                         "status-badge",
-                        entry.is_published ? "status-badge--success" : "status-badge--neutral",
+                        entry.is_published
+                          ? "status-badge--success"
+                          : "status-badge--neutral",
                       )}
                     >
                       {entry.is_published ? "Published" : "Draft"}
@@ -254,7 +291,9 @@ function MyGearTab() {
                       {CATEGORY_LABELS[entry.category] ?? entry.category}
                     </span>
                     {entry.brand && (
-                      <span className="status-badge status-badge--neutral">{entry.brand}</span>
+                      <span className="status-badge status-badge--neutral">
+                        {entry.brand}
+                      </span>
                     )}
                     {entry.condition && (
                       <span className="status-badge status-badge--neutral">
@@ -264,14 +303,18 @@ function MyGearTab() {
                     <span
                       className={cn(
                         "status-badge",
-                        entry.is_available ? "status-badge--success" : "status-badge--warning",
+                        entry.is_available
+                          ? "status-badge--success"
+                          : "status-badge--warning",
                       )}
                     >
                       {entry.is_available ? "Available" : "Booked"}
                     </span>
                   </div>
                   {entry.city && (
-                    <p className="text-xs text-text-tertiary mt-1">{entry.city}</p>
+                    <p className="text-xs text-text-tertiary mt-1">
+                      {entry.city}
+                    </p>
                   )}
                 </div>
                 <div className="text-right shrink-0">
@@ -300,7 +343,9 @@ function MyGearTab() {
 
                 {confirmDeleteId === entry.id ? (
                   <div className="flex items-center gap-2 ml-auto">
-                    <span className="text-sm text-text-secondary">Remove this listing?</span>
+                    <span className="text-sm text-text-secondary">
+                      Remove this listing?
+                    </span>
                     <button
                       type="button"
                       onClick={() => handleDelete(entry.id)}
@@ -342,22 +387,30 @@ export default function CameraRentalsPage() {
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Camera Rentals</h1>
+          <h1 className="text-2xl font-semibold text-text-primary">
+            Camera Rentals
+          </h1>
           <p className="text-sm text-text-secondary mt-1">
-            Rent cameras, lenses, lighting, and accessories from other photographers
+            Rent cameras, lenses, lighting, and accessories from other
+            photographers
           </p>
         </div>
-        <Link href="/marketplace/gear/new" className="btn-primary inline-flex items-center gap-1.5 px-4 py-2.5 text-sm">
+        <Link
+          href="/marketplace/gear/new"
+          className="btn-primary inline-flex items-center gap-1.5 px-4 py-2.5 text-sm"
+        >
           <Plus className="h-4 w-4" />
           List Your Gear
         </Link>
       </div>
 
       <div className="flex gap-2 border-b border-border-default pb-0">
-        {([
-          { id: "gear-rental", label: "Gear Rental" },
-          { id: "my-gear", label: "My Gear" },
-        ] as const).map(({ id, label }) => (
+        {(
+          [
+            { id: "gear-rental", label: "Gear Rental" },
+            { id: "my-gear", label: "My Gear" },
+          ] as const
+        ).map(({ id, label }) => (
           <button
             key={id}
             onClick={() => setTab(id)}

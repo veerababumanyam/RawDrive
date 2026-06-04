@@ -59,7 +59,14 @@ function buildColumns(
       render: (_value, row) => {
         const state = balances[row.id];
         if (state?.loading) {
-          return <span className="text-xs text-text-tertiary" data-testid={`balance-loading-${row.id}`}>…</span>;
+          return (
+            <span
+              className="text-xs text-text-tertiary"
+              data-testid={`balance-loading-${row.id}`}
+            >
+              …
+            </span>
+          );
         }
         if (state?.error) {
           return (
@@ -99,7 +106,8 @@ function buildColumns(
             data-testid={`balance-breakdown-${row.id}`}
             className="font-mono text-xs text-text-secondary"
           >
-            {formatCredits(data?.plan_granted)} / {formatCredits(data?.purchased)}
+            {formatCredits(data?.plan_granted)} /{" "}
+            {formatCredits(data?.purchased)}
           </span>
         );
       },
@@ -151,7 +159,11 @@ export default function AdminUploadCreditsPage() {
   const fetchBalance = useCallback(async (workspaceId: string) => {
     setBalances((prev) => ({
       ...prev,
-      [workspaceId]: { ...(prev[workspaceId] ?? {}), loading: true, error: undefined },
+      [workspaceId]: {
+        ...(prev[workspaceId] ?? {}),
+        loading: true,
+        error: undefined,
+      },
     }));
     try {
       const token = getStoredAccessToken() || "";
@@ -209,7 +221,10 @@ export default function AdminUploadCreditsPage() {
   if (error) {
     return (
       <div className="max-w-7xl mx-auto space-y-8 p-8">
-        <p className="text-feedback-error" data-testid="admin-upload-credits-error">
+        <p
+          className="text-feedback-error"
+          data-testid="admin-upload-credits-error"
+        >
           {error}
         </p>
       </div>
@@ -217,19 +232,22 @@ export default function AdminUploadCreditsPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8" data-testid="admin-upload-credits-page">
+    <div
+      className="max-w-7xl mx-auto space-y-8"
+      data-testid="admin-upload-credits-page"
+    >
       <div>
         <h2 className="font-headline text-4xl font-extrabold tracking-tight text-on-surface flex items-center gap-4">
           Upload Credits
-          <span className="text-xs font-label uppercase tracking-[0.15em] bg-surface-container-high px-3 py-1 rounded-full text-primary border border-white/5">
+          <span className="text-xs font-label uppercase tracking-[0.15em] bg-surface-container-high px-3 py-1 rounded-full text-primary border border-text-media/5">
             {total} workspaces
           </span>
         </h2>
         <p className="text-text-secondary mt-2 font-body text-sm max-w-3xl">
-          Grant upload credits to any workspace. The Available column shows the current net
-          balance; Granted / Purchased breaks that down so you can see recurring plan grants
-          vs paid top-ups before adding more. Grants are idempotent, audit-logged, and
-          capped at 100,000 credits per grant.
+          Grant upload credits to any workspace. The Available column shows the
+          current net balance; Granted / Purchased breaks that down so you can
+          see recurring plan grants vs paid top-ups before adding more. Grants
+          are idempotent, audit-logged, and capped at 100,000 credits per grant.
         </p>
       </div>
 

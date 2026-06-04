@@ -18,7 +18,12 @@ import { EndedView } from "./EndedView";
 import { PINEntry } from "./PINEntry";
 import { saveViewerSession, type ViewerTokenPair } from "@/lib/viewer/session";
 
-export type ViewerState = "scheduled" | "waiting_room" | "live" | "replay" | "ended";
+export type ViewerState =
+  | "scheduled"
+  | "waiting_room"
+  | "live"
+  | "replay"
+  | "ended";
 
 export interface ViewerInitialPayload {
   access_level?: "link" | "pin" | "sso";

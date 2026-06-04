@@ -99,6 +99,12 @@ if [ ${#fe_files[@]} -gt 0 ]; then
       fail "eslint failed on staged frontend files.
     Fix the errors above, or bypass with: git commit --no-verify"
     fi
+    # Design-token guard — bans raw palette/backdrop-blur/arbitrary-color
+    # classes so the central system can't be bypassed. Fast, no deps.
+    if ! ( cd frontend && node scripts/check-design-tokens.mjs ); then
+      fail "design-token guard failed on frontend.
+    Use semantic token classes (design-tokens.json), or bypass with: git commit --no-verify"
+    fi
   else
     warn "pnpm/frontend deps absent; skipping eslint (CI will enforce)"
   fi

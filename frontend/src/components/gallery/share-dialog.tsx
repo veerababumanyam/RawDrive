@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { XMark, Download } from "@/components/icons";
+import { components as designComponents } from "@/lib/tokens";
 
 interface ShareDialogProps {
   galleryUrl: string;
@@ -27,10 +28,10 @@ function generateQRMatrix(text: string): boolean[][] {
 
   // Allocate grid
   const grid: boolean[][] = Array.from({ length: modules }, () =>
-    Array(modules).fill(false)
+    Array(modules).fill(false),
   );
   const reserved: boolean[][] = Array.from({ length: modules }, () =>
-    Array(modules).fill(false)
+    Array(modules).fill(false),
   );
 
   // Finder patterns (3 corners)
@@ -68,7 +69,10 @@ function generateQRMatrix(text: string): boolean[][] {
 
   // Reserve format info areas
   for (let i = 0; i < 9; i++) {
-    if (i < modules) { reserved[8][i] = true; reserved[i][8] = true; }
+    if (i < modules) {
+      reserved[8][i] = true;
+      reserved[i][8] = true;
+    }
   }
   for (let i = 0; i < 8; i++) {
     reserved[8][modules - 1 - i] = true;
@@ -134,8 +138,8 @@ function drawQRToCanvas(
   canvas: HTMLCanvasElement,
   text: string,
   size: number,
-  darkColor = "#000000",
-  lightColor = "#ffffff",
+  darkColor = designComponents.qrCode.dark,
+  lightColor = designComponents.qrCode.light,
 ) {
   const matrix = generateQRMatrix(text);
   const modules = matrix.length;
@@ -158,7 +162,12 @@ function drawQRToCanvas(
   for (let row = 0; row < modules; row++) {
     for (let col = 0; col < modules; col++) {
       if (matrix[row][col]) {
-        ctx.fillRect(offset + col * cellSize, offset + row * cellSize, cellSize, cellSize);
+        ctx.fillRect(
+          offset + col * cellSize,
+          offset + row * cellSize,
+          cellSize,
+          cellSize,
+        );
       }
     }
   }
@@ -181,12 +190,16 @@ function generateQRSVG(text: string): string {
   }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalSize} ${totalSize}" width="${totalSize}" height="${totalSize}">
-<rect width="${totalSize}" height="${totalSize}" fill="#fff"/>
-<g fill="#000">${paths}</g>
+<rect width="${totalSize}" height="${totalSize}" fill="${designComponents.qrCode.light}"/>
+<g fill="${designComponents.qrCode.dark}">${paths}</g>
 </svg>`;
 }
 
-export function ShareDialog({ galleryUrl, galleryTitle, onClose }: ShareDialogProps) {
+export function ShareDialog({
+  galleryUrl,
+  galleryTitle,
+  onClose,
+}: ShareDialogProps) {
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -229,13 +242,16 @@ export function ShareDialog({ galleryUrl, galleryTitle, onClose }: ShareDialogPr
   const emailUrl = `mailto:?subject=${emailSubject}&body=${emailBody}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-surface-scrim-strong/50 glass-blur-subtle"
+      onClick={onClose}
+    >
       <div
         className="w-full max-w-md p-6 glass-card rounded-2xl shadow-glass"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-primary">
+          <h3 className="text-lg font-semibold text-accent">
             {showQR ? "QR Code" : "Share Gallery"}
           </h3>
           <div className="flex items-center gap-2">
@@ -247,7 +263,12 @@ export function ShareDialog({ galleryUrl, galleryTitle, onClose }: ShareDialogPr
                 Back
               </button>
             )}
-            <GlassIconButton label="Close" size="sm" variant="ghost" onClick={onClose}>
+            <GlassIconButton
+              label="Close"
+              size="sm"
+              variant="ghost"
+              onClick={onClose}
+            >
               <XMark />
             </GlassIconButton>
           </div>
@@ -260,7 +281,9 @@ export function ShareDialog({ galleryUrl, galleryTitle, onClose }: ShareDialogPr
               <canvas ref={canvasRef} className="max-w-full" />
             </div>
 
-            <p className="text-xs text-center text-text-secondary truncate">{galleryUrl}</p>
+            <p className="text-xs text-center text-text-secondary truncate">
+              {galleryUrl}
+            </p>
 
             {/* Download buttons */}
             <div className="grid grid-cols-2 gap-3">
@@ -269,14 +292,14 @@ export function ShareDialog({ galleryUrl, galleryTitle, onClose }: ShareDialogPr
                 className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl glass-surface border border-glass-border hover:bg-accent/10 transition-colors"
               >
                 <Download className="w-4 h-4" />
-                <span className="text-sm text-primary">Download PNG</span>
+                <span className="text-sm text-accent">Download PNG</span>
               </button>
               <button
                 onClick={handleDownloadSVG}
                 className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl glass-surface border border-glass-border hover:bg-accent/10 transition-colors"
               >
                 <Download className="w-4 h-4" />
-                <span className="text-sm text-primary">Download SVG</span>
+                <span className="text-sm text-accent">Download SVG</span>
               </button>
             </div>
           </div>
@@ -288,11 +311,11 @@ export function ShareDialog({ galleryUrl, galleryTitle, onClose }: ShareDialogPr
                 type="text"
                 value={galleryUrl}
                 readOnly
-                className="flex-1 px-3 py-2 rounded-lg glass-surface border border-glass-border text-sm text-primary truncate"
+                className="flex-1 px-3 py-2 rounded-lg glass-surface border border-glass-border text-sm text-accent truncate"
               />
               <button
                 onClick={handleCopy}
-                className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium whitespace-nowrap"
+                className="px-4 py-2 rounded-lg bg-accent text-text-media text-sm font-medium whitespace-nowrap"
               >
                 {copied ? "Copied!" : "Copy"}
               </button>
@@ -307,7 +330,7 @@ export function ShareDialog({ galleryUrl, galleryTitle, onClose }: ShareDialogPr
                 className="flex items-center gap-3 px-4 py-3 rounded-xl glass-surface border border-glass-border hover:bg-accent/10 transition-colors"
               >
                 <span className="text-xl">💬</span>
-                <span className="text-sm text-primary">WhatsApp</span>
+                <span className="text-sm text-accent">WhatsApp</span>
               </a>
 
               <a
@@ -315,7 +338,7 @@ export function ShareDialog({ galleryUrl, galleryTitle, onClose }: ShareDialogPr
                 className="flex items-center gap-3 px-4 py-3 rounded-xl glass-surface border border-glass-border hover:bg-accent/10 transition-colors"
               >
                 <span className="text-xl">✉️</span>
-                <span className="text-sm text-primary">Email</span>
+                <span className="text-sm text-accent">Email</span>
               </a>
 
               <button
@@ -323,7 +346,7 @@ export function ShareDialog({ galleryUrl, galleryTitle, onClose }: ShareDialogPr
                 className="flex items-center gap-3 px-4 py-3 rounded-xl glass-surface border border-glass-border hover:bg-accent/10 transition-colors text-left"
               >
                 <span className="text-xl">📱</span>
-                <span className="text-sm text-primary">QR Code</span>
+                <span className="text-sm text-accent">QR Code</span>
               </button>
 
               <button
@@ -335,7 +358,7 @@ export function ShareDialog({ galleryUrl, galleryTitle, onClose }: ShareDialogPr
                 className="flex items-center gap-3 px-4 py-3 rounded-xl glass-surface border border-glass-border hover:bg-accent/10 transition-colors text-left"
               >
                 <span className="text-xl">🔗</span>
-                <span className="text-sm text-primary">More...</span>
+                <span className="text-sm text-accent">More...</span>
               </button>
             </div>
           </>

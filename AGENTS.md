@@ -84,6 +84,10 @@ These are load-bearing — breaking them causes real bugs and has burned us befo
   Never placeholders, never external URLs.
 - **E2E auth:** Dashboard E2E tests need auth-token injection via Playwright
   `storageState` or `addInitScript` — no UI login flow in tests.
+- **Performance hot paths:** Gallery/media surfaces must batch data, window large
+  UI lists, and claim background jobs atomically. Do not reintroduce per-asset
+  fetch loops, full filmstrip rendering, double full-file upload reads, or
+  list-then-mark worker races.
 
 ## Hardcode Laws — MANDATORY FOR ALL AGENTS
 
@@ -227,6 +231,52 @@ Edit `design-tokens.json`, then run `node tools/cobolt-sync-tokens.js sync` to r
 2. For E2E upload tests, pick 2–3 files to keep tests fast (e.g., `Wedding (42).jpg`, `veera.jpg`).
 3. For batch/gallery tests, use the full set to exercise pagination and grid layouts.
 4. **Filenames with spaces and parentheses are intentional** (e.g., `Wedding (42).jpg`). Tests MUST handle them correctly — this catches real-world filename bugs.
+
+## Performance Hot Paths — MANDATORY FOR ALL AGENTS
+
+These rules came from the June 2026 performance audit and PR
+`perf(galleries): collapse gallery media hot paths`. Treat them as architecture
+constraints for gallery, upload, storage, and worker changes.
+
+### Gallery / Asset Hydration
+- Owner gallery asset lists support `GET /api/v1/galleries/{id}/assets?include_assets=true`,
+  which returns ordered gallery-asset rows with embedded asset records via one bulk
+  `AssetRepo.GetByIDs` lookup.
+- Do **not** hydrate gallery, cover, preview, photo-search, or album pages with
+  `Promise.all(assetIds.map(getAsset))` / per-asset API loops. Add or use a batch
+  endpoint/source instead, preserving gallery/album ordering after hydration.
+- When adding a new media list, prove the request count does not scale linearly
+  with asset count. Add a regression test for the batch path.
+
+### Large Media UI
+- Filmstrips, lightboxes, grids, and selectable media rails must not render every
+  item for large galleries. Use a bounded window around the active index or a
+  virtualization library for long scrollable lists.
+- Keep active index math global when rendering a sliced/windowed filmstrip so
+  selection, keyboard navigation, and share/photo URLs still point to the right asset.
+
+### Upload Screening / Hashing
+- Avoid double-reading full files. If screening already read bytes, hash those
+  bytes; for Blob-only paths use the existing chunked/incremental SHA-256 helper.
+- WebCrypto `subtle.digest()` is not streaming. Do not implement "chunked" hashing
+  by accumulating the whole file in memory first.
+- Upload progress state updates should be skipped when values have not changed;
+  large batches otherwise create avoidable React render churn.
+
+### Background Workers / Queues
+- Workers that claim DB jobs must use an atomic claim query:
+  `UPDATE ... FROM (SELECT ... FOR UPDATE SKIP LOCKED LIMIT n) ... RETURNING`.
+- Do **not** list pending rows and then mark them processing in a second step;
+  concurrent workers can duplicate work. Apply this pattern to download,
+  thumbnail, AI, email, webhook, and future queue workers.
+
+### Database & Migrations
+- Index hot media paths by the actual predicate and ordering used by code
+  (`gallery_id, sort_order, asset_id`, album position, derivative `storage_key`, etc.).
+- Add migration contract tests for new performance indexes.
+- Before assigning a migration number, fetch/check `origin/main`; if main claimed
+  the number while your branch was open, renumber your unmerged migration instead
+  of editing committed migrations.
 
 ## MCP Tools — MANDATORY FOR ALL AGENTS
 

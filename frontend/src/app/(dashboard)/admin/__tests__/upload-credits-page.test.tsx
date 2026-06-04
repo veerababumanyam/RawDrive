@@ -50,7 +50,9 @@ describe("AdminUploadCreditsPage (/admin/upload-credits)", () => {
       items: [fakeWorkspace],
       total_count: 1,
     });
-    vi.spyOn(adminApi, "getAdminWorkspaceUploadBalance").mockResolvedValue(fakeBalance);
+    vi.spyOn(adminApi, "getAdminWorkspaceUploadBalance").mockResolvedValue(
+      fakeBalance,
+    );
 
     render(<AdminUploadCreditsPage />);
 
@@ -69,7 +71,9 @@ describe("AdminUploadCreditsPage (/admin/upload-credits)", () => {
       items: [fakeWorkspace],
       total_count: 1,
     });
-    vi.spyOn(adminApi, "getAdminWorkspaceUploadBalance").mockResolvedValue(fakeBalance);
+    vi.spyOn(adminApi, "getAdminWorkspaceUploadBalance").mockResolvedValue(
+      fakeBalance,
+    );
 
     render(<AdminUploadCreditsPage />);
 
@@ -119,7 +123,9 @@ describe("AdminUploadCreditsPage (/admin/upload-credits)", () => {
       expect(balanceSpy).toHaveBeenCalledTimes(1);
     });
 
-    const action = screen.getByTestId(`upload-credits-grant-action-${WORKSPACE_ID}`);
+    const action = screen.getByTestId(
+      `upload-credits-grant-action-${WORKSPACE_ID}`,
+    );
     fireEvent.click(action);
 
     await waitFor(() => {

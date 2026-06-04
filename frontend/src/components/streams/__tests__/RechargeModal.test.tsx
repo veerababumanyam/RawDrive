@@ -30,18 +30,39 @@ const fakePackages = [
   },
 ];
 
-function stubFetch(handlers: { packages?: { ok: boolean; body: unknown }; recharge?: { ok: boolean; body: unknown; status?: number } }) {
+function stubFetch(handlers: {
+  packages?: { ok: boolean; body: unknown };
+  recharge?: { ok: boolean; body: unknown; status?: number };
+}) {
   return vi.fn(async (input: RequestInfo, _init?: RequestInit) => {
     const url = typeof input === "string" ? input : (input as Request).url;
     if (url.includes("/public/streaming/packages")) {
-      const h = handlers.packages ?? { ok: true, body: { packages: fakePackages } };
-      return { ok: h.ok, status: h.ok ? 200 : 500, json: async () => h.body } as unknown as Response;
+      const h = handlers.packages ?? {
+        ok: true,
+        body: { packages: fakePackages },
+      };
+      return {
+        ok: h.ok,
+        status: h.ok ? 200 : 500,
+        json: async () => h.body,
+      } as unknown as Response;
     }
     if (url.includes("/streaming/recharge")) {
-      const h = handlers.recharge ?? { ok: true, body: { order_id: "o-1", checkout_url: "https://checkout.example/123" } };
-      return { ok: h.ok, status: h.status ?? (h.ok ? 200 : 400), json: async () => h.body } as unknown as Response;
+      const h = handlers.recharge ?? {
+        ok: true,
+        body: { order_id: "o-1", checkout_url: "https://checkout.example/123" },
+      };
+      return {
+        ok: h.ok,
+        status: h.status ?? (h.ok ? 200 : 400),
+        json: async () => h.body,
+      } as unknown as Response;
     }
-    return { ok: true, status: 200, json: async () => ({}) } as unknown as Response;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+    } as unknown as Response;
   });
 }
 
@@ -61,14 +82,25 @@ describe("RechargeModal", () => {
   });
 
   it("returns null when closed", () => {
-    const { container } = render(<RechargeModal open={false} onClose={() => {}} />);
+    const { container } = render(
+      <RechargeModal open={false} onClose={() => {}} />,
+    );
     expect(container.firstChild).toBeNull();
   });
 
   it("submits selected package and calls onRedirect with the URL", async () => {
-    vi.stubGlobal("fetch", stubFetch({
-      recharge: { ok: true, body: { order_id: "o-42", checkout_url: "https://checkout.example/42" } },
-    }));
+    vi.stubGlobal(
+      "fetch",
+      stubFetch({
+        recharge: {
+          ok: true,
+          body: {
+            order_id: "o-42",
+            checkout_url: "https://checkout.example/42",
+          },
+        },
+      }),
+    );
     const onRedirect = vi.fn();
     const onClose = vi.fn();
 
@@ -84,9 +116,18 @@ describe("RechargeModal", () => {
   });
 
   it("falls back to redirect_url for older recharge responses", async () => {
-    vi.stubGlobal("fetch", stubFetch({
-      recharge: { ok: true, body: { order_id: "o-43", redirect_url: "https://checkout.example/43" } },
-    }));
+    vi.stubGlobal(
+      "fetch",
+      stubFetch({
+        recharge: {
+          ok: true,
+          body: {
+            order_id: "o-43",
+            redirect_url: "https://checkout.example/43",
+          },
+        },
+      }),
+    );
     const onRedirect = vi.fn();
 
     render(<RechargeModal open onClose={() => {}} onRedirect={onRedirect} />);
@@ -109,9 +150,12 @@ describe("RechargeModal", () => {
   });
 
   it("shows an error and does not redirect on recharge failure", async () => {
-    vi.stubGlobal("fetch", stubFetch({
-      recharge: { ok: false, status: 400, body: { error: "insufficient" } },
-    }));
+    vi.stubGlobal(
+      "fetch",
+      stubFetch({
+        recharge: { ok: false, status: 400, body: { error: "insufficient" } },
+      }),
+    );
     const onRedirect = vi.fn();
     render(<RechargeModal open onClose={() => {}} onRedirect={onRedirect} />);
     await waitFor(() => screen.getByTestId("package-pkg-basic"));

@@ -71,11 +71,22 @@ interface CameraError {
   rawMessage: string;
 }
 
-function MatchedAssetPreview({ asset, token }: { asset: Asset; token: string | null }) {
+function MatchedAssetPreview({
+  asset,
+  token,
+}: {
+  asset: Asset;
+  token: string | null;
+}) {
   const media = useDecryptedAssetUrl(asset, GRID_VARIANTS, token);
 
   if (media.loading) {
-    return <div className="h-full w-full animate-pulse bg-surface-container-high" aria-hidden="true" />;
+    return (
+      <div
+        className="h-full w-full animate-pulse bg-surface-container-high"
+        aria-hidden="true"
+      />
+    );
   }
 
   if (media.src) {
@@ -107,10 +118,18 @@ function classifyCameraError(err: unknown): CameraError {
     switch (err.name) {
       case "NotAllowedError":
       case "SecurityError":
-        return { kind: "permission-denied", rawName: err.name, rawMessage: err.message };
+        return {
+          kind: "permission-denied",
+          rawName: err.name,
+          rawMessage: err.message,
+        };
       case "NotFoundError":
       case "OverconstrainedError":
-        return { kind: "no-device", rawName: err.name, rawMessage: err.message };
+        return {
+          kind: "no-device",
+          rawName: err.name,
+          rawMessage: err.message,
+        };
       case "NotReadableError":
       case "AbortError":
         return { kind: "in-use", rawName: err.name, rawMessage: err.message };
@@ -130,7 +149,11 @@ function classifyCameraError(err: unknown): CameraError {
 // plain HTTP is NOT a secure context and getUserMedia will fail —
 // detect this up-front so the error message is actionable instead of
 // blaming the user's permissions.
-function detectInsecureDevOrigin(): { insecure: boolean; hostname: string; protocol: string } {
+function detectInsecureDevOrigin(): {
+  insecure: boolean;
+  hostname: string;
+  protocol: string;
+} {
   if (typeof window === "undefined") {
     return { insecure: false, hostname: "", protocol: "" };
   }
@@ -165,7 +188,9 @@ export default function PhotoSearchPage({
   // the Capture button on !videoReady so the user can't tap before
   // dimensions exist, and we gate handleCapture defensively as well.
   const [videoReady, setVideoReady] = useState(false);
-  const [searchResult, setSearchResult] = useState<FaceSearchResponse | null>(null);
+  const [searchResult, setSearchResult] = useState<FaceSearchResponse | null>(
+    null,
+  );
   const [matchedAssets, setMatchedAssets] = useState<Asset[]>([]);
 
   const stopCamera = useCallback(() => {
@@ -202,10 +227,14 @@ export default function PhotoSearchPage({
       return;
     }
 
-    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices?.getUserMedia
+    ) {
       setCameraError({
         kind: "no-api",
-        rawMessage: "navigator.mediaDevices.getUserMedia is unavailable in this browser.",
+        rawMessage:
+          "navigator.mediaDevices.getUserMedia is unavailable in this browser.",
       });
       setStage("camera-error");
       return;
@@ -213,7 +242,11 @@ export default function PhotoSearchPage({
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: {
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
         audio: false,
       });
       // IMPORTANT: stash the stream BEFORE flipping the stage. The
@@ -340,7 +373,9 @@ export default function PhotoSearchPage({
         // calling it explicitly here means the user sees the light
         // go out in the same animation frame the result panel mounts.
         stopCamera();
-        setStage(result.faces_detected === 0 ? "result-no-face" : "result-no-match");
+        setStage(
+          result.faces_detected === 0 ? "result-no-face" : "result-no-match",
+        );
         return;
       }
 
@@ -392,7 +427,11 @@ export default function PhotoSearchPage({
   // longer comment); the effect is idempotent so the setState inside
   // is safe. The disable below is line-scoped to that single call.
   useEffect(() => {
-    if (stage === "result-found" || stage === "result-no-face" || stage === "result-no-match") {
+    if (
+      stage === "result-found" ||
+      stage === "result-no-face" ||
+      stage === "result-no-match"
+    ) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       stopCamera();
     }
@@ -418,12 +457,16 @@ export default function PhotoSearchPage({
       </Link>
 
       <header className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">Photo Search</p>
-        <h1 className="text-2xl font-semibold text-text-primary">Find a person in this gallery</h1>
+        <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">
+          Photo Search
+        </p>
+        <h1 className="text-2xl font-semibold text-text-primary">
+          Find a person in this gallery
+        </h1>
         <p className="text-sm text-text-secondary">
           Point your camera at someone&apos;s face and tap Capture. We&apos;ll
-          match it against the people already detected in this gallery
-          and show every photo they appear in.
+          match it against the people already detected in this gallery and show
+          every photo they appear in.
         </p>
       </header>
 
@@ -433,7 +476,10 @@ export default function PhotoSearchPage({
       <section className="surface-panel p-4">
         {stage === "idle" && (
           <div className="text-center space-y-4 py-8">
-            <Camera className="mx-auto h-12 w-12 text-text-tertiary" aria-hidden />
+            <Camera
+              className="mx-auto h-12 w-12 text-text-tertiary"
+              aria-hidden
+            />
             <p className="text-sm text-text-secondary">
               We&apos;ll ask for camera permission once. Nothing is recorded —
               only the still frame you capture is sent to the server.
@@ -458,7 +504,7 @@ export default function PhotoSearchPage({
 
         {(stage === "preview" || stage === "searching") && (
           <div className="space-y-3">
-            <div className="relative mx-auto aspect-[4/3] max-w-xl overflow-hidden rounded-2xl border border-border-subtle bg-black">
+            <div className="relative mx-auto aspect-[4/3] max-w-xl overflow-hidden rounded-2xl border border-border-subtle bg-surface-scrim-strong">
               <video
                 ref={videoRef}
                 className="h-full w-full object-cover"
@@ -474,7 +520,7 @@ export default function PhotoSearchPage({
                 aria-hidden
                 className="pointer-events-none absolute inset-0 flex items-center justify-center"
               >
-                <div className="h-2/3 w-2/3 rounded-full border-2 border-white/30" />
+                <div className="h-2/3 w-2/3 rounded-full border-2 border-text-media/30" />
               </div>
             </div>
             <div className="flex flex-col items-center gap-1">
@@ -508,7 +554,9 @@ export default function PhotoSearchPage({
               )}
             </div>
             {errorDetail && (
-              <p className="text-center text-xs text-feedback-error">{errorDetail}</p>
+              <p className="text-center text-xs text-feedback-error">
+                {errorDetail}
+              </p>
             )}
           </div>
         )}
@@ -521,7 +569,9 @@ export default function PhotoSearchPage({
       {/* Result section */}
       {stage === "result-no-face" && (
         <section className="surface-panel p-6 text-center space-y-3">
-          <p className="text-sm font-semibold text-text-primary">No face detected</p>
+          <p className="text-sm font-semibold text-text-primary">
+            No face detected
+          </p>
           <p className="text-xs text-text-secondary">
             Make sure your face is centered and well lit, then try again.
           </p>
@@ -540,12 +590,14 @@ export default function PhotoSearchPage({
 
       {stage === "result-no-match" && (
         <section className="surface-panel p-6 text-center space-y-3">
-          <p className="text-sm font-semibold text-text-primary">No matching photos</p>
+          <p className="text-sm font-semibold text-text-primary">
+            No matching photos
+          </p>
           <p className="text-xs text-text-secondary">
             We saw {searchResult?.faces_detected ?? 1}{" "}
-            {(searchResult?.faces_detected ?? 1) === 1 ? "face" : "faces"} in your
-            capture, but didn&apos;t find a strong match in this gallery&apos;s
-            identified people.
+            {(searchResult?.faces_detected ?? 1) === 1 ? "face" : "faces"} in
+            your capture, but didn&apos;t find a strong match in this
+            gallery&apos;s identified people.
           </p>
           <div className="flex justify-center">
             <button
@@ -564,7 +616,9 @@ export default function PhotoSearchPage({
         <section className="space-y-4">
           <div className="surface-panel p-4 flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-1">
-              <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">Match</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">
+                Match
+              </p>
               <p className="text-sm font-semibold text-text-primary">
                 {searchResult.cluster_name?.trim() || "Unnamed person"}
               </p>
@@ -685,9 +739,9 @@ function CameraErrorPanel({
           instead of the LAN IP.
         </li>
         <li>
-          If you really need the LAN IP (testing from a phone), run the
-          dev server over HTTPS — Chrome accepts a self-signed cert if
-          you bypass the warning.
+          If you really need the LAN IP (testing from a phone), run the dev
+          server over HTTPS — Chrome accepts a self-signed cert if you bypass
+          the warning.
         </li>
       </ol>
     );
@@ -713,9 +767,9 @@ function CameraErrorPanel({
     title = "Camera access blocked";
     lead = (
       <p className="text-sm text-text-secondary">
-        The browser refused camera access. Either this site is blocked
-        in your browser settings, or your operating system isn&apos;t
-        letting the browser see the camera at all.
+        The browser refused camera access. Either this site is blocked in your
+        browser settings, or your operating system isn&apos;t letting the
+        browser see the camera at all.
       </p>
     );
     steps = (
@@ -725,17 +779,17 @@ function CameraErrorPanel({
           <ul className="list-disc pl-5 space-y-1 mt-1 text-xs">
             <li>
               <strong>Chrome / Edge</strong>: click the lock icon (or the
-              video-camera icon) in the address bar, set <em>Camera</em>{" "}
-              to <em>Allow</em>, then refresh.
+              video-camera icon) in the address bar, set <em>Camera</em> to{" "}
+              <em>Allow</em>, then refresh.
             </li>
             <li>
-              <strong>Safari</strong>: Safari → Settings → Websites →
-              Camera → set this site to <em>Allow</em>, then refresh.
+              <strong>Safari</strong>: Safari → Settings → Websites → Camera →
+              set this site to <em>Allow</em>, then refresh.
             </li>
             <li>
-              <strong>Firefox</strong>: click the camera icon in the
-              address bar, clear the &ldquo;Blocked Temporarily&rdquo;
-              entry, then refresh.
+              <strong>Firefox</strong>: click the camera icon in the address
+              bar, clear the &ldquo;Blocked Temporarily&rdquo; entry, then
+              refresh.
             </li>
           </ul>
         </div>
@@ -743,14 +797,13 @@ function CameraErrorPanel({
           <p className="font-semibold text-text-primary">At the OS level</p>
           <ul className="list-disc pl-5 space-y-1 mt-1 text-xs">
             <li>
-              <strong>macOS</strong>: System Settings → Privacy &amp;
-              Security → Camera → enable your browser, then quit and
-              reopen the browser.
+              <strong>macOS</strong>: System Settings → Privacy &amp; Security →
+              Camera → enable your browser, then quit and reopen the browser.
             </li>
             <li>
-              <strong>Windows</strong>: Settings → Privacy &amp; Security
-              → Camera → enable &ldquo;Let apps access your camera&rdquo;
-              and the browser&apos;s entry below it.
+              <strong>Windows</strong>: Settings → Privacy &amp; Security →
+              Camera → enable &ldquo;Let apps access your camera&rdquo; and the
+              browser&apos;s entry below it.
             </li>
           </ul>
         </div>
@@ -760,17 +813,16 @@ function CameraErrorPanel({
     title = "No camera found";
     lead = (
       <p className="text-sm text-text-secondary">
-        The browser didn&apos;t find a usable camera device. Plug one in
-        (or enable the built-in one) and try again.
+        The browser didn&apos;t find a usable camera device. Plug one in (or
+        enable the built-in one) and try again.
       </p>
     );
   } else if (kind === "in-use") {
     title = "Camera is busy";
     lead = (
       <p className="text-sm text-text-secondary">
-        Another application appears to be using the camera (Zoom,
-        Teams, FaceTime, OBS, another browser tab). Close it and try
-        again.
+        Another application appears to be using the camera (Zoom, Teams,
+        FaceTime, OBS, another browser tab). Close it and try again.
       </p>
     );
   } else {

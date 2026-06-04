@@ -20,7 +20,11 @@ export type ReplayPlayerProps = {
   className?: string;
 };
 
-export function ReplayPlayer({ shortlink, token, className }: ReplayPlayerProps) {
+export function ReplayPlayer({
+  shortlink,
+  token,
+  className,
+}: ReplayPlayerProps) {
   const { data, loading, error } = useReplay(shortlink, token);
 
   if (loading) {
@@ -87,7 +91,7 @@ export function ReplayPlayer({ shortlink, token, className }: ReplayPlayerProps)
         controls
         playsInline
         preload="metadata"
-        className="w-full rounded-lg bg-black"
+        className="w-full rounded-lg bg-surface-scrim-strong"
       />
     </div>
   );

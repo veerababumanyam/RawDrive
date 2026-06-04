@@ -66,7 +66,7 @@ describe("Features Page", () => {
   it("renders the final CTA section", () => {
     render(<FeaturesContent />);
     expect(
-      screen.getByText("Ready to Transform Your Photography Business?")
+      screen.getByText("Ready to Transform Your Photography Business?"),
     ).toBeInTheDocument();
   });
 });

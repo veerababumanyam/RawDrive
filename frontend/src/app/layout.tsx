@@ -15,6 +15,7 @@ import {
   SITE_URL,
   SITE_TAGLINE,
 } from "@/lib/seo";
+import { viewportThemeColors } from "@/lib/tokens";
 
 export const metadata: Metadata = {
   title: {
@@ -50,7 +51,11 @@ export const metadata: Metadata = {
     ],
     shortcut: "/logo/favicon.ico",
     apple: [
-      { url: "/logo/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+      {
+        url: "/logo/apple-touch-icon.png",
+        sizes: "180x180",
+        type: "image/png",
+      },
     ],
   },
 };
@@ -81,10 +86,14 @@ export default async function RootLayout({
     >
       <head>
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#0b1326" />
+        <meta name="theme-color" content={viewportThemeColors.appDark} />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <JsonLd id="rawdrive-site-schema" data={buildSiteJsonLd()} nonce={nonce} />
+        <JsonLd
+          id="rawdrive-site-schema"
+          data={buildSiteJsonLd()}
+          nonce={nonce}
+        />
         {/* Theme init MUST run before React hydrates so data-theme is set
             on <html> before first paint — otherwise the page flashes the
             default theme then snaps to the user's choice.

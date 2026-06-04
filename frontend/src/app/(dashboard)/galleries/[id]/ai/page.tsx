@@ -7,12 +7,18 @@ import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav"
 import { getGallery, type Gallery } from "@/lib/api/galleries";
 import { getStoredAccessToken } from "@/lib/auth";
 
-export default function GalleryAIPage({ params }: { params: Promise<{ id: string }> }) {
+export default function GalleryAIPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = use(params);
   const [gallery, setGallery] = useState<Gallery | null>(null);
   const [token] = useState(() => getStoredAccessToken());
   const [loadError, setLoadError] = useState("");
-  const error = token ? loadError : "Your session expired. Please log in again.";
+  const error = token
+    ? loadError
+    : "Your session expired. Please log in again.";
 
   useEffect(() => {
     if (!token) return;
@@ -22,7 +28,10 @@ export default function GalleryAIPage({ params }: { params: Promise<{ id: string
         if (!cancelled) setGallery(nextGallery);
       })
       .catch((err) => {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : "Failed to load gallery");
+        if (!cancelled)
+          setLoadError(
+            err instanceof Error ? err.message : "Failed to load gallery",
+          );
       });
     return () => {
       cancelled = true;
@@ -35,17 +44,23 @@ export default function GalleryAIPage({ params }: { params: Promise<{ id: string
           element on mobile (matches the cover and settings sub-pages). */}
       <GalleryWorkspaceNav galleryId={id} />
 
-      <Link href={`/galleries/${id}`} className="btn-tertiary px-0 py-0 text-sm">
+      <Link
+        href={`/galleries/${id}`}
+        className="btn-tertiary px-0 py-0 text-sm"
+      >
         Back to gallery
       </Link>
 
       <div className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">Gallery AI</p>
+        <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">
+          Gallery AI
+        </p>
         <h1 className="text-2xl font-semibold text-text-primary">
           {gallery?.title ? `${gallery.title} AI` : "Gallery AI"}
         </h1>
         <p className="max-w-2xl text-sm leading-relaxed text-text-secondary">
-          Run gallery-scoped automation here so face matching, culling support, and client discovery stay attached to the delivery workspace.
+          Run gallery-scoped automation here so face matching, culling support,
+          and client discovery stay attached to the delivery workspace.
         </p>
       </div>
 

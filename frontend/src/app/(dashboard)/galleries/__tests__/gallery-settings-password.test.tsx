@@ -1,5 +1,11 @@
 import { Suspense } from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import GallerySettingsPage from "../[id]/settings/page";
 
@@ -9,7 +15,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("next/link", () => ({
-  default: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
+  default: ({
+    href,
+    children,
+    ...props
+  }: {
+    href: string;
+    children: React.ReactNode;
+  }) => (
     <a href={href} {...props}>
       {children}
     </a>
@@ -71,8 +84,9 @@ describe("Gallery settings password protection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getGallery.mockResolvedValue(gallery({ has_password: false }));
-    mocks.updateGallerySettings.mockImplementation(async (_token, _id, payload) =>
-      gallery({ has_password: Boolean(payload.password) }),
+    mocks.updateGallerySettings.mockImplementation(
+      async (_token, _id, payload) =>
+        gallery({ has_password: Boolean(payload.password) }),
     );
   });
 
@@ -80,7 +94,9 @@ describe("Gallery settings password protection", () => {
     await renderPage();
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Gallery Settings" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: "Gallery Settings" }),
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Set Password" }));
@@ -98,63 +114,119 @@ describe("Gallery settings password protection", () => {
     });
 
     expect(await screen.findByText("Password set")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Remove Password" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Remove Password" }),
+    ).toBeInTheDocument();
   });
 
   it("offers explicit client download formats without the mixed Both option", async () => {
-    mocks.getGallery.mockResolvedValue(gallery({ has_password: false, download_enabled: true, download_quality: "original" }));
+    mocks.getGallery.mockResolvedValue(
+      gallery({
+        has_password: false,
+        download_enabled: true,
+        download_quality: "original",
+      }),
+    );
 
     await renderPage();
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Gallery Settings" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: "Gallery Settings" }),
+      ).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Choose the exact format clients can download from this public gallery.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /WebP display/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /WebP thumbnail/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Original source/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Both/i })).not.toBeInTheDocument();
-    expect(screen.queryByText("Full source files only.")).not.toBeInTheDocument();
-    expect(screen.queryByText("Clients choose either format.")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Choose the exact format clients can download from this public gallery.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /WebP display/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /WebP thumbnail/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Original source/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Both/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Full source files only."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Clients choose either format."),
+    ).not.toBeInTheDocument();
   });
 
   it("saves the selected optimized WebP download option", async () => {
-    mocks.getGallery.mockResolvedValue(gallery({ has_password: false, download_enabled: true, download_quality: "webp" }));
-    mocks.updateGallerySettings.mockResolvedValue(gallery({ download_enabled: true, download_quality: "thumbnail" }));
+    mocks.getGallery.mockResolvedValue(
+      gallery({
+        has_password: false,
+        download_enabled: true,
+        download_quality: "webp",
+      }),
+    );
+    mocks.updateGallerySettings.mockResolvedValue(
+      gallery({ download_enabled: true, download_quality: "thumbnail" }),
+    );
 
     await renderPage();
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /WebP thumbnail/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /WebP thumbnail/i }),
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /WebP thumbnail/i }));
 
     await waitFor(() => {
-      expect(mocks.updateGallerySettings).toHaveBeenCalledWith("token-1", "gallery-1", {
-        download_quality: "thumbnail",
-      });
+      expect(mocks.updateGallerySettings).toHaveBeenCalledWith(
+        "token-1",
+        "gallery-1",
+        {
+          download_quality: "thumbnail",
+        },
+      );
     });
-    expect(await screen.findByText("Download option saved")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Download option saved"),
+    ).toBeInTheDocument();
   });
 
   it("saves original source as a client download option", async () => {
-    mocks.getGallery.mockResolvedValue(gallery({ has_password: false, download_enabled: true, download_quality: "webp" }));
-    mocks.updateGallerySettings.mockResolvedValue(gallery({ download_enabled: true, download_quality: "original" }));
+    mocks.getGallery.mockResolvedValue(
+      gallery({
+        has_password: false,
+        download_enabled: true,
+        download_quality: "webp",
+      }),
+    );
+    mocks.updateGallerySettings.mockResolvedValue(
+      gallery({ download_enabled: true, download_quality: "original" }),
+    );
 
     await renderPage();
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Original source/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /Original source/i }),
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Original source/i }));
 
     await waitFor(() => {
-      expect(mocks.updateGallerySettings).toHaveBeenCalledWith("token-1", "gallery-1", {
-        download_quality: "original",
-      });
+      expect(mocks.updateGallerySettings).toHaveBeenCalledWith(
+        "token-1",
+        "gallery-1",
+        {
+          download_quality: "original",
+        },
+      );
     });
   });
 });

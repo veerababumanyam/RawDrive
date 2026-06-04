@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { BrainCircuit, CopyCheck, Search, Sparkles } from "lucide-react";
+import { BrainCircuit, CopyCheck, Search, Sparkles } from "@/components/icons";
 import { SolutionShowcasePage } from "@/components/marketing/SolutionShowcasePage";
 import { createPageMetadata } from "@/lib/seo";
 
@@ -16,7 +16,10 @@ export default function AIIngelligencePage() {
       previewAlt="RawDrive AI culling and face recognition dashboard preview"
       previewLabel="AI intelligence dashboard"
       primaryCta={{ href: "/register", label: "Try AI workflows" }}
-      secondaryCta={{ href: "/solutions/galleries", label: "See gallery delivery" }}
+      secondaryCta={{
+        href: "/solutions/galleries",
+        label: "See gallery delivery",
+      }}
       stats={[
         { label: "Culling", value: "Thousands in one pass" },
         { label: "Search", value: "Natural language ready" },

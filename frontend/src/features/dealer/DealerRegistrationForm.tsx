@@ -127,8 +127,9 @@ export default function DealerRegistrationForm({ onSuccess }: Props) {
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-text-secondary mb-1">Business Name *</label>
+          <label htmlFor="dealer-business-name" className="block text-sm font-medium text-text-secondary mb-1">Business Name *</label>
           <input
+            id="dealer-business-name"
             type="text"
             value={businessName}
             onChange={(e) => setBusinessName(e.target.value)}
@@ -141,8 +142,9 @@ export default function DealerRegistrationForm({ onSuccess }: Props) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-text-secondary mb-1">Dealer Email *</label>
+          <label htmlFor="dealer-email" className="block text-sm font-medium text-text-secondary mb-1">Dealer Email *</label>
           <input
+            id="dealer-email"
             type="email"
             value={dealerEmail}
             onChange={(e) => setDealerEmail(e.target.value)}
@@ -154,8 +156,9 @@ export default function DealerRegistrationForm({ onSuccess }: Props) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-text-secondary mb-1">State *</label>
+          <label htmlFor="dealer-state" className="block text-sm font-medium text-text-secondary mb-1">State *</label>
           <select
+            id="dealer-state"
             value={stateId}
             onChange={(e) => setStateId(Number(e.target.value))}
             required
@@ -170,21 +173,25 @@ export default function DealerRegistrationForm({ onSuccess }: Props) {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">PAN Number *</label>
+            <label htmlFor="dealer-pan" className="block text-sm font-medium text-text-secondary mb-1">PAN Number *</label>
             <input
+              id="dealer-pan"
               type="text"
               value={panNumber}
               onChange={(e) => validatePAN(e.target.value)}
               required
               maxLength={10}
+              aria-invalid={panError ? "true" : "false"}
+              aria-describedby={panError ? "dealer-pan-error" : undefined}
               className="input-base w-full"
               placeholder="ABCDE1234F"
             />
-            {panError && <p className="text-xs text-feedback-error mt-1">{panError}</p>}
+            {panError && <p id="dealer-pan-error" className="text-xs text-feedback-error mt-1">{panError}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">GSTIN</label>
+            <label htmlFor="dealer-gstin" className="block text-sm font-medium text-text-secondary mb-1">GSTIN</label>
             <input
+              id="dealer-gstin"
               type="text"
               value={gstin}
               onChange={(e) => setGstin(e.target.value.toUpperCase())}
@@ -197,44 +204,60 @@ export default function DealerRegistrationForm({ onSuccess }: Props) {
 
         <fieldset className="border border-border-default rounded-lg p-4 space-y-3">
           <legend className="text-sm font-medium text-text-secondary px-2">Bank Account Details *</legend>
-          <input
-            type="text"
-            value={bank}
-            onChange={(e) => setBank(e.target.value)}
-            required
-            className="input-base w-full"
-            placeholder="Bank Name"
-          />
+          <label className="block space-y-1" htmlFor="dealer-bank-name">
+            <span className="text-xs font-medium text-text-secondary">Bank Name *</span>
+            <input
+              id="dealer-bank-name"
+              type="text"
+              value={bank}
+              onChange={(e) => setBank(e.target.value)}
+              required
+              className="input-base w-full"
+              placeholder="Bank Name"
+            />
+          </label>
           <div className="grid grid-cols-2 gap-3">
             <div>
+              <label htmlFor="dealer-ifsc" className="mb-1 block text-xs font-medium text-text-secondary">IFSC Code *</label>
               <input
+                id="dealer-ifsc"
                 type="text"
                 value={ifsc}
                 onChange={(e) => validateIFSC(e.target.value)}
                 required
                 maxLength={11}
+                aria-invalid={ifscError ? "true" : "false"}
+                aria-describedby={ifscError ? "dealer-ifsc-error" : undefined}
                 className="input-base w-full"
                 placeholder="IFSC Code"
               />
-              {ifscError && <p className="text-xs text-feedback-error mt-1">{ifscError}</p>}
+              {ifscError && <p id="dealer-ifsc-error" className="text-xs text-feedback-error mt-1">{ifscError}</p>}
             </div>
-            <input
-              type="text"
-              value={accountNumber}
-              onChange={(e) => setAccountNumber(e.target.value)}
-              required
-              pattern="[0-9]{9,18}"
-              className="input-base w-full"
-              placeholder="Account Number"
-            />
+            <label className="block space-y-1" htmlFor="dealer-account-number">
+              <span className="text-xs font-medium text-text-secondary">Account Number *</span>
+              <input
+                id="dealer-account-number"
+                type="text"
+                value={accountNumber}
+                onChange={(e) => setAccountNumber(e.target.value)}
+                required
+                pattern="[0-9]{9,18}"
+                className="input-base w-full"
+                placeholder="Account Number"
+              />
+            </label>
           </div>
-          <input
-            type="text"
-            value={upiId}
-            onChange={(e) => setUpiId(e.target.value)}
-            className="input-base w-full"
-            placeholder="UPI ID (optional)"
-          />
+          <label className="block space-y-1" htmlFor="dealer-upi-id">
+            <span className="text-xs font-medium text-text-secondary">UPI ID</span>
+            <input
+              id="dealer-upi-id"
+              type="text"
+              value={upiId}
+              onChange={(e) => setUpiId(e.target.value)}
+              className="input-base w-full"
+              placeholder="UPI ID (optional)"
+            />
+          </label>
         </fieldset>
 
         <label className="flex items-start gap-3 min-h-[44px] cursor-pointer">

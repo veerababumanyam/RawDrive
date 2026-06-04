@@ -18,6 +18,11 @@
  */
 
 import type { Gallery } from "@/lib/api/galleries";
+import { components as designComponents } from "@/lib/tokens";
+
+/** Serialized data-URI SVGs cannot resolve CSS variables, so the watermark
+ * text color comes from the token system's concrete media-text preset. */
+const WATERMARK_TEXT_COLOR = designComponents.mediaCover.presetColors.textMedia;
 
 interface Props {
   config?: Gallery["watermark_config"];
@@ -27,7 +32,12 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 function absoluteApiUrl(url?: string | null) {
   if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) return url;
+  if (
+    url.startsWith("http://") ||
+    url.startsWith("https://") ||
+    url.startsWith("data:")
+  )
+    return url;
   return `${API_BASE}${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
@@ -35,7 +45,10 @@ export function WatermarkOverlay({ config }: Props) {
   if (!config) return null;
 
   const rawOpacity = config.opacity ?? 30;
-  const opacity = Math.max(0, Math.min(1, rawOpacity > 1 ? rawOpacity / 100 : rawOpacity));
+  const opacity = Math.max(
+    0,
+    Math.min(1, rawOpacity > 1 ? rawOpacity / 100 : rawOpacity),
+  );
   const text = config.text ?? "";
   const position = config.position ?? "center";
   const logoUrl = absoluteApiUrl(config.logo_url);
@@ -70,7 +83,7 @@ export function WatermarkOverlay({ config }: Props) {
     const svg = `
       <svg xmlns="http://www.w3.org/2000/svg" width="300" height="200">
         <text x="50%" y="50%" font-family="system-ui, sans-serif" font-size="32"
-              font-weight="700" fill="white" fill-opacity="${opacity}"
+              font-weight="700" fill="${WATERMARK_TEXT_COLOR}" fill-opacity="${opacity}"
               text-anchor="middle" dominant-baseline="middle"
               transform="rotate(-30 150 100)">${escapeXml(text)}</text>
       </svg>`.trim();
@@ -96,8 +109,12 @@ export function WatermarkOverlay({ config }: Props) {
         className="pointer-events-none absolute inset-0 flex items-center justify-center"
       >
         <span
-          className="select-none text-6xl font-bold uppercase tracking-widest text-white"
-          style={{ opacity, transform: "rotate(-15deg)", textShadow: "0 2px 8px rgba(0,0,0,0.4)" }}
+          className="select-none text-6xl font-bold uppercase tracking-widest text-text-media"
+          style={{
+            opacity,
+            transform: "rotate(-15deg)",
+            textShadow: "var(--cover-text-shadow)",
+          }}
         >
           {text}
         </span>
@@ -118,7 +135,9 @@ export function WatermarkOverlay({ config }: Props) {
       className={`pointer-events-none absolute ${corner} select-none`}
       style={{ opacity }}
     >
-      <span className="text-sm font-semibold uppercase tracking-wider text-white">{text}</span>
+      <span className="text-sm font-semibold uppercase tracking-wider text-text-media">
+        {text}
+      </span>
     </div>
   );
 }

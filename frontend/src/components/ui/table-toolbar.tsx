@@ -2,7 +2,15 @@
 
 import { type ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { Search, Funnel, XMark, ChevronUp, ChevronDown, ChevronUpDown } from "@/components/icons";
+import {
+  Search,
+  Funnel,
+  XMark,
+  ChevronUp,
+  ChevronDown,
+  ChevronUpDown,
+} from "@/components/icons";
+import { GlassButton } from "@/components/ui/glass-button";
 import type { SortDirection } from "@/hooks/use-data-table";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -50,8 +58,9 @@ interface TableToolbarProps {
 // ─── Sort Direction Icon ────────────────────────────────────────────────────
 
 function SortDirectionIcon({ direction }: { direction: SortDirection | null }) {
-  if (direction === "asc") return <ChevronUp className="h-3 w-3 text-primary" />;
-  if (direction === "desc") return <ChevronDown className="h-3 w-3 text-primary" />;
+  if (direction === "asc") return <ChevronUp className="h-3 w-3 text-accent" />;
+  if (direction === "desc")
+    return <ChevronDown className="h-3 w-3 text-accent" />;
   return <ChevronUpDown className="h-3 w-3 opacity-40" />;
 }
 
@@ -75,18 +84,23 @@ export function TableToolbar({
   className,
 }: TableToolbarProps) {
   return (
-    <div className={cn("bg-surface-container-low/40 backdrop-blur-md border border-white/[0.03] p-4 rounded-2xl shadow-xl", className)}>
+    <div className={cn("glass-card p-4", className)}>
       <div className="flex flex-wrap items-center gap-3">
         {/* Search */}
         {searchable && (
-          <div className="relative flex-1 min-w-[200px]">
+          <div className="relative min-w-56 flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary pointer-events-none" />
             <input
               type="text"
+              aria-label={
+                searchPlaceholder === "Search..."
+                  ? "Search table"
+                  : searchPlaceholder
+              }
               placeholder={searchPlaceholder}
               value={searchValue}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full bg-surface-container-lowest border-none rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-secondary/50 transition-all outline-none placeholder:text-text-tertiary/50"
+              className="input-base w-full pl-10"
             />
           </div>
         )}
@@ -95,9 +109,10 @@ export function TableToolbar({
         {filters.map((f) => (
           <div key={f.key} className="relative">
             <select
+              aria-label={`Filter by ${f.label}`}
               value={getFilterValue(f.key)}
               onChange={(e) => onFilterChange(f.key, e.target.value)}
-              className="appearance-none bg-surface-container-lowest border border-white/[0.06] rounded-xl pl-3 pr-8 py-2.5 text-sm text-on-surface focus:ring-2 focus:ring-secondary/50 outline-none cursor-pointer"
+              className="input-base cursor-pointer appearance-none pl-3 pr-8 text-sm"
             >
               <option value="">All {f.label}</option>
               {f.options.map((opt) => (
@@ -114,34 +129,46 @@ export function TableToolbar({
         {sortOptions.length > 0 && (
           <div className="relative">
             <select
+              aria-label="Sort results"
               value={currentSortKey || ""}
               onChange={(e) => onSortChange(e.target.value)}
-              className="appearance-none bg-surface-container-lowest border border-white/[0.06] rounded-xl pl-3 pr-8 py-2.5 text-sm text-on-surface focus:ring-2 focus:ring-secondary/50 outline-none cursor-pointer"
+              className="input-base cursor-pointer appearance-none pl-3 pr-8 text-sm"
             >
               <option value="">Sort by...</option>
               {sortOptions.map((opt) => (
                 <option key={opt.key} value={opt.key}>
-                  {opt.label} {currentSortKey === opt.key ? (currentSortDirection === "asc" ? "↑" : "↓") : ""}
+                  {opt.label}{" "}
+                  {currentSortKey === opt.key
+                    ? currentSortDirection === "asc"
+                      ? "↑"
+                      : "↓"
+                    : ""}
                 </option>
               ))}
             </select>
-            <SortDirectionIcon direction={currentSortKey ? currentSortDirection : null} />
+            <SortDirectionIcon
+              direction={currentSortKey ? currentSortDirection : null}
+            />
           </div>
         )}
 
         {/* Clear */}
         {hasActiveFilters && (
-          <button
+          <GlassButton
+            type="button"
             onClick={onClearAll}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-text-secondary hover:text-on-surface hover:bg-white/[0.06] transition-colors"
+            variant="quiet"
+            size="sm"
+            icon={<XMark className="h-3.5 w-3.5" />}
           >
-            <XMark className="h-3.5 w-3.5" />
             Clear
-          </button>
+          </GlassButton>
         )}
 
         {/* Actions */}
-        {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
+        {actions && (
+          <div className="ml-auto flex items-center gap-2">{actions}</div>
+        )}
       </div>
     </div>
   );

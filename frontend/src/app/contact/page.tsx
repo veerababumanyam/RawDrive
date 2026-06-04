@@ -9,8 +9,8 @@ const contactCards = [
   {
     icon: Mail,
     title: "Sales & Partnerships",
-    copy: "infor@rawdrive.in",
-    href: "mailto:infor@rawdrive.in",
+    copy: "info@rawdrive.in",
+    href: "mailto:info@rawdrive.in",
   },
   {
     icon: MessageSquareText,
@@ -51,8 +51,8 @@ export default function ContactPage() {
               Reach the team behind your studio&apos;s next operating system.
             </h1>
             <p className="max-w-2xl text-lg leading-8 text-text-secondary">
-              We can help with onboarding, partnerships, demos, support, and rollout planning for
-              your photography business.
+              We can help with onboarding, partnerships, demos, support, and
+              rollout planning for your photography business.
             </p>
           </div>
 
@@ -69,7 +69,9 @@ export default function ContactPage() {
                 <h2 className="mt-5 font-headline text-xl font-bold text-text-primary">
                   {card.title}
                 </h2>
-                <p className="mt-2 text-sm leading-7 text-text-secondary">{card.copy}</p>
+                <p className="mt-2 text-sm leading-7 text-text-secondary">
+                  {card.copy}
+                </p>
               </Link>
             ))}
           </div>
@@ -91,8 +93,9 @@ export default function ContactPage() {
               Fastest way to get a reply
             </h2>
             <p className="mt-3 leading-7 text-text-secondary">
-              For live projects, send us your studio name, city, and the workflow you want help
-              with. We&apos;ll route you to the right team faster.
+              For live projects, send us your studio name, city, and the
+              workflow you want help with. We&apos;ll route you to the right
+              team faster.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link

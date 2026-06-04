@@ -20,8 +20,17 @@
 import { useEffect, useState } from "react";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { Download, Share, XCircle, ZoomIn, ZoomOut } from "@/components/icons";
-import type { Gallery, GalleryBranding, PublicAsset } from "@/lib/api/galleries";
-import { LIGHTBOX_VARIANTS, assetUsesClientMediaEncryption, originalManifest, variantManifest } from "@/lib/media-encryption/asset-media";
+import type {
+  Gallery,
+  GalleryBranding,
+  PublicAsset,
+} from "@/lib/api/galleries";
+import {
+  LIGHTBOX_VARIANTS,
+  assetUsesClientMediaEncryption,
+  originalManifest,
+  variantManifest,
+} from "@/lib/media-encryption/asset-media";
 import { decryptBlobWithAvailableMediaKeys } from "@/lib/media-encryption/media-key-store";
 import { publicMediaErrorMessage } from "@/lib/media-encryption/public-media-error";
 import {
@@ -35,7 +44,9 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 type PublicDownloadFormat = "webp" | "thumbnail" | "original";
 
-function downloadFormatsForQuality(value: string | undefined | null): PublicDownloadFormat[] {
+function downloadFormatsForQuality(
+  value: string | undefined | null,
+): PublicDownloadFormat[] {
   if (value === "original") return ["original"];
   if (value === "thumbnail") return ["thumbnail"];
   return ["webp"];
@@ -47,13 +58,20 @@ function publicDownloadLabel(format: PublicDownloadFormat): string {
   return "Download WebP";
 }
 
-function publicDownloadFilename(photo: PublicAsset, format: PublicDownloadFormat): string {
+function publicDownloadFilename(
+  photo: PublicAsset,
+  format: PublicDownloadFormat,
+): string {
   if (format === "original") return photo.filename;
-  if (format === "thumbnail") return "thumb_" + photo.filename.replace(/\.[^.]+$/, ".webp");
+  if (format === "thumbnail")
+    return "thumb_" + photo.filename.replace(/\.[^.]+$/, ".webp");
   return photo.filename.replace(/\.[^.]+$/, ".webp");
 }
 
-function encryptedDownloadManifest(photo: PublicAsset, format: PublicDownloadFormat) {
+function encryptedDownloadManifest(
+  photo: PublicAsset,
+  format: PublicDownloadFormat,
+) {
   if (format === "original") return originalManifest(photo);
   if (format === "thumbnail") {
     return (
@@ -104,21 +122,35 @@ export function SinglePhotoView({
   // cookie does not reach). For open/published galleries the bytes serve
   // anonymously and the token is ignored; gated same-origin deployments also
   // still work via the SameSite cookie.
-  const media = useDecryptedAssetUrl(photo, LIGHTBOX_VARIANTS, null, assetAccessToken);
+  const media = useDecryptedAssetUrl(
+    photo,
+    LIGHTBOX_VARIANTS,
+    null,
+    assetAccessToken,
+  );
 
   const brandName = branding?.can_customize ? branding.brand_name : null;
   const downloadEnabled = gallery.download_enabled !== false;
-  const allowedDownloadFormats = downloadEnabled ? downloadFormatsForQuality(gallery.download_quality) : [];
+  const allowedDownloadFormats = downloadEnabled
+    ? downloadFormatsForQuality(gallery.download_quality)
+    : [];
   const wm = gallery.watermark_config as Record<string, unknown> | undefined;
   const watermarkConfig = wm && wm.enabled === true ? wm : undefined;
 
-  const plainShareUrl = typeof window !== "undefined"
-    ? setUrlSearchParamBeforeFragment(`${window.location.origin}/g/${slug}/photo/${photo.id}`, "ws", workspaceScope)
-    : "";
+  const plainShareUrl =
+    typeof window !== "undefined"
+      ? setUrlSearchParamBeforeFragment(
+          `${window.location.origin}/g/${slug}/photo/${photo.id}`,
+          "ws",
+          workspaceScope,
+        )
+      : "";
   const shareUrl = appendCurrentGalleryKeyFragment(plainShareUrl);
 
   async function handleDownload(format: PublicDownloadFormat) {
-    const url = new URL(`${API_BASE}/api/v1/public/galleries/${slug}/assets/${photo.id}/download`);
+    const url = new URL(
+      `${API_BASE}/api/v1/public/galleries/${slug}/assets/${photo.id}/download`,
+    );
     url.searchParams.set("format", format);
     if (workspaceScope) {
       url.searchParams.set("ws", workspaceScope);
@@ -134,7 +166,10 @@ export function SinglePhotoView({
     if (!manifest) return;
     const res = await fetch(url.toString());
     if (!res.ok) return;
-    const plaintext = await decryptBlobWithAvailableMediaKeys(await res.blob(), manifest);
+    const plaintext = await decryptBlobWithAvailableMediaKeys(
+      await res.blob(),
+      manifest,
+    );
     const objectUrl = URL.createObjectURL(plaintext);
     const a = document.createElement("a");
     a.href = objectUrl;
@@ -150,7 +185,11 @@ export function SinglePhotoView({
     const data = { title: photo.filename, url: shareUrl };
     if (typeof navigator !== "undefined" && "share" in navigator) {
       try {
-        await (navigator as Navigator & { share: (d: { title: string; url: string }) => Promise<void> }).share(data);
+        await (
+          navigator as Navigator & {
+            share: (d: { title: string; url: string }) => Promise<void>;
+          }
+        ).share(data);
         return;
       } catch {
         // User cancelled or share failed — fall through to clipboard so
@@ -181,7 +220,11 @@ export function SinglePhotoView({
   // Keyboard zoom shortcuts to match the public lightbox affordances.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      )
+        return;
       switch (e.key) {
         case "+":
         case "=":
@@ -207,17 +250,31 @@ export function SinglePhotoView({
       <header className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-border-subtle">
         <div className="flex min-w-0 items-center gap-3 text-text-secondary text-sm">
           {brandName ? (
-            <span className="font-medium text-text-primary truncate">{brandName}</span>
+            <span className="font-medium text-text-primary truncate">
+              {brandName}
+            </span>
           ) : (
-            <span className="font-medium text-text-primary truncate">RawDrive</span>
+            <span className="font-medium text-text-primary truncate">
+              RawDrive
+            </span>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <GlassIconButton size="sm" label="Zoom out" onClick={() => setZoom((z) => Math.max(z - 0.25, 0.5))}>
+          <GlassIconButton
+            size="sm"
+            label="Zoom out"
+            onClick={() => setZoom((z) => Math.max(z - 0.25, 0.5))}
+          >
             <ZoomOut />
           </GlassIconButton>
-          <span className="text-text-tertiary text-xs w-12 text-center tabular-nums">{Math.round(zoom * 100)}%</span>
-          <GlassIconButton size="sm" label="Zoom in" onClick={() => setZoom((z) => Math.min(z + 0.25, 3))}>
+          <span className="text-text-tertiary text-xs w-12 text-center tabular-nums">
+            {Math.round(zoom * 100)}%
+          </span>
+          <GlassIconButton
+            size="sm"
+            label="Zoom in"
+            onClick={() => setZoom((z) => Math.min(z + 0.25, 3))}
+          >
             <ZoomIn />
           </GlassIconButton>
           <div className="w-px h-6 bg-border-subtle mx-1" />
@@ -263,9 +320,14 @@ export function SinglePhotoView({
             {watermarkConfig && (
               <div
                 className="pointer-events-none absolute inset-0"
-                style={{ transform: `scale(${zoom})`, transformOrigin: "center" }}
+                style={{
+                  transform: `scale(${zoom})`,
+                  transformOrigin: "center",
+                }}
               >
-                <WatermarkOverlay config={watermarkConfig as Gallery["watermark_config"]} />
+                <WatermarkOverlay
+                  config={watermarkConfig as Gallery["watermark_config"]}
+                />
               </div>
             )}
           </div>
@@ -273,7 +335,9 @@ export function SinglePhotoView({
           <div className="text-center">
             <XCircle className="mx-auto mb-2 h-8 w-8 text-text-tertiary" />
             <p className="text-sm text-text-secondary">
-              {media.loading ? "Decrypting photo..." : publicMediaErrorMessage(media.error) || "Image unavailable"}
+              {media.loading
+                ? "Decrypting photo..."
+                : publicMediaErrorMessage(media.error) || "Image unavailable"}
             </p>
           </div>
         )}

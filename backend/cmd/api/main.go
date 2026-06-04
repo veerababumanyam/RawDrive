@@ -639,6 +639,17 @@ func storageKeyBelongsToWorkspace(ctx context.Context, pool *pgxpool.Pool, key s
 			 WHERE d.storage_key = $1
 			   AND a.workspace_id = $2
 			   AND a.deleted_at IS NULL
+			UNION
+			SELECT 1
+			  FROM photographer_profiles p
+			 WHERE p.workspace_id = $2
+			   AND $1 IN (
+			     p.avatar_url,
+			     p.avatar_cropped_url,
+			     p.cover_url,
+			     p.background_photo_url,
+			     p.og_image_url
+			   )
 		)`,
 		key, wsID,
 	).Scan(&ok)
@@ -1830,6 +1841,7 @@ func main() {
 	assetDerivativeRepo := repository.NewAssetDerivativeRepo(dbPool)
 	galleryRepo := repository.NewGalleryRepo(dbPool)
 	galleryAssetRepo := repository.NewGalleryAssetRepo(dbPool)
+	photographerProfileRepo := repository.NewPhotographerProfileRepo(dbPool)
 	shareLinkRepo := repository.NewShareLinkRepo(dbPool)
 	galleryShareLogRepo := repository.NewGalleryShareLogRepo(dbPool)
 	proofingRepo := repository.NewProofingRepo(dbPool)
@@ -1919,6 +1931,11 @@ func main() {
 		WithNotifications(repository.NewNotificationRepo(dbPool)) // GAL-FR-134
 	galleryFavoritesSvc := service.NewGalleryFavoritesService(galleryFavoritesRepo, galleryRepo)
 	storageConfigSvc := service.NewStorageConfigService(dbPool)
+	photographerProfileHandler := handler.NewPhotographerProfileHandler(
+		photographerProfileRepo,
+		galleryRepo,
+		storageProvider,
+	).WithPublicBaseURL(os.Getenv("FRONTEND_URL"))
 
 	// M13 Services: Gallery Access, Proofing Sessions, Comments, Album Approval
 	accessLogRepo := repository.NewGalleryAccessLogRepo(dbPool)
@@ -2136,9 +2153,11 @@ func main() {
 			JobRepo: ai.NewJobRepo(dbPool),
 		}
 		galleryHandler := handler.RegisterM2Routes(api, m2Deps)
+		photographerProfileHandler.RegisterProtectedRoutes(api)
 
 		// Public gallery routes — registered on outer router (no auth required)
 		handler.RegisterPublicGalleryRoutes(r, m2Deps)
+		photographerProfileHandler.RegisterPublicRoutes(r)
 
 		// M16 E49-S1: public upload-policy versions endpoint. Mounted on
 		// the outer router so the browser screening worker can fetch it

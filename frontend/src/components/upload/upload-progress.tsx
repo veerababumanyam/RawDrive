@@ -38,7 +38,11 @@ interface UploadProgressProps {
   onRetry?: (id: string) => void;
 }
 
-export function UploadProgress({ items, onCancel, onRetry }: UploadProgressProps) {
+export function UploadProgress({
+  items,
+  onCancel,
+  onRetry,
+}: UploadProgressProps) {
   if (items.length === 0) return null;
 
   const completed = items.filter((i) => i.status === "complete").length;
@@ -52,7 +56,9 @@ export function UploadProgress({ items, onCancel, onRetry }: UploadProgressProps
         <span className="text-text-secondary">
           {completed}/{total} files uploaded
         </span>
-        <span className="font-medium text-text-primary">{overallProgress}%</span>
+        <span className="font-medium text-text-primary">
+          {overallProgress}%
+        </span>
       </div>
       <div className="h-1.5 rounded-full bg-surface-sunken overflow-hidden">
         <div
@@ -96,9 +102,7 @@ export function UploadProgress({ items, onCancel, onRetry }: UploadProgressProps
             )}
 
             {item.status === "paused" && (
-              <span className="text-xs font-medium text-warning">
-                Paused
-              </span>
+              <span className="text-xs font-medium text-warning">Paused</span>
             )}
 
             {item.status === "uploading" && (
@@ -136,8 +140,9 @@ export function UploadProgress({ items, onCancel, onRetry }: UploadProgressProps
                 <span className="text-xs text-error">Failed</span>
                 {onRetry && (
                   <button
+                    type="button"
                     onClick={() => onRetry(item.id)}
-                    className="text-xs text-accent hover:underline"
+                    className="inline-flex min-h-[var(--touch-target-min)] items-center rounded-lg px-2 text-xs font-medium text-accent hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
                   >
                     Retry
                   </button>
@@ -152,8 +157,9 @@ export function UploadProgress({ items, onCancel, onRetry }: UploadProgressProps
               item.status === "uploading") &&
               onCancel && (
                 <button
+                  type="button"
                   onClick={() => onCancel(item.id)}
-                  className="text-xs text-text-secondary hover:text-error"
+                  className="inline-flex min-h-[var(--touch-target-min)] items-center rounded-lg px-2 text-xs font-medium text-text-secondary hover:bg-surface-sunken hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
                 >
                   Cancel
                 </button>

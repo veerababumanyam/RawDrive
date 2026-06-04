@@ -20,6 +20,7 @@ import {
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import { TermsAcceptanceModal } from "@/components/legal/terms-acceptance-modal";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
 
 const ACCESS_WINDOW_PRESETS = [30, 60, 90] as const;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -50,7 +51,11 @@ const DOWNLOAD_QUALITY_OPTIONS: Array<{
 function formatExpiryDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 }
 
 function expiryDaysLeft(iso: string): number | null {
@@ -74,7 +79,9 @@ function presetButtonClass(active: boolean): string {
   }`;
 }
 
-function normalizedDownloadQuality(value: string | null | undefined): DownloadQuality {
+function normalizedDownloadQuality(
+  value: string | null | undefined,
+): DownloadQuality {
   if (value === "original") return "original";
   return value === "thumbnail" ? "thumbnail" : "webp";
 }
@@ -82,8 +89,9 @@ function normalizedDownloadQuality(value: string | null | undefined): DownloadQu
 function galleryHasPassword(gallery: Gallery): boolean {
   return Boolean(
     gallery.has_password ||
-      (gallery.settings as Record<string, unknown> | undefined)?.has_password ||
-      (gallery.settings as Record<string, unknown> | undefined)?.password_protected,
+    (gallery.settings as Record<string, unknown> | undefined)?.has_password ||
+    (gallery.settings as Record<string, unknown> | undefined)
+      ?.password_protected,
   );
 }
 
@@ -101,11 +109,22 @@ function withPasswordState(gallery: Gallery, hasPassword: boolean): Gallery {
 
 function isTermsUploadError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err ?? "");
-  return msg.includes("TERMS_NOT_ACCEPTED") || msg.toLowerCase().includes("terms of service");
+  return (
+    msg.includes("TERMS_NOT_ACCEPTED") ||
+    msg.toLowerCase().includes("terms of service")
+  );
 }
 
-function studioBrandName(profile: WorkspaceProfile | null, fallback: string): string {
-  return profile?.brand_name?.trim() || profile?.name?.trim() || fallback.trim() || "Studio";
+function studioBrandName(
+  profile: WorkspaceProfile | null,
+  fallback: string,
+): string {
+  return (
+    profile?.brand_name?.trim() ||
+    profile?.name?.trim() ||
+    fallback.trim() ||
+    "Studio"
+  );
 }
 
 function workspaceSubdomain(profile: WorkspaceProfile | null): string {
@@ -114,18 +133,28 @@ function workspaceSubdomain(profile: WorkspaceProfile | null): string {
   return slug && code ? `${slug}-${code}` : "";
 }
 
-function logoWatermarkURL(gallery: Gallery, profile: WorkspaceProfile | null): string {
+function logoWatermarkURL(
+  gallery: Gallery,
+  profile: WorkspaceProfile | null,
+): string {
   const base = `/api/v1/public/galleries/${encodeURIComponent(gallery.slug)}/branding/logo`;
   const ws = workspaceSubdomain(profile);
   return ws ? `${base}?ws=${encodeURIComponent(ws)}` : base;
 }
 
-function logoPreviewURL(profile: WorkspaceProfile | null, token: string | null): string {
+function logoPreviewURL(
+  profile: WorkspaceProfile | null,
+  token: string | null,
+): string {
   const source = profile?.logo_url || profile?.logo_metadata?.storage_key || "";
   return source ? getStorageBackedUrl(source, token) : "";
 }
 
-export default function GallerySettingsPage({ params }: { params: Promise<{ id: string }> }) {
+export default function GallerySettingsPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = use(params);
   const [gallery, setGallery] = useState<Gallery | null>(null);
   const [loading, setLoading] = useState(true);
@@ -145,7 +174,8 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
   const [pendingMusicFile, setPendingMusicFile] = useState<File | null>(null);
 
   // Studio logo / watermark state
-  const [workspaceProfile, setWorkspaceProfile] = useState<WorkspaceProfile | null>(null);
+  const [workspaceProfile, setWorkspaceProfile] =
+    useState<WorkspaceProfile | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
@@ -170,12 +200,16 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load gallery.");
+          setError(
+            err instanceof Error ? err.message : "Failed to load gallery.",
+          );
           setLoading(false);
         }
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   useEffect(() => {
@@ -183,7 +217,8 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
     if (!token) return;
     let cancelled = false;
     void getTermsStatus(token).then((status) => {
-      if (!cancelled && status) setTermsNeedsAcceptance(status.needs_acceptance);
+      if (!cancelled && status)
+        setTermsNeedsAcceptance(status.needs_acceptance);
     });
     void getWorkspaceProfile(token)
       .then((profile) => {
@@ -192,7 +227,9 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
       .catch(() => {
         if (!cancelled) setWorkspaceProfile(null);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleToggle = async (field: string, value: boolean) => {
@@ -202,7 +239,9 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
     setSaving(true);
     setSaveMsg("");
     try {
-      const updated = await updateGallerySettings(token, id, { [field]: value });
+      const updated = await updateGallerySettings(token, id, {
+        [field]: value,
+      });
       setGallery(updated);
       setSaveMsg("Saved");
       setTimeout(() => setSaveMsg(""), 2000);
@@ -220,12 +259,16 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
     setSaving(true);
     setSaveMsg("");
     try {
-      const updated = await updateGallerySettings(token, id, { download_quality: value });
+      const updated = await updateGallerySettings(token, id, {
+        download_quality: value,
+      });
       setGallery(updated);
       setSaveMsg("Download option saved");
       setTimeout(() => setSaveMsg(""), 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save download option");
+      setError(
+        err instanceof Error ? err.message : "Failed to save download option",
+      );
     } finally {
       setSaving(false);
     }
@@ -238,18 +281,25 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
     setSaving(true);
     setSaveMsg("");
     try {
-      const updated = await updateGallerySettings(token, id, { expires_at: expiresAt });
+      const updated = await updateGallerySettings(token, id, {
+        expires_at: expiresAt,
+      });
       setGallery(updated);
       setSaveMsg(expiresAt ? "Access window set" : "Access window cleared");
       setTimeout(() => setSaveMsg(""), 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update access window");
+      setError(
+        err instanceof Error ? err.message : "Failed to update access window",
+      );
     } finally {
       setSaving(false);
     }
   };
 
-  const handleMusicUpload = async (file: File, options?: { skipTermsPrecheck?: boolean }) => {
+  const handleMusicUpload = async (
+    file: File,
+    options?: { skipTermsPrecheck?: boolean },
+  ) => {
     const token = getStoredAccessToken();
     if (!token || !gallery) return;
     if (termsNeedsAcceptance && !options?.skipTermsPrecheck) {
@@ -272,7 +322,9 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
         setTermsModalOpen(true);
         return;
       }
-      setMusicError(err instanceof Error ? err.message : "Failed to upload music");
+      setMusicError(
+        err instanceof Error ? err.message : "Failed to upload music",
+      );
     } finally {
       setMusicUploading(false);
     }
@@ -297,13 +349,18 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
       setSaveMsg("Music removed");
       setTimeout(() => setSaveMsg(""), 2000);
     } catch (err) {
-      setMusicError(err instanceof Error ? err.message : "Failed to remove music");
+      setMusicError(
+        err instanceof Error ? err.message : "Failed to remove music",
+      );
     } finally {
       setMusicUploading(false);
     }
   };
 
-  const applyLogoWatermark = async (logoAssetId: string, profile: WorkspaceProfile | null) => {
+  const applyLogoWatermark = async (
+    logoAssetId: string,
+    profile: WorkspaceProfile | null,
+  ) => {
     const token = getStoredAccessToken();
     if (!token || !gallery) return;
 
@@ -315,19 +372,26 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
       logo_asset_id: logoAssetId,
       logo_url: logoWatermarkURL(gallery, profile),
       text: studioBrandName(profile, gallery.title),
-      position: typeof current.position === "string" ? current.position : "bottom-right",
+      position:
+        typeof current.position === "string"
+          ? current.position
+          : "bottom-right",
       opacity: typeof current.opacity === "number" ? current.opacity : 40,
     };
 
     setSaving(true);
     setSaveMsg("");
     try {
-      const updated = await updateGallerySettings(token, id, { watermark_config: config });
+      const updated = await updateGallerySettings(token, id, {
+        watermark_config: config,
+      });
       setGallery(updated);
       setSaveMsg("Studio logo watermark enabled");
       setTimeout(() => setSaveMsg(""), 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update watermark logo");
+      setError(
+        err instanceof Error ? err.message : "Failed to update watermark logo",
+      );
     } finally {
       setSaving(false);
     }
@@ -346,7 +410,9 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
       setWorkspaceProfile(profile);
       await applyLogoWatermark(asset.id, profile);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to upload studio logo");
+      setError(
+        err instanceof Error ? err.message : "Failed to upload studio logo",
+      );
     } finally {
       setLogoUploading(false);
       if (logoInputRef.current) logoInputRef.current.value = "";
@@ -366,20 +432,25 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
     const token = getStoredAccessToken();
     if (!token || !gallery) return;
 
-    const nextPassword = overridePassword === undefined ? (password || null) : overridePassword;
+    const nextPassword =
+      overridePassword === undefined ? password || null : overridePassword;
     const nextHasPassword = Boolean(nextPassword);
 
     setSaving(true);
     setSaveMsg("");
     try {
-      const updated = await updateGallerySettings(token, id, { password: nextPassword });
+      const updated = await updateGallerySettings(token, id, {
+        password: nextPassword,
+      });
       setGallery(withPasswordState(updated, nextHasPassword));
       setPassword("");
       setShowPasswordField(false);
       setSaveMsg(nextHasPassword ? "Password set" : "Password removed");
       setTimeout(() => setSaveMsg(""), 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update password");
+      setError(
+        err instanceof Error ? err.message : "Failed to update password",
+      );
     } finally {
       setSaving(false);
     }
@@ -402,8 +473,13 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
       <div className="mx-auto max-w-3xl space-y-6 px-4 py-16">
         <GalleryWorkspaceNav galleryId={id} />
         <div className="text-center">
-          <p className="text-sm text-text-secondary">{error || "Gallery not found."}</p>
-          <Link href="/galleries" className="btn-tertiary mt-4 px-3 py-2 text-sm">
+          <p className="text-sm text-text-secondary">
+            {error || "Gallery not found."}
+          </p>
+          <Link
+            href="/galleries"
+            className="btn-tertiary mt-4 px-3 py-2 text-sm"
+          >
             Back to galleries
           </Link>
         </div>
@@ -412,10 +488,18 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
   }
 
   const hasGalleryPassword = galleryHasPassword(gallery);
-  const selectedDownloadQuality = normalizedDownloadQuality(gallery.download_quality);
-  const studioLogoPreviewUrl = logoPreviewURL(workspaceProfile, getStoredAccessToken());
-  const studioLogoName = workspaceProfile?.logo_metadata?.filename || (workspaceProfile?.logo_asset_id ? "Uploaded logo" : "");
-  const currentWatermark = (gallery.watermark_config as Record<string, unknown>) || {};
+  const selectedDownloadQuality = normalizedDownloadQuality(
+    gallery.download_quality,
+  );
+  const studioLogoPreviewUrl = logoPreviewURL(
+    workspaceProfile,
+    getStoredAccessToken(),
+  );
+  const studioLogoName =
+    workspaceProfile?.logo_metadata?.filename ||
+    (workspaceProfile?.logo_asset_id ? "Uploaded logo" : "");
+  const currentWatermark =
+    (gallery.watermark_config as Record<string, unknown>) || {};
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 pb-24 overflow-y-auto">
@@ -423,10 +507,15 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
           element on mobile (matches the cover and AI sub-pages). */}
       <GalleryWorkspaceNav galleryId={id} />
       <div className="space-y-2">
-        <Link href={`/galleries/${id}`} className="btn-tertiary px-0 py-0 text-sm">
+        <Link
+          href={`/galleries/${id}`}
+          className="btn-tertiary px-0 py-0 text-sm"
+        >
           Back to gallery
         </Link>
-        <h1 className="text-2xl font-semibold text-text-primary">Gallery Settings</h1>
+        <h1 className="text-2xl font-semibold text-text-primary">
+          Gallery Settings
+        </h1>
         <p className="text-sm text-text-secondary">{gallery.title}</p>
       </div>
 
@@ -446,7 +535,8 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
       <section className="surface-panel space-y-4 p-5">
         <h2 className="text-lg font-semibold text-text-primary">Downloads</h2>
         <p className="text-sm text-text-secondary">
-          Clients can download optimized WebP gallery files or original source files when you allow them.
+          Clients can download optimized WebP gallery files or original source
+          files when you allow them.
         </p>
         <ToggleRow
           label="Enable downloads"
@@ -457,11 +547,18 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
         />
         {(gallery.download_enabled ?? true) && (
           <div className="rounded-xl border border-border-default bg-surface-sunken px-4 py-3">
-            <p className="text-sm font-semibold text-text-primary">Allowed file format</p>
-            <p className="mt-1 text-sm text-text-secondary">
-              Choose the exact format clients can download from this public gallery.
+            <p className="text-sm font-semibold text-text-primary">
+              Allowed file format
             </p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-3" role="group" aria-label="Allowed download file format">
+            <p className="mt-1 text-sm text-text-secondary">
+              Choose the exact format clients can download from this public
+              gallery.
+            </p>
+            <div
+              className="mt-3 grid gap-2 sm:grid-cols-3"
+              role="group"
+              aria-label="Allowed download file format"
+            >
               {DOWNLOAD_QUALITY_OPTIONS.map((option) => {
                 const active = selectedDownloadQuality === option.value;
                 return (
@@ -477,8 +574,12 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
                         : "border-border-default bg-surface-container text-text-secondary hover:bg-surface-container-low"
                     }`}
                   >
-                    <span className="block text-sm font-semibold">{option.label}</span>
-                    <span className="mt-1 block text-xs text-text-secondary">{option.description}</span>
+                    <span className="block text-sm font-semibold">
+                      {option.label}
+                    </span>
+                    <span className="mt-1 block text-xs text-text-secondary">
+                      {option.description}
+                    </span>
                   </button>
                 );
               })}
@@ -489,29 +590,44 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
 
       {/* Access window / expiry */}
       <section className="surface-panel space-y-4 p-5">
-        <h2 className="text-lg font-semibold text-text-primary">Access window</h2>
+        <h2 className="text-lg font-semibold text-text-primary">
+          Access window
+        </h2>
         <p className="text-sm text-text-secondary">
-          Choose when this gallery stops being accessible to clients. After expiry the public
-          link shows a friendly &ldquo;gallery has expired&rdquo; notice and protects your storage.
+          Choose when this gallery stops being accessible to clients. After
+          expiry the public link shows a friendly &ldquo;gallery has
+          expired&rdquo; notice and protects your storage.
         </p>
         {gallery.expires_at ? (
           <p className="text-sm text-text-primary">
-            Expires on <span className="font-semibold">{formatExpiryDate(gallery.expires_at)}</span>
+            Expires on{" "}
+            <span className="font-semibold">
+              {formatExpiryDate(gallery.expires_at)}
+            </span>
             {(() => {
               const left = expiryDaysLeft(gallery.expires_at);
               if (left === null) return null;
               return (
                 <span className="text-text-secondary">
                   {" "}
-                  · {left > 0 ? `${left} day${left === 1 ? "" : "s"} left` : "expired"}
+                  ·{" "}
+                  {left > 0
+                    ? `${left} day${left === 1 ? "" : "s"} left`
+                    : "expired"}
                 </span>
               );
             })()}
           </p>
         ) : (
-          <p className="text-sm text-text-secondary">No expiry — clients keep access indefinitely.</p>
+          <p className="text-sm text-text-secondary">
+            No expiry — clients keep access indefinitely.
+          </p>
         )}
-        <div className="grid gap-2 sm:grid-cols-4" role="group" aria-label="Access window presets">
+        <div
+          className="grid gap-2 sm:grid-cols-4"
+          role="group"
+          aria-label="Access window presets"
+        >
           <button
             type="button"
             disabled={saving}
@@ -538,7 +654,10 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
           ))}
         </div>
         <div className="space-y-1">
-          <label htmlFor="expiry-custom" className="text-sm font-medium text-text-primary">
+          <label
+            htmlFor="expiry-custom"
+            className="text-sm font-medium text-text-primary"
+          >
             Custom date
           </label>
           <input
@@ -553,7 +672,9 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
                 return;
               }
               // End of the chosen day so the gallery stays live through that date.
-              void handleExpiry(new Date(`${e.target.value}T23:59:59`).toISOString());
+              void handleExpiry(
+                new Date(`${e.target.value}T23:59:59`).toISOString(),
+              );
             }}
             className="min-h-[44px] w-full rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent-primary sm:w-60"
           />
@@ -595,8 +716,12 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
         </p>
         <div className="flex items-center justify-between gap-4 py-2">
           <div className="space-y-0.5">
-            <p className="text-sm font-medium text-text-primary">Selection limit</p>
-            <p className="text-xs text-text-secondary">Set to 0 for unlimited selections.</p>
+            <p className="text-sm font-medium text-text-primary">
+              Selection limit
+            </p>
+            <p className="text-xs text-text-secondary">
+              Set to 0 for unlimited selections.
+            </p>
           </div>
           <input
             type="number"
@@ -607,10 +732,16 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
               const token = getStoredAccessToken();
               if (!token || !gallery) return;
               try {
-                const updated = await updateGallerySettings(token, id, { max_selections: val });
+                const updated = await updateGallerySettings(token, id, {
+                  max_selections: val,
+                });
                 setGallery(updated);
               } catch (err) {
-                setError(err instanceof Error ? err.message : "Failed to update selection limit");
+                setError(
+                  err instanceof Error
+                    ? err.message
+                    : "Failed to update selection limit",
+                );
               }
             }}
             className="min-h-[44px] w-24 rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-center text-sm text-text-primary focus:outline-none focus:border-accent-primary"
@@ -623,11 +754,12 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
       <section className="surface-panel space-y-4 p-5">
         <h2 className="text-lg font-semibold text-text-primary">Watermark</h2>
         <p className="text-sm text-text-secondary">
-          Add a text watermark to gallery images to protect your work.
+          Use your Business Profile logo or text watermark on client-facing
+          gallery images.
         </p>
         <ToggleRow
           label="Enable watermark"
-          description="Overlay a text watermark on images displayed in the public gallery."
+          description="Overlay your Business Profile logo or watermark text on public gallery images."
           checked={currentWatermark.enabled === true}
           disabled={saving}
           onChange={async (v) => {
@@ -635,10 +767,16 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
             const token = getStoredAccessToken();
             if (!token || !gallery) return;
             try {
-              const updated = await updateGallerySettings(token, id, { watermark_config: config });
+              const updated = await updateGallerySettings(token, id, {
+                watermark_config: config,
+              });
               setGallery(updated);
             } catch (err) {
-              setError(err instanceof Error ? err.message : "Failed to update watermark");
+              setError(
+                err instanceof Error
+                  ? err.message
+                  : "Failed to update watermark",
+              );
             }
           }}
         />
@@ -653,21 +791,44 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
                     className="h-full w-full object-contain p-2"
                   />
                 ) : (
-                  <span className="text-xl font-semibold text-text-tertiary" aria-hidden="true">
-                    {studioBrandName(workspaceProfile, gallery.title).slice(0, 1).toUpperCase()}
+                  <span
+                    className="text-xl font-semibold text-text-tertiary"
+                    aria-hidden="true"
+                  >
+                    {studioBrandName(workspaceProfile, gallery.title)
+                      .slice(0, 1)
+                      .toUpperCase()}
                   </span>
                 )}
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-text-primary">Studio logo watermark</p>
+                <p className="text-sm font-semibold text-text-primary">
+                  Business Profile logo watermark
+                </p>
                 <p className="truncate text-xs text-text-secondary">
-                  {studioLogoName || "No studio logo uploaded for this workspace."}
+                  {studioLogoName
+                    ? `${studioLogoName} · linked from Business Profile`
+                    : "No Business Profile logo uploaded for this workspace."}
                 </p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
+              {workspaceProfile?.logo_asset_id && (
+                <button
+                  type="button"
+                  disabled={logoUploading || saving}
+                  onClick={handleUseStudioLogo}
+                  className="btn-tertiary px-4 py-2 text-sm"
+                >
+                  Use Business Profile logo
+                </button>
+              )}
               <label className="btn-tertiary cursor-pointer px-4 py-2 text-sm">
-                {logoUploading ? "Uploading..." : "Upload logo"}
+                {logoUploading
+                  ? "Uploading..."
+                  : workspaceProfile?.logo_asset_id
+                    ? "Replace logo"
+                    : "Upload Business Profile logo"}
                 <input
                   ref={logoInputRef}
                   type="file"
@@ -681,23 +842,21 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
                   aria-label="Upload studio logo for watermark"
                 />
               </label>
-              {workspaceProfile?.logo_asset_id && (
-                <button
-                  type="button"
-                  disabled={logoUploading || saving}
-                  onClick={handleUseStudioLogo}
-                  className="btn-tertiary px-4 py-2 text-sm"
-                >
-                  Use as watermark
-                </button>
-              )}
+              <Link
+                href="/settings/business"
+                className="btn-tertiary px-4 py-2 text-sm"
+              >
+                Edit Business Profile
+              </Link>
             </div>
           </div>
         </div>
         {currentWatermark.enabled === true && (
           <div className="space-y-4 pl-1">
             <div className="space-y-1">
-              <label className="text-sm font-medium text-text-primary">Watermark text</label>
+              <label className="text-sm font-medium text-text-primary">
+                Watermark text
+              </label>
               <input
                 type="text"
                 placeholder="Studio Name"
@@ -707,14 +866,26 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
                   const token = getStoredAccessToken();
                   if (!token || !gallery) return;
                   try {
-                    const updated = await updateGallerySettings(token, id, { watermark_config: config });
+                    const updated = await updateGallerySettings(token, id, {
+                      watermark_config: config,
+                    });
                     setGallery(updated);
                   } catch (err) {
-                    setError(err instanceof Error ? err.message : "Failed to update watermark text");
+                    setError(
+                      err instanceof Error
+                        ? err.message
+                        : "Failed to update watermark text",
+                    );
                   }
                 }}
                 onChange={(e) => {
-                  setGallery({ ...gallery, watermark_config: { ...currentWatermark, text: e.target.value } });
+                  setGallery({
+                    ...gallery,
+                    watermark_config: {
+                      ...currentWatermark,
+                      text: e.target.value,
+                    },
+                  });
                 }}
                 className="w-full rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary focus:outline-none focus:border-accent-primary"
               />
@@ -724,33 +895,53 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
                 Opacity — {Number(currentWatermark.opacity) || 40}%
               </label>
               <input
-                type="range" min={10} max={90} step={5}
+                type="range"
+                min={10}
+                max={90}
+                step={5}
                 value={Number(currentWatermark.opacity) || 40}
                 onChange={async (e) => {
-                  const config = { ...currentWatermark, opacity: Number(e.target.value) };
+                  const config = {
+                    ...currentWatermark,
+                    opacity: Number(e.target.value),
+                  };
                   const token = getStoredAccessToken();
                   if (!token || !gallery) return;
                   try {
-                    const updated = await updateGallerySettings(token, id, { watermark_config: config });
+                    const updated = await updateGallerySettings(token, id, {
+                      watermark_config: config,
+                    });
                     setGallery(updated);
-                  } catch { /* non-critical */ }
+                  } catch {
+                    /* non-critical */
+                  }
                 }}
                 className="w-full accent-[var(--accent-primary)]"
               />
             </div>
             <div className="space-y-1">
-              <span className="text-sm font-medium text-text-primary">Position</span>
+              <span className="text-sm font-medium text-text-primary">
+                Position
+              </span>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {(["center", "bottom-right", "bottom-left", "diagonal"] as const).map((pos) => (
-                  <button key={pos} type="button"
+                {(
+                  ["center", "bottom-right", "bottom-left", "diagonal"] as const
+                ).map((pos) => (
+                  <button
+                    key={pos}
+                    type="button"
                     onClick={async () => {
                       const config = { ...currentWatermark, position: pos };
                       const token = getStoredAccessToken();
                       if (!token || !gallery) return;
                       try {
-                        const updated = await updateGallerySettings(token, id, { watermark_config: config });
+                        const updated = await updateGallerySettings(token, id, {
+                          watermark_config: config,
+                        });
                         setGallery(updated);
-                      } catch { /* non-critical */ }
+                      } catch {
+                        /* non-critical */
+                      }
                     }}
                     className={`min-h-[44px] rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
                       currentWatermark.position === pos
@@ -758,7 +949,9 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
                         : "border-border-default bg-surface-sunken text-text-secondary hover:bg-surface-container-low"
                     }`}
                   >
-                    {pos.replace("-", " ").replace(/\b\w/g, c => c.toUpperCase())}
+                    {pos
+                      .replace("-", " ")
+                      .replace(/\b\w/g, (c) => c.toUpperCase())}
                   </button>
                 ))}
               </div>
@@ -769,11 +962,13 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
 
       {/* Client emails */}
       <section className="surface-panel space-y-4 p-5">
-        <h2 className="text-lg font-semibold text-text-primary">Client emails</h2>
+        <h2 className="text-lg font-semibold text-text-primary">
+          Client emails
+        </h2>
         <p className="text-sm text-text-secondary">
-          Automatically send your client a branded &ldquo;gallery ready&rdquo; email when this
-          gallery is published, a reminder a week later, and a &ldquo;last chance&rdquo; warning
-          before it expires.
+          Automatically send your client a branded &ldquo;gallery ready&rdquo;
+          email when this gallery is published, a reminder a week later, and a
+          &ldquo;last chance&rdquo; warning before it expires.
         </p>
         <ToggleRow
           label="Automated client emails"
@@ -786,14 +981,19 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
 
       {/* Slideshow music */}
       <section className="surface-panel space-y-4 p-5">
-        <h2 className="text-lg font-semibold text-text-primary">Slideshow music</h2>
+        <h2 className="text-lg font-semibold text-text-primary">
+          Slideshow music
+        </h2>
         <p className="text-sm text-text-secondary">
-          Add a background track for the full-screen client slideshow. The audio is stored in your
-          gallery storage and counts toward your plan&rsquo;s allocated space.
+          Add a background track for the full-screen client slideshow. The audio
+          is stored in your gallery storage and counts toward your plan&rsquo;s
+          allocated space.
         </p>
         {gallery.music_asset_id ? (
           <div className="flex items-center justify-between gap-4 py-1">
-            <p className="text-sm text-text-primary">A music track is attached to this gallery.</p>
+            <p className="text-sm text-text-primary">
+              A music track is attached to this gallery.
+            </p>
             <button
               type="button"
               disabled={saving || musicUploading}
@@ -807,7 +1007,10 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
           <p className="text-sm text-text-secondary">No music attached.</p>
         )}
         <div className="space-y-1">
-          <label htmlFor="music-upload" className="text-sm font-medium text-text-primary">
+          <label
+            htmlFor="music-upload"
+            className="text-sm font-medium text-text-primary"
+          >
             {gallery.music_asset_id ? "Replace track" : "Upload track"}
           </label>
           <input
@@ -822,16 +1025,23 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
             }}
             className="block w-full text-sm text-text-secondary file:mr-4 file:rounded-lg file:border-0 file:bg-accent-primary/10 file:px-4 file:py-2 file:text-sm file:font-medium file:text-accent-primary disabled:opacity-50"
           />
-          {musicUploading && <p className="text-xs text-text-secondary">Uploading&hellip;</p>}
-          {musicError && <p className="text-xs text-feedback-error">{musicError}</p>}
+          {musicUploading && (
+            <p className="text-xs text-text-secondary">Uploading&hellip;</p>
+          )}
+          {musicError && (
+            <p className="text-xs text-feedback-error">{musicError}</p>
+          )}
         </div>
       </section>
 
       {/* Password Protection */}
       <section className="surface-panel space-y-4 p-5">
-        <h2 className="text-lg font-semibold text-text-primary">Password Protection</h2>
+        <h2 className="text-lg font-semibold text-text-primary">
+          Password Protection
+        </h2>
         <p className="text-sm text-text-secondary">
-          Require a password to access this gallery. Leave empty to remove protection.
+          Require a password to access this gallery. Leave empty to remove
+          protection.
         </p>
 
         {showPasswordField ? (
@@ -851,11 +1061,18 @@ export default function GallerySettingsPage({ params }: { params: Promise<{ id: 
                 disabled={saving || (!password && !hasGalleryPassword)}
                 className="btn-primary px-4 py-2 text-sm"
               >
-                {saving ? "Saving..." : password ? "Set Password" : "Remove Password"}
+                {saving
+                  ? "Saving..."
+                  : password
+                    ? "Set Password"
+                    : "Remove Password"}
               </button>
               <button
                 type="button"
-                onClick={() => { setShowPasswordField(false); setPassword(""); }}
+                onClick={() => {
+                  setShowPasswordField(false);
+                  setPassword("");
+                }}
                 className="btn-tertiary px-4 py-2 text-sm"
               >
                 Cancel
@@ -926,22 +1143,14 @@ function ToggleRow({
         <p className="text-sm font-medium text-text-primary">{label}</p>
         <p className="text-xs text-text-secondary">{description}</p>
       </div>
-      <button
-        role="switch"
-        aria-checked={checked}
-        aria-label={label}
+      <ToggleSwitch
+        checked={checked}
+        label={label}
+        checkedLabel="On"
+        uncheckedLabel="Off"
         disabled={disabled}
-        onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-          checked ? "bg-accent-primary" : "bg-surface-sunken"
-        }`}
-      >
-        <span
-          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-            checked ? "translate-x-5" : "translate-x-0"
-          }`}
-        />
-      </button>
+        onCheckedChange={onChange}
+      />
     </div>
   );
 }

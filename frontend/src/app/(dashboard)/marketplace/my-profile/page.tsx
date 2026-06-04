@@ -2,7 +2,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { getMyListing, updateFreelancerListing, type FreelancerListing } from "@/lib/api/marketplace";
+import {
+  getMyListing,
+  updateFreelancerListing,
+  type FreelancerListing,
+} from "@/lib/api/marketplace";
 import { getStoredAccessToken } from "@/lib/auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -16,7 +20,11 @@ interface FreelancerAvailability {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(iso).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 export default function MyFreelancerProfilePage() {
@@ -26,7 +34,8 @@ export default function MyFreelancerProfilePage() {
   const [error, setError] = useState<string | null>(() =>
     token ? null : "Not authenticated",
   );
-  const [availability, setAvailability] = useState<FreelancerAvailability | null>(null);
+  const [availability, setAvailability] =
+    useState<FreelancerAvailability | null>(null);
   const [toggling, setToggling] = useState(false);
   const [newBlockDate, setNewBlockDate] = useState("");
   const [savingDates, setSavingDates] = useState(false);
@@ -34,7 +43,9 @@ export default function MyFreelancerProfilePage() {
 
   const fetchAvailability = useCallback(async (listingId: string) => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/marketplace/freelancers/${listingId}/availability`);
+      const res = await fetch(
+        `${API_BASE}/api/v1/marketplace/freelancers/${listingId}/availability`,
+      );
       if (res.ok) {
         const json = await res.json();
         setAvailability(json.data);
@@ -51,7 +62,9 @@ export default function MyFreelancerProfilePage() {
         setListing(data);
         if (data) fetchAvailability(data.id);
       })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : "Failed to load profile"))
+      .catch((err: unknown) =>
+        setError(err instanceof Error ? err.message : "Failed to load profile"),
+      )
       .finally(() => setLoading(false));
   }, [token, fetchAvailability]);
 
@@ -76,7 +89,8 @@ export default function MyFreelancerProfilePage() {
   };
 
   const handleAddBlockDate = async () => {
-    if (!newBlockDate || !listing || !token || savingDates || !availability) return;
+    if (!newBlockDate || !listing || !token || savingDates || !availability)
+      return;
     if (availability.blocked_dates.includes(newBlockDate)) {
       setNewBlockDate("");
       return;
@@ -97,18 +111,26 @@ export default function MyFreelancerProfilePage() {
     setSavingDates(true);
     setDatesSaved(false);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/marketplace/freelancers/${listingId}/availability`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ blocked_dates: dates }),
-      });
+      const res = await fetch(
+        `${API_BASE}/api/v1/marketplace/freelancers/${listingId}/availability`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ blocked_dates: dates }),
+        },
+      );
       if (!res.ok) throw new Error("Failed to update availability");
       const json = await res.json();
       setAvailability(json.data);
       setDatesSaved(true);
       setTimeout(() => setDatesSaved(false), 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update availability");
+      setError(
+        err instanceof Error ? err.message : "Failed to update availability",
+      );
     } finally {
       setSavingDates(false);
     }
@@ -118,7 +140,10 @@ export default function MyFreelancerProfilePage() {
     return (
       <div className="mx-auto max-w-3xl px-4 py-8 space-y-4">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-24 rounded-2xl bg-surface-sunken animate-pulse" />
+          <div
+            key={i}
+            className="h-24 rounded-2xl bg-surface-sunken animate-pulse"
+          />
         ))}
       </div>
     );
@@ -128,7 +153,9 @@ export default function MyFreelancerProfilePage() {
     <div className="mx-auto max-w-3xl px-4 py-8 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-text-primary">My Freelance Profile</h1>
+          <h1 className="text-2xl font-semibold text-text-primary">
+            My Freelance Profile
+          </h1>
           <p className="text-sm text-text-secondary mt-1">
             Manage your freelancer listing visibility and availability.
           </p>
@@ -151,11 +178,17 @@ export default function MyFreelancerProfilePage() {
 
       {!listing ? (
         <div className="rounded-2xl border border-dashed border-border-default p-10 text-center space-y-4">
-          <p className="font-medium text-text-primary">No freelance profile yet</p>
-          <p className="text-sm text-text-secondary">
-            Create a profile so clients can find and contact you from the marketplace.
+          <p className="font-medium text-text-primary">
+            No freelance profile yet
           </p>
-          <Link href="/marketplace/freelancers/edit" className="btn-primary px-5 py-2.5 text-sm">
+          <p className="text-sm text-text-secondary">
+            Create a profile so clients can find and contact you from the
+            marketplace.
+          </p>
+          <Link
+            href="/marketplace/freelancers/edit"
+            className="btn-primary px-5 py-2.5 text-sm"
+          >
             Create Profile
           </Link>
         </div>
@@ -165,26 +198,38 @@ export default function MyFreelancerProfilePage() {
           <div className="rounded-2xl border border-border-default bg-surface-raised p-5 space-y-3">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h2 className="text-lg font-semibold text-on-surface truncate">{listing.title}</h2>
+                <h2 className="text-lg font-semibold text-text-primary truncate">
+                  {listing.title}
+                </h2>
                 {listing.city && (
-                  <p className="text-sm text-text-secondary mt-0.5">{listing.city}</p>
+                  <p className="text-sm text-text-secondary mt-0.5">
+                    {listing.city}
+                  </p>
                 )}
               </div>
               {listing.daily_rate_paisa && (
                 <span className="text-sm font-semibold text-text-primary shrink-0">
-                  ₹{(listing.daily_rate_paisa / 100).toLocaleString("en-IN")}/day
+                  ₹{(listing.daily_rate_paisa / 100).toLocaleString("en-IN")}
+                  /day
                 </span>
               )}
             </div>
             {listing.specializations.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {listing.specializations.map((s) => (
-                  <span key={s} className="status-badge status-badge--accent capitalize">{s}</span>
+                  <span
+                    key={s}
+                    className="status-badge status-badge--accent capitalize"
+                  >
+                    {s}
+                  </span>
                 ))}
               </div>
             )}
             {listing.description && (
-              <p className="text-sm text-text-secondary line-clamp-2">{listing.description}</p>
+              <p className="text-sm text-text-secondary line-clamp-2">
+                {listing.description}
+              </p>
             )}
           </div>
 
@@ -192,7 +237,9 @@ export default function MyFreelancerProfilePage() {
           <div className="rounded-2xl border border-border-default bg-surface-raised p-5">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h3 className="text-sm font-semibold text-on-surface">Available for bookings</h3>
+                <h3 className="text-sm font-semibold text-text-primary">
+                  Available for bookings
+                </h3>
                 <p className="text-xs text-text-secondary mt-0.5">
                   {listing.is_published
                     ? "Your profile is visible and accepting inquiries."
@@ -206,11 +253,13 @@ export default function MyFreelancerProfilePage() {
                 onClick={handleTogglePublished}
                 disabled={toggling}
                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 disabled:opacity-50 ${
-                  listing.is_published ? "bg-feedback-success" : "bg-surface-sunken"
+                  listing.is_published
+                    ? "bg-feedback-success"
+                    : "bg-surface-sunken"
                 }`}
               >
                 <span
-                  className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform duration-200 ${
+                  className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-surface-elevated shadow ring-0 transition-transform duration-200 ${
                     listing.is_published ? "translate-x-5" : "translate-x-0"
                   }`}
                 />
@@ -222,9 +271,12 @@ export default function MyFreelancerProfilePage() {
           <div className="rounded-2xl border border-border-default bg-surface-raised p-5 space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-on-surface">Unavailable dates</h3>
+                <h3 className="text-sm font-semibold text-text-primary">
+                  Unavailable dates
+                </h3>
                 <p className="text-xs text-text-secondary mt-0.5">
-                  Dates you cannot accept bookings — shown on your public profile.
+                  Dates you cannot accept bookings — shown on your public
+                  profile.
                 </p>
               </div>
               {datesSaved && (
@@ -270,12 +322,16 @@ export default function MyFreelancerProfilePage() {
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-text-tertiary">No dates blocked — you appear available every day.</p>
+              <p className="text-xs text-text-tertiary">
+                No dates blocked — you appear available every day.
+              </p>
             )}
 
             {availability && availability.booked_dates.length > 0 && (
               <div>
-                <p className="text-xs font-medium text-text-secondary mb-2">Auto-blocked from calendar</p>
+                <p className="text-xs font-medium text-text-secondary mb-2">
+                  Auto-blocked from calendar
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {availability.booked_dates.map((date) => (
                     <span
@@ -293,13 +349,15 @@ export default function MyFreelancerProfilePage() {
           {/* Quick stats */}
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-2xl border border-border-default bg-surface-raised p-4 text-center">
-              <p className="text-2xl font-bold text-on-surface">
+              <p className="text-2xl font-bold text-text-primary">
                 {listing.rating_avg?.toFixed(1) ?? "—"}
               </p>
-              <p className="text-xs text-text-secondary mt-1">Avg rating ({listing.review_count} reviews)</p>
+              <p className="text-xs text-text-secondary mt-1">
+                Avg rating ({listing.review_count} reviews)
+              </p>
             </div>
             <div className="rounded-2xl border border-border-default bg-surface-raised p-4 text-center">
-              <p className="text-2xl font-bold text-on-surface capitalize">
+              <p className="text-2xl font-bold text-text-primary capitalize">
                 {listing.is_published ? "Active" : "Hidden"}
               </p>
               <p className="text-xs text-text-secondary mt-1">Profile status</p>

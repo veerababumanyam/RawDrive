@@ -33,8 +33,20 @@ describe("FaceClusterBrowser", () => {
 
   it("renders cluster cards with names and counts", async () => {
     mockGetFaceClusters.mockResolvedValue([
-      { cluster_label: "c1", cluster_name: "Bride", face_count: 45, asset_count: 30, sample_asset_id: "a1" },
-      { cluster_label: "c2", cluster_name: "Groom", face_count: 32, asset_count: 25, sample_asset_id: "a2" },
+      {
+        cluster_label: "c1",
+        cluster_name: "Bride",
+        face_count: 45,
+        asset_count: 30,
+        sample_asset_id: "a1",
+      },
+      {
+        cluster_label: "c2",
+        cluster_name: "Groom",
+        face_count: 32,
+        asset_count: 25,
+        sample_asset_id: "a2",
+      },
     ]);
     render(<FaceClusterBrowser token="test" />);
 
@@ -48,7 +60,13 @@ describe("FaceClusterBrowser", () => {
 
   it("shows Unknown for unnamed clusters", async () => {
     mockGetFaceClusters.mockResolvedValue([
-      { cluster_label: "c1", cluster_name: "", face_count: 10, asset_count: 8, sample_asset_id: "a1" },
+      {
+        cluster_label: "c1",
+        cluster_name: "",
+        face_count: 10,
+        asset_count: 8,
+        sample_asset_id: "a1",
+      },
     ]);
     render(<FaceClusterBrowser token="test" />);
 
@@ -60,7 +78,13 @@ describe("FaceClusterBrowser", () => {
   it("calls onSelectCluster when card clicked", async () => {
     const onSelect = vi.fn();
     mockGetFaceClusters.mockResolvedValue([
-      { cluster_label: "c1", cluster_name: "Bride", face_count: 10, asset_count: 8, sample_asset_id: "a1" },
+      {
+        cluster_label: "c1",
+        cluster_name: "Bride",
+        face_count: 10,
+        asset_count: 8,
+        sample_asset_id: "a1",
+      },
     ]);
     render(<FaceClusterBrowser token="test" onSelectCluster={onSelect} />);
 
@@ -83,7 +107,13 @@ describe("FaceClusterBrowser", () => {
 
   it("shows singular 'photo' for count of 1", async () => {
     mockGetFaceClusters.mockResolvedValue([
-      { cluster_label: "c1", cluster_name: "Solo", face_count: 1, asset_count: 1, sample_asset_id: "a1" },
+      {
+        cluster_label: "c1",
+        cluster_name: "Solo",
+        face_count: 1,
+        asset_count: 1,
+        sample_asset_id: "a1",
+      },
     ]);
     render(<FaceClusterBrowser token="test" />);
 

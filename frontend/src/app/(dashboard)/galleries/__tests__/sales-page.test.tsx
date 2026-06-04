@@ -34,7 +34,14 @@ async function renderPage(id: string) {
 // next/link renders a plain anchor in the test environment so href
 // assertions resolve against real DOM attributes.
 vi.mock("next/link", () => ({
-  default: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
+  default: ({
+    href,
+    children,
+    ...props
+  }: {
+    href: string;
+    children: React.ReactNode;
+  }) => (
     <a href={href} {...props}>
       {children}
     </a>
@@ -46,7 +53,14 @@ vi.mock("next/link", () => ({
 // sub-route.
 vi.mock("next/navigation", () => ({
   usePathname: () => "/galleries/gallery-1/sales",
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn(), back: vi.fn(), forward: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    prefetch: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+    refresh: vi.fn(),
+  }),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -109,10 +123,11 @@ describe("Gallery sales continuity sub-route", () => {
       expect(screen.getByTestId("sales-continuity-panel")).toBeInTheDocument();
     });
 
-    expect(screen.getByRole("navigation", { name: "Gallery workspace" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /back to gallery/i })).toHaveAttribute(
-      "href",
-      "/galleries/gallery-1",
-    );
+    expect(
+      screen.getByRole("navigation", { name: "Gallery workspace" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /back to gallery/i }),
+    ).toHaveAttribute("href", "/galleries/gallery-1");
   });
 });

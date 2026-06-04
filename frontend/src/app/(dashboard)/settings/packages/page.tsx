@@ -50,7 +50,11 @@ export default function ServicePackagesPage() {
     const token = getStoredAccessToken();
     listServicePackages(token)
       .then(setPackages)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load packages"))
+      .catch((err) =>
+        setError(
+          err instanceof Error ? err.message : "Failed to load packages",
+        ),
+      )
       .finally(() => setLoading(false));
   }, [refreshTick]);
 
@@ -66,7 +70,10 @@ export default function ServicePackagesPage() {
     return {
       name: form.name.trim(),
       description: form.description.trim(),
-      inclusions: form.inclusions.split("\n").map((item) => item.trim()).filter(Boolean),
+      inclusions: form.inclusions
+        .split("\n")
+        .map((item) => item.trim())
+        .filter(Boolean),
       base_price_paisa: Math.round(form.base_price_rupees * 100),
       gst_rate: form.gst_rate,
       sac_code: form.sac_code.trim() || "998386",
@@ -120,7 +127,9 @@ export default function ServicePackagesPage() {
       await deleteServicePackage(token, id);
       setRefreshTick((n) => n + 1);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to deactivate package");
+      setError(
+        err instanceof Error ? err.message : "Failed to deactivate package",
+      );
     }
   };
 
@@ -137,8 +146,12 @@ export default function ServicePackagesPage() {
       <CRMSecondaryNav />
 
       <div>
-        <h1 className="text-2xl font-semibold text-text-primary">Service Packages</h1>
-        <p className="mt-1 text-sm text-text-secondary">Wedding packages that fill invoice line items in one click.</p>
+        <h1 className="text-2xl font-semibold text-text-primary">
+          Service Packages
+        </h1>
+        <p className="mt-1 text-sm text-text-secondary">
+          Wedding packages that fill invoice line items in one click.
+        </p>
       </div>
 
       {error && (
@@ -148,7 +161,9 @@ export default function ServicePackagesPage() {
       )}
 
       <section className="rounded-2xl border border-border-default bg-surface-raised p-6 space-y-4">
-        <h2 className="text-lg font-semibold text-text-primary">{editingId ? "Edit Package" : "New Package"}</h2>
+        <h2 className="text-lg font-semibold text-text-primary">
+          {editingId ? "Edit Package" : "New Package"}
+        </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <input
             value={form.name}
@@ -166,7 +181,12 @@ export default function ServicePackagesPage() {
             type="number"
             min="0"
             value={form.base_price_rupees}
-            onChange={(e) => setForm({ ...form, base_price_rupees: Number(e.target.value) || 0 })}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                base_price_rupees: Number(e.target.value) || 0,
+              })
+            }
             className="input-field"
             placeholder="Base price"
           />
@@ -176,7 +196,9 @@ export default function ServicePackagesPage() {
               min="0"
               max="28"
               value={form.gst_rate}
-              onChange={(e) => setForm({ ...form, gst_rate: Number(e.target.value) || 18 })}
+              onChange={(e) =>
+                setForm({ ...form, gst_rate: Number(e.target.value) || 18 })
+              }
               className="input-field"
               placeholder="GST %"
             />
@@ -192,7 +214,9 @@ export default function ServicePackagesPage() {
           value={form.inclusions}
           onChange={(e) => setForm({ ...form, inclusions: e.target.value })}
           className="input-field min-h-28 resize-y"
-          placeholder={"One inclusion per line\nTwo photographers\nEdited photos\nAlbum design"}
+          placeholder={
+            "One inclusion per line\nTwo photographers\nEdited photos\nAlbum design"
+          }
         />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <input
@@ -205,13 +229,20 @@ export default function ServicePackagesPage() {
             type="number"
             min="0"
             value={form.addon_price_rupees}
-            onChange={(e) => setForm({ ...form, addon_price_rupees: Number(e.target.value) || 0 })}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                addon_price_rupees: Number(e.target.value) || 0,
+              })
+            }
             className="input-field"
             placeholder="Add-on price"
           />
           <input
             value={form.addon_description}
-            onChange={(e) => setForm({ ...form, addon_description: e.target.value })}
+            onChange={(e) =>
+              setForm({ ...form, addon_description: e.target.value })
+            }
             className="input-field"
             placeholder="Add-on note"
           />
@@ -220,7 +251,10 @@ export default function ServicePackagesPage() {
           {editingId && (
             <button
               type="button"
-              onClick={() => { setEditingId(null); setForm(blankForm); }}
+              onClick={() => {
+                setEditingId(null);
+                setForm(blankForm);
+              }}
               className="rounded-xl border border-border-default px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-sunken min-h-[44px]"
             >
               Cancel
@@ -230,9 +264,13 @@ export default function ServicePackagesPage() {
             type="button"
             onClick={savePackage}
             disabled={saving || !payload.name}
-            className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-primary/90 disabled:opacity-50 min-h-[44px]"
+            className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-text-inverse hover:bg-accent-primary/90 disabled:opacity-50 min-h-[44px]"
           >
-            {saving ? "Saving..." : editingId ? "Save Package" : "Create Package"}
+            {saving
+              ? "Saving..."
+              : editingId
+                ? "Save Package"
+                : "Create Package"}
           </button>
         </div>
       </section>
@@ -244,16 +282,25 @@ export default function ServicePackagesPage() {
           </div>
         ) : (
           packages.map((pkg) => (
-            <article key={pkg.id} className="rounded-2xl border border-border-default bg-surface-raised p-5">
+            <article
+              key={pkg.id}
+              className="rounded-2xl border border-border-default bg-surface-raised p-5"
+            >
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <h2 className="text-lg font-semibold text-text-primary">{pkg.name}</h2>
-                  <p className="mt-1 text-sm text-text-secondary">{pkg.description}</p>
+                  <h2 className="text-lg font-semibold text-text-primary">
+                    {pkg.name}
+                  </h2>
+                  <p className="mt-1 text-sm text-text-secondary">
+                    {pkg.description}
+                  </p>
                   <div className="mt-3 flex flex-wrap gap-2 text-xs text-text-tertiary">
                     <span>{formatPaisa(pkg.base_price_paisa)}</span>
                     <span>{pkg.gst_rate}% GST</span>
                     <span>SAC {pkg.sac_code}</span>
-                    {pkg.addons?.length ? <span>{pkg.addons.length} add-on</span> : null}
+                    {pkg.addons?.length ? (
+                      <span>{pkg.addons.length} add-on</span>
+                    ) : null}
                   </div>
                 </div>
                 <div className="flex gap-2">

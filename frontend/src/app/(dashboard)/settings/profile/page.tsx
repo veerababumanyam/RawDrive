@@ -1,102 +1,250 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getStoredAccessToken } from "@/lib/auth";
-import { getDistrictsForState } from "@/lib/data/india-districts";
+import { useCallback, useEffect, useState } from "react";
+import {
+  DEFAULT_VISIBILITY,
+  emptyPhotographerProfile,
+  getPhotographerProfile,
+  savePhotographerProfile,
+  type PhotographerProfile,
+} from "@/lib/api/photographer-profile";
+import { listServicePackages, type ServicePackage } from "@/lib/api/billing";
+import type { WorkspaceProfile } from "@/lib/api/workspace-profile";
+import { authFetch } from "@/lib/api/authFetch";
+import { normalizeCustomLinks } from "@/lib/profile-custom-links";
+import {
+  applyLinkedBusinessProfile,
+  applyLinkedPricingProfile,
+  linkedBusinessProfileFromPhotographer,
+  linkedBusinessProfileFromWorkspace,
+  linkedPricingProfileFromSources,
+  type LinkedBusinessProfile,
+  type LinkedPricingProfile,
+} from "@/lib/profile-business-link";
+import { CheckCircle } from "@/components/icons";
+import { GlassButton } from "@/components/ui/glass-button";
+import {
+  SettingsAlert,
+  SettingsPageHeader,
+  SettingsPageShell,
+} from "../_components/settings-page-shell";
+import { AvatarCrop } from "./_components/avatar-crop";
+import { EditForm } from "./_components/edit-form";
+import { GalleryPicker } from "./_components/gallery-picker";
+import { LivePreview } from "./_components/live-preview";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-
-interface IndianState {
-  id: number;
-  name: string;
-  code: string;
+interface AccountProfile {
+  display_name?: string;
+  email?: string;
+  phone?: string;
 }
 
-interface UserProfile {
-  display_name: string;
-  email: string;
-  phone: string;
-  avatar_url: string;
-  state_id: number | null;
-  district: string;
+interface Requirement {
+  key: string;
+  label: string;
+  ok: boolean;
 }
 
-const EMPTY_PROFILE: UserProfile = {
-  display_name: "",
-  email: "",
-  phone: "",
-  avatar_url: "",
-  state_id: null,
-  district: "",
-};
+function profileFromAccount(
+  account: AccountProfile | null,
+): PhotographerProfile {
+  const profile = emptyPhotographerProfile();
+  profile.primary_email = account?.email || "";
+  profile.primary_phone = account?.phone || "";
+  const parts = (account?.display_name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length > 1) {
+    profile.first_name = parts.slice(0, -1).join(" ");
+    profile.last_name = parts.at(-1) || "";
+    profile.display_name = parts.join(" ");
+  }
+  return profile;
+}
+
+async function loadWorkspaceBusinessProfile(): Promise<WorkspaceProfile | null> {
+  return authFetch("/api/v1/workspaces/current/profile")
+    .then((res) => (res.ok ? res.json() : null))
+    .catch(() => null);
+}
+
+async function loadServicePackages(): Promise<ServicePackage[]> {
+  return listServicePackages("").catch(() => []);
+}
+
+function publicProfileRequirements(
+  profile: PhotographerProfile,
+): Requirement[] {
+  const visibility = {
+    ...DEFAULT_VISIBILITY,
+    ...profile.visibility_config,
+  };
+  const hasPhoto = Boolean(profile.avatar_cropped_url || profile.avatar_url);
+  const hasVisibleContact = Boolean(
+    (visibility.show_email && profile.primary_email) ||
+    (visibility.show_phone && profile.primary_phone) ||
+    (visibility.show_whatsapp && profile.whatsapp_number),
+  );
+
+  return [
+    {
+      key: "last_name",
+      label: "Last name",
+      ok: Boolean(profile.last_name.trim()),
+    },
+    {
+      key: "url_slug",
+      label: "Public slug",
+      ok: Boolean(profile.url_slug.trim()),
+    },
+    {
+      key: "profile_photo",
+      label: "Profile photo",
+      ok: hasPhoto,
+    },
+    {
+      key: "contact",
+      label: "Visible email, phone, or WhatsApp",
+      ok: hasVisibleContact,
+    },
+    {
+      key: "gallery",
+      label: "At least one featured gallery",
+      ok: (profile.featured_galleries || []).length > 0,
+    },
+  ];
+}
 
 export default function ProfileSettingsPage() {
-  const [profile, setProfile] = useState<UserProfile>(EMPTY_PROFILE);
-  const [states, setStates] = useState<IndianState[]>([]);
-  const [loading, setLoading] = useState(() => Boolean(getStoredAccessToken()));
+  const [profile, setProfile] = useState<PhotographerProfile>(() =>
+    emptyPhotographerProfile(),
+  );
+  const [publicUrl, setPublicUrl] = useState("");
+  const [linkedBusinessProfile, setLinkedBusinessProfile] =
+    useState<LinkedBusinessProfile>(() =>
+      linkedBusinessProfileFromWorkspace(null),
+    );
+  const [linkedPricingProfile, setLinkedPricingProfile] =
+    useState<LinkedPricingProfile>(() =>
+      linkedPricingProfileFromSources([], null, emptyPhotographerProfile()),
+    );
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [savedNotice, setSavedNotice] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetch(`${API_BASE}/api/v1/states`)
-      .then((r) => r.json())
-      .then((body: { states?: IndianState[] }) =>
-        setStates(Array.isArray(body.states) ? body.states : []),
-      )
-      .catch(() => {});
+  const reportError = useCallback((message: string) => {
+    setError(message);
+    setNotice(null);
   }, []);
 
   useEffect(() => {
-    const token = getStoredAccessToken();
-    if (!token) {
-      return;
+    let cancelled = false;
+    async function load() {
+      try {
+        const [profileBody, account, workspaceBusinessProfile, packages] =
+          await Promise.all([
+            getPhotographerProfile(),
+            authFetch("/api/v1/users/profile")
+              .then((res) => (res.ok ? res.json() : null))
+              .catch(() => null),
+            loadWorkspaceBusinessProfile(),
+            loadServicePackages(),
+          ]);
+        if (cancelled) return;
+        const next =
+          profileBody.profile ||
+          profileFromAccount(account as AccountProfile | null);
+        const linkedBusiness = workspaceBusinessProfile
+          ? linkedBusinessProfileFromWorkspace(workspaceBusinessProfile)
+          : linkedBusinessProfileFromPhotographer(next);
+        const linkedPricing = linkedPricingProfileFromSources(
+          packages,
+          workspaceBusinessProfile,
+          next,
+        );
+        setLinkedBusinessProfile(linkedBusiness);
+        setLinkedPricingProfile(linkedPricing);
+        setProfile(
+          applyLinkedPricingProfile(
+            applyLinkedBusinessProfile(next, linkedBusiness),
+            linkedPricing,
+          ),
+        );
+        setPublicUrl(profileBody.public_url || "");
+      } catch (err) {
+        if (!cancelled) {
+          reportError(
+            err instanceof Error ? err.message : "Failed to load profile",
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
-    fetch(`${API_BASE}/api/v1/users/profile`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => (r.ok ? r.json() : EMPTY_PROFILE))
-      .then((data) =>
-        setProfile({
-          display_name: data.display_name ?? "",
-          email: data.email ?? "",
-          phone: data.phone ?? "",
-          avatar_url: data.avatar_url ?? "",
-          state_id: data.state_id ?? null,
-          district: data.district ?? "",
-        }),
-      )
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [reportError]);
 
   const save = async () => {
+    const [latestBusinessProfile, latestPackages] = await Promise.all([
+      loadWorkspaceBusinessProfile(),
+      loadServicePackages(),
+    ]);
+    const nextLinkedBusinessProfile = latestBusinessProfile
+      ? linkedBusinessProfileFromWorkspace(latestBusinessProfile)
+      : linkedBusinessProfile;
+    const nextLinkedPricingProfile = linkedPricingProfileFromSources(
+      latestPackages,
+      latestBusinessProfile,
+      profile,
+    );
+    const profileToSave = applyLinkedPricingProfile(
+      applyLinkedBusinessProfile(profile, nextLinkedBusinessProfile),
+      nextLinkedPricingProfile,
+    );
+    profileToSave.custom_links = normalizeCustomLinks(
+      profileToSave.custom_links,
+    );
+    setLinkedBusinessProfile(nextLinkedBusinessProfile);
+    setLinkedPricingProfile(nextLinkedPricingProfile);
+    setProfile(profileToSave);
+
+    const missing = profileToSave.is_public
+      ? publicProfileRequirements(profileToSave).filter((item) => !item.ok)
+      : [];
+    if (missing.length) {
+      reportError(
+        `Public Profile needs: ${missing.map((item) => item.label).join(", ")}.`,
+      );
+      return;
+    }
     setSaving(true);
     setError(null);
-    setSavedNotice(null);
+    setNotice(null);
     try {
-      const token = getStoredAccessToken();
-      const res = await fetch(`${API_BASE}/api/v1/users/profile`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          display_name: profile.display_name,
-          phone: profile.phone,
-          avatar_url: profile.avatar_url,
-          state_id: profile.state_id,
-          district: profile.district || null,
-        }),
-      });
-      if (!res.ok) {
-        const body = await res.text();
-        throw new Error(body || `HTTP ${res.status}`);
+      const body = await savePhotographerProfile(profileToSave);
+      if (body.profile) {
+        setProfile(
+          applyLinkedPricingProfile(
+            applyLinkedBusinessProfile(body.profile, nextLinkedBusinessProfile),
+            nextLinkedPricingProfile,
+          ),
+        );
       }
-      setSavedNotice("Profile updated successfully.");
+      setPublicUrl(body.public_url || "");
+      setNotice(
+        body.profile?.is_public
+          ? "Public Profile is live."
+          : "Profile saved privately.",
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save");
+      reportError(
+        err instanceof Error ? err.message : "Failed to save profile",
+      );
     } finally {
       setSaving(false);
     }
@@ -104,177 +252,91 @@ export default function ProfileSettingsPage() {
 
   if (loading) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-8">
-        <div className="animate-pulse h-64 bg-surface-sunken rounded-xl" />
-      </div>
+      <SettingsPageShell>
+        <div className="settings-panel settings-loading-panel" />
+      </SettingsPageShell>
     );
   }
 
+  const requirements = publicProfileRequirements(profile);
+  const publicReady = requirements.every((item) => item.ok);
+  const publicLive = profile.is_public && profile.status === "published";
+
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
-      {error && (
-        <div className="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
-          {error}
-        </div>
-      )}
-      {savedNotice && (
-        <div className="rounded-xl border border-success/20 bg-success/10 px-4 py-3 text-sm text-success">
-          {savedNotice}
-        </div>
-      )}
+    <SettingsPageShell>
+      <SettingsPageHeader
+        eyebrow="Personal"
+        title="Personal Profile"
+        badge={
+          <span
+            className={
+              publicLive
+                ? "status-badge status-badge--success"
+                : "status-badge status-badge--neutral"
+            }
+          >
+            {publicLive ? "Public" : "Private"}
+          </span>
+        }
+        description={
+          <>
+            Build a mobile-first link-in-bio page at{" "}
+            <span className="settings-panel-copy--strong">/p/slug</span>. Saved
+            private details stay available when the public page is off.
+          </>
+        }
+        actions={
+          <GlassButton
+            type="button"
+            variant="surface"
+            icon={<CheckCircle />}
+            disabled={saving}
+            onClick={save}
+          >
+            {saving ? "Saving" : "Save"}
+          </GlassButton>
+        }
+      />
 
-      <div>
-        <h1 className="text-2xl font-semibold text-text-primary">Profile Settings</h1>
-        <p className="text-sm text-text-secondary mt-1">
-          Manage your personal account details.
-        </p>
+      {error ? <SettingsAlert tone="error">{error}</SettingsAlert> : null}
+      {notice ? <SettingsAlert tone="success">{notice}</SettingsAlert> : null}
+
+      <div className="settings-profile-layout">
+        <div className="settings-profile-main">
+          <AvatarCrop
+            profile={profile}
+            onProfileChange={setProfile}
+            onError={reportError}
+          />
+          <EditForm
+            profile={profile}
+            linkedBusinessProfile={linkedBusinessProfile}
+            linkedPricingProfile={linkedPricingProfile}
+            publicProfile={{
+              enabled: profile.is_public,
+              ready: publicReady,
+              requirements,
+              onToggle: (enabled) =>
+                setProfile({
+                  ...profile,
+                  is_public: enabled,
+                  status: enabled ? profile.status : "draft",
+                }),
+            }}
+            onChange={setProfile}
+          />
+          <GalleryPicker
+            profile={profile}
+            onProfileChange={setProfile}
+            onError={reportError}
+          />
+        </div>
+        <LivePreview
+          profile={profile}
+          publicUrl={publicUrl}
+          onError={reportError}
+        />
       </div>
-
-      <section className="rounded-2xl border border-border-default bg-surface-raised p-6 space-y-4">
-        <h2 className="text-lg font-semibold text-text-primary">Account Information</h2>
-        <div className="grid grid-cols-1 gap-4">
-          <div>
-            <label
-              htmlFor="profile-display-name"
-              className="mb-1 block text-sm font-medium text-text-secondary"
-            >
-              Display Name
-            </label>
-            <input
-              id="profile-display-name"
-              type="text"
-              value={profile.display_name}
-              onChange={(e) =>
-                setProfile((p) => ({ ...p, display_name: e.target.value }))
-              }
-              placeholder="e.g. Rahul Sharma"
-              className="input-base w-full min-h-[44px]"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="profile-email"
-              className="mb-1 block text-sm font-medium text-text-secondary"
-            >
-              Email
-            </label>
-            <input
-              id="profile-email"
-              type="email"
-              value={profile.email}
-              readOnly
-              className="input-base w-full min-h-[44px] opacity-60 cursor-not-allowed"
-            />
-            <p className="mt-1 text-xs text-text-tertiary">
-              Email cannot be changed. Contact support if you need to update it.
-            </p>
-          </div>
-
-          <div>
-            <label
-              htmlFor="profile-phone"
-              className="mb-1 block text-sm font-medium text-text-secondary"
-            >
-              Phone number
-            </label>
-            <input
-              id="profile-phone"
-              type="tel"
-              value={profile.phone}
-              onChange={(e) =>
-                setProfile((p) => ({ ...p, phone: e.target.value }))
-              }
-              placeholder="98765 43210"
-              className="input-base w-full min-h-[44px]"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="profile-avatar-url"
-              className="mb-1 block text-sm font-medium text-text-secondary"
-            >
-              Avatar URL
-            </label>
-            <input
-              id="profile-avatar-url"
-              type="text"
-              value={profile.avatar_url}
-              onChange={(e) =>
-                setProfile((p) => ({ ...p, avatar_url: e.target.value }))
-              }
-              placeholder="https://example.com/photo.jpg"
-              className="input-base w-full min-h-[44px]"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="profile-state"
-              className="mb-1 block text-sm font-medium text-text-secondary"
-            >
-              State
-            </label>
-            <select
-              id="profile-state"
-              value={profile.state_id ?? ""}
-              onChange={(e) =>
-                setProfile((p) => ({
-                  ...p,
-                  state_id: e.target.value ? Number(e.target.value) : null,
-                  district: "",
-                }))
-              }
-              className="input-base w-full min-h-[44px]"
-            >
-              <option value="">Select state…</option>
-              {states.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label
-              htmlFor="profile-district"
-              className="mb-1 block text-sm font-medium text-text-secondary"
-            >
-              District
-            </label>
-            {(() => {
-              const selectedStateName = states.find((s) => s.id === profile.state_id)?.name ?? "";
-              const districts = getDistrictsForState(selectedStateName);
-              return (
-                <select
-                  id="profile-district"
-                  value={profile.district}
-                  onChange={(e) => setProfile((p) => ({ ...p, district: e.target.value }))}
-                  disabled={districts.length === 0}
-                  className="input-base w-full min-h-[44px] disabled:opacity-50"
-                >
-                  <option value="">{districts.length === 0 ? "Select state first" : "Select district…"}</option>
-                  {districts.map((d) => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-              );
-            })()}
-          </div>
-        </div>
-      </section>
-
-      <div className="flex justify-end">
-        <button
-          onClick={save}
-          disabled={saving}
-          className="btn-primary min-h-[44px] px-6 disabled:opacity-50 cursor-pointer"
-        >
-          {saving ? "Saving..." : "Save profile"}
-        </button>
-      </div>
-    </div>
+    </SettingsPageShell>
   );
 }

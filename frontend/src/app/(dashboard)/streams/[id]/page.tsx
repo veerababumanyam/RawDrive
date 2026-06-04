@@ -3,7 +3,10 @@
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/api/authFetch";
-import { ConsoleTabs, type ConsolePayload } from "@/components/streams/ConsoleTabs";
+import {
+  ConsoleTabs,
+  type ConsolePayload,
+} from "@/components/streams/ConsoleTabs";
 import { BackButton } from "@/components/ui/back-button";
 
 export default function StreamConsolePage({
@@ -14,7 +17,9 @@ export default function StreamConsolePage({
   const { id } = use(params);
   const router = useRouter();
   const [payload, setPayload] = useState<ConsolePayload | null>(null);
-  const [error, setError] = useState<"forbidden" | "notfound" | "generic" | null>(null);
+  const [error, setError] = useState<
+    "forbidden" | "notfound" | "generic" | null
+  >(null);
 
   useEffect(() => {
     authFetch(`/api/v1/streaming/streams/${id}/console`)
@@ -23,10 +28,19 @@ export default function StreamConsolePage({
           router.replace(`/login?next=/streams/${id}`);
           return;
         }
-        if (res.status === 403) { setError("forbidden"); return; }
-        if (res.status === 404) { setError("notfound"); return; }
-        if (!res.ok) { setError("generic"); return; }
-        setPayload(await res.json() as ConsolePayload);
+        if (res.status === 403) {
+          setError("forbidden");
+          return;
+        }
+        if (res.status === 404) {
+          setError("notfound");
+          return;
+        }
+        if (!res.ok) {
+          setError("generic");
+          return;
+        }
+        setPayload((await res.json()) as ConsolePayload);
       })
       .catch(() => setError("generic"));
   }, [id, router]);
@@ -34,10 +48,11 @@ export default function StreamConsolePage({
   if (error === "forbidden") {
     return (
       <main className="mx-auto max-w-2xl px-6 py-12">
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-white/80">
+        <div className="rounded-2xl border border-text-media/10 bg-surface-overlay/5 p-6 text-text-media/80">
           <h1 className="mb-2 text-xl font-semibold">Access denied</h1>
-          <p className="text-sm text-white/70">
-            You do not have permission to view this stream console. Contact your workspace owner.
+          <p className="text-sm text-text-media/70">
+            You do not have permission to view this stream console. Contact your
+            workspace owner.
           </p>
         </div>
       </main>
@@ -47,9 +62,11 @@ export default function StreamConsolePage({
   if (error === "notfound") {
     return (
       <main className="mx-auto max-w-2xl px-6 py-12">
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-white/80">
+        <div className="rounded-2xl border border-text-media/10 bg-surface-overlay/5 p-6 text-text-media/80">
           <h1 className="mb-2 text-xl font-semibold">Stream not found</h1>
-          <p className="text-sm text-white/70">This stream does not exist or has been deleted.</p>
+          <p className="text-sm text-text-media/70">
+            This stream does not exist or has been deleted.
+          </p>
         </div>
       </main>
     );
@@ -58,9 +75,9 @@ export default function StreamConsolePage({
   if (error === "generic") {
     return (
       <main className="mx-auto max-w-2xl px-6 py-12">
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-white/80">
+        <div className="rounded-2xl border border-text-media/10 bg-surface-overlay/5 p-6 text-text-media/80">
           <h1 className="mb-2 text-xl font-semibold">Unable to load stream</h1>
-          <p className="text-sm text-white/70">Please try again in a moment.</p>
+          <p className="text-sm text-text-media/70">Please try again in a moment.</p>
         </div>
       </main>
     );
@@ -69,7 +86,7 @@ export default function StreamConsolePage({
   if (!payload) {
     return (
       <main className="mx-auto max-w-2xl px-6 py-12">
-        <div className="text-white/50 text-sm">Loading stream console…</div>
+        <div className="text-text-media/50 text-sm">Loading stream console…</div>
       </main>
     );
   }

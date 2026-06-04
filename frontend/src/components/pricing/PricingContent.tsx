@@ -61,10 +61,12 @@ export function PricingContent() {
           </span>
           <div className="space-y-5">
             <h1 className="font-headline text-4xl font-extrabold tracking-[-0.03em] text-text-primary md:text-6xl">
-              Choose the plan that matches your studio today and scale without replatforming later.
+              Choose the plan that matches your studio today and scale without
+              replatforming later.
             </h1>
             <p className="max-w-2xl text-lg leading-8 text-text-secondary">
-              Transparent pricing built for Indian photography studios — from solo shooters to large teams. No hidden fees, no lock-in.
+              Transparent pricing built for Indian photography studios — from
+              solo shooters to large teams. No hidden fees, no lock-in.
             </p>
           </div>
 
@@ -84,8 +86,12 @@ export function PricingContent() {
               },
             ].map((item) => (
               <div key={item.title} className="surface-panel p-5">
-                <h2 className="font-headline text-xl font-bold text-text-primary">{item.title}</h2>
-                <p className="mt-3 text-sm leading-7 text-text-secondary">{item.body}</p>
+                <h2 className="font-headline text-xl font-bold text-text-primary">
+                  {item.title}
+                </h2>
+                <p className="mt-3 text-sm leading-7 text-text-secondary">
+                  {item.body}
+                </p>
               </div>
             ))}
           </div>
@@ -104,7 +110,9 @@ export function PricingContent() {
               onClick={() => setIsAnnual(!isAnnual)}
               className="relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border border-border transition-colors"
               style={{
-                backgroundColor: isAnnual ? "var(--accent-default)" : "var(--surface-sunken)",
+                backgroundColor: isAnnual
+                  ? "var(--accent-default)"
+                  : "var(--surface-sunken)",
                 transitionDuration: "var(--duration-fast)",
                 minHeight: "var(--touch-target-min)",
                 minWidth: "var(--touch-target-min)",
@@ -128,18 +136,18 @@ export function PricingContent() {
 
         {/* Pricing hero image — hidden */}
         {false && (
-        <div className="relative">
-          <div className="absolute inset-x-8 top-10 h-48 rounded-full bg-accent-muted blur-[120px]" />
-          <div className="glass-card relative overflow-hidden p-3">
-            <div className="overflow-hidden rounded-[1.5rem] bg-surface-container-high">
-              <img
-                src="/stitch/pricing.png"
-                alt="RawDrive pricing plans preview for photography studios"
-                className="h-auto w-full object-cover"
-              />
+          <div className="relative">
+            <div className="absolute inset-x-8 top-10 h-48 rounded-full bg-accent-muted blur-[120px]" />
+            <div className="glass-card relative overflow-hidden p-3">
+              <div className="overflow-hidden rounded-[1.5rem] bg-surface-container-high">
+                <img
+                  src="/stitch/pricing.png"
+                  alt="RawDrive pricing plans preview for photography studios"
+                  className="h-auto w-full object-cover"
+                />
+              </div>
             </div>
           </div>
-        </div>
         )}
       </section>
 
@@ -147,7 +155,8 @@ export function PricingContent() {
         <div className="mx-auto grid max-w-7xl gap-6 sm:grid-cols-2 lg:grid-cols-5">
           {pricingPlans.map((plan) => {
             const price = isAnnual ? plan.annualPrice : plan.monthlyPrice;
-            const period = plan.id === "free" ? "/30 days" : isAnnual ? "/year" : "/month";
+            const period =
+              plan.id === "free" ? "/30 days" : isAnnual ? "/year" : "/month";
 
             return (
               <div
@@ -164,17 +173,25 @@ export function PricingContent() {
                     Popular
                   </span>
                 )}
-                <h3 className="text-lg font-semibold text-text-primary">{plan.name}</h3>
+                <h3 className="text-lg font-semibold text-text-primary">
+                  {plan.name}
+                </h3>
                 <p className="mt-3 text-3xl font-bold text-text-primary">
                   {formatPrice(price)}
                 </p>
-                <p className="text-sm text-text-tertiary">
+                <p className="text-sm font-medium text-text-secondary">
                   {period}
                 </p>
                 <ul className="mt-6 flex-1 space-y-3">
                   {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-sm text-text-secondary">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
+                    <li
+                      key={f}
+                      className="flex items-start gap-2 text-sm text-text-secondary"
+                    >
+                      <Check
+                        className="mt-0.5 h-4 w-4 shrink-0 text-accent"
+                        aria-hidden="true"
+                      />
                       {f}
                     </li>
                   ))}
@@ -186,7 +203,10 @@ export function PricingContent() {
                       ? "bg-accent text-text-inverse hover:bg-accent-hover"
                       : "border border-border bg-surface-elevated text-text-primary hover:bg-accent-subtle hover:text-accent"
                   }`}
-                  style={{ minHeight: "var(--touch-target-min)", transitionDuration: "var(--duration-fast)" }}
+                  style={{
+                    minHeight: "var(--touch-target-min)",
+                    transitionDuration: "var(--duration-fast)",
+                  }}
                 >
                   Get Started
                 </Link>
@@ -198,123 +218,179 @@ export function PricingContent() {
 
       {/* Feature Comparison Table — hidden */}
       {false && (
-      <section className="bg-surface-sunken px-4 py-16 lg:px-8">
-        <div className="mx-auto max-w-7xl">
-          <h2 className="mb-8 text-center text-2xl font-bold text-text-primary">
-            Feature Comparison
-          </h2>
-          <div className="overflow-x-auto rounded-xl border border-border bg-surface-elevated shadow-glass">
-            <table className="w-full table-auto text-left text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="sticky left-0 bg-surface-elevated px-4 py-3 text-text-primary font-semibold">
-                    Feature
-                  </th>
-                  {pricingPlans.map((p) => (
-                    <th key={p.id} className="px-4 py-3 text-center text-text-primary font-semibold">
-                      {p.name}
+        <section className="bg-surface-sunken px-4 py-16 lg:px-8">
+          <div className="mx-auto max-w-7xl">
+            <h2 className="mb-8 text-center text-2xl font-bold text-text-primary">
+              Feature Comparison
+            </h2>
+            <div className="overflow-x-auto rounded-xl border border-border bg-surface-elevated shadow-glass">
+              <table className="w-full table-auto text-left text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="sticky left-0 bg-surface-elevated px-4 py-3 text-text-primary font-semibold">
+                      Feature
                     </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  { label: "Storage", values: ["1GB", "50GB", "250GB", "2TB", "Unlimited"] },
-                  { label: "Galleries", values: ["3", "10", "50", "200", "Unlimited"] },
-                  { label: "Client Profiles", values: ["5", "20", "100", "500", "Unlimited"] },
-                  { label: "AI Culling", values: [false, false, true, true, true] },
-                  { label: "Client Proofing", values: [false, true, true, true, true] },
-                  { label: "CRM & Bookings", values: [false, "Basic", "Full", "Full", "Full"] },
-                  { label: "Live Streaming", values: [false, false, "5/mo", "20/mo", "Unlimited"] },
-                  { label: "Marketplace", values: [false, false, true, "Premium", "Premium"] },
-                  { label: "API Access", values: [false, false, false, true, true] },
-                  { label: "White Label", values: [false, false, false, false, true] },
-                ].map((row) => (
-                  <tr key={row.label} className="border-b border-border-subtle">
-                    <td className="sticky left-0 bg-surface-elevated px-4 py-3 font-medium text-text-primary">
-                      {row.label}
-                    </td>
-                    {row.values.map((val, i) => (
-                      <td key={i} className="px-4 py-3 text-center text-text-secondary">
-                        {val === true ? (
-                          <Check className="mx-auto h-4 w-4 text-accent" />
-                        ) : val === false ? (
-                          <span className="text-text-tertiary">—</span>
-                        ) : (
-                          val
-                        )}
-                      </td>
+                    {pricingPlans.map((p) => (
+                      <th
+                        key={p.id}
+                        className="px-4 py-3 text-center text-text-primary font-semibold"
+                      >
+                        {p.name}
+                      </th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {[
+                    {
+                      label: "Storage",
+                      values: ["1GB", "50GB", "250GB", "2TB", "Unlimited"],
+                    },
+                    {
+                      label: "Galleries",
+                      values: ["3", "10", "50", "200", "Unlimited"],
+                    },
+                    {
+                      label: "Client Profiles",
+                      values: ["5", "20", "100", "500", "Unlimited"],
+                    },
+                    {
+                      label: "AI Culling",
+                      values: [false, false, true, true, true],
+                    },
+                    {
+                      label: "Client Proofing",
+                      values: [false, true, true, true, true],
+                    },
+                    {
+                      label: "CRM & Bookings",
+                      values: [false, "Basic", "Full", "Full", "Full"],
+                    },
+                    {
+                      label: "Live Streaming",
+                      values: [false, false, "5/mo", "20/mo", "Unlimited"],
+                    },
+                    {
+                      label: "Marketplace",
+                      values: [false, false, true, "Premium", "Premium"],
+                    },
+                    {
+                      label: "API Access",
+                      values: [false, false, false, true, true],
+                    },
+                    {
+                      label: "White Label",
+                      values: [false, false, false, false, true],
+                    },
+                  ].map((row) => (
+                    <tr
+                      key={row.label}
+                      className="border-b border-border-subtle"
+                    >
+                      <td className="sticky left-0 bg-surface-elevated px-4 py-3 font-medium text-text-primary">
+                        {row.label}
+                      </td>
+                      {row.values.map((val, i) => (
+                        <td
+                          key={i}
+                          className="px-4 py-3 text-center text-text-secondary"
+                        >
+                          {val === true ? (
+                            <Check className="mx-auto h-4 w-4 text-accent" />
+                          ) : val === false ? (
+                            <span className="text-text-tertiary">—</span>
+                          ) : (
+                            val
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
       )}
 
       {/* Storage Boosters — hidden */}
       {false && (
-      <section className="px-4 py-16 lg:px-8">
-        <div className="mx-auto max-w-5xl">
-          <h2 className="mb-8 text-center text-2xl font-bold text-text-primary">
-            <HardDrive className="mr-2 inline-block h-6 w-6 text-accent" aria-hidden="true" />
-            Storage Boosters
-          </h2>
-          <div className="grid gap-6 sm:grid-cols-3">
-            {storageBoosters.map((b) => (
-              <div
-                key={b.name}
-                className="rounded-xl border border-border bg-surface-elevated p-6 text-center shadow-glass"
-              >
-                <h3 className="text-lg font-semibold text-text-primary">{b.name}</h3>
-                <p className="mt-2 text-2xl font-bold text-text-primary">
-                  Rs. {b.price.toLocaleString("en-IN")}
-                </p>
-                <p className="text-sm text-text-tertiary">{b.storage} extra storage</p>
-              </div>
-            ))}
+        <section className="px-4 py-16 lg:px-8">
+          <div className="mx-auto max-w-5xl">
+            <h2 className="mb-8 text-center text-2xl font-bold text-text-primary">
+              <HardDrive
+                className="mr-2 inline-block h-6 w-6 text-accent"
+                aria-hidden="true"
+              />
+              Storage Boosters
+            </h2>
+            <div className="grid gap-6 sm:grid-cols-3">
+              {storageBoosters.map((b) => (
+                <div
+                  key={b.name}
+                  className="rounded-xl border border-border bg-surface-elevated p-6 text-center shadow-glass"
+                >
+                  <h3 className="text-lg font-semibold text-text-primary">
+                    {b.name}
+                  </h3>
+                  <p className="mt-2 text-2xl font-bold text-text-primary">
+                    Rs. {b.price.toLocaleString("en-IN")}
+                  </p>
+                  <p className="text-sm text-text-tertiary">
+                    {b.storage} extra storage
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
       )}
 
       {/* Streaming Packs — hidden */}
       {false && (
-      <section className="bg-surface-sunken px-4 py-16 lg:px-8">
-        <div className="mx-auto max-w-5xl">
-          <h2 className="mb-8 text-center text-2xl font-bold text-text-primary">
-            <Video className="mr-2 inline-block h-6 w-6 text-accent" aria-hidden="true" />
-            Streaming Session Packs
-          </h2>
-          <LiveStreamingPackagesGrid />
-          {/* Build-time fallback list, hidden when the API populates above. */}
-          <noscript>
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {streamingPacks.map((p) => (
-                <div
-                  key={p.name}
-                  className="rounded-xl border border-border bg-surface-elevated p-6 text-center shadow-glass"
-                >
-                  <h3 className="text-lg font-semibold text-text-primary">{p.name}</h3>
-                  <p className="mt-2 text-2xl font-bold text-text-primary">
-                    Rs. {p.price.toLocaleString("en-IN")}
-                  </p>
-                  <p className="text-sm text-text-tertiary">{p.sessions} streaming minutes</p>
-                </div>
-              ))}
-            </div>
-          </noscript>
-        </div>
-      </section>
+        <section className="bg-surface-sunken px-4 py-16 lg:px-8">
+          <div className="mx-auto max-w-5xl">
+            <h2 className="mb-8 text-center text-2xl font-bold text-text-primary">
+              <Video
+                className="mr-2 inline-block h-6 w-6 text-accent"
+                aria-hidden="true"
+              />
+              Streaming Session Packs
+            </h2>
+            <LiveStreamingPackagesGrid />
+            {/* Build-time fallback list, hidden when the API populates above. */}
+            <noscript>
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {streamingPacks.map((p) => (
+                  <div
+                    key={p.name}
+                    className="rounded-xl border border-border bg-surface-elevated p-6 text-center shadow-glass"
+                  >
+                    <h3 className="text-lg font-semibold text-text-primary">
+                      {p.name}
+                    </h3>
+                    <p className="mt-2 text-2xl font-bold text-text-primary">
+                      Rs. {p.price.toLocaleString("en-IN")}
+                    </p>
+                    <p className="text-sm text-text-tertiary">
+                      {p.sessions} streaming minutes
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </noscript>
+          </div>
+        </section>
       )}
 
       {/* Coupon Code */}
       <section className="px-4 py-16 lg:px-8">
         <div className="mx-auto max-w-md text-center">
           <h2 className="mb-4 text-xl font-bold text-text-primary">
-            <Tag className="mr-2 inline-block h-5 w-5 text-accent" aria-hidden="true" />
+            <Tag
+              className="mr-2 inline-block h-5 w-5 text-accent"
+              aria-hidden="true"
+            />
             Have a Coupon Code?
           </h2>
           <div className="flex gap-2">
@@ -330,7 +406,10 @@ export function PricingContent() {
             <button
               type="button"
               className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-text-inverse transition-colors hover:bg-accent-hover"
-              style={{ minHeight: "var(--touch-target-min)", transitionDuration: "var(--duration-fast)" }}
+              style={{
+                minHeight: "var(--touch-target-min)",
+                transitionDuration: "var(--duration-fast)",
+              }}
             >
               Apply
             </button>
@@ -426,7 +505,8 @@ function LiveStreamingPackagesGrid() {
             {p.minutes} streaming minutes
           </p>
           <p className="mt-1 text-xs text-text-tertiary">
-            up to {p.max_concurrent_viewers} viewers · {p.replay_ttl_days}d replay
+            up to {p.max_concurrent_viewers} viewers · {p.replay_ttl_days}d
+            replay
           </p>
         </div>
       ))}

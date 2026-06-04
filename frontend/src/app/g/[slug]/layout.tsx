@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { createNoIndexMetadata } from "@/lib/seo";
+import { viewportThemeColors } from "@/lib/tokens";
 import { OfflineRevalidator } from "@/components/offline/offline-revalidator";
 
 // Service worker registration is handled globally by AppShell
@@ -12,12 +13,12 @@ import { OfflineRevalidator } from "@/components/offline/offline-revalidator";
 // less-capable shim instead of the M15 SW. Removed 2026-05-18.
 
 export const viewport: Viewport = {
-  // Brand-accent override of the root #0b1326 navy specifically for the
+  // Brand-accent override of the root app chrome specifically for the
   // public guest-gallery PWA chrome (Android address bar, iOS status
   // bar). Studio owners share these galleries with clients, so the
   // installed/standalone surface should read as a brand experience, not
   // the dashboard.
-  themeColor: "#3B82F6",
+  themeColor: viewportThemeColors.publicGallery,
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,

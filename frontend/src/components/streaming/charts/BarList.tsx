@@ -50,7 +50,9 @@ export function BarList({
               <span className="text-text-primary">{it.label}</span>
               <span className="text-text-secondary tabular-nums">
                 {it.value}
-                {it.hint ? <span className="ml-1 text-text-tertiary">{it.hint}</span> : null}
+                {it.hint ? (
+                  <span className="ml-1 text-text-tertiary">{it.hint}</span>
+                ) : null}
               </span>
             </div>
             <div className="relative h-2 w-full overflow-hidden rounded-full bg-surface-muted">

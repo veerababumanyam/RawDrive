@@ -6,10 +6,55 @@ export const brand = {
   domain: "rawdrive.in",
   locale: "en-IN",
   dpoEmail: "contactus@rawdrive.in",
+  thirdPartyMarks: {
+    google: {
+      blue: "#4285f4",
+      green: "#34a853",
+      yellow: "#fbbc05",
+      red: "#ea4335",
+    },
+    instagram: {
+      primary: "#e4405f",
+    },
+    facebook: {
+      primary: "#1877f2",
+    },
+    linkedin: {
+      primary: "#0a66c2",
+    },
+    youtube: {
+      primary: "#ff0000",
+    },
+  },
+  nationalMarks: {
+    indiaFlag: {
+      saffron: "#ff9933",
+      white: "#ffffff",
+      green: "#138808",
+      chakra: "#000080",
+    },
+  },
 } as const;
 
-export const themes = ["liquid-glass", "liquid-glass-dark", "midnight"] as const;
+export const themes = [
+  "liquid-glass",
+  "liquid-glass-dark",
+  "midnight",
+] as const;
 export type Theme = (typeof themes)[number];
+
+export const themeMetaColors: Record<Theme, string> = {
+  // Must equal themes.{name}.surface.base in design-tokens.json.
+  "liquid-glass": "#f6f9fd",
+  "liquid-glass-dark": "#06121b",
+  midnight: "#020709",
+} as const;
+
+export const viewportThemeColors = {
+  appDark: themeMetaColors["liquid-glass-dark"],
+  // Must equal themes.liquid-glass.accent.primary in design-tokens.json.
+  publicGallery: "#1a66c9",
+} as const;
 
 export const breakpoints = {
   xs: "0px",
@@ -22,10 +67,13 @@ export const breakpoints = {
 
 export const typography = {
   fontFamily: {
+    display:
+      "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
     sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
     mono: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace",
   },
   scale: {
+    "2xs": { size: "0.625rem", lineHeight: "0.875rem" },
     xs: { size: "0.75rem", lineHeight: "1rem" },
     sm: { size: "0.875rem", lineHeight: "1.25rem" },
     base: { size: "1rem", lineHeight: "1.5rem" },
@@ -33,8 +81,16 @@ export const typography = {
     xl: { size: "1.25rem", lineHeight: "1.75rem" },
     "2xl": { size: "1.5rem", lineHeight: "2rem" },
     "3xl": { size: "1.875rem", lineHeight: "2.25rem" },
-    "4xl": { size: "2.25rem", lineHeight: "2.5rem" },
-    "5xl": { size: "3rem", lineHeight: "1" },
+    "4xl": {
+      size: "clamp(2.25rem, 2rem + 1.1vw, 2.75rem)",
+      lineHeight: "1.12",
+    },
+    "5xl": { size: "clamp(3rem, 2.55rem + 2vw, 3.75rem)", lineHeight: "1.08" },
+    "6xl": { size: "clamp(3.5rem, 2.8rem + 3vw, 4.75rem)", lineHeight: "1.05" },
+    "7xl": { size: "clamp(4rem, 3rem + 4.5vw, 6rem)", lineHeight: "1.02" },
+  },
+  letterSpacing: {
+    default: "0",
   },
   weight: {
     normal: "400",
@@ -62,6 +118,7 @@ export const spacing = {
     16: "4rem",
     20: "5rem",
     24: "6rem",
+    32: "8rem",
   },
 } as const;
 
@@ -69,9 +126,10 @@ export const radii = {
   none: "0",
   sm: "0.25rem",
   md: "0.375rem",
-  lg: "0.5rem",
-  xl: "0.75rem",
-  "2xl": "1rem",
+  lg: "0.625rem",
+  xl: "0.875rem",
+  "2xl": "1.25rem",
+  "3xl": "1.5rem",
   full: "9999px",
 } as const;
 
@@ -88,16 +146,37 @@ export const zIndex = {
 export const motion = {
   duration: {
     instant: "0ms",
-    fast: "150ms",
-    normal: "300ms",
-    slow: "500ms",
+    fast: "140ms",
+    normal: "260ms",
+    slow: "420ms",
     shimmer: "1500ms",
   },
   easing: {
-    default: "cubic-bezier(0.4, 0, 0.2, 1)",
-    in: "cubic-bezier(0.4, 0, 1, 1)",
-    out: "cubic-bezier(0, 0, 0.2, 1)",
-    bounce: "cubic-bezier(0.34, 1.56, 0.64, 1)",
+    default: "cubic-bezier(0.2, 0, 0, 1)",
+    in: "cubic-bezier(0.3, 0, 1, 1)",
+    out: "cubic-bezier(0, 0, 0, 1)",
+    spring: "cubic-bezier(0.16, 1, 0.3, 1)",
+    bounce: "cubic-bezier(0.22, 1.28, 0.36, 1)",
+  },
+} as const;
+
+export const accessibility = {
+  contrast: {
+    normalText: "4.5:1",
+    largeText: "3:1",
+    uiComponent: "3:1",
+    focusIndicator: "3:1",
+  },
+  touchTarget: {
+    minimum: "44px",
+    wcagMinimum: "24px",
+    gap: "12px",
+  },
+  preferences: {
+    reduceTransparency: "supported",
+    increaseContrast: "supported",
+    reduceMotion: "supported",
+    differentiateWithoutColor: "supported",
   },
 } as const;
 
@@ -107,12 +186,19 @@ export const components = {
     heightMobile: "56px",
   },
   button: {
-    height: "40px",
-    heightSm: "32px",
-    heightLg: "48px",
+    height: "44px",
+    heightSm: "36px",
+    heightLg: "52px",
+  },
+  glassIconButton: {
+    foreground: "var(--glass-icon-button-fg)",
+    foregroundMuted: "var(--glass-icon-button-fg-muted)",
+    foregroundOnMedia: "var(--glass-icon-button-fg-on-media)",
+    disabledOpacity: "var(--glass-icon-button-disabled-opacity)",
+    minContrast: accessibility.contrast.uiComponent,
   },
   input: {
-    height: "40px",
+    height: "44px",
   },
   modal: {
     maxWidth: "32rem",
@@ -124,13 +210,36 @@ export const components = {
   toast: {
     autoDismiss: "5000ms",
   },
+  mediaCover: {
+    heroMinHeight: "60vh",
+    heroMaxHeight: "85vh",
+    textBackdropPadding: "0.12em 0.26em",
+    textShadow: "var(--cover-text-shadow)",
+    scrimAuto: "var(--cover-scrim-auto)",
+    scrimDark: "var(--cover-scrim-dark)",
+    presetColors: {
+      textMedia: "#ffffff",
+      warmTitle: "#fffaf0",
+      warmSubtitle: "#e6c36a",
+      haldiTitle: "#fff8e7",
+      haldiSubtitle: "#f5c84b",
+      warmAccent: "#B7791F",
+      editorialTitle: "#172033",
+      editorialSubtitle: "#344054",
+      receptionSubtitle: "#dbeafe",
+    },
+  },
+  qrCode: {
+    dark: "#000000",
+    light: "#ffffff",
+  },
   touchTarget: {
     minimum: "44px",
-    gap: "8px",
+    gap: "12px",
   },
   focusRing: {
-    width: "2px",
-    offset: "2px",
+    width: "3px",
+    offset: "3px",
   },
 } as const;
 
@@ -250,7 +359,7 @@ export const storageBoosters = [
 // invisible to the running app; the source of truth is streaming_packages
 // + streaming_rate_cards in the database (M32 / F-014 E104-S6).
 export const streamingPacks = [
-  { name: "Basic",      price: 499,  sessions: 60,  tier: "basic"      },
-  { name: "Pro",        price: 1499, sessions: 180, tier: "pro"        },
+  { name: "Basic", price: 499, sessions: 60, tier: "basic" },
+  { name: "Pro", price: 1499, sessions: 180, tier: "pro" },
   { name: "Enterprise", price: 4999, sessions: 600, tier: "enterprise" },
 ] as const;

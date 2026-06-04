@@ -19,7 +19,7 @@
 <!-- Badges -->
 <p align="center">
   <a href="#vision"><img src="https://img.shields.io/badge/Platform-SaaS-2563EB?style=for-the-badge&logo=icloud&logoColor=white" alt="Platform SaaS" /></a>
-  <a href="#tech-stack"><img src="https://img.shields.io/badge/React%2019-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React 19" /></a>
+  <a href="#tech-stack"><img src="https://img.shields.io/badge/Next.js%2015-000000?style=for-the-badge&logo=nextdotjs&logoColor=white" alt="Next.js 15" /></a>
   <a href="#tech-stack"><img src="https://img.shields.io/badge/Go%20Backend-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go Backend" /></a>
   <a href="#tech-stack"><img src="https://img.shields.io/badge/TailwindCSS%20v4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind v4" /></a>
   <a href="#tech-stack"><img src="https://img.shields.io/badge/TypeScript%205-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript 5" /></a>
@@ -116,15 +116,14 @@ We compared the typical workflows against the **RawDrive Solution** to demonstra
 
 We maintain a **"Zero-Compromise"** systemic architecture designed with performance at its core, enabling sub-200ms interface interactivity.
 
-| Component Area | Innovative Technologies Deployed |
+| Component Area | Technologies Deployed |
 | :--- | :--- |
-| **Frontend UI** | `React 19`, `TypeScript 5`, `Vite 6`, `Framer Motion`, `Tailwind CSS v4` |
-| **Backend API** | `Go (Golang)` + `Chi Router` for extreme concurrency |
-| **Intelligence** | Google `Gemini AI` + `PGvector` (Vector Embeddings) |
-| **Edge Storage** | `Cloudflare R2 Edge` + Highly Distributed Global CDN |
-| **Database Ops** | robust `PostgreSQL` + lightning-fast `Valkey` (Memory Cache) |
-| **Identity & ML** | browser-first `face-api.js` ML Models |
-| **Experience** | `i18next` catering to 10+ Indic Languages |
+| **Frontend UI** | `Next.js 15` (App Router), `TypeScript 5`, `Tailwind CSS v4`, token-driven Liquid Glass design system (`design-tokens.json`) |
+| **Backend API** | `Go (Golang)` + `Chi Router`, JWT auth, for extreme concurrency |
+| **Intelligence** | `pgvector` (vector embeddings) + face detection for find-my-photos |
+| **Managed Storage** | `Backblaze B2` (S3-compatible) for all tiers; Enterprise BYOS (S3/MinIO/B2) |
+| **Database Ops** | `PostgreSQL 16` + `Valkey 8` (cache) + `NATS JetStream` (jobs) |
+| **Experience** | System-font stack (no web fonts), 3 themes, WCAG 2.1 AA, 10+ Indic locales |
 
 ---
 

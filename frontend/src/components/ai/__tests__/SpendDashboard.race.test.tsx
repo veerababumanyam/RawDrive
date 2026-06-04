@@ -17,7 +17,10 @@ const getCreditsMock = vi.mocked(getCredits);
 
 function spendFor(totalPaisa: number): SpendSummary {
   // Cast keeps the test resilient to extra optional fields on SpendSummary.
-  return { total_paisa: totalPaisa, by_operation: {} } as unknown as SpendSummary;
+  return {
+    total_paisa: totalPaisa,
+    by_operation: {},
+  } as unknown as SpendSummary;
 }
 
 function creditsFor(remainingPaisa: number): CreditSummary {
@@ -38,7 +41,9 @@ function deferred<T>() {
 }
 
 const formatPaisa = (paisa: number) =>
-  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(paisa / 100);
+  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(
+    paisa / 100,
+  );
 
 // Flush all pending microtasks (Promise.all -> .then -> .finally chains) plus
 // any React state updates they schedule, wrapped in act() so the re-render is

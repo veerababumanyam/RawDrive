@@ -25,20 +25,14 @@ function pickSrc(value: string | string[] | undefined): string | undefined {
   return value;
 }
 
-function FallbackCard({
-  title,
-  body,
-}: {
-  title: string;
-  body: string;
-}) {
+function FallbackCard({ title, body }: { title: string; body: string }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface px-4">
       <div
         className={[
           "w-full max-w-sm rounded-2xl p-8 text-center",
-          "bg-white/[0.08] backdrop-blur-[16px] backdrop-saturate-[180%]",
-          "border border-white/[0.18]",
+          "bg-surface-overlay/10 glass-blur-full",
+          "border border-text-media/20",
           "shadow-[0_8px_32px_-4px_hsla(0,0%,0%,0.18)]",
         ].join(" ")}
       >
@@ -47,7 +41,12 @@ function FallbackCard({
         <div className="mt-6 flex justify-center">
           <Link href="/" aria-label="Back to home">
             <GlassIconButton label="Back to home" size="md" variant="glass">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.5}
+              >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -104,8 +103,9 @@ export default async function ShortlinkPage({ params, searchParams }: Props) {
   try {
     const h = await headers();
     forwardedFor =
-      (h as unknown as { get?: (k: string) => string | null }).get?.("x-forwarded-for") ??
-      null;
+      (h as unknown as { get?: (k: string) => string | null }).get?.(
+        "x-forwarded-for",
+      ) ?? null;
   } catch {
     forwardedFor = null;
   }

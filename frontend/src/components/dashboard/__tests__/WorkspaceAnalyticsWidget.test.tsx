@@ -8,9 +8,27 @@ const dto = {
   streamsCount: 12,
   creditsConsumed: 3450,
   topStreams: [
-    { id: "a", title: "Reception Live", peakViewers: 180, watchTimeSec: 7200, chatMessages: 240 },
-    { id: "b", title: "Sangeet", peakViewers: 90, watchTimeSec: 3600, chatMessages: 120 },
-    { id: "c", title: "Mehendi", peakViewers: 45, watchTimeSec: 1800, chatMessages: 60 },
+    {
+      id: "a",
+      title: "Reception Live",
+      peakViewers: 180,
+      watchTimeSec: 7200,
+      chatMessages: 240,
+    },
+    {
+      id: "b",
+      title: "Sangeet",
+      peakViewers: 90,
+      watchTimeSec: 3600,
+      chatMessages: 120,
+    },
+    {
+      id: "c",
+      title: "Mehendi",
+      peakViewers: 45,
+      watchTimeSec: 1800,
+      chatMessages: 60,
+    },
   ],
   byDayCredits: [
     { date: "2026-04-01", credits: 100 },
@@ -30,7 +48,9 @@ function jsonResp(body: unknown, status = 200): Response {
 
 describe("WorkspaceAnalyticsWidget", () => {
   it("renders monthly streams, credits consumed, and top performers", async () => {
-    const fn = vi.fn(async (_url: string, _init?: RequestInit) => jsonResp(dto));
+    const fn = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResp(dto),
+    );
     render(<WorkspaceAnalyticsWidget defaultMonth="2026-04" fetcher={fn} />);
     await waitFor(() => {
       expect(screen.getByText(/Streams/i)).toBeTruthy();
@@ -43,7 +63,9 @@ describe("WorkspaceAnalyticsWidget", () => {
   });
 
   it("month navigation triggers refetch with adjusted YYYY-MM", async () => {
-    const fn = vi.fn(async (_url: string, _init?: RequestInit) => jsonResp(dto));
+    const fn = vi.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResp(dto),
+    );
     render(<WorkspaceAnalyticsWidget defaultMonth="2026-04" fetcher={fn} />);
     await waitFor(() => screen.getByText("Reception Live"));
     const prev = screen.getByLabelText(/previous month/i);

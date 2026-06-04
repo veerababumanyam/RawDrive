@@ -30,7 +30,9 @@ describe("CountdownView", () => {
   });
 
   it("renders the calm pending state (not a zeroed countdown) for an invalid/empty date", () => {
-    const { container } = render(<CountdownView scheduledAt="" brandName="Studio One" />);
+    const { container } = render(
+      <CountdownView scheduledAt="" brandName="Studio One" />,
+    );
 
     // Pending fallback shown; normal countdown is NOT shown.
     expect(screen.getByTestId("viewer-countdown-pending")).toBeTruthy();

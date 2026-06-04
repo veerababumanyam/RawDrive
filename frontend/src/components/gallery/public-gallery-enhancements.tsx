@@ -63,7 +63,9 @@ export function PublicGalleryEnhancements({
   const fromParam = searchParams?.get("from") ?? "";
   const [branding, setBranding] = useState<GalleryBranding | null>(null);
   const [faceIdDismissed, setFaceIdDismissed] = useState(false);
-  const [facePinnedAssetIds, setFacePinnedAssetIds] = useState<string[] | null>(null);
+  const [facePinnedAssetIds, setFacePinnedAssetIds] = useState<string[] | null>(
+    null,
+  );
   const faceIdOpen = faceIdParam === "1" && faceIdEnabled && !faceIdDismissed;
 
   // GAL-FR-118: View-as-Client mode — applies a body class the CSS can hook
@@ -87,7 +89,10 @@ export function PublicGalleryEnhancements({
         // Only apply overrides when the tier permits it (GAL-FR-115).
         if (b.can_customize) {
           if (b.accent_color) {
-            document.documentElement.style.setProperty("--accent-primary", b.accent_color);
+            document.documentElement.style.setProperty(
+              "--accent-primary",
+              b.accent_color,
+            );
           }
         }
       })
@@ -130,7 +135,7 @@ export function PublicGalleryEnhancements({
     <>
       {/* GAL-FR-117: public profile → gallery bridge breadcrumb */}
       {fromParam === "profile" && (
-        <div className="fixed top-4 left-4 z-30 rounded-full bg-surface-raised/90 backdrop-blur-sm border border-border-subtle px-3 py-1.5 text-xs text-text-secondary">
+        <div className="fixed top-4 left-4 z-30 rounded-full bg-surface-raised/90 glass-blur-subtle border border-border-subtle px-3 py-1.5 text-xs text-text-secondary">
           ← From photographer profile
         </div>
       )}
@@ -155,7 +160,7 @@ export function PublicGalleryEnhancements({
         <Link
           href={`/g/${slug}/photo-search`}
           aria-label="Find your photos with your camera"
-          className="fixed bottom-4 left-4 z-30 inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2.5 text-sm font-semibold text-text-inverse shadow-lg shadow-black/20 backdrop-blur-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 sm:bottom-6 sm:left-6"
+          className="fixed bottom-4 left-4 z-30 inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2.5 text-sm font-semibold text-text-inverse shadow-lg glass-blur-subtle hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 sm:bottom-6 sm:left-6"
         >
           <Camera className="h-4 w-4" aria-hidden />
           <span className="hidden sm:inline">Find me with my camera</span>
@@ -174,8 +179,10 @@ export function PublicGalleryEnhancements({
 
       {/* Face filter indicator (GAL-FR-109 fallback affordance always visible) */}
       {facePinnedAssetIds !== null && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 rounded-full bg-accent-primary/90 backdrop-blur-sm px-4 py-2 text-xs text-text-inverse">
-          <span>Showing {facePinnedAssetIds.length} photos matching your face</span>
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 rounded-full bg-accent-primary/90 glass-blur-subtle px-4 py-2 text-xs text-text-inverse">
+          <span>
+            Showing {facePinnedAssetIds.length} photos matching your face
+          </span>
           <button
             type="button"
             onClick={onFaceFallback}

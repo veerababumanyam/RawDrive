@@ -21,7 +21,9 @@ describe("PINEntry", () => {
   it("rejects PINs shorter than 4 digits with inline validation", async () => {
     const onAuth = vi.fn();
     render(<PINEntry streamId="s1" onAuthenticated={onAuth} />);
-    fireEvent.change(screen.getByTestId("pin-input"), { target: { value: "12" } });
+    fireEvent.change(screen.getByTestId("pin-input"), {
+      target: { value: "12" },
+    });
     fireEvent.click(screen.getByTestId("pin-submit"));
     await waitFor(() => {
       expect(screen.getByTestId("pin-error").textContent).toMatch(/4/);
@@ -38,11 +40,20 @@ describe("PINEntry", () => {
     };
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({ ok: true, status: 200, json: async () => pair }) as unknown as Response),
+      vi.fn(
+        async () =>
+          ({
+            ok: true,
+            status: 200,
+            json: async () => pair,
+          }) as unknown as Response,
+      ),
     );
     const onAuth = vi.fn();
     render(<PINEntry streamId="s1" onAuthenticated={onAuth} />);
-    fireEvent.change(screen.getByTestId("pin-input"), { target: { value: "1234" } });
+    fireEvent.change(screen.getByTestId("pin-input"), {
+      target: { value: "1234" },
+    });
     fireEvent.click(screen.getByTestId("pin-submit"));
     await waitFor(() => expect(onAuth).toHaveBeenCalledWith(pair));
   });
@@ -50,17 +61,24 @@ describe("PINEntry", () => {
   it("shows an error on 401 invalid PIN", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
-        ok: false,
-        status: 401,
-        json: async () => ({ error: "invalid_pin" }),
-      }) as unknown as Response),
+      vi.fn(
+        async () =>
+          ({
+            ok: false,
+            status: 401,
+            json: async () => ({ error: "invalid_pin" }),
+          }) as unknown as Response,
+      ),
     );
     render(<PINEntry streamId="s1" onAuthenticated={vi.fn()} />);
-    fireEvent.change(screen.getByTestId("pin-input"), { target: { value: "9999" } });
+    fireEvent.change(screen.getByTestId("pin-input"), {
+      target: { value: "9999" },
+    });
     fireEvent.click(screen.getByTestId("pin-submit"));
     await waitFor(() => {
-      expect(screen.getByTestId("pin-error").textContent).toMatch(/invalid|incorrect/i);
+      expect(screen.getByTestId("pin-error").textContent).toMatch(
+        /invalid|incorrect/i,
+      );
     });
   });
 });

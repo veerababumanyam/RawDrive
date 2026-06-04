@@ -1,10 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { PreviewChrome } from "../preview-chrome";
 import type { Gallery } from "@/lib/api/galleries";
 
 vi.mock("next/link", () => ({
-  default: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
+  default: ({
+    href,
+    children,
+    ...props
+  }: {
+    href: string;
+    children: React.ReactNode;
+  }) => (
     <a href={href} {...props}>
       {children}
     </a>
@@ -60,7 +73,9 @@ describe("PreviewChrome", () => {
       "href",
       "/galleries/gallery-42",
     );
-    expect(screen.getByText("app.rawdrive.test/g/wedding-2026")).toBeInTheDocument();
+    expect(
+      screen.getByText("app.rawdrive.test/g/wedding-2026"),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("preview-share-button")).toBeEnabled();
   });
 
@@ -81,13 +96,17 @@ describe("PreviewChrome", () => {
     fireEvent.click(screen.getByTestId("preview-share-button"));
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith("https://app.rawdrive.test/g/wedding-2026");
+      expect(writeText).toHaveBeenCalledWith(
+        "https://app.rawdrive.test/g/wedding-2026",
+      );
     });
     // Confirm the button flips to its Copied state — the sr-only
     // aria-live region announces the transition and is single-text-node
     // friendly for RTL's text matcher.
     await waitFor(() => {
-      expect(screen.getByText("Share link copied to clipboard.")).toBeInTheDocument();
+      expect(
+        screen.getByText("Share link copied to clipboard."),
+      ).toBeInTheDocument();
     });
     expect(screen.getByTestId("preview-share-button")).toHaveAttribute(
       "aria-label",
@@ -172,8 +191,6 @@ describe("PreviewChrome", () => {
 
     fireEvent.click(screen.getByTestId("preview-share-button"));
 
-    expect(
-      await screen.findByRole("alert"),
-    ).toHaveTextContent(/copy failed/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/copy failed/i);
   });
 });

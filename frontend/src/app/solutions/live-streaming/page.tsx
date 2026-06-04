@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Layers3, MonitorPlay, Users, Video } from "lucide-react";
+import { Layers3, MonitorPlay, Users, Video } from "@/components/icons";
 import { SolutionShowcasePage } from "@/components/marketing/SolutionShowcasePage";
 import { createPageMetadata } from "@/lib/seo";
 

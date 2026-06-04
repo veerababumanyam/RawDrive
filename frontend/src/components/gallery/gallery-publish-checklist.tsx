@@ -15,9 +15,15 @@ interface GalleryPublishChecklistProps {
   assets: Array<{ asset: Asset | null }>;
 }
 
-export function GalleryPublishChecklist({ gallery, assets }: GalleryPublishChecklistProps) {
+export function GalleryPublishChecklist({
+  gallery,
+  assets,
+}: GalleryPublishChecklistProps) {
   const hasWebP = assets.some((entry) =>
-    Boolean(entry.asset?.thumbnail_urls?.display_webp || entry.asset?.thumbnail_urls?.thumb_lg_webp),
+    Boolean(
+      entry.asset?.thumbnail_urls?.display_webp ||
+      entry.asset?.thumbnail_urls?.thumb_lg_webp,
+    ),
   );
   const items: ChecklistItem[] = [
     {
@@ -59,38 +65,62 @@ export function GalleryPublishChecklist({ gallery, assets }: GalleryPublishCheck
       actionHref: `/galleries/${gallery.id}#share-center`,
     },
   ];
-  const missingCritical = items.filter((item) => item.critical && !item.ok).length;
+  const missingCritical = items.filter(
+    (item) => item.critical && !item.ok,
+  ).length;
 
   return (
     <section className="surface-panel space-y-4 p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">Publish Checklist</p>
-          <h2 className="mt-1 text-lg font-semibold text-text-primary">Ready for client sharing</h2>
+          <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">
+            Publish Checklist
+          </p>
+          <h2 className="mt-1 text-lg font-semibold text-text-primary">
+            Ready for client sharing
+          </h2>
         </div>
-        <span className={missingCritical ? "status-badge status-badge--warning" : "status-badge status-badge--success"}>
+        <span
+          className={
+            missingCritical
+              ? "status-badge status-badge--warning"
+              : "status-badge status-badge--success"
+          }
+        >
           {missingCritical ? `${missingCritical} blockers` : "Ready"}
         </span>
       </div>
       <div className="space-y-2">
         {items.map((item) => (
-          <div key={item.key} className="flex items-center justify-between gap-3 rounded-2xl border border-border-default bg-surface-sunken p-3">
+          <div
+            key={item.key}
+            className="flex items-center justify-between gap-3 rounded-2xl border border-border-default bg-surface-sunken p-3"
+          >
             <div>
-              <p className="text-xs font-medium text-text-primary">{item.label}</p>
+              <p className="text-xs font-medium text-text-primary">
+                {item.label}
+              </p>
               {!item.ok && (
                 <p className="mt-1 text-xs text-text-tertiary">
-                  {item.critical ? "Blocks safe publishing unless overridden." : "Recommended before sharing."}
+                  {item.critical
+                    ? "Blocks safe publishing unless overridden."
+                    : "Recommended before sharing."}
                 </p>
               )}
             </div>
             {item.ok ? (
               <span className="status-badge status-badge--success">OK</span>
             ) : item.actionHref ? (
-              <Link href={item.actionHref} className="text-xs text-accent-primary hover:underline">
+              <Link
+                href={item.actionHref}
+                className="text-xs text-accent-primary hover:underline"
+              >
                 Fix
               </Link>
             ) : (
-              <span className="status-badge status-badge--warning">Missing</span>
+              <span className="status-badge status-badge--warning">
+                Missing
+              </span>
             )}
           </div>
         ))}

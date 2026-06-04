@@ -2,7 +2,12 @@
 
 import { useState, useEffect, use } from "react";
 import Link from "next/link";
-import { getFreelancer, createInquiry, type FreelancerListing, type FreelancerReview } from "@/lib/api/marketplace";
+import {
+  getFreelancer,
+  createInquiry,
+  type FreelancerListing,
+  type FreelancerReview,
+} from "@/lib/api/marketplace";
 import { BackButton } from "@/components/ui/back-button";
 import { getStoredAccessToken, getStoredAccessTokenClaims } from "@/lib/auth";
 
@@ -21,7 +26,11 @@ const BLANK_AVAILABILITY: Availability = {
   booked_dates: [],
 };
 
-export default function FreelancerProfilePage({ params }: { params: Promise<{ id: string }> }) {
+export default function FreelancerProfilePage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = use(params);
   const [listing, setListing] = useState<FreelancerListing | null>(null);
   const [reviews, setReviews] = useState<FreelancerReview[]>([]);
@@ -32,16 +41,20 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
   const [inquirySent, setInquirySent] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   // Availability state
-  const [availability, setAvailability] = useState<Availability>(BLANK_AVAILABILITY);
+  const [availability, setAvailability] =
+    useState<Availability>(BLANK_AVAILABILITY);
   const [nextAvailable, setNextAvailable] = useState<string>("");
   const [newBlockDate, setNewBlockDate] = useState<string>("");
   const [savingAvailability, setSavingAvailability] = useState(false);
 
   // Determine if the current viewer owns this listing so we can show
   // the edit controls. `sub` in the JWT claims is the user_id.
-  const claims = typeof window !== "undefined" ? getStoredAccessTokenClaims() : null;
+  const claims =
+    typeof window !== "undefined" ? getStoredAccessTokenClaims() : null;
   const currentUserID = claims?.sub ?? "";
-  const isOwner = Boolean(listing && currentUserID && listing.user_id === currentUserID);
+  const isOwner = Boolean(
+    listing && currentUserID && listing.user_id === currentUserID,
+  );
 
   useEffect(() => {
     getFreelancer(id)
@@ -58,7 +71,7 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
   // "Next available" badge.
   useEffect(() => {
     fetch(`${API_BASE}/api/v1/marketplace/freelancers/${id}/availability`)
-      .then((r) => r.ok ? r.json() : null)
+      .then((r) => (r.ok ? r.json() : null))
       .then((body) => {
         if (body?.data) {
           setAvailability({ ...BLANK_AVAILABILITY, ...body.data });
@@ -67,7 +80,9 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
           setNextAvailable(body.next_available);
         }
       })
-      .catch(() => { /* silent — booked_dates is a soft signal */ });
+      .catch(() => {
+        /* silent — booked_dates is a soft signal */
+      });
   }, [id]);
 
   const saveAvailability = async (next: Availability) => {
@@ -75,14 +90,17 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
     if (!token || !isOwner) return;
     setSavingAvailability(true);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/marketplace/freelancers/${id}/availability`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
+      const res = await fetch(
+        `${API_BASE}/api/v1/marketplace/freelancers/${id}/availability`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(next),
         },
-        body: JSON.stringify(next),
-      });
+      );
       if (res.ok) {
         const body = await res.json();
         setAvailability({ ...BLANK_AVAILABILITY, ...(body.data || next) });
@@ -97,7 +115,9 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
     if (!newBlockDate) return;
     const next: Availability = {
       ...availability,
-      blocked_dates: Array.from(new Set([...availability.blocked_dates, newBlockDate])).sort(),
+      blocked_dates: Array.from(
+        new Set([...availability.blocked_dates, newBlockDate]),
+      ).sort(),
     };
     setNewBlockDate("");
     saveAvailability(next);
@@ -125,7 +145,11 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
       setInquirySent(true);
       setInquiryMsg("");
     } catch (err) {
-      setSendError(err instanceof Error ? err.message : "Failed to send inquiry. Please try again.");
+      setSendError(
+        err instanceof Error
+          ? err.message
+          : "Failed to send inquiry. Please try again.",
+      );
     } finally {
       setSending(false);
     }
@@ -146,7 +170,9 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
     return (
       <div className="max-w-4xl mx-auto px-4 py-8 text-center text-text-secondary">
         Freelancer not found.{" "}
-        <Link href="/marketplace/freelancers" className="text-accent underline">Back to browse</Link>
+        <Link href="/marketplace/freelancers" className="text-accent underline">
+          Back to browse
+        </Link>
       </div>
     );
   }
@@ -157,7 +183,9 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-text-primary">{listing.title}</h1>
+          <h1 className="text-2xl font-semibold text-text-primary">
+            {listing.title}
+          </h1>
           {listing.city && (
             <p className="text-sm text-text-secondary mt-1">{listing.city}</p>
           )}
@@ -173,7 +201,9 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
           {listing.daily_rate_paisa && (
             <div className="text-xl font-bold text-text-primary">
               ₹{(listing.daily_rate_paisa / 100).toLocaleString("en-IN")}
-              <span className="text-sm font-normal text-text-secondary">/day</span>
+              <span className="text-sm font-normal text-text-secondary">
+                /day
+              </span>
             </div>
           )}
           <div className="flex items-center gap-1 mt-1 justify-end">
@@ -181,7 +211,9 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
             <span className="text-sm font-medium text-text-primary">
               {listing.rating_avg?.toFixed(1) || "New"}
             </span>
-            <span className="text-xs text-text-secondary">({listing.review_count} reviews)</span>
+            <span className="text-xs text-text-secondary">
+              ({listing.review_count} reviews)
+            </span>
           </div>
         </div>
       </div>
@@ -189,8 +221,12 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
       {/* Description */}
       {listing.description && (
         <div className="surface-panel p-5">
-          <h2 className="text-base font-semibold text-text-primary mb-2">About</h2>
-          <p className="text-sm text-text-secondary leading-relaxed">{listing.description}</p>
+          <h2 className="text-base font-semibold text-text-primary mb-2">
+            About
+          </h2>
+          <p className="text-sm text-text-secondary leading-relaxed">
+            {listing.description}
+          </p>
         </div>
       )}
 
@@ -200,25 +236,39 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
           token. */}
       <div className="surface-panel p-5 space-y-3">
         <div className="flex items-center justify-between gap-4">
-          <h2 className="text-base font-semibold text-text-primary">Availability</h2>
+          <h2 className="text-base font-semibold text-text-primary">
+            Availability
+          </h2>
           {nextAvailable && (
             <span className="status-badge status-badge--success">
-              Next available: {new Date(nextAvailable).toLocaleDateString("en-IN", {
-                day: "numeric", month: "short", year: "numeric",
+              Next available:{" "}
+              {new Date(nextAvailable).toLocaleDateString("en-IN", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
               })}
             </span>
           )}
         </div>
 
-        {(availability.blocked_dates.length > 0 || availability.booked_dates.length > 0) && (
+        {(availability.blocked_dates.length > 0 ||
+          availability.booked_dates.length > 0) && (
           <div className="space-y-2">
             {availability.booked_dates.length > 0 && (
               <div>
-                <p className="text-xs font-medium text-text-secondary mb-1">Booked (synced from calendar)</p>
+                <p className="text-xs font-medium text-text-secondary mb-1">
+                  Booked (synced from calendar)
+                </p>
                 <div className="flex flex-wrap gap-1.5">
                   {availability.booked_dates.map((d) => (
-                    <span key={d} className="status-badge status-badge--warning">
-                      {new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                    <span
+                      key={d}
+                      className="status-badge status-badge--warning"
+                    >
+                      {new Date(d).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                      })}
                     </span>
                   ))}
                 </div>
@@ -226,15 +276,23 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
             )}
             {availability.blocked_dates.length > 0 && (
               <div>
-                <p className="text-xs font-medium text-text-secondary mb-1">Blocked (manual blackouts)</p>
+                <p className="text-xs font-medium text-text-secondary mb-1">
+                  Blocked (manual blackouts)
+                </p>
                 <div className="flex flex-wrap gap-1.5">
                   {availability.blocked_dates.map((d) => (
-                    <span key={d} className="status-badge status-badge--neutral inline-flex items-center gap-1">
-                      {new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                    <span
+                      key={d}
+                      className="status-badge status-badge--neutral inline-flex items-center gap-1"
+                    >
+                      {new Date(d).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                      })}
                       {isOwner && (
                         <button
                           onClick={() => removeBlockedDate(d)}
-                          className="text-text-secondary hover:text-error ml-1"
+                          className="text-text-secondary hover:text-feedback-error ml-1"
                           aria-label={`Unblock ${d}`}
                           disabled={savingAvailability}
                         >
@@ -260,7 +318,7 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
             <button
               onClick={addBlockedDate}
               disabled={!newBlockDate || savingAvailability}
-              className="rounded-lg bg-accent-primary px-4 py-2 text-sm font-medium text-white hover:bg-accent-primary/90 disabled:opacity-50"
+              className="rounded-lg bg-accent-primary px-4 py-2 text-sm font-medium text-text-inverse hover:bg-accent-primary/90 disabled:opacity-50"
             >
               Block date
             </button>
@@ -276,16 +334,24 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
         {inquirySent ? (
           <div className="surface-panel p-5 space-y-3">
             <div className="flex items-start gap-3">
-              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-feedback-success/15 text-feedback-success text-sm">✓</span>
+              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-feedback-success/15 text-feedback-success text-sm">
+                ✓
+              </span>
               <div>
-                <p className="font-semibold text-on-surface text-sm">Inquiry sent!</p>
+                <p className="font-semibold text-text-primary text-sm">
+                  Inquiry sent!
+                </p>
                 <p className="text-sm text-text-secondary mt-0.5">
-                  Your message has been delivered to the photographer. They&apos;ll respond shortly.
+                  Your message has been delivered to the photographer.
+                  They&apos;ll respond shortly.
                 </p>
               </div>
             </div>
             <button
-              onClick={() => { setInquirySent(false); setShowInquiry(true); }}
+              onClick={() => {
+                setInquirySent(false);
+                setShowInquiry(true);
+              }}
               className="surface-button text-sm"
             >
               Send another inquiry
@@ -300,7 +366,9 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
           </button>
         ) : (
           <div className="surface-panel space-y-3 p-5">
-            <h3 className="text-sm font-semibold text-text-primary">Send an inquiry</h3>
+            <h3 className="text-sm font-semibold text-text-primary">
+              Send an inquiry
+            </h3>
             {sendError && (
               <p className="rounded-lg border border-feedback-error/30 bg-feedback-error/10 px-3 py-2 text-sm text-feedback-error">
                 {sendError}
@@ -321,7 +389,10 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
                 {sending ? "Sending..." : "Send"}
               </button>
               <button
-                onClick={() => { setShowInquiry(false); setSendError(null); }}
+                onClick={() => {
+                  setShowInquiry(false);
+                  setSendError(null);
+                }}
                 className="surface-button text-sm"
               >
                 Cancel
@@ -334,13 +405,24 @@ export default function FreelancerProfilePage({ params }: { params: Promise<{ id
       {/* Reviews */}
       {reviews.length > 0 && (
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-text-primary">Reviews ({reviews.length})</h2>
+          <h2 className="text-lg font-semibold text-text-primary">
+            Reviews ({reviews.length})
+          </h2>
           {reviews.map((rev) => (
             <div key={rev.id} className="surface-panel p-4">
               <div className="flex items-center gap-2 mb-2">
                 <div className="flex gap-0.5">
                   {[1, 2, 3, 4, 5].map((star) => (
-                    <span key={star} className={star <= rev.rating ? "rating-star" : "text-text-secondary/30"}>★</span>
+                    <span
+                      key={star}
+                      className={
+                        star <= rev.rating
+                          ? "rating-star"
+                          : "text-text-secondary/30"
+                      }
+                    >
+                      ★
+                    </span>
                   ))}
                 </div>
                 <span className="text-xs text-text-secondary">

@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
-import type { Gallery, GalleryBranding, PublicAsset } from "@/lib/api/galleries";
+import type {
+  Gallery,
+  GalleryBranding,
+  PublicAsset,
+} from "@/lib/api/galleries";
 import type { PublicDesignConfig } from "@/lib/gallery-design-config";
 import { getCoverStyleById } from "@/components/gallery/cover-styles";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
@@ -32,20 +36,23 @@ function absoluteApiUrl(url?: string | null) {
 // display_webp as a WebP-only last resort. The hero is above-the-fold so
 // thumb_lg_webp (typically ~1200px) is more than enough detail. Lightbox
 // stays on display_webp via authenticated fetch + blob.
-function pickFromThumbnails(urls: Record<string, string> | undefined | null): string {
+function pickFromThumbnails(
+  urls: Record<string, string> | undefined | null,
+): string {
   if (!urls) return "";
-  return (
-    getStorageBackedUrl(
-      urls.thumb_lg_webp ||
-        urls.thumb_md_webp ||
-        urls.thumb_sm_webp ||
-        urls.display_webp ||
-        "",
-    )
+  return getStorageBackedUrl(
+    urls.thumb_lg_webp ||
+      urls.thumb_md_webp ||
+      urls.thumb_sm_webp ||
+      urls.display_webp ||
+      "",
   );
 }
 
-export function resolvePublicCoverImage(gallery: Gallery, assets: PublicAsset[]) {
+export function resolvePublicCoverImage(
+  gallery: Gallery,
+  assets: PublicAsset[],
+) {
   const preferred = gallery.cover_asset_id
     ? assets.find((asset) => asset.id === gallery.cover_asset_id)
     : assets[0];
@@ -88,7 +95,10 @@ const HERO_VARIANTS = [
 
 type PublicCoverConfig = NonNullable<PublicDesignConfig["cover"]>;
 
-function resolvePublicCoverAsset(gallery: Gallery, assets: PublicAsset[]): PublicAsset | null {
+function resolvePublicCoverAsset(
+  gallery: Gallery,
+  assets: PublicAsset[],
+): PublicAsset | null {
   const preferred = gallery.cover_asset_id
     ? assets.find((asset) => asset.id === gallery.cover_asset_id)
     : assets[0];
@@ -124,7 +134,10 @@ function resolveDesignCoverAsset(
     if (match) return match;
   }
 
-  return coverAssetFromThumbnails(gallery, designCoverThumbnails) || resolvePublicCoverAsset(gallery, assets);
+  return (
+    coverAssetFromThumbnails(gallery, designCoverThumbnails) ||
+    resolvePublicCoverAsset(gallery, assets)
+  );
 }
 
 interface PublicGalleryHeroProps {
@@ -145,9 +158,11 @@ interface PublicGalleryHeroProps {
 // it; `dark` and `auto` add increasing levels of dim so light text reads
 // against a busy cover. Same mapping the Gallery Design Studio preview
 // uses, so what-you-see-is-what-clients-see.
-function variantScrim(variant: "light" | "dark" | "auto" | undefined): string | null {
-  if (variant === "dark") return "rgba(0,0,0,0.35)";
-  if (variant === "auto") return "rgba(0,0,0,0.15)";
+function variantScrim(
+  variant: "light" | "dark" | "auto" | undefined,
+): string | null {
+  if (variant === "dark") return "var(--cover-scrim-dark)";
+  if (variant === "auto") return "var(--cover-scrim-auto)";
   return null;
 }
 
@@ -156,13 +171,17 @@ function coverExperienceScrim(
   variant: "light" | "dark" | "auto" | undefined,
 ): string | null {
   if (style === "none") return null;
-  if (style === "soft-gradient") return "linear-gradient(to bottom, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.52))";
-  if (style === "cinematic-dark") return "linear-gradient(180deg, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.68))";
+  if (style === "soft-gradient")
+    return "linear-gradient(to bottom, var(--cover-scrim-soft-start), var(--cover-scrim-soft-end))";
+  if (style === "cinematic-dark")
+    return "linear-gradient(180deg, var(--cover-scrim-cinematic-start), var(--cover-scrim-cinematic-end))";
   if (style === "warm-vignette") {
-    return "radial-gradient(circle at 50% 45%, rgba(255, 196, 87, 0.18), rgba(0, 0, 0, 0.58) 72%)";
+    return "radial-gradient(circle at 50% 45%, var(--cover-scrim-warm), var(--cover-scrim-soft-end) 72%)";
   }
-  if (style === "blur-band") return "linear-gradient(to bottom, transparent 36%, rgba(0, 0, 0, 0.64) 55%, transparent 76%)";
-  if (style === "light-wash") return "linear-gradient(to bottom, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.08))";
+  if (style === "blur-band")
+    return "linear-gradient(to bottom, transparent 36%, var(--cover-scrim-band) 55%, transparent 76%)";
+  if (style === "light-wash")
+    return "linear-gradient(to bottom, var(--cover-scrim-light-start), var(--cover-scrim-light-end))";
   return variantScrim(variant);
 }
 
@@ -171,25 +190,27 @@ function textBackdropStyle(
 ): CSSProperties | undefined {
   if (backdrop === "glass") {
     return {
-      background: "rgba(255, 255, 255, 0.16)",
-      backdropFilter: "blur(14px) saturate(160%)",
-      border: "1px solid rgba(255, 255, 255, 0.24)",
-      borderRadius: "12px",
-      padding: "0.12em 0.26em",
+      background: "var(--cover-text-backdrop-glass-bg)",
+      backdropFilter:
+        "blur(calc(var(--glass-blur) * 0.6)) saturate(var(--glass-saturation))",
+      border: "1px solid var(--cover-text-backdrop-glass-border)",
+      borderRadius: "var(--radius-xl)",
+      boxShadow: "var(--shadow-md)",
+      padding: "var(--cover-text-backdrop-padding)",
     };
   }
   if (backdrop === "dark") {
     return {
-      background: "rgba(0, 0, 0, 0.42)",
-      borderRadius: "12px",
-      padding: "0.12em 0.26em",
+      background: "var(--cover-text-backdrop-dark-bg)",
+      borderRadius: "var(--radius-xl)",
+      padding: "var(--cover-text-backdrop-padding)",
     };
   }
   if (backdrop === "light") {
     return {
-      background: "rgba(255, 255, 255, 0.76)",
-      borderRadius: "12px",
-      padding: "0.12em 0.26em",
+      background: "var(--cover-text-backdrop-light-bg)",
+      borderRadius: "var(--radius-xl)",
+      padding: "var(--cover-text-backdrop-padding)",
     };
   }
   return undefined;
@@ -210,7 +231,11 @@ function useIsMobileViewport() {
   return mobile;
 }
 
-function placementClass(placement: NonNullable<PublicDesignConfig["branding"]>["logoPlacement"] | undefined) {
+function placementClass(
+  placement:
+    | NonNullable<PublicDesignConfig["branding"]>["logoPlacement"]
+    | undefined,
+) {
   if (placement === "top-right") return "top-6 right-6";
   if (placement === "bottom-left") return "bottom-6 left-6";
   if (placement === "bottom-right") return "bottom-6 right-6";
@@ -226,7 +251,9 @@ function sceneCoverUrl(
   assets: PublicAsset[],
   fallbackAsset: PublicAsset | null,
 ): string {
-  const sceneAsset = scene.assetId ? assets.find((asset) => asset.id === scene.assetId) : null;
+  const sceneAsset = scene.assetId
+    ? assets.find((asset) => asset.id === scene.assetId)
+    : null;
   return mediaUrlForAsset(sceneAsset || fallbackAsset);
 }
 
@@ -244,7 +271,10 @@ function CoverSlideshow({
   const urls = [
     coverUrl,
     ...assets.map((asset) => mediaUrlForAsset(asset)),
-  ].filter((url, index, all): url is string => Boolean(url) && all.indexOf(url) === index);
+  ].filter(
+    (url, index, all): url is string =>
+      Boolean(url) && all.indexOf(url) === index,
+  );
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
@@ -274,7 +304,10 @@ function CoverSlideshow({
 // dynamic <link>; on the public viewer we add a static <link> in the
 // rendered output so first paint already has the right family. Falls
 // back silently when no design is present.
-function googleFontsHref(headingFont: string | undefined, bodyFont: string | undefined): string | null {
+function googleFontsHref(
+  headingFont: string | undefined,
+  bodyFont: string | undefined,
+): string | null {
   const families: string[] = [];
   if (headingFont) families.push(headingFont);
   if (bodyFont && bodyFont !== headingFont) families.push(bodyFont);
@@ -294,7 +327,9 @@ export function PublicGalleryHero({
   designCoverThumbnails,
 }: PublicGalleryHeroProps) {
   const mobileViewport = useIsMobileViewport();
-  const canUseStudioBrand = Boolean(branding?.can_customize && branding.public_branding_enabled !== false);
+  const canUseStudioBrand = Boolean(
+    branding?.can_customize && branding.public_branding_enabled !== false,
+  );
   // Brand chip only renders when the studio HAS configured branding for
   // the public viewer. Prior to this fix, the fallback was the literal
   // string "RawDrive" which forced the platform's own wordmark onto every
@@ -303,7 +338,7 @@ export function PublicGalleryHero({
   // Three downstream render sites already guard on `(logoUrl || brandName)`
   // so dropping the fallback removes the chip entirely when nothing is
   // configured.
-  const brandName = canUseStudioBrand ? (branding?.brand_name?.trim() || "") : "";
+  const brandName = canUseStudioBrand ? branding?.brand_name?.trim() || "" : "";
   const logoUrl = canUseStudioBrand ? absoluteApiUrl(branding?.logo_url) : "";
   const studioAccent = canUseStudioBrand ? branding?.accent_color || "" : "";
 
@@ -313,22 +348,38 @@ export function PublicGalleryHero({
   // saved with all defaults intact) still falls through to the legacy
   // path for predictability.
   const designStyleId = design?.cover?.styleId;
-  const designStyle = designStyleId ? getCoverStyleById(designStyleId) : undefined;
-  const resolvedDesignCoverAsset = design && designStyle
-    ? resolveDesignCoverAsset(gallery, assets, design, designCoverThumbnails ?? null, designCoverAsset)
+  const designStyle = designStyleId
+    ? getCoverStyleById(designStyleId)
+    : undefined;
+  const resolvedDesignCoverAsset =
+    design && designStyle
+      ? resolveDesignCoverAsset(
+          gallery,
+          assets,
+          design,
+          designCoverThumbnails ?? null,
+          designCoverAsset,
+        )
+      : null;
+  const legacyCoverAsset = !resolvedDesignCoverAsset
+    ? resolvePublicCoverAsset(gallery, assets)
     : null;
-  const legacyCoverAsset = !resolvedDesignCoverAsset ? resolvePublicCoverAsset(gallery, assets) : null;
   const coverMedia = useDecryptedAssetUrl(
     resolvedDesignCoverAsset || legacyCoverAsset,
     HERO_VARIANTS,
   );
 
   if (design && designStyle) {
-    const coverUrl = coverMedia.src || (
-      resolvedDesignCoverAsset
+    const coverUrl =
+      coverMedia.src ||
+      (resolvedDesignCoverAsset
         ? ""
-        : resolveDesignCoverImage(gallery, assets, design, designCoverThumbnails ?? null)
-    );
+        : resolveDesignCoverImage(
+            gallery,
+            assets,
+            design,
+            designCoverThumbnails ?? null,
+          ));
     const accent = design.theme?.accentColor || studioAccent || "";
     const variant = design.theme?.variant;
     const scrim = coverExperienceScrim(design.cover?.scrimStyle, variant);
@@ -338,7 +389,8 @@ export function PublicGalleryHero({
       ? `${mobileViewport && mobileFocal ? mobileFocal.x : focal.x}% ${mobileViewport && mobileFocal ? mobileFocal.y : focal.y}%`
       : designStyle.objectPosition;
     const title = design.cover?.title?.trim() || gallery.title;
-    const subtitle = design.cover?.subtitle?.trim() || gallery.description || "";
+    const subtitle =
+      design.cover?.subtitle?.trim() || gallery.description || "";
     const titleSize = design.typography?.titleSize;
     const subtitleSize = design.typography?.subtitleSize;
     const headingFont = design.typography?.headingFont;
@@ -356,9 +408,12 @@ export function PublicGalleryHero({
           : "text-center items-center";
     // Aspect-ratio override from the Cover & Design page lets the user
     // crop a 21/9 panoramic style to 4/3 without picking a new style.
-    const effectiveAspectRatio = design.cover?.aspectRatio || designStyle.aspectRatio;
+    const effectiveAspectRatio =
+      design.cover?.aspectRatio || designStyle.aspectRatio;
     const mobileAspectRatio = design.cover?.mobileAspectRatio || "4/5";
-    const renderedAspectRatio = mobileViewport ? mobileAspectRatio : effectiveAspectRatio;
+    const renderedAspectRatio = mobileViewport
+      ? mobileAspectRatio
+      : effectiveAspectRatio;
     const titlePos = design.cover?.titlePosition;
     const subtitlePos = design.cover?.subtitlePosition;
     const useDragLayout = Boolean(titlePos || subtitlePos);
@@ -371,23 +426,34 @@ export function PublicGalleryHero({
     const titleColor = design.cover?.titleColor || textColor;
     const subtitleColor = design.cover?.subtitleColor || textColor;
     const textShadow = design.cover?.textShadow
-      ? "0 2px 12px rgba(0,0,0,0.55), 0 1px 3px rgba(0,0,0,0.4)"
+      ? "var(--cover-text-shadow)"
       : undefined;
     const backdropStyle = textBackdropStyle(design.cover?.textBackdrop);
     const mediaMode = design.cover?.mediaMode || "single-photo";
-    const enabledScenes = (design.sceneHeaders || []).filter((scene) => scene.enabled);
+    const enabledScenes = (design.sceneHeaders || []).filter(
+      (scene) => scene.enabled,
+    );
     const coverForGrid = resolvedDesignCoverAsset || legacyCoverAsset;
     const photoGridAssets = [
       coverForGrid,
       ...assets.filter((asset) => asset.id !== coverForGrid?.id),
-    ].filter((asset): asset is PublicAsset => Boolean(asset)).slice(0, 4);
-    const showPhotoGrid = mediaMode === "photo-grid" && photoGridAssets.length > 1;
-    const showVideo = mediaMode === "short-video" && resolvedDesignCoverAsset?.content_type?.startsWith("video/");
-    const showSlideshow = mediaMode === "slideshow" && photoGridAssets.length > 1;
+    ]
+      .filter((asset): asset is PublicAsset => Boolean(asset))
+      .slice(0, 4);
+    const showPhotoGrid =
+      mediaMode === "photo-grid" && photoGridAssets.length > 1;
+    const showVideo =
+      mediaMode === "short-video" &&
+      resolvedDesignCoverAsset?.content_type?.startsWith("video/");
+    const showSlideshow =
+      mediaMode === "slideshow" && photoGridAssets.length > 1;
     const activeLogoPlacement = design.branding?.logoPlacement;
-    const showBrandChip = activeLogoPlacement !== "hidden" && (logoUrl || brandName || design.branding?.monogram);
+    const showBrandChip =
+      activeLogoPlacement !== "hidden" &&
+      (logoUrl || brandName || design.branding?.monogram);
     const monogram = design.branding?.monogram?.trim();
-    const brandColor = design.branding?.brandColor || accent || textColor || "#ffffff";
+    const brandColor =
+      design.branding?.brandColor || accent || textColor || "var(--text-media)";
     // Title and subtitle are anchored at their CENTER regardless of
     // textAlign — matches the Cover & Design editor's drag behavior
     // (Canva/Figma-style: object grabbed at visual middle). textAlign
@@ -414,11 +480,9 @@ export function PublicGalleryHero({
       //     the View Gallery CTA below the fold on shorter desktop
       //     viewports (1440×900 etc.).
       <section
-        className="relative flex w-full overflow-hidden"
+        className="cover-hero-frame relative flex w-full overflow-hidden"
         style={{
           aspectRatio: renderedAspectRatio,
-          minHeight: "60vh",
-          maxHeight: "85vh",
         }}
         data-cover-style={designStyle.id}
       >
@@ -429,9 +493,15 @@ export function PublicGalleryHero({
             data-testid="gallery-cover-photo-grid"
           >
             {photoGridAssets.map((asset, idx) => {
-              const src = idx === 0 ? coverUrl || mediaUrlForAsset(asset) : mediaUrlForAsset(asset);
+              const src =
+                idx === 0
+                  ? coverUrl || mediaUrlForAsset(asset)
+                  : mediaUrlForAsset(asset);
               return (
-                <div key={`${asset.id}-${idx}`} className="relative overflow-hidden">
+                <div
+                  key={`${asset.id}-${idx}`}
+                  className="relative overflow-hidden"
+                >
                   {src && (
                     <img
                       src={src}
@@ -464,19 +534,30 @@ export function PublicGalleryHero({
             title={title}
             objectPosition={objectPosition}
           />
-        ) : coverUrl && (
-          <img
-            src={coverUrl}
-            alt={title}
-            className="absolute inset-0 h-full w-full object-cover"
-            style={{ objectPosition }}
-            loading="eager"
-          />
+        ) : (
+          coverUrl && (
+            <img
+              src={coverUrl}
+              alt={title}
+              className="absolute inset-0 h-full w-full object-cover"
+              style={{ objectPosition }}
+              loading="eager"
+            />
+          )
         )}
         {designStyle.overlay && (
-          <div className="absolute inset-0" style={{ background: designStyle.overlay }} />
+          <div
+            className="absolute inset-0"
+            style={{ background: designStyle.overlay }}
+          />
         )}
-        {scrim && <div className="absolute inset-0" style={{ background: scrim }} data-testid="gallery-cover-scrim" />}
+        {scrim && (
+          <div
+            className="absolute inset-0"
+            style={{ background: scrim }}
+            data-testid="gallery-cover-scrim"
+          />
+        )}
 
         {useDragLayout ? (
           // Drag-positioned overlay — title and subtitle are absolutely
@@ -492,9 +573,11 @@ export function PublicGalleryHero({
                   left: `${titlePos.x}%`,
                   top: `${titlePos.y}%`,
                   transform: "translate(-50%, -50%)",
-                  fontFamily: headingFont ? `'${headingFont}', serif` : undefined,
+                  fontFamily: headingFont
+                    ? `'${headingFont}', serif`
+                    : undefined,
                   fontSize: titleSize ? `${titleSize}px` : undefined,
-                  color: titleColor || accent || "#ffffff",
+                  color: titleColor || accent || "var(--text-media)",
                   textShadow,
                   textAlign: effectiveAlign,
                   whiteSpace: "pre",
@@ -512,9 +595,11 @@ export function PublicGalleryHero({
                   left: `${subtitlePos.x}%`,
                   top: `${subtitlePos.y}%`,
                   transform: "translate(-50%, -50%)",
-                  fontFamily: bodyFont ? `'${bodyFont}', sans-serif` : undefined,
+                  fontFamily: bodyFont
+                    ? `'${bodyFont}', sans-serif`
+                    : undefined,
                   fontSize: subtitleSize ? `${subtitleSize}px` : undefined,
-                  color: subtitleColor || "#ffffff",
+                  color: subtitleColor || "var(--text-media)",
                   textShadow,
                   textAlign: effectiveAlign,
                   whiteSpace: "pre",
@@ -528,7 +613,7 @@ export function PublicGalleryHero({
               <div
                 className={`absolute flex items-center gap-3 ${placementClass(activeLogoPlacement)}`}
                 style={{
-                  color: textColor || "#ffffff",
+                  color: textColor || "var(--text-media)",
                   textShadow,
                 }}
               >
@@ -539,14 +624,10 @@ export function PublicGalleryHero({
                     className="h-10 w-10 rounded-full bg-surface-raised object-contain p-1"
                   />
                 )}
-                {brandName && (
-                  <span className="text-xs uppercase tracking-[0.18em]">
-                    {brandName}
-                  </span>
-                )}
+                {brandName && <span className="media-label">{brandName}</span>}
                 {monogram && (
                   <span
-                    className="inline-flex h-10 min-w-10 items-center justify-center rounded-full border border-white/25 px-2 text-sm font-semibold"
+                    className="cover-brand-mark inline-flex h-10 min-w-10 items-center justify-center rounded-full px-2 text-sm font-semibold"
                     style={{ color: brandColor, borderColor: brandColor }}
                   >
                     {monogram}
@@ -554,17 +635,18 @@ export function PublicGalleryHero({
                 )}
               </div>
             )}
-            {design.branding?.watermarkStyle && design.branding.watermarkStyle !== "none" && (
-              <span
-                className={`pointer-events-none absolute left-6 text-xs font-semibold uppercase tracking-[0.22em] opacity-70 ${
-                  enabledScenes.length > 0 ? "bottom-24" : "bottom-5"
-                }`}
-                style={{ color: brandColor, textShadow }}
-                aria-hidden
-              >
-                {monogram || brandName}
-              </span>
-            )}
+            {design.branding?.watermarkStyle &&
+              design.branding.watermarkStyle !== "none" && (
+                <span
+                  className={`media-label pointer-events-none absolute left-6 font-semibold opacity-70 ${
+                    enabledScenes.length > 0 ? "bottom-24" : "bottom-5"
+                  }`}
+                  style={{ color: brandColor, textShadow }}
+                  aria-hidden
+                >
+                  {monogram || brandName}
+                </span>
+              )}
             {enabledScenes.length > 0 && (
               <div
                 className="absolute bottom-6 left-6 right-40 flex gap-2 overflow-x-auto pb-1"
@@ -574,7 +656,7 @@ export function PublicGalleryHero({
                   <a
                     key={scene.id}
                     href="#gallery-grid"
-                    className="flex min-w-28 items-center gap-2 rounded-xl border border-white/25 bg-black/35 p-1.5 pr-3 text-xs font-medium text-white backdrop-blur-md transition-colors hover:bg-black/45"
+                    className="cover-media-chip flex min-w-28 items-center gap-2 p-1.5 pr-3 text-xs font-medium"
                     data-testid={`gallery-scene-header-${scene.id}`}
                   >
                     {sceneCoverUrl(scene, assets, coverForGrid) && (
@@ -592,7 +674,7 @@ export function PublicGalleryHero({
             )}
             <a
               href="#gallery-grid"
-              className="absolute bottom-6 right-6 inline-block rounded-full border bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary backdrop-blur-md transition-colors hover:bg-surface-raised"
+              className="absolute bottom-6 right-6 inline-block rounded-full border bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary glass-blur-medium transition-colors hover:bg-surface-raised"
               style={accent ? { borderColor: accent } : undefined}
             >
               View Gallery
@@ -601,9 +683,21 @@ export function PublicGalleryHero({
         ) : (
           // Legacy bottom-anchored layout — used when no drag positions
           // have been saved. Matches the design-studio's published behavior.
-          <div className={`relative z-10 mx-auto flex w-full max-w-3xl flex-col justify-end px-6 py-16 ${textAlignClass}`}>
+          <div
+            className={`relative z-10 mx-auto flex w-full max-w-3xl flex-col justify-end px-6 py-16 ${textAlignClass}`}
+          >
             {(logoUrl || brandName) && (
-              <div className="mb-6 flex items-center gap-3" style={{ justifyContent: effectiveAlign === "center" ? "center" : effectiveAlign === "right" ? "flex-end" : "flex-start" }}>
+              <div
+                className="mb-6 flex items-center gap-3"
+                style={{
+                  justifyContent:
+                    effectiveAlign === "center"
+                      ? "center"
+                      : effectiveAlign === "right"
+                        ? "flex-end"
+                        : "flex-start",
+                }}
+              >
                 {logoUrl && (
                   <img
                     src={logoUrl}
@@ -612,7 +706,7 @@ export function PublicGalleryHero({
                   />
                 )}
                 {brandName && (
-                  <span className="text-xs uppercase tracking-[0.18em] text-text-inverse">
+                  <span className="media-label text-text-inverse">
                     {brandName}
                   </span>
                 )}
@@ -636,7 +730,9 @@ export function PublicGalleryHero({
                 className="mt-3 max-w-2xl text-text-inverse/85"
                 data-testid="gallery-cover-subtitle"
                 style={{
-                  fontFamily: bodyFont ? `'${bodyFont}', sans-serif` : undefined,
+                  fontFamily: bodyFont
+                    ? `'${bodyFont}', sans-serif`
+                    : undefined,
                   fontSize: subtitleSize ? `${subtitleSize}px` : undefined,
                   color: subtitleColor || undefined,
                   textShadow,
@@ -649,14 +745,21 @@ export function PublicGalleryHero({
             {enabledScenes.length > 0 && (
               <div
                 className="mt-5 flex max-w-2xl flex-wrap gap-2"
-                style={{ justifyContent: effectiveAlign === "center" ? "center" : effectiveAlign === "right" ? "flex-end" : "flex-start" }}
+                style={{
+                  justifyContent:
+                    effectiveAlign === "center"
+                      ? "center"
+                      : effectiveAlign === "right"
+                        ? "flex-end"
+                        : "flex-start",
+                }}
                 data-testid="gallery-scene-headers"
               >
                 {enabledScenes.map((scene) => (
                   <a
                     key={scene.id}
                     href="#gallery-grid"
-                    className="flex items-center gap-2 rounded-xl border border-white/25 bg-surface-overlay p-1.5 pr-3 text-xs font-medium text-text-primary backdrop-blur-md transition-colors hover:bg-surface-raised"
+                    className="cover-media-chip flex items-center gap-2 p-1.5 pr-3 text-xs font-medium"
                     data-testid={`gallery-scene-header-${scene.id}`}
                   >
                     {sceneCoverUrl(scene, assets, coverForGrid) && (
@@ -672,10 +775,20 @@ export function PublicGalleryHero({
                 ))}
               </div>
             )}
-            <div className="mt-8" style={{ alignSelf: effectiveAlign === "center" ? "center" : effectiveAlign === "right" ? "flex-end" : "flex-start" }}>
+            <div
+              className="mt-8"
+              style={{
+                alignSelf:
+                  effectiveAlign === "center"
+                    ? "center"
+                    : effectiveAlign === "right"
+                      ? "flex-end"
+                      : "flex-start",
+              }}
+            >
               <a
                 href="#gallery-grid"
-                className="inline-block rounded-full border bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary backdrop-blur-md transition-colors hover:bg-surface-raised"
+                className="inline-block rounded-full border bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary glass-blur-medium transition-colors hover:bg-surface-raised"
                 style={accent ? { borderColor: accent } : undefined}
               >
                 View Gallery
@@ -690,8 +803,14 @@ export function PublicGalleryHero({
   // Legacy fallback — keeps the M19 `cover_template` path working for any
   // gallery that hasn't been touched by the design studio. Same code as
   // before this fix, modulo the early-return shape above.
-  const coverImageUrl = coverMedia.src || (!legacyCoverAsset ? resolvePublicCoverImage(gallery, assets) : "");
-  const hasCoverTemplate = Boolean(gallery.cover_template && gallery.cover_template !== "none" && coverImageUrl);
+  const coverImageUrl =
+    coverMedia.src ||
+    (!legacyCoverAsset ? resolvePublicCoverImage(gallery, assets) : "");
+  const hasCoverTemplate = Boolean(
+    gallery.cover_template &&
+    gallery.cover_template !== "none" &&
+    coverImageUrl,
+  );
   const accentColor = studioAccent;
 
   if (!hasCoverTemplate) {
@@ -699,22 +818,34 @@ export function PublicGalleryHero({
       <header className="mx-auto max-w-6xl px-4 py-8">
         {(logoUrl || brandName) && (
           <div className="mb-4 flex flex-wrap items-center gap-3">
-            {logoUrl && <img src={logoUrl} alt={brandName ? `${brandName} logo` : "Studio logo"} className="h-10 w-10 rounded-full object-contain" />}
+            {logoUrl && (
+              <img
+                src={logoUrl}
+                alt={brandName ? `${brandName} logo` : "Studio logo"}
+                className="h-10 w-10 rounded-full object-contain"
+              />
+            )}
             {brandName && (
-              <span className="text-xs uppercase tracking-[0.18em] text-text-tertiary">{brandName}</span>
+              <span className="media-label text-text-tertiary">
+                {brandName}
+              </span>
             )}
           </div>
         )}
-        <h1 className="text-3xl font-semibold text-text-primary">{gallery.title}</h1>
+        <h1 className="text-3xl font-semibold text-text-primary">
+          {gallery.title}
+        </h1>
         {gallery.description && (
-          <p className="mt-2 max-w-2xl text-text-secondary">{gallery.description}</p>
+          <p className="mt-2 max-w-2xl text-text-secondary">
+            {gallery.description}
+          </p>
         )}
       </header>
     );
   }
 
   return (
-    <section className="relative flex min-h-[60vh] w-full items-center justify-center overflow-hidden">
+    <section className="cover-hero-frame relative flex w-full items-center justify-center overflow-hidden">
       <img
         src={coverImageUrl}
         alt={gallery.title}
@@ -725,9 +856,15 @@ export function PublicGalleryHero({
       <div className="relative z-10 max-w-2xl px-6 py-12 text-center">
         {(logoUrl || brandName) && (
           <div className="mb-6 flex items-center justify-center gap-3">
-            {logoUrl && <img src={logoUrl} alt={brandName ? `${brandName} logo` : "Studio logo"} className="h-12 w-12 rounded-full bg-surface-raised object-contain p-2" />}
+            {logoUrl && (
+              <img
+                src={logoUrl}
+                alt={brandName ? `${brandName} logo` : "Studio logo"}
+                className="h-12 w-12 rounded-full bg-surface-raised object-contain p-2"
+              />
+            )}
             {brandName && (
-              <span className="text-xs uppercase tracking-[0.18em] text-text-inverse">{brandName}</span>
+              <span className="media-label text-text-inverse">{brandName}</span>
             )}
           </div>
         )}
@@ -735,11 +872,13 @@ export function PublicGalleryHero({
           {gallery.title}
         </h1>
         {gallery.description && (
-          <p className="mt-4 text-lg text-text-inverse/80">{gallery.description}</p>
+          <p className="mt-4 text-lg text-text-inverse/80">
+            {gallery.description}
+          </p>
         )}
         <a
           href="#gallery-grid"
-          className="mt-8 inline-block rounded-full border border-border-subtle bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary backdrop-blur-md transition-colors hover:bg-surface-raised"
+          className="mt-8 inline-block rounded-full border border-border-subtle bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary glass-blur-medium transition-colors hover:bg-surface-raised"
           style={accentColor ? { borderColor: accentColor } : undefined}
         >
           View Gallery

@@ -9,14 +9,24 @@ export function ServiceWorkerRegister() {
     }
 
     if (process.env.NODE_ENV !== "production") {
-      void navigator.serviceWorker.getRegistrations().then((registrations) =>
-        Promise.all(registrations.map((registration) => registration.unregister()))
-      );
+      void navigator.serviceWorker
+        .getRegistrations()
+        .then((registrations) =>
+          Promise.all(
+            registrations.map((registration) => registration.unregister()),
+          ),
+        );
 
       if ("caches" in window) {
-        void caches.keys().then((keys) =>
-          Promise.all(keys.filter((key) => key.startsWith("rawdrive-")).map((key) => caches.delete(key)))
-        );
+        void caches
+          .keys()
+          .then((keys) =>
+            Promise.all(
+              keys
+                .filter((key) => key.startsWith("rawdrive-"))
+                .map((key) => caches.delete(key)),
+            ),
+          );
       }
 
       return;
@@ -24,10 +34,13 @@ export function ServiceWorkerRegister() {
 
     const registerServiceWorker = async () => {
       try {
-        const registration = await navigator.serviceWorker.register("/service-worker.js", {
-          scope: "/",
-          updateViaCache: "none",
-        });
+        const registration = await navigator.serviceWorker.register(
+          "/service-worker.js",
+          {
+            scope: "/",
+            updateViaCache: "none",
+          },
+        );
         console.log("SW registered:", registration.scope);
       } catch (error) {
         console.warn("SW registration failed:", error);

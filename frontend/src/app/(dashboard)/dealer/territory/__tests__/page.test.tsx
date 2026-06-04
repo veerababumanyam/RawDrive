@@ -47,9 +47,27 @@ describe("DealerTerritoryPage — functional territory view", () => {
       { id: 2, name: "Maharashtra" },
     ]);
     getDealerPhotographers.mockResolvedValue([
-      { user_id: "p1", full_name: "A", email: "a@x.com", subscription_plan: "pro", subscription_status: "active" },
-      { user_id: "p2", full_name: "B", email: "b@x.com", subscription_plan: "", subscription_status: "none" },
-      { user_id: "p3", full_name: "C", email: "c@x.com", subscription_plan: "pro", subscription_status: "active" },
+      {
+        user_id: "p1",
+        full_name: "A",
+        email: "a@x.com",
+        subscription_plan: "pro",
+        subscription_status: "active",
+      },
+      {
+        user_id: "p2",
+        full_name: "B",
+        email: "b@x.com",
+        subscription_plan: "",
+        subscription_status: "none",
+      },
+      {
+        user_id: "p3",
+        full_name: "C",
+        email: "c@x.com",
+        subscription_plan: "pro",
+        subscription_status: "active",
+      },
     ]);
 
     render(<DealerTerritoryPage />);
@@ -79,7 +97,9 @@ describe("DealerTerritoryPage — functional territory view", () => {
 
   it("renders a friendly register prompt when the user is not a dealer (404)", async () => {
     // getDealerDashboard throws on a 404 from the endpoint.
-    getDealerDashboard.mockRejectedValue(new Error("Failed to fetch dealer dashboard"));
+    getDealerDashboard.mockRejectedValue(
+      new Error("Failed to fetch dealer dashboard"),
+    );
     getStates.mockResolvedValue([{ id: 1, name: "Karnataka" }]);
     getDealerPhotographers.mockResolvedValue([]);
 

@@ -10,15 +10,24 @@ describe("dashboard metric links", () => {
   it("routes create-gallery dashboard actions straight to the create form", () => {
     const source = fs.readFileSync(dashboardPagePath, "utf8");
 
-    expect(source).toContain('const GALLERY_CREATE_HREF = "/galleries?create=true"');
-    expect(source).toContain('{ label: "Create Gallery", icon: Plus, href: GALLERY_CREATE_HREF }');
+    expect(source).toContain(
+      'const GALLERY_CREATE_HREF = "/galleries?create=true"',
+    );
+    expect(source).toContain(
+      '{ label: "Create Gallery", icon: Plus, href: GALLERY_CREATE_HREF }',
+    );
     expect(source).toContain("href={GALLERY_CREATE_HREF}");
   });
 
   it("links every dashboard metric card to its real workspace page", () => {
     const source = fs.readFileSync(dashboardPagePath, "utf8");
 
-    for (const href of ["/galleries", "/crm/contacts", "/settings/storage", "/billing"]) {
+    for (const href of [
+      "/galleries",
+      "/crm/contacts",
+      "/settings/storage",
+      "/billing",
+    ]) {
       expect(source).toContain(`href: "${href}"`);
     }
 
@@ -40,15 +49,27 @@ describe("dashboard metric links", () => {
     const source = fs.readFileSync(dashboardPagePath, "utf8");
 
     expect(source).toContain("text-text-primary");
-    expect(source).toContain("text-accent transition-transform group-hover:scale-110");
+    expect(source).toContain(
+      "text-accent transition-transform group-hover:scale-110",
+    );
     expect(source).not.toContain("p-4 text-accent transition-colors");
   });
 
   it("keeps every dashboard metric destination backed by an existing page", () => {
-    expect(fs.existsSync(path.join(dashboardRoot, "galleries/page.tsx"))).toBe(true);
-    expect(fs.existsSync(path.join(dashboardRoot, "crm/contacts/page.tsx"))).toBe(true);
-    expect(fs.existsSync(path.join(dashboardRoot, "settings/storage/page.tsx"))).toBe(true);
-    expect(fs.existsSync(path.join(dashboardRoot, "billing/page.tsx"))).toBe(true);
-    expect(fs.existsSync(path.join(dashboardRoot, "settings/pwa/page.tsx"))).toBe(true);
+    expect(fs.existsSync(path.join(dashboardRoot, "galleries/page.tsx"))).toBe(
+      true,
+    );
+    expect(
+      fs.existsSync(path.join(dashboardRoot, "crm/contacts/page.tsx")),
+    ).toBe(true);
+    expect(
+      fs.existsSync(path.join(dashboardRoot, "settings/storage/page.tsx")),
+    ).toBe(true);
+    expect(fs.existsSync(path.join(dashboardRoot, "billing/page.tsx"))).toBe(
+      true,
+    );
+    expect(
+      fs.existsSync(path.join(dashboardRoot, "settings/pwa/page.tsx")),
+    ).toBe(true);
   });
 });

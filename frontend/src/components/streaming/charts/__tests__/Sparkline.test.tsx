@@ -26,9 +26,7 @@ describe("Sparkline", () => {
   });
 
   it("renders a flat zero-line when points are empty", () => {
-    const { container } = render(
-      <Sparkline points={[]} ariaLabel="empty" />,
-    );
+    const { container } = render(<Sparkline points={[]} ariaLabel="empty" />);
     expect(container.querySelector("svg")).toBeTruthy();
   });
 
@@ -60,14 +58,25 @@ describe("Sparkline", () => {
         ariaLabel="errors"
       />,
     );
-    expect(container.querySelector("title")?.textContent).toMatch(/trending down/);
+    expect(container.querySelector("title")?.textContent).toMatch(
+      /trending down/,
+    );
   });
 
   it("uses the requested stroke token via CSS var class", () => {
     const { container } = render(
-      <Sparkline points={[{ x: 0, y: 1 }, { x: 1, y: 2 }]} ariaLabel="t" strokeToken="success" />,
+      <Sparkline
+        points={[
+          { x: 0, y: 1 },
+          { x: 1, y: 2 },
+        ]}
+        ariaLabel="t"
+        strokeToken="success"
+      />,
     );
     const polyline = container.querySelector("polyline");
-    expect(polyline?.getAttribute("stroke")).toContain("var(--color-feedback-success");
+    expect(polyline?.getAttribute("stroke")).toContain(
+      "var(--color-feedback-success",
+    );
   });
 });

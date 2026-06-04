@@ -51,14 +51,20 @@ export default function FreelancerProfileEditorPage() {
         title,
         city: city || undefined,
         specializations,
-        daily_rate_paisa: dailyRate ? Math.round(Number(dailyRate) * 100) : undefined,
+        daily_rate_paisa: dailyRate
+          ? Math.round(Number(dailyRate) * 100)
+          : undefined,
         description: description || undefined,
         is_published: isPublished,
       });
 
       window.location.assign(`/marketplace/freelancers/${listing.id}`);
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Failed to save profile.");
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Failed to save profile.",
+      );
       setSaving(false);
     }
   };
@@ -67,16 +73,23 @@ export default function FreelancerProfileEditorPage() {
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
       <BackButton href="/marketplace/freelancers" label="Back to freelancers" />
       <div className="space-y-2">
-        <h1 className="text-2xl font-semibold text-text-primary">Create Freelancer Profile</h1>
+        <h1 className="text-2xl font-semibold text-text-primary">
+          Create Freelancer Profile
+        </h1>
         <p className="text-sm text-text-secondary">
-          Publish a profile that clients can browse, shortlist, and contact from the marketplace.
+          Publish a profile that clients can browse, shortlist, and contact from
+          the marketplace.
         </p>
       </div>
 
       {error && (
         <div
           className="surface-panel p-4 text-sm"
-          style={{ borderColor: "color-mix(in srgb, var(--feedback-error) 24%, transparent)", color: "var(--feedback-error)" }}
+          style={{
+            borderColor:
+              "color-mix(in srgb, var(--feedback-error) 24%, transparent)",
+            color: "var(--feedback-error)",
+          }}
         >
           {error}
         </div>
@@ -85,7 +98,9 @@ export default function FreelancerProfileEditorPage() {
       <form onSubmit={handleSubmit} className="surface-panel space-y-6 p-6">
         <div className="grid gap-5 md:grid-cols-2">
           <label className="space-y-2 md:col-span-2">
-            <span className="text-sm font-medium text-text-primary">Headline</span>
+            <span className="text-sm font-medium text-text-primary">
+              Headline
+            </span>
             <input
               type="text"
               value={title}
@@ -108,7 +123,9 @@ export default function FreelancerProfileEditorPage() {
           </label>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-text-primary">Daily rate</span>
+            <span className="text-sm font-medium text-text-primary">
+              Daily rate
+            </span>
             <input
               type="number"
               min="0"
@@ -121,7 +138,9 @@ export default function FreelancerProfileEditorPage() {
           </label>
 
           <label className="space-y-2 md:col-span-2">
-            <span className="text-sm font-medium text-text-primary">Description</span>
+            <span className="text-sm font-medium text-text-primary">
+              Description
+            </span>
             <textarea
               value={description}
               onChange={(event) => setDescription(event.target.value)}
@@ -133,7 +152,9 @@ export default function FreelancerProfileEditorPage() {
 
         <div className="space-y-3">
           <div>
-            <h2 className="text-sm font-medium text-text-primary">Specializations</h2>
+            <h2 className="text-sm font-medium text-text-primary">
+              Specializations
+            </h2>
             <p className="mt-1 text-sm text-text-secondary">
               Choose the work you want this listing to surface for.
             </p>
@@ -168,7 +189,11 @@ export default function FreelancerProfileEditorPage() {
         </label>
 
         <div className="flex flex-wrap gap-3">
-          <button type="submit" disabled={saving} className="btn-primary px-4 py-2.5 text-sm">
+          <button
+            type="submit"
+            disabled={saving}
+            className="btn-primary px-4 py-2.5 text-sm"
+          >
             {saving ? "Saving profile..." : "Create profile"}
           </button>
           <button

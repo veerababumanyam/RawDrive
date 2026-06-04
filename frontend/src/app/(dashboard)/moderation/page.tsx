@@ -29,11 +29,17 @@ export default function ModerationPage() {
   const fetchQueue = () => {
     const token = getStoredAccessToken();
     fetch(`${API_BASE}/api/v1/moderation/queue`, {
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
     })
       .then((r) => r.json())
       .then((res) => setItems(res.data || []))
-      .catch((err) => { setError(err?.message || "Failed to load moderation queue"); setItems([]); })
+      .catch((err) => {
+        setError(err?.message || "Failed to load moderation queue");
+        setItems([]);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -45,7 +51,10 @@ export default function ModerationPage() {
     const token = getStoredAccessToken();
     await fetch(`${API_BASE}/api/v1/moderation/${id}`, {
       method: "PUT",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({ action }),
     });
     fetchQueue();
@@ -65,12 +74,14 @@ export default function ModerationPage() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
       {error && (
-        <div className="mb-4 rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
+        <div className="mb-4 rounded-xl border border-feedback-error/20 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error">
           {error}
         </div>
       )}
       <div>
-        <h1 className="text-2xl font-semibold text-text-primary">Content Moderation</h1>
+        <h1 className="text-2xl font-semibold text-text-primary">
+          Content Moderation
+        </h1>
         <p className="text-sm text-text-secondary mt-1">
           {items.length} pending {items.length === 1 ? "item" : "items"}
         </p>
@@ -94,10 +105,13 @@ export default function ModerationPage() {
                   </span>
                   <span
                     className={cn(
-                      moderationReasonClasses[item.reason] || "status-badge status-badge--neutral",
+                      moderationReasonClasses[item.reason] ||
+                        "status-badge status-badge--neutral",
                     )}
                   >
-                    {item.reason === "auto_flagged" ? "Auto-flagged" : "Reported"}
+                    {item.reason === "auto_flagged"
+                      ? "Auto-flagged"
+                      : "Reported"}
                   </span>
                 </div>
                 <p className="text-xs text-text-secondary mt-1 truncate">

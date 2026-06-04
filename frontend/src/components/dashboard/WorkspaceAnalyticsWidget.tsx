@@ -63,7 +63,11 @@ export function WorkspaceAnalyticsWidget({
       })
       .catch(() => {
         if (!alive) return;
-        setState({ data: null, loading: false, error: "Workspace analytics unavailable." });
+        setState({
+          data: null,
+          loading: false,
+          error: "Workspace analytics unavailable.",
+        });
       });
     return () => {
       alive = false;
@@ -93,21 +97,37 @@ export function WorkspaceAnalyticsWidget({
     >
       <header className="flex items-center justify-between">
         <div>
-          <div className="text-sm font-medium text-text-primary">Streaming this month</div>
+          <div className="text-sm font-medium text-text-primary">
+            Streaming this month
+          </div>
           <div className="text-xs text-text-tertiary">{month}</div>
         </div>
         <div className="flex items-center gap-2">
-          <GlassIconButton size="sm" variant="ghost" label="Previous month" onClick={goPrev}>
+          <GlassIconButton
+            size="sm"
+            variant="ghost"
+            label="Previous month"
+            onClick={goPrev}
+          >
             <ChevronLeft />
           </GlassIconButton>
-          <GlassIconButton size="sm" variant="ghost" label="Next month" onClick={goNext}>
+          <GlassIconButton
+            size="sm"
+            variant="ghost"
+            label="Next month"
+            onClick={goNext}
+          >
             <ChevronRight />
           </GlassIconButton>
         </div>
       </header>
 
       {loading ? (
-        <div role="status" aria-label="Loading workspace analytics" className="grid grid-cols-2 gap-3">
+        <div
+          role="status"
+          aria-label="Loading workspace analytics"
+          className="grid grid-cols-2 gap-3"
+        >
           {[0, 1, 2, 3].map((i) => (
             <div
               key={i}
@@ -128,7 +148,9 @@ export function WorkspaceAnalyticsWidget({
             />
           </div>
           <div>
-            <div className="mb-2 text-xs font-medium text-text-secondary">Daily credits</div>
+            <div className="mb-2 text-xs font-medium text-text-secondary">
+              Daily credits
+            </div>
             <Sparkline
               ariaLabel="daily credits consumed"
               points={trendPoints}
@@ -139,7 +161,9 @@ export function WorkspaceAnalyticsWidget({
             />
           </div>
           <div>
-            <div className="mb-2 text-xs font-medium text-text-secondary">Top performers</div>
+            <div className="mb-2 text-xs font-medium text-text-secondary">
+              Top performers
+            </div>
             <BarList ariaLabel="top streams" items={topItems} maxItems={5} />
           </div>
         </>

@@ -1,19 +1,35 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getDealerRevenueCalendar, type RevenueCalendarResponse, type DailyRevenueShare } from "@/lib/api/dealer";
+import {
+  getDealerRevenueCalendar,
+  type RevenueCalendarResponse,
+  type DailyRevenueShare,
+} from "@/lib/api/dealer";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { ChevronLeft, ChevronRight, XMark } from "@/components/icons";
 
 const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function formatPaisa(paisa: number) {
-  return "₹" + (paisa / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  return (
+    "₹" + (paisa / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })
+  );
 }
 
 interface DayModalProps {
@@ -23,11 +39,16 @@ interface DayModalProps {
 
 function DayModal({ entry, onClose }: DayModalProps) {
   const date = new Date(entry.date + "T00:00:00");
-  const label = date.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const label = date.toLocaleDateString("en-IN", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-surface-scrim-strong/50 glass-blur-subtle p-4"
       onClick={onClose}
     >
       <div
@@ -36,35 +57,58 @@ function DayModal({ entry, onClose }: DayModalProps) {
       >
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-text-primary">Revenue Breakdown</h2>
+            <h2 className="text-lg font-semibold text-text-primary">
+              Revenue Breakdown
+            </h2>
             <p className="text-sm text-text-secondary mt-0.5">{label}</p>
           </div>
-          <GlassIconButton onClick={onClose} label="Close" size="sm" variant="ghost">
+          <GlassIconButton
+            onClick={onClose}
+            label="Close"
+            size="sm"
+            variant="ghost"
+          >
             <XMark />
           </GlassIconButton>
         </div>
 
         <div className="space-y-3 text-sm">
           <div className="flex justify-between py-2 border-b border-border-subtle">
-            <span className="text-text-secondary">Photographers subscribed</span>
-            <span className="font-medium text-text-primary">{entry.subscriber_count}</span>
+            <span className="text-text-secondary">
+              Photographers subscribed
+            </span>
+            <span className="font-medium text-text-primary">
+              {entry.subscriber_count}
+            </span>
           </div>
           <div className="flex justify-between py-2 border-b border-border-subtle">
-            <span className="text-text-secondary">Total subscription revenue</span>
-            <span className="font-medium text-text-primary">{formatPaisa(entry.total_subscription_paisa)}</span>
+            <span className="text-text-secondary">
+              Total subscription revenue
+            </span>
+            <span className="font-medium text-text-primary">
+              {formatPaisa(entry.total_subscription_paisa)}
+            </span>
           </div>
           <div className="flex justify-between py-2 border-b border-border-subtle">
             <span className="text-text-secondary">Your commission rate</span>
-            <span className="font-medium text-text-primary">{entry.commission_rate_pct}%</span>
+            <span className="font-medium text-text-primary">
+              {entry.commission_rate_pct}%
+            </span>
           </div>
           <div className="flex justify-between py-3 rounded-xl bg-accent/10 px-3">
-            <span className="font-semibold text-accent">Your revenue share</span>
-            <span className="font-bold text-accent text-base">{formatPaisa(entry.revenue_share_paisa)}</span>
+            <span className="font-semibold text-accent">
+              Your revenue share
+            </span>
+            <span className="font-bold text-accent text-base">
+              {formatPaisa(entry.revenue_share_paisa)}
+            </span>
           </div>
         </div>
 
         <p className="text-xs text-text-tertiary">
-          Calculation: {formatPaisa(entry.total_subscription_paisa)} × {entry.commission_rate_pct}% = {formatPaisa(entry.revenue_share_paisa)}
+          Calculation: {formatPaisa(entry.total_subscription_paisa)} ×{" "}
+          {entry.commission_rate_pct}% ={" "}
+          {formatPaisa(entry.revenue_share_paisa)}
         </p>
       </div>
     </div>
@@ -78,7 +122,9 @@ export default function DealerRevenueSharePage() {
   const [data, setData] = useState<RevenueCalendarResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedDay, setSelectedDay] = useState<DailyRevenueShare | null>(null);
+  const [selectedDay, setSelectedDay] = useState<DailyRevenueShare | null>(
+    null,
+  );
 
   // Reset loading + error at render time when the viewed month changes.
   // Doing this during render (not in an effect) avoids synchronous setState
@@ -95,19 +141,38 @@ export default function DealerRevenueSharePage() {
   useEffect(() => {
     let cancelled = false;
     getDealerRevenueCalendar(year, month)
-      .then((res) => { if (!cancelled) setData(res); })
-      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load revenue data"); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .then((res) => {
+        if (!cancelled) setData(res);
+      })
+      .catch((err) => {
+        if (!cancelled)
+          setError(
+            err instanceof Error ? err.message : "Failed to load revenue data",
+          );
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [year, month]);
 
   const prevMonth = () => {
-    if (month === 1) { setYear(y => y - 1); setMonth(12); }
-    else { setMonth(m => m - 1); }
+    if (month === 1) {
+      setYear((y) => y - 1);
+      setMonth(12);
+    } else {
+      setMonth((m) => m - 1);
+    }
   };
   const nextMonth = () => {
-    if (month === 12) { setYear(y => y + 1); setMonth(1); }
-    else { setMonth(m => m + 1); }
+    if (month === 12) {
+      setYear((y) => y + 1);
+      setMonth(1);
+    } else {
+      setMonth((m) => m + 1);
+    }
   };
 
   // Build calendar grid
@@ -136,13 +201,19 @@ export default function DealerRevenueSharePage() {
           Revenue Share
         </h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Your daily commission earnings based on subscription revenue generated in your state.
+          Your daily commission earnings based on subscription revenue generated
+          in your state.
         </p>
       </div>
 
       {/* Month navigation */}
       <div className="flex items-center justify-between">
-        <GlassIconButton onClick={prevMonth} label="Previous month" size="sm" variant="ghost">
+        <GlassIconButton
+          onClick={prevMonth}
+          label="Previous month"
+          size="sm"
+          variant="ghost"
+        >
           <ChevronLeft />
         </GlassIconButton>
         <h2 className="text-lg font-semibold text-text-primary">
@@ -163,16 +234,28 @@ export default function DealerRevenueSharePage() {
       {data && !loading && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <div className="glass-card rounded-xl p-4 space-y-1">
-            <p className="text-xs text-text-tertiary uppercase tracking-wide">Total Subscriptions</p>
-            <p className="text-xl font-bold text-text-primary">{formatPaisa(data.total_revenue_paisa)}</p>
+            <p className="text-xs text-text-tertiary uppercase tracking-wide">
+              Total Subscriptions
+            </p>
+            <p className="text-xl font-bold text-text-primary">
+              {formatPaisa(data.total_revenue_paisa)}
+            </p>
           </div>
           <div className="glass-card rounded-xl p-4 space-y-1">
-            <p className="text-xs text-text-tertiary uppercase tracking-wide">Commission Rate</p>
-            <p className="text-xl font-bold text-text-primary">{data.commission_rate_pct}%</p>
+            <p className="text-xs text-text-tertiary uppercase tracking-wide">
+              Commission Rate
+            </p>
+            <p className="text-xl font-bold text-text-primary">
+              {data.commission_rate_pct}%
+            </p>
           </div>
           <div className="glass-card rounded-xl p-4 space-y-1 col-span-2 md:col-span-1">
-            <p className="text-xs text-text-tertiary uppercase tracking-wide">Your Share</p>
-            <p className="text-xl font-bold text-accent">{formatPaisa(data.total_share_paisa)}</p>
+            <p className="text-xs text-text-tertiary uppercase tracking-wide">
+              Your Share
+            </p>
+            <p className="text-xl font-bold text-accent">
+              {formatPaisa(data.total_share_paisa)}
+            </p>
           </div>
         </div>
       )}
@@ -188,7 +271,10 @@ export default function DealerRevenueSharePage() {
         {/* Day-of-week header */}
         <div className="grid grid-cols-7 border-b border-border-subtle">
           {DAY_LABELS.map((d) => (
-            <div key={d} className="py-2 text-center text-xs font-medium text-text-tertiary">
+            <div
+              key={d}
+              className="py-2 text-center text-xs font-medium text-text-tertiary"
+            >
               {d}
             </div>
           ))}
@@ -202,7 +288,12 @@ export default function DealerRevenueSharePage() {
           <div className="grid grid-cols-7">
             {cells.map((day, idx) => {
               if (day === null) {
-                return <div key={`empty-${idx}`} className="h-16 border-b border-r border-border-subtle/40 last:border-r-0" />;
+                return (
+                  <div
+                    key={`empty-${idx}`}
+                    className="h-16 border-b border-r border-border-subtle/40 last:border-r-0"
+                  />
+                );
               }
               const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
               const entry = dayMap.get(dateStr);
@@ -215,20 +306,26 @@ export default function DealerRevenueSharePage() {
                   disabled={!entry}
                   className={[
                     "h-16 p-1.5 border-b border-r border-border-subtle/40 last:border-r-0 text-left transition-colors",
-                    entry ? "hover:bg-feedback-success/20 cursor-pointer bg-feedback-success/10" : "cursor-default",
+                    entry
+                      ? "hover:bg-feedback-success/20 cursor-pointer bg-feedback-success/10"
+                      : "cursor-default",
                     isToday && !entry ? "bg-accent/5" : "",
                     isToday && entry ? "ring-1 ring-inset ring-accent/30" : "",
                   ].join(" ")}
                 >
-                  <span className={[
-                    "text-xs font-medium",
-                    isToday ? "text-accent" : "text-text-secondary",
-                  ].join(" ")}>
+                  <span
+                    className={[
+                      "text-xs font-medium",
+                      isToday ? "text-accent" : "text-text-secondary",
+                    ].join(" ")}
+                  >
                     {day}
                   </span>
                   {entry && (
                     <div className="mt-0.5">
-                      <p className="text-[10px] leading-none text-text-tertiary">Share</p>
+                      <p className="text-[10px] leading-none text-text-tertiary">
+                        Share
+                      </p>
                       <p className="text-xs font-semibold text-accent truncate">
                         {formatPaisa(entry.revenue_share_paisa)}
                       </p>

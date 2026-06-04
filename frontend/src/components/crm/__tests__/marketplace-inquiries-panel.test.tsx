@@ -21,7 +21,9 @@ vi.mock("@/lib/auth", () => ({
 
 import { MarketplaceInquiriesPanel } from "../marketplace-inquiries-panel";
 
-function makeInquiry(overrides: Partial<MarketplaceInquiry> = {}): MarketplaceInquiry {
+function makeInquiry(
+  overrides: Partial<MarketplaceInquiry> = {},
+): MarketplaceInquiry {
   return {
     id: "inq-1",
     to_user_id: "user-123",
@@ -60,12 +62,18 @@ describe("MarketplaceInquiriesPanel", () => {
   it("renders inquiries addressed to the current user", async () => {
     listInquiries.mockResolvedValue([
       makeInquiry(),
-      makeInquiry({ id: "inq-2", to_user_id: "someone-else", from_user_name: "Other" }),
+      makeInquiry({
+        id: "inq-2",
+        to_user_id: "someone-else",
+        from_user_name: "Other",
+      }),
     ]);
 
     render(<MarketplaceInquiriesPanel />);
 
-    await waitFor(() => expect(screen.getByText("Asha Rao")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Asha Rao")).toBeInTheDocument(),
+    );
     // The inquiry for a different to_user_id must be filtered out.
     expect(screen.queryByText("Other")).not.toBeInTheDocument();
     expect(screen.getByText(/1 inquiry received/i)).toBeInTheDocument();
@@ -79,7 +87,9 @@ describe("MarketplaceInquiriesPanel", () => {
 
     // Empty state is reached without an unhandled TypeError.
     await waitFor(() =>
-      expect(screen.getByText(/No marketplace inquiries yet/i)).toBeInTheDocument(),
+      expect(
+        screen.getByText(/No marketplace inquiries yet/i),
+      ).toBeInTheDocument(),
     );
   });
 

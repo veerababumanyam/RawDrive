@@ -4,7 +4,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // so we can assert the redirect target without crashing the test runner.
 const redirectMock = vi.fn((url: string) => {
   const e = new Error(`NEXT_REDIRECT:${url}`);
-  (e as Error & { digest?: string }).digest = `NEXT_REDIRECT;replace;${url};307;`;
+  (e as Error & { digest?: string }).digest =
+    `NEXT_REDIRECT;replace;${url};307;`;
   throw e;
 });
 
@@ -18,9 +19,9 @@ vi.mock("next/headers", () => ({
 
 const resolveMock = vi.fn();
 vi.mock("@/lib/streaming/resolve-shortlink", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/streaming/resolve-shortlink")>(
-    "@/lib/streaming/resolve-shortlink",
-  );
+  const actual = await vi.importActual<
+    typeof import("@/lib/streaming/resolve-shortlink")
+  >("@/lib/streaming/resolve-shortlink");
   return {
     ...actual,
     resolveShortlink: (...args: unknown[]) => resolveMock(...args),

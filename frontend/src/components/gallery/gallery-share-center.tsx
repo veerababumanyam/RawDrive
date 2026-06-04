@@ -21,12 +21,20 @@ interface GalleryShareCenterProps {
 }
 
 function accessLabel(link: GalleryShareLink) {
-  return link.permissions?.access_mode || (link.permissions?.allowed_emails?.length ? "email" : "public");
+  return (
+    link.permissions?.access_mode ||
+    (link.permissions?.allowed_emails?.length ? "email" : "public")
+  );
 }
 
-export function GalleryShareCenter({ gallery, token }: GalleryShareCenterProps) {
+export function GalleryShareCenter({
+  gallery,
+  token,
+}: GalleryShareCenterProps) {
   const [links, setLinks] = useState<GalleryShareLink[]>([]);
-  const [accessMode, setAccessMode] = useState<"public" | "pin" | "email">("public");
+  const [accessMode, setAccessMode] = useState<"public" | "pin" | "email">(
+    "public",
+  );
   const [pin, setPin] = useState("");
   const [recipients, setRecipients] = useState("");
   const [expiryDays, setExpiryDays] = useState("14");
@@ -48,7 +56,10 @@ export function GalleryShareCenter({ gallery, token }: GalleryShareCenterProps) 
   const gallerySlug = gallery.slug;
   const publicUrl = useMemo(() => {
     if (!gallerySlug) return "";
-    return appendStoredGalleryKeyFragment(galleryPublicUrl({ slug: gallerySlug }), galleryId);
+    return appendStoredGalleryKeyFragment(
+      galleryPublicUrl({ slug: gallerySlug }),
+      galleryId,
+    );
   }, [galleryId, gallerySlug]);
   const legacyUrl = ""; // unused in the orphan state — keep variable for JSX below
 
@@ -102,12 +113,20 @@ export function GalleryShareCenter({ gallery, token }: GalleryShareCenterProps) 
         channel,
       });
       setLinks((current) => [created, ...current]);
-      const shareUrl = setUrlSearchParamBeforeFragment(publicUrl, "share", created.token);
+      const shareUrl = setUrlSearchParamBeforeFragment(
+        publicUrl,
+        "share",
+        created.token,
+      );
       if (channel === "copy") {
         await navigator.clipboard.writeText(shareUrl).catch(() => undefined);
       }
       if (channel === "whatsapp") {
-        window.open(`https://wa.me/?text=${encodeURIComponent(message || shareUrl)}`, "_blank", "noopener,noreferrer");
+        window.open(
+          `https://wa.me/?text=${encodeURIComponent(message || shareUrl)}`,
+          "_blank",
+          "noopener,noreferrer",
+        );
       }
       if (channel === "email") {
         setNotice("Share link created and email sent.");
@@ -115,7 +134,9 @@ export function GalleryShareCenter({ gallery, token }: GalleryShareCenterProps) 
       }
       setNotice("Share link created.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create share link");
+      setError(
+        err instanceof Error ? err.message : "Failed to create share link",
+      );
     } finally {
       setSaving(false);
     }
@@ -127,26 +148,43 @@ export function GalleryShareCenter({ gallery, token }: GalleryShareCenterProps) 
       setLinks((current) => current.filter((link) => link.id !== linkId));
       setNotice("Share link revoked.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to revoke share link");
+      setError(
+        err instanceof Error ? err.message : "Failed to revoke share link",
+      );
     }
   };
 
   return (
     <section id="share-center" className="surface-panel space-y-4 p-5">
       <div>
-        <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">Share Center</p>
-        <h2 className="mt-1 text-lg font-semibold text-text-primary">Public sharing</h2>
+        <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">
+          Share Center
+        </p>
+        <h2 className="mt-1 text-lg font-semibold text-text-primary">
+          Public sharing
+        </h2>
         <p className="mt-1 text-xs text-text-secondary">
-          Manage public URL, protected links, recipients, WhatsApp/email copy, client preview, and access logs in one gallery workspace.
+          Manage public URL, protected links, recipients, WhatsApp/email copy,
+          client preview, and access logs in one gallery workspace.
         </p>
       </div>
 
-      {notice && <p className="rounded-xl border border-success/20 bg-success/10 px-3 py-2 text-xs text-success">{notice}</p>}
-      {error && <p className="rounded-xl border border-error/20 bg-error/10 px-3 py-2 text-xs text-error">{error}</p>}
+      {notice && (
+        <p className="rounded-xl border border-success/20 bg-success/10 px-3 py-2 text-xs text-success">
+          {notice}
+        </p>
+      )}
+      {error && (
+        <p className="rounded-xl border border-error/20 bg-error/10 px-3 py-2 text-xs text-error">
+          {error}
+        </p>
+      )}
 
       <div className="rounded-2xl border border-border-default bg-surface-sunken p-4">
         <p className="text-xs text-text-tertiary">Public URL</p>
-        <p className="mt-1 break-all text-sm text-text-primary">{publicUrl || "Publish to generate a public URL"}</p>
+        <p className="mt-1 break-all text-sm text-text-primary">
+          {publicUrl || "Publish to generate a public URL"}
+        </p>
         {legacyUrl && (
           <p className="mt-1 text-xs text-text-tertiary">
             Legacy URL (also works):{" "}
@@ -154,7 +192,11 @@ export function GalleryShareCenter({ gallery, token }: GalleryShareCenterProps) 
           </p>
         )}
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button type="button" onClick={copyPublicUrl} className="btn-tertiary px-3 py-2 text-xs">
+          <button
+            type="button"
+            onClick={copyPublicUrl}
+            className="btn-tertiary px-3 py-2 text-xs"
+          >
             Copy public URL
           </button>
           <ShareQrPopover
@@ -163,7 +205,10 @@ export function GalleryShareCenter({ gallery, token }: GalleryShareCenterProps) 
             label="Show QR code for public URL"
             filename={`${gallery.slug || "gallery"}-public-qr`}
           />
-          <a href={`/galleries/${gallery.id}/preview`} className="btn-tertiary px-3 py-2 text-xs">
+          <a
+            href={`/galleries/${gallery.id}/preview`}
+            className="btn-tertiary px-3 py-2 text-xs"
+          >
             Dashboard preview
           </a>
         </div>
@@ -172,7 +217,13 @@ export function GalleryShareCenter({ gallery, token }: GalleryShareCenterProps) 
       <div className="grid gap-3">
         <label className="flex flex-col gap-1 text-xs text-text-secondary">
           Access mode
-          <select value={accessMode} onChange={(event) => setAccessMode(event.target.value as "public" | "pin" | "email")} className="input-base w-full">
+          <select
+            value={accessMode}
+            onChange={(event) =>
+              setAccessMode(event.target.value as "public" | "pin" | "email")
+            }
+            className="input-base w-full"
+          >
             <option value="public">Public link</option>
             <option value="pin">PIN protected</option>
             <option value="email">Recipient email list</option>
@@ -181,31 +232,66 @@ export function GalleryShareCenter({ gallery, token }: GalleryShareCenterProps) 
         {accessMode === "pin" && (
           <label className="flex flex-col gap-1 text-xs text-text-secondary">
             Password/PIN
-            <input value={pin} onChange={(event) => setPin(event.target.value)} className="input-base w-full" placeholder="Enter client PIN" />
+            <input
+              value={pin}
+              onChange={(event) => setPin(event.target.value)}
+              className="input-base w-full"
+              placeholder="Enter client PIN"
+            />
           </label>
         )}
         <label className="flex flex-col gap-1 text-xs text-text-secondary">
           Recipients
-          <textarea value={recipients} onChange={(event) => setRecipients(event.target.value)} className="input-base min-h-24 w-full resize-y" placeholder="client@example.com, family@example.com" />
+          <textarea
+            value={recipients}
+            onChange={(event) => setRecipients(event.target.value)}
+            className="input-base min-h-24 w-full resize-y"
+            placeholder="client@example.com, family@example.com"
+          />
         </label>
         <label className="flex flex-col gap-1 text-xs text-text-secondary">
           Expiry in days
-          <input value={expiryDays} onChange={(event) => setExpiryDays(event.target.value)} className="input-base w-full" inputMode="numeric" />
+          <input
+            value={expiryDays}
+            onChange={(event) => setExpiryDays(event.target.value)}
+            className="input-base w-full"
+            inputMode="numeric"
+          />
         </label>
         <label className="flex flex-col gap-1 text-xs text-text-secondary">
           Share copy
-          <textarea value={message} onChange={(event) => setMessage(event.target.value)} className="input-base min-h-24 w-full resize-y" placeholder={`Your ${gallery.title} gallery is ready: {link}`} />
+          <textarea
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            className="input-base min-h-24 w-full resize-y"
+            placeholder={`Your ${gallery.title} gallery is ready: {link}`}
+          />
         </label>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <button type="button" disabled={saving} onClick={() => void createLink("copy")} className="btn-primary px-3 py-2 text-xs">
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => void createLink("copy")}
+          className="btn-primary px-3 py-2 text-xs"
+        >
           Copy link
         </button>
-        <button type="button" disabled={saving} onClick={() => void createLink("whatsapp")} className="btn-tertiary px-3 py-2 text-xs">
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => void createLink("whatsapp")}
+          className="btn-tertiary px-3 py-2 text-xs"
+        >
           WhatsApp
         </button>
-        <button type="button" disabled={saving} onClick={() => void createLink("email")} className="btn-tertiary px-3 py-2 text-xs">
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => void createLink("email")}
+          className="btn-tertiary px-3 py-2 text-xs"
+        >
           Email
         </button>
       </div>
@@ -213,18 +299,32 @@ export function GalleryShareCenter({ gallery, token }: GalleryShareCenterProps) 
       <div className="space-y-2">
         <h3 className="text-sm font-semibold text-text-primary">Share logs</h3>
         {links.length === 0 ? (
-          <p className="text-xs text-text-secondary">No share links created yet.</p>
+          <p className="text-xs text-text-secondary">
+            No share links created yet.
+          </p>
         ) : (
           links.map((link) => (
-            <div key={link.id} className="rounded-2xl border border-border-default bg-surface-sunken p-3">
+            <div
+              key={link.id}
+              className="rounded-2xl border border-border-default bg-surface-sunken p-3"
+            >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <p className="text-xs font-medium text-text-primary">{accessLabel(link)} link</p>
+                  <p className="text-xs font-medium text-text-primary">
+                    {accessLabel(link)} link
+                  </p>
                   <p className="text-xs text-text-tertiary">
-                    {link.access_count} visits {link.expires_at ? `- expires ${new Date(link.expires_at).toLocaleDateString("en-IN")}` : ""}
+                    {link.access_count} visits{" "}
+                    {link.expires_at
+                      ? `- expires ${new Date(link.expires_at).toLocaleDateString("en-IN")}`
+                      : ""}
                   </p>
                 </div>
-                <button type="button" onClick={() => void revoke(link.id)} className="text-xs text-error hover:underline">
+                <button
+                  type="button"
+                  onClick={() => void revoke(link.id)}
+                  className="text-xs text-error hover:underline"
+                >
                   Revoke
                 </button>
               </div>

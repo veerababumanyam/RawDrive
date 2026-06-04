@@ -50,6 +50,17 @@ export interface Gallery {
   tether_directory?: string | null;
   // Populated by list endpoint via LEFT JOIN on assets — used for card thumbnails
   cover_thumbnails?: Record<string, string>;
+  // Lightweight effective cover asset from the list endpoint. Avoids fetching
+  // one asset per gallery card when the API has already joined cover metadata.
+  cover_asset?: {
+    id: string;
+    filename?: string;
+    content_type?: string;
+    status?: string;
+    thumbnail_urls?: Record<string, string>;
+    is_encrypted?: boolean;
+    media_encryption?: Record<string, unknown>;
+  };
   // M19: Gallery Enhancement Suite (F-009)
   cover_template?: string;
   cover_config?: Record<string, unknown>;
@@ -109,7 +120,8 @@ export function galleryPublicUrl(
 ): string {
   const bizSlug = workspace?.business_profile_slug || "";
   const bizCode = workspace?.business_unique_code || "";
-  const browserOrigin = typeof window !== "undefined" ? window.location.origin : "";
+  const browserOrigin =
+    typeof window !== "undefined" ? window.location.origin : "";
   const origin = originOverride || browserOrigin;
 
   // Rawdrive.in is stable enough to inline — if the brand domain ever
@@ -135,7 +147,12 @@ export function galleryPublicUrl(
 function isLocalShareOrigin(origin: string): boolean {
   try {
     const { hostname } = new URL(origin);
-    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
+    return (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "::1" ||
+      hostname === "[::1]"
+    );
   } catch {
     return false;
   }

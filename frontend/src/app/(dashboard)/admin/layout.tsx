@@ -20,16 +20,20 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   return (
     <div>
-      <nav className="mb-8 bg-surface-container-low/40 backdrop-blur-md border border-border-subtle rounded-2xl p-1.5 flex gap-1 overflow-x-auto" aria-label="Admin navigation">
+      <nav
+        className="mb-8 bg-surface-container-low/40 glass-blur-medium border border-border-subtle rounded-2xl p-1.5 flex gap-1 overflow-x-auto"
+        aria-label="Admin navigation"
+      >
         {adminNav.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const active =
+            pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
             <Link
               key={item.href}
               href={item.href}
               className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap rounded-xl transition-all ${
                 active
-                  ? "bg-surface-container-high text-primary font-semibold backdrop-blur-lg"
+                  ? "bg-surface-container-high text-accent font-semibold glass-blur-full"
                   : "text-text-tertiary hover:text-text-primary hover:bg-surface-container-high/40"
               }`}
             >

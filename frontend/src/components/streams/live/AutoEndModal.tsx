@@ -15,7 +15,12 @@ export interface AutoEndModalProps {
   onDismiss: () => void;
 }
 
-export function AutoEndModal({ phase, graceEndsAt, onConfirmEnd, onDismiss }: AutoEndModalProps) {
+export function AutoEndModal({
+  phase,
+  graceEndsAt,
+  onConfirmEnd,
+  onDismiss,
+}: AutoEndModalProps) {
   if (phase !== "grace" && phase !== "ended") return null;
 
   const heading = phase === "ended" ? "Stream ended" : "Auto-end imminent";
@@ -30,13 +35,13 @@ export function AutoEndModal({ phase, graceEndsAt, onConfirmEnd, onDismiss }: Au
       aria-modal="true"
       aria-label={heading}
       data-testid="auto-end-modal"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-surface-scrim-strong/60 glass-blur-subtle"
     >
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-black/70 p-6 shadow-2xl">
-        <h2 className="mb-2 text-lg font-semibold text-white">{heading}</h2>
-        <p className="mb-4 text-sm text-white/80">{body}</p>
+      <div className="w-full max-w-md rounded-2xl border border-text-media/10 bg-surface-scrim-strong/70 p-6 shadow-2xl">
+        <h2 className="mb-2 text-lg font-semibold text-text-media">{heading}</h2>
+        <p className="mb-4 text-sm text-text-media/80">{body}</p>
         {graceEndsAt && (
-          <p className="mb-4 font-mono text-xs text-white/60">
+          <p className="mb-4 font-mono text-xs text-text-media/60">
             Grace ends: {graceEndsAt.toISOString()}
           </p>
         )}
@@ -46,7 +51,7 @@ export function AutoEndModal({ phase, graceEndsAt, onConfirmEnd, onDismiss }: Au
               type="button"
               onClick={onDismiss}
               data-testid="auto-end-dismiss"
-              className="rounded-md px-3 py-2 text-sm text-white/70 hover:bg-white/10"
+              className="rounded-md px-3 py-2 text-sm text-text-media/70 hover:bg-surface-overlay/10"
             >
               Dismiss
             </button>
@@ -55,7 +60,7 @@ export function AutoEndModal({ phase, graceEndsAt, onConfirmEnd, onDismiss }: Au
             type="button"
             onClick={onConfirmEnd}
             data-testid="auto-end-confirm"
-            className="rounded-md bg-feedback-error/80 px-3 py-2 text-sm font-medium text-white hover:bg-feedback-error"
+            className="rounded-md bg-feedback-error/80 px-3 py-2 text-sm font-medium text-text-media hover:bg-feedback-error"
           >
             {phase === "ended" ? "Close" : "End stream now"}
           </button>

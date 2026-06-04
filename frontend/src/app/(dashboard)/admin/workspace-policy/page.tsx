@@ -98,8 +98,8 @@ export default function WorkspacePolicyPage() {
           Workspace Upload Policy
         </h1>
         <p className="mt-2 text-sm text-text-secondary">
-          M16 Tier D — configure how strictly incoming uploads are screened
-          for this workspace. Changes take effect on the next upload.
+          M16 Tier D — configure how strictly incoming uploads are screened for
+          this workspace. Changes take effect on the next upload.
         </p>
       </div>
 
@@ -115,7 +115,10 @@ export default function WorkspacePolicyPage() {
             id="workspace-id"
             type="text"
             value={workspaceId}
-            onChange={(e) => { setWorkspaceId(e.target.value); setSuccess(null); }}
+            onChange={(e) => {
+              setWorkspaceId(e.target.value);
+              setSuccess(null);
+            }}
             placeholder="e.g. 11111111-1111-1111-1111-111111111111"
             className="w-full rounded-lg border border-surface-raised bg-surface-sunken px-4 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-accent"
           />

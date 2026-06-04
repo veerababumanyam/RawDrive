@@ -82,7 +82,9 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("dedupeGalleryAssetEntries");
     expect(source).toContain("seenAssetIds");
     expect(source).toContain("seenAssetIds.has(entry.asset_id)");
-    expect(source).toContain("const uniqueEntries = dedupeGalleryAssetEntries(entries)");
+    expect(source).toContain(
+      "const uniqueEntries = dedupeGalleryAssetEntries(entries)",
+    );
     expect(source).toContain("uniqueEntries.length");
   });
 
@@ -134,12 +136,14 @@ describe("gallery detail page — perf & a11y contracts", () => {
     );
     expect(source).not.toContain("openMenuAssetId");
     expect(source).not.toContain("EllipsisVertical");
-    expect(source).toContain('`Share ${entry.asset.filename}`');
-    expect(source).toContain('`Delete ${entry.asset.filename}`');
+    expect(source).toContain("`Share ${entry.asset.filename}`");
+    expect(source).toContain("`Delete ${entry.asset.filename}`");
     expect(source).toContain("void handleShareAsset(e, entry.asset!.id)");
     expect(source).toContain("setDeleteConfirm({");
     expect(source).toContain("assetId: entry.asset!.id");
-    expect(source).toContain('className="absolute bottom-2 right-2 z-10 flex items-center gap-1.5"');
+    expect(source).toContain(
+      'className="absolute bottom-2 right-2 z-10 flex items-center gap-1.5"',
+    );
     expect(source).toContain("if (e.currentTarget !== e.target) return;");
   });
 
@@ -173,8 +177,12 @@ describe("gallery detail page — perf & a11y contracts", () => {
   it("gates uploads on terms acceptance and replays the stashed batch after acceptance", () => {
     const source = readDetailPage();
 
-    expect(source).toContain("const [termsNeedsAcceptance, setTermsNeedsAcceptance] = useState(false)");
-    expect(source).toContain("const [termsModalOpen, setTermsModalOpen] = useState(false)");
+    expect(source).toContain(
+      "const [termsNeedsAcceptance, setTermsNeedsAcceptance] = useState(false)",
+    );
+    expect(source).toContain(
+      "const [termsModalOpen, setTermsModalOpen] = useState(false)",
+    );
     expect(source).toContain("const termsNeedsAcceptanceRef = useRef(false)");
     expect(source).toContain("const pendingUploadRef = useRef<{");
     expect(source).toContain("files: File[];");
@@ -219,10 +227,14 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("completedUploadRefreshKeyRef");
     expect(source).toContain("[0, ...ASSET_SETTLE_REFRESH_DELAYS_MS]");
     expect(source).toContain("refreshGalleryAssets().catch");
-    expect(source).toContain("Failed to refresh gallery after upload completion");
+    expect(source).toContain(
+      "Failed to refresh gallery after upload completion",
+    );
     expect(source).toContain("void refreshAlbums()");
     expect(source).toContain("Promise<GalleryAssetRecord[] | null>");
-    expect(source).toContain("const hydratedAssets = await refreshGalleryAssets()");
+    expect(source).toContain(
+      "const hydratedAssets = await refreshGalleryAssets()",
+    );
   });
 
   it("keeps the upload dialog mobile-first by hiding desktop-only progress tabs and helper cards", () => {
@@ -232,11 +244,15 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain('data-testid="upload-mobile-tethered-capture"');
     expect(source).toContain('data-testid="upload-desktop-stepper"');
     expect(source).toContain('data-testid="upload-desktop-sidebar"');
-    expect(source).toContain("hidden border-b border-border-subtle px-6 py-4 md:grid");
+    expect(source).toContain(
+      "hidden border-b border-border-subtle px-6 py-4 md:grid",
+    );
     expect(source).toContain("lg:hidden");
     expect(source).toContain("hidden space-y-4 lg:block");
     expect(source).toContain("max-h-[100dvh]");
-    expect(source).toContain("grid gap-4 overflow-y-auto p-4 sm:p-5 lg:grid-cols-3 lg:gap-6 lg:p-6");
+    expect(source).toContain(
+      "grid gap-4 overflow-y-auto p-4 sm:p-5 lg:grid-cols-3 lg:gap-6 lg:p-6",
+    );
   });
 
   it("keeps the full tethered-capture control set with a 1-second default poll", () => {
@@ -244,7 +260,9 @@ describe("gallery detail page — perf & a11y contracts", () => {
 
     expect(source).toContain("TETHERED_DEFAULT_POLL_MS = 1000");
     expect(source).toContain("tetheredControlsVisible");
-    expect(source).toContain("const tetheredControlsVisible = tetheredControlsEnabled;");
+    expect(source).toContain(
+      "const tetheredControlsVisible = tetheredControlsEnabled;",
+    );
     expect(source).toContain("void startTetheredFolder();");
     expect(source).toContain("{tetheredControlsVisible && (");
     expect(source).toContain("tetheredPollIntervalMs");
@@ -265,14 +283,18 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("requestPermission");
     expect(source).toContain("Last detected:");
     expect(source).toContain("tetheredAutoOpenRef.current");
-    expect(source).toContain('variant === "desktop" ? "grid-cols-1" : "sm:grid-cols-3"');
+    expect(source).toContain(
+      'variant === "desktop" ? "grid-cols-1" : "sm:grid-cols-3"',
+    );
   });
 
   it("auto-opens tethered uploads after backend completion without leaving the upload dialog on top", () => {
     const source = readDetailPage();
 
     expect(source).toContain("const isTetheredUpload =");
-    expect(source).toContain("tetheredUploadSignaturesRef.current.has(uploadSignature)");
+    expect(source).toContain(
+      "tetheredUploadSignaturesRef.current.has(uploadSignature)",
+    );
     expect(source).toContain("if (isTetheredUpload) {");
     expect(source).toContain("newlyAddedTetheredAssetIds.push(item.assetId)");
     expect(source).toContain("setShowUploadDialog(false);");
@@ -284,10 +306,21 @@ describe("gallery detail page — perf & a11y contracts", () => {
   it("uses one accessible publish-state switch instead of a separate status badge and action button", () => {
     const source = readDetailPage();
 
-    expect(source).toContain('role="switch"');
-    expect(source).toContain("aria-checked={gallery.is_published}");
-    expect(source).toContain("publish-state-toggle");
-    expect(source).toContain("publish-state-toggle__track");
+    expect(source).toContain(
+      'import { ToggleSwitch } from "@/components/ui/toggle-switch";',
+    );
+    expect(source).toContain("<ToggleSwitch");
+    expect(source).toContain("checked={gallery.is_published}");
+    expect(source).toContain('label="Gallery publish state"');
+    expect(source).toContain('checkedLabel="Published"');
+    expect(source).toContain('uncheckedLabel="Unpublished"');
+    expect(source).toContain("data-mutation");
+    expect(source.indexOf('title="Click to edit title"')).toBeLessThan(
+      source.indexOf('label="Gallery publish state"'),
+    );
+    expect(source.indexOf('label="Gallery publish state"')).toBeLessThan(
+      source.indexOf("{editingDesc ? ("),
+    );
     expect(source).not.toContain(
       '<span className={gallery.is_published ? "status-badge status-badge--success" : "status-badge status-badge--neutral"}>',
     );
@@ -302,27 +335,26 @@ describe("gallery detail page — perf & a11y contracts", () => {
     );
 
     expect(viewAsClientIndex).toBeGreaterThan(-1);
-    expect(viewAsClientBlock).toContain("{gallery.is_published && gallery.slug && (");
+    expect(viewAsClientBlock).toContain(
+      "{gallery.is_published && gallery.slug && (",
+    );
     expect(source).toContain("View as client");
     expect(viewAsClientBlock).not.toContain("{gallery.slug && (");
   });
 
-  it("adds a sub-gallery management toggle with real rename and delete controls", () => {
+  it("omits the sub-gallery management toggle while keeping delete actions reachable", () => {
     const source = readDetailPage();
 
-    expect(source).toContain("managingAlbums");
-    expect(source).toContain('aria-pressed={managingAlbums}');
-    expect(source).toContain("Manage sub-galleries");
-    expect(source).toContain("updateGalleryAlbum");
+    expect(source).not.toContain("managingAlbums");
+    expect(source).not.toContain("aria-pressed={managingAlbums}");
+    expect(source).not.toContain("Manage sub-galleries");
+    expect(source).not.toContain("updateGalleryAlbum");
     expect(source).toContain("deleteGalleryAlbum");
-    expect(source).toContain("editingAlbumId");
     expect(source).toContain("albumIsEditable");
-    expect(source).toContain('label={`Rename ${album.name}`}');
-    expect(source).toContain('label={`Delete ${album.name}`}');
-    expect(source).toContain("!albumIsEditable(album)");
+    expect(source).toContain("label={`Delete ${album.name}`}");
   });
 
-  it("keeps sub-gallery sharing complete with copy, email, and delete actions without QR or phone buttons", () => {
+  it("keeps sharing on canonical/editable sub-galleries while smart album chips stay filter-only", () => {
     const source = readDetailPage();
 
     expect(source).not.toContain("REQUIRED_SHARE_CONTACTS");
@@ -336,10 +368,17 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("openShareLink");
     expect(source).toContain('label="Copy All Photos share link"');
     expect(source).toContain('label="Email All Photos share link"');
+    expect(source).toContain("const selectedIsShareable =");
+    expect(source).toContain(
+      "!selectedAlbum || albumIsEditable(selectedAlbum)",
+    );
+    expect(source).toContain("{selectedIsShareable && (");
+    expect(source).toContain("{isEditableAlbum && (");
+    expect(source).toContain("Smart utility");
     expect(source).toContain('data-testid="visibility-share-links"');
     expect(source).toContain('label="Copy gallery share link"');
     expect(source).toContain('label="Email gallery share link"');
-    expect(source).toContain('label={`Delete ${album.name}`}');
+    expect(source).toContain("label={`Delete ${album.name}`}");
     expect(source).toContain('variant="danger"');
     expect(source).toContain("Publish gallery");
     expect(source).toContain("Share links");
@@ -349,14 +388,18 @@ describe("gallery detail page — perf & a11y contracts", () => {
     const source = readDetailPage();
 
     expect(source).toContain("SHARE_UNAVAILABLE_MESSAGE");
-    expect(source).toContain('aria-disabled={!gallery.is_published}');
-    expect(source).toContain("Publish this gallery before sharing client links.");
+    expect(source).toContain("aria-disabled={!gallery.is_published}");
+    expect(source).toContain(
+      "Publish this gallery before sharing client links.",
+    );
   });
 
   it("does not show the upload sidebar processing helper card", () => {
     const source = readDetailPage();
 
-    expect(source).not.toContain("Photos are screened, encrypted, uploaded, and converted into WebP display files.");
+    expect(source).not.toContain(
+      "Photos are screened, encrypted, uploaded, and converted into WebP display files.",
+    );
   });
 
   it("refreshes gallery rows shortly after initial load so late-linked processing photos update counts", () => {
@@ -364,14 +407,21 @@ describe("gallery detail page — perf & a11y contracts", () => {
 
     expect(source).toContain("ASSET_SETTLE_REFRESH_DELAYS_MS");
     expect(source).toContain("assetRowsSignature");
-    expect(source).toContain("refreshGalleryAssets({ skipIfRowsUnchanged: true })");
+    expect(source).toContain(
+      "refreshGalleryAssets({ skipIfRowsUnchanged: true })",
+    );
     expect(source).toContain("late-linked assets");
   });
 
   it("starts tethered folder selection from Enable and shows controls after a watched folder exists", () => {
     const source = readDetailPage();
-    const enableToggleStart = source.indexOf("const handleTetheredEnableToggle = useCallback(() => {");
-    const enableToggleEnd = source.indexOf("const handleDrop = useCallback", enableToggleStart);
+    const enableToggleStart = source.indexOf(
+      "const handleTetheredEnableToggle = useCallback(() => {",
+    );
+    const enableToggleEnd = source.indexOf(
+      "const handleDrop = useCallback",
+      enableToggleStart,
+    );
     const enableToggleBody = source.slice(enableToggleStart, enableToggleEnd);
 
     expect(source).toContain('data-testid="tethered-enable-toggle"');
@@ -384,7 +434,9 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("startTetheredFolder");
     expect(source).toContain("const tetheredControlsEnabled =");
     expect(source).toContain("tetheredEnabled && Boolean(tetheredFolderName);");
-    expect(source).toContain("const tetheredControlsVisible = tetheredControlsEnabled;");
+    expect(source).toContain(
+      "const tetheredControlsVisible = tetheredControlsEnabled;",
+    );
     expect(enableToggleBody).toContain("void startTetheredFolder();");
   });
 });

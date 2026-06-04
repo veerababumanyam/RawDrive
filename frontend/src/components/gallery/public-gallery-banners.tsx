@@ -167,7 +167,7 @@ function BannerCard({
     <div
       role="region"
       aria-label={banner.title}
-      className="glass-card rounded-2xl p-5 border border-white/10 flex items-center justify-between gap-4"
+      className="glass-card rounded-2xl p-5 border border-text-media/10 flex items-center justify-between gap-4"
       style={style}
     >
       <div className="flex-1 min-w-0">
@@ -190,7 +190,7 @@ function BannerCard({
           onClick={handleClick}
           target="_blank"
           rel="noopener noreferrer"
-          className="shrink-0 min-h-[44px] rounded-xl px-5 py-2 text-sm font-semibold bg-accent text-text-inverse shadow-md hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="shrink-0 touch-min rounded-xl px-5 py-2 text-sm font-semibold bg-accent text-text-inverse shadow-md hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           {banner.cta_label}
         </a>

@@ -3,8 +3,14 @@
 import { useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Check, Eye, EyeOff, Sparkles } from "lucide-react";
-import { getGoogleOAuthStartUrl, isAndroidWebView, openPageInChrome } from "@/lib/auth";
+import { Check, Eye, EyeOff, GoogleMark, Sparkle } from "@/components/icons";
+import { GlassButton } from "@/components/ui/glass-button";
+import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import {
+  getGoogleOAuthStartUrl,
+  isAndroidWebView,
+  openPageInChrome,
+} from "@/lib/auth";
 import { useOAuthAvailability } from "@/hooks/useOAuthAvailability";
 import { pricingPlans } from "@/lib/tokens";
 
@@ -19,14 +25,22 @@ const GOOGLE_SIGNUP_UNAVAILABLE =
 
 // Self-serve plan IDs the user can pick at signup. Must match the backend
 // whitelist in backend/internal/auth/handler.go (selfServePlans).
-const selfServePlanIds = ["free", "starter", "professional", "business", "enterprise"] as const;
+const selfServePlanIds = [
+  "free",
+  "starter",
+  "professional",
+  "business",
+  "enterprise",
+] as const;
 type SelfServePlanId = (typeof selfServePlanIds)[number];
 
 function isSelfServePlan(value: string): value is SelfServePlanId {
   return (selfServePlanIds as readonly string[]).includes(value);
 }
 
-async function parseRegisterResponse(response: Response): Promise<Record<string, unknown>> {
+async function parseRegisterResponse(
+  response: Response,
+): Promise<Record<string, unknown>> {
   return response.json().catch(() => ({}));
 }
 
@@ -103,7 +117,8 @@ export function RegisterForm() {
   // in an effect: it re-syncs the moment the URL-derived plan changes, while a
   // user clicking the segmented control within the same URL still wins because
   // initialPlan is unchanged on those renders.
-  const [planParamSnapshot, setPlanParamSnapshot] = useState<SelfServePlanId>(initialPlan);
+  const [planParamSnapshot, setPlanParamSnapshot] =
+    useState<SelfServePlanId>(initialPlan);
   if (planParamSnapshot !== initialPlan) {
     setPlanParamSnapshot(initialPlan);
     setPlan(initialPlan);
@@ -122,7 +137,9 @@ export function RegisterForm() {
   const { enabled: oauthEnabled, loading: oauthAvailabilityLoading } =
     useOAuthAvailability(API_BASE);
   const googleUnavailable = !oauthAvailabilityLoading && !oauthEnabled;
-  const googleDescriptionId = webviewNotice ? "register-google-webview-recovery" : undefined;
+  const googleDescriptionId = webviewNotice
+    ? "register-google-webview-recovery"
+    : undefined;
 
   const googleStartUrl = useMemo(
     () => getGoogleOAuthStartUrl(API_BASE, { intent: "signup", plan }),
@@ -171,14 +188,18 @@ export function RegisterForm() {
       if (!response.ok) {
         const message = await readRegisterError(response);
         setError(message);
-        if (response.status === 409 && message.toLowerCase().includes("email already registered")) {
+        if (
+          response.status === 409 &&
+          message.toLowerCase().includes("email already registered")
+        ) {
           setDuplicateActivationEmail(email.trim());
         }
         return;
       }
 
       const payload = await parseRegisterResponse(response);
-      const acceptedPlan: string = typeof payload.plan === "string" ? payload.plan : plan;
+      const acceptedPlan: string =
+        typeof payload.plan === "string" ? payload.plan : plan;
       router.push(
         `/activate?email=${encodeURIComponent(email.trim())}` +
           `&plan=${encodeURIComponent(acceptedPlan)}`,
@@ -213,7 +234,10 @@ export function RegisterForm() {
   }
 
   return (
-    <form className="space-y-5" onSubmit={(event) => void handleRegister(event)}>
+    <form
+      className="space-y-5"
+      onSubmit={(event) => void handleRegister(event)}
+    >
       {error ? (
         <div
           role="alert"
@@ -235,9 +259,7 @@ export function RegisterForm() {
 
       {/* ── Plan selection ─────────────────────────────────────────── */}
       <fieldset className="space-y-3">
-        <legend className="ml-1 text-xs font-semibold uppercase tracking-[0.2em] text-text-tertiary">
-          Plans
-        </legend>
+        <legend className="form-label ml-1">Plans</legend>
 
         {/* Segmented pill control — iOS-style, one thumb slides between 4 tabs */}
         <div
@@ -254,10 +276,10 @@ export function RegisterForm() {
                 role="radio"
                 aria-checked={selected}
                 onClick={() => setPlan(p.id as SelfServePlanId)}
-                className={`relative z-10 flex-1 rounded-xl px-2 py-2 text-[0.72rem] font-semibold uppercase tracking-wide transition-all duration-200 ${
+                className={`relative z-10 flex-1 rounded-xl px-2 py-2 text-xs font-semibold uppercase transition-all duration-200 ${
                   selected
                     ? "bg-surface-elevated text-text-primary shadow-sm ring-1 ring-accent/30"
-                    : "text-text-tertiary hover:text-text-secondary"
+                    : "text-text-primary hover:text-text-primary"
                 }`}
               >
                 {p.name}
@@ -286,37 +308,41 @@ export function RegisterForm() {
               />
 
               {currentPlan.popular && (
-                <span className="absolute right-4 top-4 inline-flex items-center gap-1 rounded-full bg-accent px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-text-inverse shadow-sm">
-                  <Sparkles className="h-2.5 w-2.5" aria-hidden="true" />
+                <span className="micro-badge absolute right-4 top-4 bg-accent text-text-inverse shadow-sm">
+                  <Sparkle className="h-2.5 w-2.5" aria-hidden="true" />
                   Most Popular
                 </span>
               )}
 
               <div className="relative">
-                <p className="font-headline text-2xl font-extrabold tracking-tight text-text-primary">
+                <p className="font-headline text-2xl font-extrabold text-text-primary">
                   {currentPlan.name}
                 </p>
-                <p className="mt-0.5 text-[11px] font-medium text-text-tertiary">
+                <p className="text-micro mt-0.5 font-medium text-text-tertiary">
                   {tagline}
                 </p>
 
                 <div className="mt-4 flex items-baseline gap-1.5">
                   {isFree ? (
                     <>
-                      <span className="font-headline text-[2.75rem] font-black leading-none tracking-tight text-text-primary">
+                      <span className="font-headline text-5xl font-black leading-none text-text-primary">
                         Free
                       </span>
-                      <span className="text-[11px] font-medium text-text-tertiary">
+                      <span className="text-micro font-medium text-text-tertiary">
                         · 30-day trial
                       </span>
                     </>
                   ) : (
                     <>
-                      <span className="text-sm font-semibold text-text-tertiary">Rs.</span>
-                      <span className="font-headline text-[2.75rem] font-black leading-none tracking-tight text-text-primary">
+                      <span className="text-sm font-semibold text-text-tertiary">
+                        Rs.
+                      </span>
+                      <span className="font-headline text-5xl font-black leading-none text-text-primary">
                         {currentPlan.monthlyPrice.toLocaleString("en-IN")}
                       </span>
-                      <span className="text-xs font-medium text-text-tertiary">/month</span>
+                      <span className="text-xs font-medium text-text-secondary">
+                        /month
+                      </span>
                     </>
                   )}
                 </div>
@@ -325,10 +351,14 @@ export function RegisterForm() {
                   {highlights.map((h) => (
                     <li
                       key={h}
-                      className="flex items-center gap-2 text-[12px] leading-snug text-text-secondary"
+                      className="flex items-center gap-2 text-xs leading-snug text-text-secondary"
                     >
                       <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent">
-                        <Check className="h-2.5 w-2.5" strokeWidth={3} aria-hidden="true" />
+                        <Check
+                          className="h-2.5 w-2.5"
+                          strokeWidth={3}
+                          aria-hidden="true"
+                        />
                       </span>
                       {h}
                     </li>
@@ -338,39 +368,23 @@ export function RegisterForm() {
             </div>
           );
         })()}
-
       </fieldset>
 
       {/* ── Google OAuth (primary, above email form) ───────────────── */}
       <div className="space-y-3">
-        <button
+        <GlassButton
           type="button"
           onClick={handleGoogleStart}
           disabled={googleLoading}
           aria-disabled={googleLoading}
           aria-describedby={googleDescriptionId}
-          className="inline-flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-border bg-surface-container-low font-semibold text-text-primary transition-colors hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full"
+          variant="surface"
+          size="lg"
+          icon={<GoogleMark className="brand-google-mark" />}
         >
-          <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-              fill="#4285F4"
-            />
-            <path
-              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-              fill="#34A853"
-            />
-            <path
-              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
-              fill="#FBBC05"
-            />
-            <path
-              d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-              fill="#EA4335"
-            />
-          </svg>
           {googleLoading ? "Redirecting to Google…" : "Continue with Google"}
-        </button>
+        </GlassButton>
 
         {webviewNotice ? (
           <div
@@ -381,25 +395,30 @@ export function RegisterForm() {
               Google sign-in requires Chrome
             </p>
             <p className="mt-1">
-              This browser can&apos;t open Google&apos;s sign-in page. Open RawDrive in
-              Chrome to continue.
+              This browser can&apos;t open Google&apos;s sign-in page. Open
+              RawDrive in Chrome to continue.
             </p>
-            <button
+            <GlassButton
               type="button"
               onClick={() => openPageInChrome(window.location.href)}
-              className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+              className="mt-3 w-full"
+              variant="primary"
+              size="md"
             >
               Open in Chrome
-            </button>
+            </GlassButton>
           </div>
         ) : null}
       </div>
 
-      <div className="relative flex items-center justify-center" aria-hidden="true">
+      <div
+        className="relative flex items-center justify-center"
+        aria-hidden="true"
+      >
         <div className="absolute inset-0 flex items-center">
           <div className="soft-divider w-full" />
         </div>
-        <span className="relative bg-surface-elevated px-4 text-[11px] font-bold uppercase tracking-[0.22em] text-text-tertiary">
+        <span className="text-micro relative bg-surface-elevated px-4 font-bold uppercase text-text-tertiary">
           or sign up with email
         </span>
       </div>
@@ -408,7 +427,7 @@ export function RegisterForm() {
       <div className="space-y-1.5">
         <label
           htmlFor="register-name"
-          className="ml-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.2em] text-text-tertiary"
+          className="form-label ml-1 flex items-center gap-1.5"
         >
           Full name
           <span className="text-feedback-error" aria-hidden="true">
@@ -429,7 +448,7 @@ export function RegisterForm() {
       <div className="space-y-1.5">
         <label
           htmlFor="register-email"
-          className="ml-1 text-xs font-semibold uppercase tracking-[0.2em] text-text-tertiary"
+          className="form-label ml-1"
         >
           Email address <span className="text-feedback-error">*</span>
         </label>
@@ -448,10 +467,12 @@ export function RegisterForm() {
       <div className="space-y-1.5">
         <label
           htmlFor="register-phone"
-          className="ml-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.2em] text-text-tertiary"
+          className="form-label ml-1 flex items-center gap-1.5"
         >
           Phone number
-          <span className="text-feedback-error" aria-hidden="true">*</span>
+          <span className="text-feedback-error" aria-hidden="true">
+            *
+          </span>
         </label>
         <input
           id="register-phone"
@@ -468,7 +489,7 @@ export function RegisterForm() {
       <div className="space-y-1.5">
         <label
           htmlFor="register-password"
-          className="ml-1 text-xs font-semibold uppercase tracking-[0.2em] text-text-tertiary"
+          className="form-label ml-1"
         >
           Password <span className="text-feedback-error">*</span>
         </label>
@@ -483,14 +504,19 @@ export function RegisterForm() {
             autoComplete="new-password"
             required
           />
-          <button
+          <GlassIconButton
             type="button"
             onClick={() => setShowPassword((value) => !value)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-text-tertiary"
-            aria-label={showPassword ? "Hide password" : "Show password"}
+            className="input-adornment-button"
+            variant="ghost"
+            label={showPassword ? "Hide password" : "Show password"}
           >
-            {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-          </button>
+            {showPassword ? (
+              <EyeOff className="h-5 w-5" />
+            ) : (
+              <Eye className="h-5 w-5" />
+            )}
+          </GlassIconButton>
         </div>
       </div>
 
@@ -502,13 +528,22 @@ export function RegisterForm() {
           onChange={(event) => setTermsAccepted(event.target.checked)}
           className="mt-0.5 h-5 w-5 rounded border-border bg-surface-container-low text-accent focus:ring-accent/20"
         />
-        <label htmlFor="terms" className="text-sm leading-tight text-text-secondary">
+        <label
+          htmlFor="terms"
+          className="text-sm leading-tight text-text-secondary"
+        >
           I accept the{" "}
-          <Link href="/terms" className="font-semibold text-text-primary underline underline-offset-2">
+          <Link
+            href="/terms"
+            className="font-semibold text-text-primary underline underline-offset-2"
+          >
             Terms of Service
           </Link>{" "}
           and{" "}
-          <Link href="/privacy" className="font-semibold text-text-primary underline underline-offset-2">
+          <Link
+            href="/privacy"
+            className="font-semibold text-text-primary underline underline-offset-2"
+          >
             Privacy Policy
           </Link>
         </label>
@@ -516,7 +551,13 @@ export function RegisterForm() {
 
       <button
         type="submit"
-        disabled={loading || !email.trim() || !fullName.trim() || !phone.trim() || !termsAccepted}
+        disabled={
+          loading ||
+          !email.trim() ||
+          !fullName.trim() ||
+          !phone.trim() ||
+          !termsAccepted
+        }
         className="btn-primary h-14 w-full font-headline disabled:cursor-not-allowed disabled:opacity-60"
       >
         {loading ? "Creating Account..." : "Create Account"}

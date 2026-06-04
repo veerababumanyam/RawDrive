@@ -46,7 +46,11 @@ describe("AISearchBar", () => {
     vi.advanceTimersByTime(350);
 
     await waitFor(() => {
-      expect(mockSearchAssets).toHaveBeenCalledWith("test", "sunset", undefined);
+      expect(mockSearchAssets).toHaveBeenCalledWith(
+        "test",
+        "sunset",
+        undefined,
+      );
     });
   });
 
@@ -109,7 +113,9 @@ describe("AISearchBar", () => {
     vi.advanceTimersByTime(350);
 
     await waitFor(() => {
-      expect(onResults).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ asset_id: "a1" })]));
+      expect(onResults).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ asset_id: "a1" })]),
+      );
     });
   });
 });

@@ -397,10 +397,12 @@ function findPhotoFixture() {
   const candidates = [
     "../tests/photos/Wedding (42).jpg",
     "../tests/photos/veera.jpg",
-    "../frontend/public/landing/gallery-baby.jpg",
-    "../frontend/public/landing/ai-couple.jpg",
   ].map((candidate) => path.resolve(process.cwd(), candidate));
   const found = candidates.find((candidate) => fs.existsSync(candidate));
-  if (!found) throw new Error("No in-repo JPEG photo fixture found for E2EE upload test");
+  if (!found) {
+    throw new Error(
+      "Missing required tests/photos JPEG fixture for E2EE upload test; do not fall back to landing images.",
+    );
+  }
   return found;
 }

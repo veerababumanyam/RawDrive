@@ -7,7 +7,10 @@ import type { GalleryProduct } from "@/lib/api/commerce";
 // The component pulls evaluatePrintPreflight and upsertPublicCart from
 // lib/api/commerce, so those are the only functions we need to fake.
 vi.mock("@/lib/api/commerce", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/api/commerce")>("@/lib/api/commerce");
+  const actual =
+    await vi.importActual<typeof import("@/lib/api/commerce")>(
+      "@/lib/api/commerce",
+    );
   return {
     ...actual,
     evaluatePrintPreflight: vi.fn(),
@@ -65,7 +68,9 @@ describe("ProductPreview", () => {
         sourceHeightPx={1800}
       />,
     );
-    expect(screen.getByRole("heading", { name: "Test Print" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Test Print" }),
+    ).toBeInTheDocument();
     // "Print" is the product_type label above the name
     expect(screen.getByText(/^print$/i)).toBeInTheDocument();
     // Price is 50000 paise → ₹500
@@ -93,7 +98,9 @@ describe("ProductPreview", () => {
         slug="test-gallery"
       />,
     );
-    expect(screen.queryByRole("radiogroup", { name: /print size/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("radiogroup", { name: /print size/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("runs preflight on mount when source dimensions provided", async () => {
@@ -190,7 +197,14 @@ describe("ProductPreview", () => {
       id: "cart-1",
       gallery_id: "gallery-1",
       client_email: "client@example.com",
-      items: [{ product_id: "product-1", quantity: 1, unit_price: 50000, line_total: 50000 }],
+      items: [
+        {
+          product_id: "product-1",
+          quantity: 1,
+          unit_price: 50000,
+          line_total: 50000,
+        },
+      ],
       subtotal: 50000,
       discount: 0,
       total: 50000,

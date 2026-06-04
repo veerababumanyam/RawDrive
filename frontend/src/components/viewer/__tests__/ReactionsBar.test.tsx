@@ -10,7 +10,13 @@ beforeEach(() => {
   sessionStorage.clear();
   sessionStorage.setItem(
     "rd:viewer:s1",
-    JSON.stringify({ access_token: "tok", refresh_token: "r", expires_in: 900, token_type: "Bearer", saved_at: Date.now() }),
+    JSON.stringify({
+      access_token: "tok",
+      refresh_token: "r",
+      expires_in: 900,
+      token_type: "Bearer",
+      saved_at: Date.now(),
+    }),
   );
   vi.useFakeTimers();
 });
@@ -30,9 +36,14 @@ describe("ReactionsBar", () => {
   });
 
   it("debounces rapid same-kind presses into a single batched POST", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ persisted: 5 }), { status: 200, headers: { "content-type": "application/json" } }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ persisted: 5 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     render(<ReactionsBar streamId="s1" />);
@@ -48,15 +59,19 @@ describe("ReactionsBar", () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toMatch(/\/api\/v1\/public\/streams\/s1\/reactions$/);
     expect(init.method).toBe("POST");
-    const body = JSON.parse(init.body as string) as { entries: { kind: string; count: number }[] };
+    const body = JSON.parse(init.body as string) as {
+      entries: { kind: string; count: number }[];
+    };
     expect(body.entries.length).toBe(1);
     expect(body.entries[0]).toMatchObject({ kind: "heart", count: 5 });
   });
 
   it("merges presses across different kinds into one batched POST", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ persisted: 3 }), { status: 200 }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ persisted: 3 }), { status: 200 }),
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     render(<ReactionsBar streamId="s1" />);
@@ -69,10 +84,16 @@ describe("ReactionsBar", () => {
       await vi.advanceTimersByTimeAsync(250);
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string) as {
+    const body = JSON.parse(
+      (fetchMock.mock.calls[0][1] as RequestInit).body as string,
+    ) as {
       entries: { kind: string; count: number }[];
     };
     expect(body.entries.length).toBe(3);
-    expect(body.entries.map((e) => e.kind).sort()).toEqual(["heart", "laugh", "thumbs_up"]);
+    expect(body.entries.map((e) => e.kind).sort()).toEqual([
+      "heart",
+      "laugh",
+      "thumbs_up",
+    ]);
   });
 });

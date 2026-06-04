@@ -11,7 +11,7 @@ import {
   Server,
   Shield,
   Users,
-} from "lucide-react";
+} from "@/components/icons";
 import { SidebarShell, SidebarAvatar } from "./SidebarShell";
 import type { NavGroup } from "./SidebarShell";
 
@@ -46,7 +46,13 @@ interface AdminSidebarProps {
   onMobileClose?: () => void;
 }
 
-export function AdminSidebar({ userName, avatarUrl, platformRole, mobileOpen, onMobileClose }: AdminSidebarProps) {
+export function AdminSidebar({
+  userName,
+  avatarUrl,
+  platformRole,
+  mobileOpen,
+  onMobileClose,
+}: AdminSidebarProps) {
   return (
     <SidebarShell
       subtitle="Admin Console"

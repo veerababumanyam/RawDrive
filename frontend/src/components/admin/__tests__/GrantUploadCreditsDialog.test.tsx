@@ -54,7 +54,9 @@ describe("GrantUploadCreditsDialog", () => {
         workspaceName={WS_NAME}
       />,
     );
-    expect(container.querySelector("[data-testid='grant-upload-credits-dialog']")).toBeNull();
+    expect(
+      container.querySelector("[data-testid='grant-upload-credits-dialog']"),
+    ).toBeNull();
   });
 
   it("POSTs to the admin grant endpoint and shows success", async () => {
@@ -157,7 +159,9 @@ describe("GrantUploadCreditsDialog", () => {
         workspaceName={WS_NAME}
       />,
     );
-    const submit = screen.getByTestId("grant-upload-credits-submit") as HTMLButtonElement;
+    const submit = screen.getByTestId(
+      "grant-upload-credits-submit",
+    ) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
 
     fireEvent.change(screen.getByTestId("grant-upload-credits-amount"), {
