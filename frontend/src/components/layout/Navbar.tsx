@@ -119,6 +119,11 @@ export function Navbar() {
               <div
                 id="navbar-solutions-menu"
                 className="surface-panel absolute left-0 top-full z-50 w-56 p-2"
+                // Positioning is inlined so the glass skin (.surface-panel sets
+                // `position: relative` for its optical pseudo-layers) can never
+                // pull the panel into the header's flex flow. Inline styles win
+                // over any stylesheet rule regardless of cascade layers.
+                style={{ position: "absolute", top: "100%", left: 0 }}
               >
                 {solutionsLinks.map((link) => (
                   <Link
@@ -165,6 +170,9 @@ export function Navbar() {
               <div
                 id="navbar-marketplaces-menu"
                 className="surface-panel absolute left-0 top-full z-50 w-48 p-2"
+                // See solutions menu: inline positioning beats .surface-panel's
+                // `position: relative` so the panel never joins the flex flow.
+                style={{ position: "absolute", top: "100%", left: 0 }}
               >
                 {marketplacesLinks.map((link) => (
                   <Link
@@ -225,6 +233,9 @@ export function Navbar() {
               <div
                 id="navbar-company-menu"
                 className="surface-panel absolute left-0 top-full z-50 w-40 p-2"
+                // See solutions menu: inline positioning beats .surface-panel's
+                // `position: relative` so the panel never joins the flex flow.
+                style={{ position: "absolute", top: "100%", left: 0 }}
               >
                 {companyLinks.map((link) => (
                   <Link
@@ -280,7 +291,16 @@ export function Navbar() {
           "transition-all",
           mobileMenuOpen ? "max-h-[80vh] opacity-100" : "max-h-0 opacity-0",
         )}
-        style={{ transitionDuration: "var(--duration-normal)" }}
+        // Inline positioning for the same reason as the desktop dropdowns:
+        // .surface-panel's `position: relative` must not pull the mobile
+        // menu into the header flow.
+        style={{
+          position: "absolute",
+          top: "100%",
+          left: 0,
+          right: 0,
+          transitionDuration: "var(--duration-normal)",
+        }}
       >
         <nav
           className="flex flex-col gap-1 px-4 py-4"

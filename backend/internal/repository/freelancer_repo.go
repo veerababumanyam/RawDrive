@@ -130,7 +130,7 @@ func (r *FreelancerRepo) List(ctx context.Context, filter FreelancerFilter) ([]F
 	argN := 1
 
 	if filter.PublishedOnly {
-		conditions = append(conditions, fmt.Sprintf("is_published = true"))
+		conditions = append(conditions, "is_published = true")
 	}
 	if filter.StateID != nil {
 		conditions = append(conditions, fmt.Sprintf("state_id = $%d", argN))
@@ -174,9 +174,10 @@ func (r *FreelancerRepo) List(ctx context.Context, filter FreelancerFilter) ([]F
 	}
 
 	orderBy := "ORDER BY created_at DESC"
-	if filter.Sort == "rating" {
+	switch filter.Sort {
+	case "rating":
 		orderBy = "ORDER BY rating_avg DESC NULLS LAST"
-	} else if filter.Sort == "rate" {
+	case "rate":
 		orderBy = "ORDER BY daily_rate_paisa ASC NULLS LAST"
 	}
 

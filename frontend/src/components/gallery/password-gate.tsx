@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { verifyGalleryPassword } from "@/lib/api/proofing";
+import { GlassButton } from "@/components/ui/glass-button";
 
 interface PasswordGateProps {
   slug: string;
@@ -79,13 +80,15 @@ export function PasswordGate({
             </p>
           )}
 
-          <button
+          <GlassButton
             type="submit"
+            variant="primary"
+            size="lg"
             disabled={loading || !password}
-            className="w-full py-3 rounded-xl bg-accent text-text-inverse font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="w-full"
           >
             {loading ? "Verifying..." : "View Gallery"}
-          </button>
+          </GlassButton>
         </form>
       </div>
     </div>

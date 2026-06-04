@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useInfiniteRender } from "@/hooks/use-infinite-render";
+import { useScrollRevealGroup } from "@/hooks/use-scroll-reveal";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -34,6 +36,7 @@ import { readGalleryCoverAssetId } from "@/lib/gallery-design-config";
 import { galleryShareExpiryDays } from "@/lib/gallery-share-expiry";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { GlassButton } from "@/components/ui/glass-button";
+import { InlineAlert } from "@/components/ui/inline-alert";
 import {
   ClipboardList,
   Envelope,
@@ -590,10 +593,31 @@ export default function GalleriesPage() {
     });
   }, [galleries, filterType, filterStatus, searchQuery]);
 
+  // Continuous scrolling: render gallery cards in growing windows instead of
+  // all at once, and reveal each card with a soft rise on first view.
+  const {
+    visibleCount,
+    hasMore: hasMoreCards,
+    sentinelRef: cardSentinelRef,
+  } = useInfiniteRender(filteredGalleries.length, {
+    initialCount: 24,
+    batchSize: 24,
+  });
+  const visibleGalleries = useMemo(
+    () => filteredGalleries.slice(0, visibleCount),
+    [filteredGalleries, visibleCount],
+  );
+  const revealGroupRef = useScrollRevealGroup<HTMLDivElement>([
+    visibleGalleries,
+    viewMode,
+  ]);
+
+  // Cover hydration is bounded to the rendered window so request counts do
+  // not scale with total gallery count (AGENTS.md performance hot paths).
   const missingCoverAssetIds = useMemo(() => {
     return Array.from(
       new Set(
-        galleries
+        visibleGalleries
           .map((g) => {
             if (g.cover_asset) return "";
             const coverAssetId = readGalleryCoverAssetId(
@@ -601,12 +625,15 @@ export default function GalleriesPage() {
               g.cover_asset_id,
             );
             if (!coverAssetId || coverAssets[coverAssetId]) return "";
+            // `g.cover_asset` is already falsy here (guarded above), so the
+            // former `g.cover_asset?.id === coverAssetId` check was dead and
+            // narrowed cover_asset to `never`, breaking the type-check.
             return coverAssetId;
           })
           .filter((id): id is string => Boolean(id && !coverAssets[id])),
       ),
     );
-  }, [coverAssets, galleries]);
+  }, [coverAssets, visibleGalleries]);
 
   // Arms the inline confirm bar for the given gallery card. The actual
   // delete happens in confirmDelete() — splitting these two keeps the
@@ -977,9 +1004,9 @@ export default function GalleriesPage() {
   return (
     <div className="space-y-6 py-8">
       {error && (
-        <div className="mb-4 rounded-xl border border-feedback-error/20 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error">
+        <InlineAlert variant="error" className="mb-4">
           {error}
-        </div>
+        </InlineAlert>
       )}
       {shareCopyFallback && (
         <ShareCopyFallbackNotice
@@ -1241,13 +1268,14 @@ export default function GalleriesPage() {
         </div>
       ) : (
         <div
+          ref={revealGroupRef}
           className={
             viewMode === "grid"
               ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
               : "space-y-3"
           }
         >
-          {filteredGalleries.map((g) => {
+          {visibleGalleries.map((g, index) => {
             const coverAssetId = readGalleryCoverAssetId(
               g.settings,
               g.cover_asset_id,
@@ -1262,6 +1290,12 @@ export default function GalleriesPage() {
             return (
               <article
                 key={g.id}
+                data-reveal
+                style={
+                  {
+                    "--reveal-delay": `${(index % 12) * 40}ms`,
+                  } as React.CSSProperties
+                }
                 className={cn(
                   "group relative rounded-xl border border-border-default bg-surface-raised",
                   "hover:border-accent/30 hover:shadow-elevation-1 transition-all duration-200",
@@ -1436,6 +1470,14 @@ export default function GalleriesPage() {
               </article>
             );
           })}
+          {hasMoreCards && (
+            <div
+              ref={cardSentinelRef}
+              data-testid="galleries-load-more-sentinel"
+              aria-hidden="true"
+              className="col-span-full h-px"
+            />
+          )}
         </div>
       )}
     </div>

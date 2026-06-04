@@ -249,7 +249,7 @@ describe("gallery detail page — perf & a11y contracts", () => {
     );
     expect(source).toContain("lg:hidden");
     expect(source).toContain("hidden space-y-4 lg:block");
-    expect(source).toContain("max-h-[100dvh]");
+    expect(source).toContain("max-h-dvh");
     expect(source).toContain(
       "grid gap-4 overflow-y-auto p-4 sm:p-5 lg:grid-cols-3 lg:gap-6 lg:p-6",
     );
@@ -373,8 +373,12 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).not.toContain("buildShareWhatsAppHrefs");
     expect(source).not.toContain("WhatsApp share contacts");
     expect(source).not.toContain("<Phone");
-    expect(source).not.toContain("ShareQrPopover");
-    expect(source).not.toContain("Show QR code");
+    // Issue #123: the QR popover (+ its inline Download PNG) was restored to
+    // the Copy/Email share groups at the owner's request, reversing the
+    // f91ade2b removal. Smart-album chips remain filter-only (no share
+    // controls), so the "filter-only" half of this contract still holds.
+    expect(source).toContain("ShareQrPopover");
+    expect(source).toContain("Show QR code");
     expect(source).toContain("buildShareEmailHref");
     expect(source).toContain("openShareLink");
     expect(source).toContain('label="Copy All Photos share link"');

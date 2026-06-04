@@ -42,9 +42,13 @@ func TestAdminModerationItem_Fields(t *testing.T) {
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
+	assert.NotEqual(t, uuid.Nil, item.ID)
 	assert.Equal(t, "image", item.ContentType)
+	assert.NotEqual(t, uuid.Nil, item.ContentID)
 	assert.Equal(t, "reported", item.Reason)
 	assert.Equal(t, "pending", item.Status)
+	assert.Equal(t, now, item.CreatedAt)
+	assert.Equal(t, now, item.UpdatedAt)
 	assert.Nil(t, item.ReporterID)
 	assert.Nil(t, item.ReviewedBy)
 	assert.Nil(t, item.ReviewedAt)

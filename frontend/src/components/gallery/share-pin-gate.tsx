@@ -34,6 +34,7 @@
 import { useState } from "react";
 
 import { Lock } from "@/components/icons";
+import { GlassButton } from "@/components/ui/glass-button";
 
 interface Props {
   slug: string;
@@ -155,13 +156,15 @@ export function SharePinGate({
               {error}
             </p>
           )}
-          <button
+          <GlassButton
             type="submit"
+            variant="primary"
+            size="lg"
             disabled={!pin || loading}
-            className="min-h-[var(--touch-target-min)] w-full rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-text-inverse transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus disabled:opacity-50"
+            className="w-full"
           >
             {loading ? "Verifying..." : "View Gallery"}
-          </button>
+          </GlassButton>
         </form>
       </div>
     </div>

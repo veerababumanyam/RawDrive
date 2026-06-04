@@ -1,7 +1,11 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
-import Link from "next/link";
+import {
+  useEffect,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import {
   publicGalleryMusicUrl,
   type Gallery,
@@ -339,11 +343,16 @@ function googleFontsHref(
   return `https://fonts.googleapis.com/css2?${param}&display=swap`;
 }
 
-// Text CTA pill that visually pairs with the adjacent "View Gallery" anchor.
-// It mirrors the View Gallery <a> pill (same shape, padding, glass tokens) but
-// is a real <button> because it opens the in-page slideshow rather than
-// navigating. `min-h-11` (44px) guarantees the WCAG/Apple touch target even
-// though the matched py-2.5 padding alone is shorter.
+// Central design-system CTA classes. The public-cover call-to-actions build
+// on the shared .glass-button primitive (translucent liquid-glass surface,
+// ≥44px touch target, token-driven focus via the global *:focus-visible rule)
+// so "Play", "View Gallery" and "Find Me" read as one consistent group.
+const COVER_CTA_CLASS = "glass-button glass-button--surface glass-button--md";
+
+// Play CTA — opens the in-page slideshow rather than navigating, so it is a
+// real <button>. It uses the same .glass-button primitive as the View Gallery /
+// Find Me anchors so the whole CTA row reads as one matched set. Sits first in
+// the row, before View Gallery and Find Me.
 function PlaySlideshowButton({
   onClick,
   accent,
@@ -356,34 +365,68 @@ function PlaySlideshowButton({
       type="button"
       onClick={onClick}
       aria-label="Play slideshow"
-      className="inline-flex min-h-11 items-center gap-2 rounded-full border bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary glass-blur-medium transition-colors hover:bg-surface-raised"
+      className={COVER_CTA_CLASS}
       style={accent ? { borderColor: accent } : undefined}
     >
-      <Play className="h-4 w-4" aria-hidden="true" />
-      Play
+      <span className="glass-button__icon">
+        <Play width={18} height={18} aria-hidden />
+      </span>
+      <span>Play</span>
     </button>
   );
 }
 
-// "Find me" photo-search CTA pill. Mirrors the View Gallery / Play pill styling
-// exactly (same shape, padding, glass tokens, optional accent border, `min-h-11`
-// for the ≥44px touch target) so the three controls read as one aligned group.
-// It is a real navigation control (Next <Link> → /g/{slug}/photo-search), not a
-// GlassIconButton, because it carries a visible text label like View Gallery.
-// Responsive text mirrors the FAB it replaced: full phrase on ≥sm, "Find me" on
-// mobile. Uses the local SF-Symbols Camera icon (NOT lucide).
-function FindMeButton({ slug, accent }: { slug: string; accent?: string }) {
+/**
+ * CoverCtaGroup — the public cover's call-to-action pair. Renders the
+ * "View Gallery" scroll link and the "Find Me" photo-search entry as a single
+ * matched set, replacing the old detached "Find me with my camera" FAB that
+ * floated off the central design system in PublicGalleryEnhancements. An
+ * optional leading Play control (passed via `slideshowControl`) is rendered
+ * first so the music slideshow CTA shares the same row and glass styling.
+ */
+function CoverCtaGroup({
+  slug,
+  showViewGallery = true,
+  showPhotoSearch,
+  accent,
+  className,
+  slideshowControl,
+}: {
+  slug: string;
+  showViewGallery?: boolean;
+  showPhotoSearch: boolean;
+  accent?: string;
+  className?: string;
+  slideshowControl?: ReactNode;
+}) {
+  if (!slideshowControl && !showViewGallery && !showPhotoSearch) return null;
+  // Studio accent (when the tier permits it) recolours the glass border to
+  // keep brand continuity, exactly as the legacy View Gallery pill did.
+  const accentStyle = accent ? { borderColor: accent } : undefined;
   return (
-    <Link
-      href={`/g/${slug}/photo-search`}
-      aria-label="Find your photos with your camera"
-      className="inline-flex min-h-11 items-center gap-2 rounded-full border bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary glass-blur-medium transition-colors hover:bg-surface-raised"
-      style={accent ? { borderColor: accent } : undefined}
+    <div
+      className={`flex flex-wrap items-center gap-3${className ? ` ${className}` : ""}`}
     >
-      <Camera className="h-4 w-4" aria-hidden="true" />
-      <span className="hidden sm:inline">Find me with my camera</span>
-      <span className="sm:hidden">Find me</span>
-    </Link>
+      {slideshowControl}
+      {showViewGallery && (
+        <a href="#gallery-grid" className={COVER_CTA_CLASS} style={accentStyle}>
+          <span>View Gallery</span>
+        </a>
+      )}
+      {showPhotoSearch && (
+        <a
+          href={`/g/${slug}/photo-search`}
+          aria-label="Find your photos with your camera"
+          className={COVER_CTA_CLASS}
+          style={accentStyle}
+        >
+          <span className="glass-button__icon">
+            <Camera width={18} height={18} aria-hidden />
+          </span>
+          <span>Find me</span>
+        </a>
+      )}
+    </div>
   );
 }
 
@@ -408,10 +451,6 @@ export function PublicGalleryHero({
   // behavior of treating music as the slideshow's reason-to-exist on share
   // links).
   const slideshowEnabled = Boolean(slug) && hasMusic && assets.length > 0;
-  // "Find me" CTA needs a slug to build the photo-search URL and the gallery
-  // to have face detection enabled. It sits last in the hero CTA row, after
-  // Play and View Gallery.
-  const findMeEnabled = Boolean(slug) && faceDetectionEnabled;
   // Auto-open on mount when the gallery has music, so the music plays as soon
   // as the /g/[slug] link opens — same UX the standalone launcher gave via
   // autoStart. Initializing state lazily from props (rather than a
@@ -459,6 +498,23 @@ export function PublicGalleryHero({
   const brandName = canUseStudioBrand ? branding?.brand_name?.trim() || "" : "";
   const logoUrl = canUseStudioBrand ? absoluteApiUrl(branding?.logo_url) : "";
   const studioAccent = canUseStudioBrand ? branding?.accent_color || "" : "";
+  const photoSearchSlug = slug || gallery.slug;
+  // "Find me" photo-search CTA gating. It sits last in the hero CTA row, after
+  // Play and View Gallery, and links to /g/{slug}/photo-search.
+  //
+  // Two entry points feed the same control:
+  //   1. The page passes `faceDetectionEnabled` (computed from the gallery's
+  //      face_detection_enabled field) alongside the `slug` it uses for the
+  //      slideshow music URL — the authoritative production path.
+  //   2. When the hero is mounted without those props (e.g. embedded previews)
+  //      it falls back to the gallery's own face_detection_enabled field, which
+  //      defaults to true in the schema (migration 046); only an explicit false
+  //      hides it.
+  // An explicit `face_detection_enabled: false` always wins and hides the CTA.
+  const photoSearchEnabled =
+    gallery.face_detection_enabled !== false &&
+    (faceDetectionEnabled || !slug);
+  const findMeEnabled = photoSearchEnabled;
 
   // Design-driven path — runs when the studio has saved anything we can
   // act on. We check `design?.cover?.styleId` rather than just "design
@@ -790,21 +846,20 @@ export function PublicGalleryHero({
                 ))}
               </div>
             )}
-            <div className="absolute bottom-6 right-6 flex flex-wrap items-center justify-end gap-3">
-              {slideshowEnabled && (
-                <PlaySlideshowButton onClick={openSlideshow} accent={accent} />
-              )}
-              <a
-                href="#gallery-grid"
-                className="inline-block rounded-full border bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary glass-blur-medium transition-colors hover:bg-surface-raised"
-                style={accent ? { borderColor: accent } : undefined}
-              >
-                View Gallery
-              </a>
-              {findMeEnabled && slug && (
-                <FindMeButton slug={slug} accent={accent} />
-              )}
-            </div>
+            <CoverCtaGroup
+              slug={photoSearchSlug}
+              showPhotoSearch={findMeEnabled}
+              accent={accent || undefined}
+              className="absolute bottom-6 right-6 justify-end"
+              slideshowControl={
+                slideshowEnabled ? (
+                  <PlaySlideshowButton
+                    onClick={openSlideshow}
+                    accent={accent || undefined}
+                  />
+                ) : null
+              }
+            />
           </div>
         ) : (
           // Legacy bottom-anchored layout — used when no drag positions
@@ -902,7 +957,7 @@ export function PublicGalleryHero({
               </div>
             )}
             <div
-              className="mt-8 flex flex-wrap items-center gap-3"
+              className="mt-8"
               style={{
                 alignSelf:
                   effectiveAlign === "center"
@@ -912,19 +967,19 @@ export function PublicGalleryHero({
                       : "flex-start",
               }}
             >
-              {slideshowEnabled && (
-                <PlaySlideshowButton onClick={openSlideshow} accent={accent} />
-              )}
-              <a
-                href="#gallery-grid"
-                className="inline-block rounded-full border bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary glass-blur-medium transition-colors hover:bg-surface-raised"
-                style={accent ? { borderColor: accent } : undefined}
-              >
-                View Gallery
-              </a>
-              {findMeEnabled && slug && (
-                <FindMeButton slug={slug} accent={accent} />
-              )}
+              <CoverCtaGroup
+                slug={photoSearchSlug}
+                showPhotoSearch={findMeEnabled}
+                accent={accent || undefined}
+                slideshowControl={
+                  slideshowEnabled ? (
+                    <PlaySlideshowButton
+                      onClick={openSlideshow}
+                      accent={accent || undefined}
+                    />
+                  ) : null
+                }
+              />
             </div>
           </div>
         )}
@@ -973,19 +1028,24 @@ export function PublicGalleryHero({
             {gallery.description}
           </p>
         )}
-        {(slideshowEnabled || findMeEnabled) && (
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            {slideshowEnabled && (
+        {/* No cover photo here, so the grid sits immediately below — surface
+            only the Play + Find Me entries (preserving the old FAB's reach)
+            rather than a redundant scroll-to-grid button. */}
+        <CoverCtaGroup
+          slug={photoSearchSlug}
+          showViewGallery={false}
+          showPhotoSearch={findMeEnabled}
+          accent={accentColor || undefined}
+          className="mt-6"
+          slideshowControl={
+            slideshowEnabled ? (
               <PlaySlideshowButton
                 onClick={openSlideshow}
                 accent={accentColor || undefined}
               />
-            )}
-            {findMeEnabled && slug && (
-              <FindMeButton slug={slug} accent={accentColor || undefined} />
-            )}
-          </div>
-        )}
+            ) : null
+          }
+        />
         {slideshowOverlay}
       </header>
     );
@@ -1023,24 +1083,20 @@ export function PublicGalleryHero({
             {gallery.description}
           </p>
         )}
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          {slideshowEnabled && (
-            <PlaySlideshowButton
-              onClick={openSlideshow}
-              accent={accentColor || undefined}
-            />
-          )}
-          <a
-            href="#gallery-grid"
-            className="inline-block rounded-full border border-border-subtle bg-surface-overlay px-6 py-2.5 text-sm font-medium text-text-primary glass-blur-medium transition-colors hover:bg-surface-raised"
-            style={accentColor ? { borderColor: accentColor } : undefined}
-          >
-            View Gallery
-          </a>
-          {findMeEnabled && slug && (
-            <FindMeButton slug={slug} accent={accentColor || undefined} />
-          )}
-        </div>
+        <CoverCtaGroup
+          slug={photoSearchSlug}
+          showPhotoSearch={findMeEnabled}
+          accent={accentColor || undefined}
+          className="mt-8 justify-center"
+          slideshowControl={
+            slideshowEnabled ? (
+              <PlaySlideshowButton
+                onClick={openSlideshow}
+                accent={accentColor || undefined}
+              />
+            ) : null
+          }
+        />
       </div>
       {slideshowOverlay}
     </section>

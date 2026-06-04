@@ -1,9 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import dynamic from "next/dynamic";
 import { use, useEffect, useState } from "react";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
+import { InlineAlert } from "@/components/ui/inline-alert";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageHeader } from "@/components/ui/page-header";
 import { getGallery, type Gallery } from "@/lib/api/galleries";
 import { getStoredAccessToken } from "@/lib/auth";
 
@@ -61,38 +63,22 @@ export default function GalleryAIPage({
   }, [id, token]);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
+    <PageContainer>
       {/* Workspace nav first so the section dropdown is the topmost
           element on mobile (matches the cover and settings sub-pages). */}
       <GalleryWorkspaceNav galleryId={id} />
 
-      <Link
-        href={`/galleries/${id}`}
-        className="btn-tertiary px-0 py-0 text-sm"
-      >
-        Back to gallery
-      </Link>
+      <PageHeader
+        eyebrow="Gallery AI"
+        title={gallery?.title ? `${gallery.title} AI` : "Gallery AI"}
+        description="Run gallery-scoped automation here so face matching, culling support, and client discovery stay attached to the delivery workspace."
+        backHref={`/galleries/${id}`}
+        backLabel="Back to gallery"
+      />
 
-      <div className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">
-          Gallery AI
-        </p>
-        <h1 className="text-2xl font-semibold text-text-primary">
-          {gallery?.title ? `${gallery.title} AI` : "Gallery AI"}
-        </h1>
-        <p className="max-w-2xl text-sm leading-relaxed text-text-secondary">
-          Run gallery-scoped automation here so face matching, culling support,
-          and client discovery stay attached to the delivery workspace.
-        </p>
-      </div>
-
-      {error && (
-        <div className="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
-          {error}
-        </div>
-      )}
+      {error && <InlineAlert variant="error">{error}</InlineAlert>}
 
       {token && <GalleryAIPanel galleryId={id} token={token} />}
-    </div>
+    </PageContainer>
   );
 }

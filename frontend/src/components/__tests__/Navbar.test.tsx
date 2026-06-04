@@ -47,4 +47,25 @@ describe("Navbar", () => {
     const header = screen.getByRole("banner");
     expect(header.className).toContain("sticky");
   });
+
+  it("keeps desktop dropdown panels anchored below the header", () => {
+    renderNavbar();
+
+    for (const [buttonLabel, menuId] of [
+      ["Products & Solutions", "navbar-solutions-menu"],
+      ["Marketplaces", "navbar-marketplaces-menu"],
+      ["Company", "navbar-company-menu"],
+    ] as const) {
+      fireEvent.mouseEnter(screen.getByRole("button", { name: buttonLabel }));
+
+      const menu = document.getElementById(menuId);
+      expect(menu).toBeInTheDocument();
+      expect(menu).toHaveStyle({
+        position: "absolute",
+        top: "100%",
+      });
+
+      fireEvent.mouseLeave(screen.getByRole("button", { name: buttonLabel }));
+    }
+  });
 });

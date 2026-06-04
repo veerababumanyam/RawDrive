@@ -24,6 +24,7 @@ func TestHealthStatus_Fields(t *testing.T) {
 	assert.Equal(t, "api", s.ServiceName)
 	assert.Equal(t, "healthy", s.Status)
 	assert.InDelta(t, 99.99, s.Uptime, 0.01)
+	assert.Equal(t, now, s.LastCheck)
 }
 
 func TestMetricPoint_Fields(t *testing.T) {
@@ -51,6 +52,8 @@ func TestAlertThreshold_Fields(t *testing.T) {
 		CriticalThreshold: 90.0,
 		Enabled:           true,
 	}
+	assert.NotEqual(t, uuid.Nil, a.ID)
+	assert.Equal(t, "api", *a.ServiceName)
 	assert.Equal(t, "cpu", a.MetricType)
 	assert.InDelta(t, 75.0, a.WarningThreshold, 0.01)
 	assert.InDelta(t, 90.0, a.CriticalThreshold, 0.01)

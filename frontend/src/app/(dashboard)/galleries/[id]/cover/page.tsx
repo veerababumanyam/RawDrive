@@ -60,7 +60,8 @@ import {
   LIGHTBOX_VARIANTS,
 } from "@/lib/media-encryption/asset-media";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
-import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
+import { GalleryPageShell } from "@/components/gallery/gallery-page-shell";
+import { GalleryPageHeader } from "@/components/gallery/gallery-page-header";
 import { components as designComponents } from "@/lib/tokens";
 
 // ──────────────────────────── Data ────────────────────────────
@@ -802,8 +803,11 @@ export default function CoverDesignPage() {
           ? galleryAssets.map((entry) => entry.asset ?? null)
           : await Promise.all(
               galleryAssets.map(async (entry) => {
-                try { return await getAsset(token, entry.asset_id); }
-                catch { return null; }
+                try {
+                  return await getAsset(token, entry.asset_id);
+                } catch {
+                  return null;
+                }
               }),
             );
         if (cancelled) return;
@@ -1027,21 +1031,14 @@ export default function CoverDesignPage() {
   // ───────────── Render ─────────────
 
   return (
-    <div className="min-h-screen bg-surface text-on-surface">
-      <div className="px-4 pt-3 sm:px-6 sm:pt-4 lg:px-8">
-        <GalleryWorkspaceNav galleryId={galleryId} />
-      </div>
-
-      <header className="cover-editor-header mt-3 flex flex-col gap-3 px-4 py-3 sm:mt-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4 lg:px-8">
-        <div className="min-w-0">
-          <h1 className="text-lg font-semibold font-headline sm:text-xl">
-            Cover &amp; Design
-          </h1>
-          <p className="truncate text-xs text-on-surface-variant">
-            {gallery?.title || "Loading…"}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+    <GalleryPageShell galleryId={galleryId} className="text-on-surface">
+      <GalleryPageHeader
+        backHref={`/galleries/${galleryId}`}
+        eyebrow="Cover & Design"
+        title="Cover & Design"
+        subtitle={gallery?.title || "Loading…"}
+        actions={
+          <>
           {/* Section selector — replaces the horizontal tab strip that
               used to sit under the preview. A dropdown is denser (one
               element instead of five) and pairs naturally with the
@@ -1144,15 +1141,12 @@ export default function CoverDesignPage() {
               />
             )}
           </button>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       {(saveMessage || saveError) && (
-        <div
-          className="px-4 pt-3 sm:px-6 lg:px-8"
-          role="status"
-          aria-live="polite"
-        >
+        <div role="status" aria-live="polite">
           {saveMessage && (
             <div className="inline-flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-3 py-1.5 text-xs font-medium text-success">
               <svg
@@ -1197,7 +1191,7 @@ export default function CoverDesignPage() {
           subject and gets the entire content rectangle. mx-auto + max-w
           keeps the cover from stretching absurdly wide on 4K monitors
           where a 16:9 frame would become a runway. */}
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 p-4 pb-8 sm:gap-7 sm:p-6 lg:gap-8 lg:p-8">
+      <div className="flex w-full flex-col gap-5 sm:gap-7 lg:gap-8">
         {/* ───────── LIVE PREVIEW ───────── */}
         <section>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -1453,7 +1447,7 @@ export default function CoverDesignPage() {
           </div>
         </section>
       </div>
-    </div>
+    </GalleryPageShell>
   );
 }
 
@@ -1660,7 +1654,7 @@ function PanelCover({
               One-tap cover direction for wedding galleries.
             </p>
           </div>
-          <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-primary">
+          <span className="rounded-full bg-primary/10 px-2 py-1 text-2xs font-medium uppercase tracking-wider text-primary">
             {config.cover.layoutPreset.replace(/-/g, " ")}
           </span>
         </div>
@@ -1677,7 +1671,7 @@ function PanelCover({
                 type="button"
                 onClick={() => setConfig((c) => applyCoverPreset(c, preset.id))}
                 aria-pressed={active}
-                className={`min-h-11 rounded-lg border px-2 py-2 text-center text-xs transition-colors sm:min-h-[72px] sm:rounded-xl sm:p-3 sm:text-left ${
+                className={`min-h-11 rounded-lg border px-2 py-2 text-center text-xs transition-colors sm:min-h-18 sm:rounded-xl sm:p-3 sm:text-left ${
                   active
                     ? "border-primary bg-primary/10 text-primary"
                     : "border-transparent text-on-surface hover:bg-accent-subtle sm:border-border-subtle"
@@ -1702,7 +1696,7 @@ function PanelCover({
             {assets.length} {assets.length === 1 ? "photo" : "photos"}
           </span>
         </div>
-        <div className="grid max-h-[320px] grid-cols-4 gap-2 overflow-y-auto pr-1 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10">
+        <div className="grid max-h-80 grid-cols-4 gap-2 overflow-y-auto pr-1 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10">
           {assets.map((a) => {
             const active = config.cover.assetId === a.id;
             return (
@@ -1752,7 +1746,7 @@ function PanelCover({
               },
             }))
           }
-          className="min-h-[40px] w-full rounded-lg border border-border-subtle px-4 py-2 text-sm transition-colors hover:bg-accent-subtle"
+          className="touch-min w-full rounded-lg border border-border-subtle px-4 py-2 text-sm transition-colors hover:bg-accent-subtle"
         >
           Reset focal points ({config.cover.focalPoint.x}%,{" "}
           {config.cover.focalPoint.y}% / phone {config.cover.mobileFocalPoint.x}
@@ -1804,7 +1798,7 @@ function DecryptedPreviewImage({
   }
 
   return (
-    <div className="flex h-full w-full items-center justify-center bg-surface-container-high px-2 text-center text-[10px] text-on-surface-variant">
+    <div className="flex h-full w-full items-center justify-center bg-surface-container-high px-2 text-center text-2xs text-on-surface-variant">
       {media.error || "Preview unavailable"}
     </div>
   );
@@ -1865,7 +1859,7 @@ function PanelText({
             Title
           </h3>
           <span
-            className={`rounded-full px-2 py-0.5 font-mono text-[10px] tabular-nums transition-colors ${
+            className={`rounded-full px-2 py-0.5 font-mono text-2xs tabular-nums transition-colors ${
               activeText === "title"
                 ? "bg-primary/15 text-primary"
                 : "text-on-surface-variant/70"
@@ -1897,7 +1891,7 @@ function PanelText({
         <div className="space-y-1.5">
           <label
             htmlFor="cover-title-font"
-            className="text-[11px] text-on-surface-variant"
+            className="text-2xs text-on-surface-variant"
           >
             Font
           </label>
@@ -1922,11 +1916,11 @@ function PanelText({
             <div className="flex items-center justify-between">
               <label
                 htmlFor="cover-title-size"
-                className="text-[11px] text-on-surface-variant"
+                className="text-2xs text-on-surface-variant"
               >
                 Size
               </label>
-              <span className="text-[11px] tabular-nums">
+              <span className="text-2xs tabular-nums">
                 {config.typography.titleSize}px
               </span>
             </div>
@@ -1953,7 +1947,7 @@ function PanelText({
           <div className="space-y-1.5">
             <label
               htmlFor="cover-title-color"
-              className="text-[11px] text-on-surface-variant"
+              className="text-2xs text-on-surface-variant"
             >
               Color
             </label>
@@ -1995,7 +1989,7 @@ function PanelText({
             Subtitle
           </h3>
           <span
-            className={`rounded-full px-2 py-0.5 font-mono text-[10px] tabular-nums transition-colors ${
+            className={`rounded-full px-2 py-0.5 font-mono text-2xs tabular-nums transition-colors ${
               activeText === "subtitle"
                 ? "bg-primary/15 text-primary"
                 : "text-on-surface-variant/70"
@@ -2023,7 +2017,7 @@ function PanelText({
         <div className="space-y-1.5">
           <label
             htmlFor="cover-subtitle-font"
-            className="text-[11px] text-on-surface-variant"
+            className="text-2xs text-on-surface-variant"
           >
             Font
           </label>
@@ -2048,11 +2042,11 @@ function PanelText({
             <div className="flex items-center justify-between">
               <label
                 htmlFor="cover-subtitle-size"
-                className="text-[11px] text-on-surface-variant"
+                className="text-2xs text-on-surface-variant"
               >
                 Size
               </label>
-              <span className="text-[11px] tabular-nums">
+              <span className="text-2xs tabular-nums">
                 {config.typography.subtitleSize}px
               </span>
             </div>
@@ -2079,7 +2073,7 @@ function PanelText({
           <div className="space-y-1.5">
             <label
               htmlFor="cover-subtitle-color"
-              className="text-[11px] text-on-surface-variant"
+              className="text-2xs text-on-surface-variant"
             >
               Color
             </label>
@@ -2117,12 +2111,12 @@ function PanelText({
             <h3 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
               Readability assistant
             </h3>
-            <p className="mt-1 text-[11px] text-on-surface-variant/80">
+            <p className="mt-1 text-2xs text-on-surface-variant/80">
               Checks the cover text setup and offers safe one-click fixes.
             </p>
           </div>
           <span
-            className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wider ${
+            className={`rounded-full px-2 py-1 text-2xs font-semibold uppercase tracking-wider ${
               readabilityPoints >= 3
                 ? "bg-success/10 text-success"
                 : readabilityPoints >= 2
@@ -2146,7 +2140,7 @@ function PanelText({
                 },
               }))
             }
-            className="min-h-[40px] rounded-lg border border-border-subtle px-3 py-2 text-left text-sm transition-colors hover:bg-accent-subtle"
+            className="touch-min rounded-lg border border-border-subtle px-3 py-2 text-left text-sm transition-colors hover:bg-accent-subtle"
           >
             Gradient scrim
           </button>
@@ -2158,7 +2152,7 @@ function PanelText({
                 cover: { ...c.cover, textBackdrop: "glass", textShadow: true },
               }))
             }
-            className="min-h-[40px] rounded-lg border border-border-subtle px-3 py-2 text-left text-sm transition-colors hover:bg-accent-subtle"
+            className="touch-min rounded-lg border border-border-subtle px-3 py-2 text-left text-sm transition-colors hover:bg-accent-subtle"
           >
             Glass title plate
           </button>
@@ -2174,7 +2168,7 @@ function PanelText({
                 },
               }))
             }
-            className="min-h-[40px] rounded-lg border border-border-subtle px-3 py-2 text-left text-sm transition-colors hover:bg-accent-subtle"
+            className="touch-min rounded-lg border border-border-subtle px-3 py-2 text-left text-sm transition-colors hover:bg-accent-subtle"
           >
             Blur band
           </button>
@@ -2191,7 +2185,7 @@ function PanelText({
                 },
               }))
             }
-            className="min-h-[40px] rounded-lg border border-border-subtle px-3 py-2 text-left text-sm transition-colors hover:bg-accent-subtle"
+            className="touch-min rounded-lg border border-border-subtle px-3 py-2 text-left text-sm transition-colors hover:bg-accent-subtle"
           >
             Darker overlay
           </button>
@@ -2199,7 +2193,7 @@ function PanelText({
       </section>
 
       <label className="flex cursor-pointer items-center justify-between gap-3 border-t border-border-subtle pt-4">
-        <span className="text-[11px] font-medium text-on-surface-variant">
+        <span className="text-2xs font-medium text-on-surface-variant">
           Readability shadow
         </span>
         <input
@@ -2215,7 +2209,7 @@ function PanelText({
         />
       </label>
 
-      <p className="text-[11px] text-on-surface-variant/80">
+      <p className="text-2xs text-on-surface-variant/80">
         Drag the title or subtitle on the preview to reposition.
       </p>
     </div>
@@ -2261,7 +2255,7 @@ function PanelMedia({
               }}
               aria-pressed={active}
               aria-disabled={disabled}
-              className={`min-h-[72px] rounded-xl border p-3 text-left transition-colors ${
+              className={`min-h-18 rounded-xl border p-3 text-left transition-colors ${
                 active
                   ? "border-primary bg-primary/10 text-primary"
                   : disabled
@@ -2319,7 +2313,7 @@ function PanelScenes({
                 : "border-border-subtle hover:bg-accent-subtle"
             }`}
           >
-            <label className="flex min-h-[40px] cursor-pointer items-center justify-between gap-3">
+            <label className="flex touch-min cursor-pointer items-center justify-between gap-3">
               <span>
                 <span className="block text-sm font-semibold">
                   {scene.label}
@@ -2346,7 +2340,7 @@ function PanelScenes({
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[11px] text-on-surface-variant">
+              <span className="text-2xs text-on-surface-variant">
                 Mini-cover
               </span>
               <select
@@ -2363,7 +2357,7 @@ function PanelScenes({
                   }))
                 }
                 aria-label={`${scene.label} mini-cover`}
-                className="min-h-[40px] w-full rounded-lg border border-border-subtle bg-surface px-3 py-2 text-sm disabled:opacity-50"
+                className="touch-min w-full rounded-lg border border-border-subtle bg-surface px-3 py-2 text-sm disabled:opacity-50"
               >
                 <option value="">Use gallery cover</option>
                 {assets.map((asset) => (
@@ -2376,7 +2370,7 @@ function PanelScenes({
           </div>
         ))}
       </div>
-      <p className="text-[11px] text-on-surface-variant/80">
+      <p className="text-2xs text-on-surface-variant/80">
         Enabled scenes are saved with this cover design and can power future
         album/ritual section headers.
       </p>
@@ -2403,7 +2397,7 @@ function PanelBrand({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="space-y-1.5">
-          <span className="text-[11px] text-on-surface-variant">Monogram</span>
+          <span className="text-2xs text-on-surface-variant">Monogram</span>
           <input
             value={config.branding.monogram}
             onChange={(e) =>
@@ -2421,7 +2415,7 @@ function PanelBrand({
           />
         </label>
         <label className="space-y-1.5">
-          <span className="text-[11px] text-on-surface-variant">
+          <span className="text-2xs text-on-surface-variant">
             Brand color
           </span>
           <input
@@ -2462,7 +2456,7 @@ function PanelBrand({
                   }))
                 }
                 aria-pressed={active}
-                className={`min-h-[40px] rounded-lg border px-3 py-2 text-sm transition-colors ${
+                className={`touch-min rounded-lg border px-3 py-2 text-sm transition-colors ${
                   active
                     ? "border-primary bg-primary/10 text-primary"
                     : "border-border-subtle hover:bg-accent-subtle"
@@ -2493,7 +2487,7 @@ function PanelBrand({
                   }))
                 }
                 aria-pressed={active}
-                className={`min-h-[40px] rounded-lg border px-3 py-2 text-sm transition-colors ${
+                className={`touch-min rounded-lg border px-3 py-2 text-sm transition-colors ${
                   active
                     ? "border-primary bg-primary/10 text-primary"
                     : "border-border-subtle hover:bg-accent-subtle"
@@ -2627,7 +2621,7 @@ function PanelGrid({
       <div className="space-y-2 border-t border-border-subtle pt-4">
         <div className="flex items-baseline justify-between">
           <h3 className="text-sm font-semibold">Preview</h3>
-          <span className="text-[10px] text-on-surface-variant/70">
+          <span className="text-2xs text-on-surface-variant/70">
             {config.grid.layout} · {config.grid.columns} col
           </span>
         </div>

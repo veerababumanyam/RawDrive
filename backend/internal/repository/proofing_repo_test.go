@@ -50,6 +50,7 @@ func TestProofingSelection_AllFieldsSet(t *testing.T) {
 	assert.Equal(t, "priya@example.com", ps.ClientEmail)
 	assert.Equal(t, "selected", ps.Status)
 	assert.Equal(t, "Love this shot!", ps.Note)
+	assert.Equal(t, now, ps.CreatedAt)
 }
 
 // ──────────────────────── Status Values ────────────────────────

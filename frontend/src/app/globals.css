@@ -323,54 +323,54 @@
 
 /* --- Theme: Liquid Glass Dark --- */
 [data-theme="liquid-glass-dark"] {
-  /* Ink-navy surfaces matching the logo's black-blue field */
-  --surface-base: #06121b;
-  --surface-elevated: #0b1d2a;
-  --surface-sunken: #030e18;
-  --surface-overlay: rgba(6, 17, 28, 0.88);
-  --surface-container: #0e2336;
-  --surface-container-low: #0a1a2a;
-  --surface-container-high: #14304a;
-  --surface-container-highest: #1a3f5e;
-  --surface-variant: #12324a;
-  --surface-bright: #225a80;
-  --surface-dim: #030e18;
-  --surface-scrim: rgba(3, 14, 24, 0.78);
-  --surface-scrim-strong: rgba(2, 8, 12, 0.96);
+  /* Cinematic ink-indigo surfaces — the logo's indigo-violet blade taken to near-black */
+  --surface-base: #070a1f;
+  --surface-elevated: #0b1229;
+  --surface-sunken: #030514;
+  --surface-overlay: rgba(7, 10, 31, 0.88);
+  --surface-container: #101a38;
+  --surface-container-low: #0a112b;
+  --surface-container-high: #16234a;
+  --surface-container-highest: #1c2d5e;
+  --surface-variant: #141f48;
+  --surface-bright: #2a3f86;
+  --surface-dim: #030514;
+  --surface-scrim: rgba(3, 5, 17, 0.78);
+  --surface-scrim-strong: rgba(1, 2, 10, 0.96);
 
-  --text-primary: #f8fcff;
+  --text-primary: #f7faff;
   --text-accent: var(--text-primary);
-  --text-secondary: #d8e9f8;
-  --text-tertiary: #b6cde0;
-  --text-inverse: #06121b;
+  --text-secondary: #d5e0fa;
+  --text-tertiary: #b3c3ec;
+  --text-inverse: #070a1f;
   --text-media: #ffffff;
 
-  /* Logo cyan / electric blue / champagne gold */
-  --accent-default: #4fcdf7;
-  --accent-hover: #8ae1ff;
-  --accent-active: #2da6d8;
-  --accent-subtle: rgba(79, 205, 247, 0.12);
-  --accent-muted: rgba(77, 154, 255, 0.24);
-  --accent-primary: #4d9aff;
-  --accent-secondary: #4fcdf7;
-  --accent-tertiary: #e8c170;
+  /* Brand cyan #1EE7FF / teal #19A7D3 / indigo #2C36D4 (lifted) / gold #CFA867 */
+  --accent-default: #1ee7ff;
+  --accent-hover: #84f1ff;
+  --accent-active: #19a7d3;
+  --accent-subtle: rgba(30, 231, 255, 0.12);
+  --accent-muted: rgba(139, 148, 255, 0.24);
+  --accent-primary: #8b94ff;
+  --accent-secondary: #1ee7ff;
+  --accent-tertiary: #cfa867;
 
-  --semantic-success: #5be0b8;
-  --semantic-warning: #f1c66f;
-  --semantic-destructive: #ff8d97;
-  --semantic-info: #4fcdf7;
+  --semantic-success: #4ee0a8;
+  --semantic-warning: #f0c668;
+  --semantic-destructive: #ff8fa0;
+  --semantic-info: #1ee7ff;
   --feedback-success: var(--semantic-success);
   --feedback-warning: var(--semantic-warning);
   --feedback-error: var(--semantic-destructive);
 
-  --border-default: rgba(110, 170, 215, 0.28);
-  --border-strong: rgba(79, 205, 247, 0.42);
-  --border-subtle: rgba(110, 170, 215, 0.14);
-  --border-focus: #7fd9ff;
-  --outline-variant: #2f6390;
+  --border-default: rgba(138, 152, 235, 0.28);
+  --border-strong: rgba(30, 231, 255, 0.45);
+  --border-subtle: rgba(138, 152, 235, 0.14);
+  --border-focus: #84f1ff;
+  --outline-variant: #34479e;
 
   --glass-blur: 26px;
-  --glass-saturation: 155%;
+  --glass-saturation: 165%;
   --glass-border-opacity: 0.24;
   --glass-surface-opacity: 0.82;
   --glass-clear-surface-opacity: 0.44;
@@ -381,68 +381,75 @@
   --glass-reduced-transparency-opacity: 0.96;
   --glass-increased-contrast-border-opacity: 0.78;
 
-  --button-primary-from: #4fcdf7;
-  --button-primary-to: #4d9aff;
-  --button-primary-foreground: #06121b;
+  --button-primary-from: #1ee7ff;
+  --button-primary-to: #8b94ff;
+  --button-primary-foreground: #070a1f;
 
-  --shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.24);
-  --shadow-md: 0 16px 34px rgba(0, 0, 0, 0.32);
+  --shadow-sm: 0 0 0 1px rgba(138, 152, 235, 0.1), 0 10px 28px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 0 0 1px rgba(138, 152, 235, 0.1), 0 16px 34px rgba(0, 0, 0, 0.32);
   --shadow-glass:
-    0 22px 48px rgba(0, 0, 0, 0.46), 0 6px 18px rgba(0, 0, 0, 0.24),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  --shadow-lg: 0 28px 58px rgba(0, 0, 0, 0.5);
-  --shadow-xl: 0 42px 86px rgba(0, 0, 0, 0.58);
+    0 0 0 1px rgba(138, 152, 235, 0.1), 0 22px 48px rgba(0, 0, 0, 0.46),
+    0 6px 18px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --shadow-lg: 0 0 0 1px rgba(138, 152, 235, 0.1), 0 28px 58px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 0 0 1px rgba(138, 152, 235, 0.1), 0 42px 86px rgba(0, 0, 0, 0.58);
   --shadow-inner: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   --shadow-glow:
-    0 0 0 1px rgba(127, 217, 255, 0.18), 0 0 38px rgba(79, 205, 247, 0.2);
+    0 0 0 1px rgba(132, 241, 255, 0.18), 0 0 38px rgba(30, 231, 255, 0.22);
+
+  --ambient-grid-line: rgba(138, 152, 235, 0.05);
+  --ambient-grid-size: 56px;
+  --ambient-aurora-indigo: rgba(44, 54, 212, 0.16);
+  --ambient-aurora-cyan: rgba(30, 231, 255, 0.07);
+  --ambient-aurora-gold: rgba(207, 168, 103, 0.05);
+  --ambient-drift-duration: 48s;
 }
 
 /* --- Theme: Midnight (AMOLED logo accent) --- */
 [data-theme="midnight"] {
-  /* AMOLED black-navy with luminous logo cyan/blue/gold */
-  --surface-base: #020709;
-  --surface-elevated: #08141a;
-  --surface-sunken: #000303;
-  --surface-overlay: rgba(2, 7, 9, 0.94);
-  --surface-container: #0a1a2a;
-  --surface-container-low: #061119;
-  --surface-container-high: #0f2740;
-  --surface-container-highest: #163a5c;
-  --surface-variant: #0e2a44;
-  --surface-bright: #1c5586;
-  --surface-dim: #000303;
-  --surface-scrim: rgba(0, 3, 3, 0.9);
-  --surface-scrim-strong: rgba(0, 2, 3, 0.97);
+  /* AMOLED true-black with the logo's indigo cast; luminous turquoise/indigo/gold */
+  --surface-base: #030412;
+  --surface-elevated: #080c21;
+  --surface-sunken: #00020a;
+  --surface-overlay: rgba(3, 4, 18, 0.94);
+  --surface-container: #0b132e;
+  --surface-container-low: #060a1c;
+  --surface-container-high: #121f4a;
+  --surface-container-highest: #182b66;
+  --surface-variant: #0f1c44;
+  --surface-bright: #234494;
+  --surface-dim: #00020a;
+  --surface-scrim: rgba(0, 2, 10, 0.9);
+  --surface-scrim-strong: rgba(0, 1, 6, 0.97);
 
   --text-primary: #ffffff;
   --text-accent: var(--text-primary);
-  --text-secondary: #e2f1fb;
-  --text-tertiary: #b9cfe2;
-  --text-inverse: #020709;
+  --text-secondary: #e2eafd;
+  --text-tertiary: #b8c5ee;
+  --text-inverse: #030412;
   --text-media: #ffffff;
 
-  --accent-default: #6fdcff;
-  --accent-hover: #a8ecff;
-  --accent-active: #3cb2e6;
-  --accent-subtle: rgba(111, 220, 255, 0.1);
-  --accent-muted: rgba(106, 176, 255, 0.22);
-  --accent-primary: #6ab0ff;
-  --accent-secondary: #6fdcff;
-  --accent-tertiary: #f6cd75;
+  --accent-default: #5af0ff;
+  --accent-hover: #9df7ff;
+  --accent-active: #19a7d3;
+  --accent-subtle: rgba(90, 240, 255, 0.1);
+  --accent-muted: rgba(149, 160, 255, 0.22);
+  --accent-primary: #95a0ff;
+  --accent-secondary: #5af0ff;
+  --accent-tertiary: #cfa867;
 
-  --semantic-success: #67e4bd;
-  --semantic-warning: #f6cd75;
-  --semantic-destructive: #ff8d97;
-  --semantic-info: #6fdcff;
+  --semantic-success: #5fe7b4;
+  --semantic-warning: #f3ca6a;
+  --semantic-destructive: #ff8fa0;
+  --semantic-info: #5af0ff;
   --feedback-success: var(--semantic-success);
   --feedback-warning: var(--semantic-warning);
   --feedback-error: var(--semantic-destructive);
 
-  --border-default: rgba(100, 170, 215, 0.28);
-  --border-strong: rgba(111, 220, 255, 0.46);
-  --border-subtle: rgba(100, 170, 215, 0.12);
-  --border-focus: #9fe5ff;
-  --outline-variant: #1f5a86;
+  --border-default: rgba(130, 148, 240, 0.28);
+  --border-strong: rgba(90, 240, 255, 0.48);
+  --border-subtle: rgba(130, 148, 240, 0.12);
+  --border-focus: #9df7ff;
+  --outline-variant: #2c3f96;
 
   --glass-blur: 28px;
   --glass-saturation: 135%;
@@ -456,20 +463,140 @@
   --glass-reduced-transparency-opacity: 0.98;
   --glass-increased-contrast-border-opacity: 0.82;
 
-  --button-primary-from: #6fdcff;
-  --button-primary-to: #6ab0ff;
-  --button-primary-foreground: #020709;
+  --button-primary-from: #5af0ff;
+  --button-primary-to: #95a0ff;
+  --button-primary-foreground: #030412;
 
-  --shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.34);
-  --shadow-md: 0 16px 34px rgba(0, 0, 0, 0.42);
+  --shadow-sm: 0 0 0 1px rgba(130, 148, 240, 0.09), 0 10px 28px rgba(0, 0, 0, 0.34);
+  --shadow-md: 0 0 0 1px rgba(130, 148, 240, 0.09), 0 16px 34px rgba(0, 0, 0, 0.42);
   --shadow-glass:
-    0 24px 54px rgba(0, 0, 0, 0.58), 0 8px 20px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  --shadow-lg: 0 30px 64px rgba(0, 0, 0, 0.64);
-  --shadow-xl: 0 46px 92px rgba(0, 0, 0, 0.72);
+    0 0 0 1px rgba(130, 148, 240, 0.09), 0 24px 54px rgba(0, 0, 0, 0.58),
+    0 8px 20px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --shadow-lg: 0 0 0 1px rgba(130, 148, 240, 0.09), 0 30px 64px rgba(0, 0, 0, 0.64);
+  --shadow-xl: 0 0 0 1px rgba(130, 148, 240, 0.09), 0 46px 92px rgba(0, 0, 0, 0.72);
   --shadow-inner: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   --shadow-glow:
-    0 0 0 1px rgba(159, 229, 255, 0.18), 0 0 42px rgba(111, 220, 255, 0.22);
+    0 0 0 1px rgba(157, 247, 255, 0.18), 0 0 42px rgba(90, 240, 255, 0.24);
+
+  --ambient-grid-line: rgba(130, 148, 240, 0.04);
+  --ambient-grid-size: 56px;
+  --ambient-aurora-indigo: rgba(44, 54, 212, 0.14);
+  --ambient-aurora-cyan: rgba(90, 240, 255, 0.06);
+  --ambient-aurora-gold: rgba(207, 168, 103, 0.04);
+  --ambient-drift-duration: 56s;
+}
+
+/* --- Continuous scrolling & scroll-reveal system ---
+   Smooth in-page scrolling plus first-view reveal transitions driven by
+   useScrollRevealGroup (src/hooks/use-scroll-reveal.ts). Elements opt in
+   with data-reveal; the hook flips data-revealed on first viewport entry.
+   Motion tokens only; fully disabled under prefers-reduced-motion. */
+html {
+  scroll-behavior: smooth;
+}
+
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity var(--duration-slow) var(--easing-out) var(--reveal-delay, 0ms),
+    transform var(--duration-slow) var(--easing-spring)
+      var(--reveal-delay, 0ms);
+}
+
+[data-reveal][data-revealed="true"] {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* --- Ambient background system (dark themes) ---
+   2026 trend treatment: faint blueprint grid lines + three slow-drifting
+   brand aurora washes (indigo #2C36D4, cyan #1EE7FF, gold #CFA867) behind
+   all content. Colors come from theme ambient tokens (design-tokens.json
+   themes.*.ambient). Decorative only — opacities ≤6% keep WCAG contrast
+   intact. Disabled under prefers-reduced-motion (drift) and
+   prefers-reduced-transparency (whole layer). */
+[data-theme="liquid-glass-dark"] body,
+[data-theme="midnight"] body {
+  background-image:
+    radial-gradient(
+      1100px 700px at 82% -10%,
+      var(--ambient-aurora-cyan),
+      transparent 60%
+    ),
+    radial-gradient(
+      900px 640px at -12% 30%,
+      var(--ambient-aurora-indigo),
+      transparent 62%
+    ),
+    radial-gradient(
+      720px 520px at 50% 115%,
+      var(--ambient-aurora-gold),
+      transparent 65%
+    ),
+    linear-gradient(var(--ambient-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--ambient-grid-line) 1px, transparent 1px);
+  background-size:
+    160% 160%,
+    160% 160%,
+    160% 160%,
+    var(--ambient-grid-size) var(--ambient-grid-size),
+    var(--ambient-grid-size) var(--ambient-grid-size);
+  background-position:
+    0% 0%,
+    100% 100%,
+    50% 100%,
+    0 0,
+    0 0;
+  background-attachment: fixed;
+  animation: ambient-aurora-drift var(--ambient-drift-duration) ease-in-out
+    infinite alternate;
+}
+
+@keyframes ambient-aurora-drift {
+  0% {
+    background-position:
+      0% 0%,
+      100% 100%,
+      50% 100%,
+      0 0,
+      0 0;
+  }
+  100% {
+    background-position:
+      24% 16%,
+      76% 64%,
+      34% 86%,
+      0 0,
+      0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="liquid-glass-dark"] body,
+  [data-theme="midnight"] body {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  [data-theme="liquid-glass-dark"] body,
+  [data-theme="midnight"] body {
+    background-image: none;
+    animation: none;
+  }
 }
 
 /* --- Tailwind v4 @theme mapping --- */
@@ -719,13 +846,24 @@ body[data-chrome="marketing"] {
     saturate(var(--glass-saturation));
 }
 
-.liquid-glass,
-.glass-surface,
-.glass-card,
-.surface-panel,
-.glass-menu {
-  position: relative;
-  isolation: isolate;
+/* Default positioning context for the optical pseudo-layers below.
+   IMPORTANT: this lives in the `components` layer so that explicit
+   Tailwind positioning utilities (`absolute`, `fixed`, `sticky`) — which
+   live in the later `utilities` layer — can override it. As an unlayered
+   rule it silently forced `position: relative` onto absolutely-positioned
+   glass panels (navbar dropdowns, mobile menu), pulling them into the
+   flex flow: nav items spread apart and the menu rendered on top of /
+   above the header instead of below it. `absolute`/`fixed` still create
+   a positioned ancestor, so the ::before/::after layers keep working. */
+@layer components {
+  .liquid-glass,
+  .glass-surface,
+  .glass-card,
+  .surface-panel,
+  .glass-menu {
+    position: relative;
+    isolation: isolate;
+  }
 }
 
 /* Layer 1 — specular highlight: light catching the top of the pane. */

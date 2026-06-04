@@ -20,7 +20,9 @@ import {
 } from "@/lib/api/workspace-profile";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import { TermsAcceptanceModal } from "@/components/legal/terms-acceptance-modal";
-import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
+import { GalleryPageShell } from "@/components/gallery/gallery-page-shell";
+import { GalleryPageHeader } from "@/components/gallery/gallery-page-header";
+import { InlineAlert } from "@/components/ui/inline-alert";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 
 const ACCESS_WINDOW_PRESETS = [30, 60, 90] as const;
@@ -73,7 +75,7 @@ function toDateInputValue(iso?: string | null): string {
 }
 
 function presetButtonClass(active: boolean): string {
-  return `min-h-[44px] rounded-xl border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+  return `touch-min rounded-xl border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
     active
       ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
       : "border-border-default bg-surface-sunken text-text-secondary hover:bg-surface-container-low"
@@ -485,20 +487,18 @@ export default function GallerySettingsPage({
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-3xl space-y-6 px-4 py-8">
-        <GalleryWorkspaceNav galleryId={id} />
-        <div className="animate-pulse space-y-4">
+      <GalleryPageShell galleryId={id}>
+        <div className="max-w-3xl animate-pulse space-y-4">
           <div className="h-8 w-48 rounded bg-surface-sunken" />
           <div className="h-64 rounded-2xl bg-surface-sunken" />
         </div>
-      </div>
+      </GalleryPageShell>
     );
   }
 
   if (!gallery) {
     return (
-      <div className="mx-auto max-w-3xl space-y-6 px-4 py-16">
-        <GalleryWorkspaceNav galleryId={id} />
+      <GalleryPageShell galleryId={id}>
         <div className="text-center">
           <p className="text-sm text-text-secondary">
             {error || "Gallery not found."}
@@ -510,7 +510,7 @@ export default function GallerySettingsPage({
             Back to galleries
           </Link>
         </div>
-      </div>
+      </GalleryPageShell>
     );
   }
 
@@ -529,34 +529,21 @@ export default function GallerySettingsPage({
     (gallery.watermark_config as Record<string, unknown>) || {};
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 pb-24 overflow-y-auto">
-      {/* Workspace nav first so the section dropdown is the topmost
-          element on mobile (matches the cover and AI sub-pages). */}
-      <GalleryWorkspaceNav galleryId={id} />
-      <div className="space-y-2">
-        <Link
-          href={`/galleries/${id}`}
-          className="btn-tertiary px-0 py-0 text-sm"
-        >
-          Back to gallery
-        </Link>
-        <h1 className="text-2xl font-semibold text-text-primary">
-          Gallery Settings
-        </h1>
-        <p className="text-sm text-text-secondary">{gallery.title}</p>
-      </div>
+    <GalleryPageShell galleryId={id} className="pb-24 overflow-y-auto">
+      <GalleryPageHeader
+        backHref={`/galleries/${id}`}
+        eyebrow="Settings"
+        title="Gallery Settings"
+        subtitle={gallery.title}
+      />
 
-      {error && (
-        <div className="rounded-xl border border-feedback-error/30 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error">
-          {error}
-        </div>
-      )}
+      {/* Settings forms read better in a narrow column; the column is
+          constrained INSIDE the shared shell so the nav/header width
+          still matches every other gallery page. */}
+      <div className="max-w-3xl space-y-6">
+      {error && <InlineAlert variant="error">{error}</InlineAlert>}
 
-      {saveMsg && (
-        <div className="rounded-xl border border-feedback-success/30 bg-feedback-success/10 px-4 py-3 text-sm text-feedback-success">
-          {saveMsg}
-        </div>
-      )}
+      {saveMsg && <InlineAlert variant="success">{saveMsg}</InlineAlert>}
 
       {/* Downloads */}
       <section className="surface-panel space-y-4 p-5">
@@ -703,7 +690,7 @@ export default function GallerySettingsPage({
                 new Date(`${e.target.value}T23:59:59`).toISOString(),
               );
             }}
-            className="min-h-[44px] w-full rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent-primary sm:w-60"
+            className="touch-min w-full rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent-primary sm:w-60"
           />
         </div>
       </section>
@@ -771,7 +758,7 @@ export default function GallerySettingsPage({
                 );
               }
             }}
-            className="min-h-[44px] w-24 rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-center text-sm text-text-primary focus:outline-none focus:border-accent-primary"
+            className="touch-min w-24 rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-center text-sm text-text-primary focus:outline-none focus:border-accent-primary"
             disabled={saving}
           />
         </div>
@@ -970,7 +957,7 @@ export default function GallerySettingsPage({
                         /* non-critical */
                       }
                     }}
-                    className={`min-h-[44px] rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                    className={`touch-min rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
                       currentWatermark.position === pos
                         ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
                         : "border-border-default bg-surface-sunken text-text-secondary hover:bg-surface-container-low"
@@ -1142,7 +1129,8 @@ export default function GallerySettingsPage({
         onAccepted={handleTermsAccepted}
         onCancel={() => setTermsModalOpen(false)}
       />
-    </div>
+      </div>
+    </GalleryPageShell>
   );
 }
 

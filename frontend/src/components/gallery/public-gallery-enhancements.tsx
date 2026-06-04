@@ -136,9 +136,10 @@ export function PublicGalleryEnhancements({
       )}
 
       {/* Photo Search entry moved to the hero CTA row (PublicGalleryHero's
-          "Find me" pill, aligned with Play + View Gallery). It used to be a
-          floating bottom-left FAB here; consolidating it into the hero keeps
-          all three public CTAs in one horizontally-aligned group. The
+          "Find me" pill, aligned with Play + View Gallery, built from the
+          central .glass-button primitive). It used to be a floating
+          bottom-left FAB here; consolidating it into the hero keeps all three
+          public CTAs in one horizontally-aligned, on-system group. The
           galleries.face_detection_enabled gate now drives the hero's
           faceDetectionEnabled prop instead. */}
 

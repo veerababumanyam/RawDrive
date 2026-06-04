@@ -179,6 +179,9 @@ export default function DashboardPage() {
               gallery.cover_asset_id,
             );
             if (!coverAssetId || coverAssets[coverAssetId]) return "";
+            // `gallery.cover_asset` is already falsy here (guarded above), so
+            // the former `gallery.cover_asset?.id === coverAssetId` check was
+            // dead and narrowed cover_asset to `never`, breaking the type-check.
             return coverAssetId;
           })
           .filter((id): id is string => Boolean(id && !coverAssets[id])),

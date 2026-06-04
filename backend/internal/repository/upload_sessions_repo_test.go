@@ -53,13 +53,20 @@ func TestUploadSession_FieldsSet(t *testing.T) {
 		CreatedAt:           now,
 		UpdatedAt:           now,
 	}
+	assert.NotEqual(t, uuid.Nil, s.ID)
 	assert.Equal(t, wsID, s.WorkspaceID)
 	assert.Equal(t, userID, s.UserID)
 	assert.Equal(t, "tus-abc", s.TUSUploadID)
 	assert.Equal(t, "wedding (42).jpg", s.Filename, "filenames with spaces + parens must survive (test-photos rule)")
+	assert.Equal(t, "image/jpeg", s.ContentType)
 	assert.Equal(t, int64(52_428_800), s.TotalSize)
 	assert.Equal(t, int64(5_242_880), s.UploadOffset)
+	assert.Equal(t, int64(5_242_880), s.ChunkSize)
 	assert.Equal(t, "m-12345", *s.R2MultipartUploadID)
+	assert.JSONEq(t, `[{"part_number":1,"etag":"e1","size":5242880}]`, string(s.R2PartETags))
+	assert.Equal(t, now.Add(24*time.Hour), s.ExpiresAt)
+	assert.Equal(t, now, s.CreatedAt)
+	assert.Equal(t, now, s.UpdatedAt)
 }
 
 // TestUploadSession_GalleryAlbumFields covers the S3-G4 / AREA-UPLOADER-3

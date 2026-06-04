@@ -250,6 +250,10 @@ function UserMenu({
         <div
           role="menu"
           className="absolute right-0 top-full z-50 mt-2 w-64 origin-top-right animate-in fade-in slide-in-from-top-1 duration-150 surface-panel rounded-2xl shadow-xl border border-text-media/10 overflow-hidden"
+          // Inline positioning: .surface-panel sets `position: relative` for
+          // its glass pseudo-layers, which would otherwise override the
+          // `absolute` utility and pull this menu into the header flow.
+          style={{ position: "absolute", top: "100%", right: 0 }}
         >
           {/* User info header */}
           <div className="px-4 py-3 border-b border-text-media/10">

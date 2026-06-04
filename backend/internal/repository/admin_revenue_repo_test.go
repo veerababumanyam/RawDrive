@@ -2,7 +2,6 @@ package repository
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -24,11 +23,12 @@ func TestRevenueMetrics_Fields(t *testing.T) {
 	assert.Equal(t, int64(5000000), m.MRR)
 	assert.Equal(t, int64(60000000), m.ARR)
 	assert.InDelta(t, 2.5, m.ChurnRate, 0.01)
+	assert.Equal(t, int64(120000), m.LTV)
+	assert.Equal(t, int64(10000), m.ARPU)
 	assert.Equal(t, int64(450), m.TotalSubscribers)
 }
 
 func TestRevenueTimeSeries_Fields(t *testing.T) {
-	_ = time.Now() // keep import used
 	ts := RevenueTimeSeries{
 		Period:      "2026-04",
 		Revenue:     1500000,
@@ -51,6 +51,7 @@ func TestStateRevenue_Fields(t *testing.T) {
 		SubscriberCount: 150,
 	}
 	assert.Equal(t, "Karnataka", sr.StateName)
+	assert.Equal(t, int64(2000000), sr.Revenue)
 	assert.Equal(t, int64(150), sr.SubscriberCount)
 }
 

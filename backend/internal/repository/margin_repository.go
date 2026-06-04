@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -90,7 +89,7 @@ func (r *MarginRepo) ListCurrent(ctx context.Context, stateID *int) ([]MarginRat
 	query := `SELECT ` + marginCols + ` FROM margin_ratios WHERE effective_from <= $1 AND (effective_until IS NULL OR effective_until > $1)`
 	args := []any{now}
 	if stateID != nil {
-		query += fmt.Sprintf(` AND state_id = $2`)
+		query += ` AND state_id = $2`
 		args = append(args, *stateID)
 	}
 	query += ` ORDER BY effective_from DESC`

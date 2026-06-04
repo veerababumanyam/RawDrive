@@ -24,9 +24,9 @@
     var validThemes = ["liquid-glass", "liquid-glass-dark", "midnight"];
     var darkThemes = ["liquid-glass-dark", "midnight"];
     var metaColors = {
-      "liquid-glass": "#f6f7f9",
-      "liquid-glass-dark": "#0f1219",
-      "midnight": "#070709",
+      "liquid-glass": "#f6f9fd",
+      "liquid-glass-dark": "#070a1f",
+      "midnight": "#030412",
     };
     var defaultTheme = "liquid-glass-dark";
 

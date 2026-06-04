@@ -231,6 +231,50 @@ describe("PublicGalleryHero", () => {
     expect(screen.queryByText("Mehendi")).not.toBeInTheDocument();
   });
 
+  it("pairs the View Gallery and Find Me photo-search CTAs as central glass-button controls", () => {
+    // The photo-search entry used to float as a detached FAB ("Find me with
+    // my camera") in PublicGalleryEnhancements, off the central design
+    // system. It now sits beside the cover "View Gallery" CTA and both are
+    // built from the shared .glass-button primitive.
+    render(
+      <PublicGalleryHero
+        gallery={gallery}
+        assets={[coverAsset]}
+        branding={branding}
+      />,
+    );
+
+    const viewGallery = screen.getByRole("link", { name: /view gallery/i });
+    const findMe = screen.getByRole("link", {
+      name: "Find your photos with your camera",
+    });
+
+    expect(viewGallery).toHaveClass("glass-button");
+    expect(findMe).toHaveClass("glass-button");
+    expect(findMe).toHaveTextContent("Find me");
+    expect(viewGallery).toHaveAttribute("href", "#gallery-grid");
+    expect(findMe).toHaveAttribute("href", "/g/asha-ravi/photo-search");
+  });
+
+  it("omits the Find Me CTA when the studio has disabled face detection", () => {
+    render(
+      <PublicGalleryHero
+        gallery={{ ...gallery, face_detection_enabled: false }}
+        assets={[coverAsset]}
+        branding={branding}
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: /view gallery/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", {
+        name: "Find your photos with your camera",
+      }),
+    ).toBeNull();
+  });
+
   it("renders a visible 'Play' control ordered before 'View Gallery' when the gallery has music", () => {
     render(
       <PublicGalleryHero

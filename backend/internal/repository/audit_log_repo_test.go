@@ -29,10 +29,15 @@ func TestAuditLogEntry_Fields(t *testing.T) {
 		Severity:     "high",
 		CreatedAt:    now,
 	}
+	assert.NotEqual(t, uuid.Nil, entry.ID)
+	assert.NotEqual(t, uuid.Nil, entry.ActorID)
 	assert.Equal(t, "admin", entry.ActorType)
 	assert.Equal(t, "user.suspended", entry.Action)
+	assert.Equal(t, "user", entry.ResourceType)
+	assert.Equal(t, "user-123", entry.ResourceID)
 	assert.Equal(t, "high", entry.Severity)
 	assert.Equal(t, "192.168.1.1", *entry.IPAddress)
+	assert.Equal(t, now, entry.CreatedAt)
 }
 
 func TestAuditLogEntry_NullableFields(t *testing.T) {
@@ -45,6 +50,13 @@ func TestAuditLogEntry_NullableFields(t *testing.T) {
 		Severity:     "low",
 		CreatedAt:    time.Now(),
 	}
+	assert.NotEqual(t, uuid.Nil, entry.ID)
+	assert.NotEqual(t, uuid.Nil, entry.ActorID)
+	assert.Equal(t, "system", entry.ActorType)
+	assert.Equal(t, "cron.cleanup", entry.Action)
+	assert.Equal(t, "system", entry.ResourceType)
+	assert.Equal(t, "low", entry.Severity)
+	assert.False(t, entry.CreatedAt.IsZero())
 	assert.Nil(t, entry.IPAddress)
 	assert.Nil(t, entry.UserAgent)
 	assert.Nil(t, entry.WorkspaceID)
@@ -81,7 +93,12 @@ func TestAuditLogFilter_AllFields(t *testing.T) {
 	}
 	assert.Equal(t, actorID, *f.ActorID)
 	assert.Equal(t, "user.suspended", f.Action)
+	assert.Equal(t, "user", f.ResourceType)
+	assert.Equal(t, "user-456", f.ResourceID)
+	assert.Equal(t, from, *f.DateFrom)
+	assert.Equal(t, to, *f.DateTo)
 	assert.Equal(t, "high", f.Severity)
+	assert.Equal(t, cursor, *f.Cursor)
 	assert.Equal(t, 50, f.Limit)
 }
 

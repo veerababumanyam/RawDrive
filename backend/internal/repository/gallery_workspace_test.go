@@ -28,6 +28,7 @@ func TestGalleryWorkspaceRelationshipFields(t *testing.T) {
 		ArchivedAt:       &archivedAt,
 	}
 
+	assert.Equal(t, &contactID, gallery.ContactID)
 	assert.Equal(t, &contactID, gallery.PrimaryContactID)
 	assert.Equal(t, &projectID, gallery.ProjectID)
 	assert.Equal(t, &eventID, gallery.EventID)

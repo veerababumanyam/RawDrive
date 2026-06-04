@@ -156,9 +156,7 @@ describe("Gallery settings — slideshow music", () => {
     window.HTMLMediaElement.prototype.pause = vi.fn();
     window.HTMLMediaElement.prototype.load = vi.fn();
     if (!URL.createObjectURL) {
-      // @ts-expect-error jsdom may not define these
       URL.createObjectURL = vi.fn(() => "blob:preview");
-      // @ts-expect-error jsdom may not define these
       URL.revokeObjectURL = vi.fn();
     }
     mocks.getGallery.mockResolvedValue(gallery());

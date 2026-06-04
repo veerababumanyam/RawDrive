@@ -95,75 +95,75 @@ Default light theme. iOS 26 inspired Liquid Glass: cool blue-opal content surfac
 
 ## Theme: liquid-glass-dark
 
-Dark Liquid Glass. Ink-navy surfaces matching the logo field, electric-blue/cyan lensing, restrained champagne-gold warmth, and high legibility in dim rooms.
+Cinematic dark Liquid Glass aligned to the RawDrive aperture logo: deep ink-indigo surfaces from the logo's indigo-violet blades, indigo→royal-blue→turquoise aurora lensing mirroring the rim gradient, and a thin champagne-gold luxury accent for the single gold blade. 2026 gradient-glow aesthetic, WCAG AA verified.
 **Mode:** `dark`
 
 ### Surface
 
 | Token | Value | Notes |
 |-------|-------|-------|
-| `base` | `#06121b` | Primary page background |
-| `elevated` | `#0b1d2a` | Cards, modals, raised elements |
-| `sunken` | `#030e18` | Secondary backgrounds, inset areas |
-| `overlay` | `rgba(6, 17, 28, 0.88)` | Modal/dialog backdrop |
-| `container` | `#0e2336` | Grouped content containers |
-| `containerLow` | `#0a1a2a` | Low-emphasis grouped surfaces |
-| `containerHigh` | `#14304a` | Raised grouped surfaces |
-| `containerHighest` | `#1a3f5e` | Highest dark-mode container before borders |
-| `variant` | `#12324a` | Subtle glass tint carrier |
-| `bright` | `#225a80` | Bright dark-mode surface |
-| `dim` | `#030e18` | Dim dark-mode surface |
-| `scrim` | `rgba(3, 14, 24, 0.78)` | Media scrim for legible text over imagery |
-| `scrimStrong` | `rgba(2, 8, 12, 0.96)` | Near-opaque shell for immersive media viewers (lightbox, video) |
+| `base` | `#070a1f` | Primary page background — the logo's indigo-violet blade taken to near-black |
+| `elevated` | `#0b1229` | Cards, modals, raised elements |
+| `sunken` | `#030514` | Secondary backgrounds, inset areas |
+| `overlay` | `rgba(7, 10, 31, 0.88)` | Modal/dialog backdrop |
+| `container` | `#101a38` | Grouped content containers |
+| `containerLow` | `#0a112b` | Low-emphasis grouped surfaces |
+| `containerHigh` | `#16234a` | Raised grouped surfaces |
+| `containerHighest` | `#1c2d5e` | Highest dark-mode container before borders |
+| `variant` | `#141f48` | Subtle glass tint carrier — indigo cast |
+| `bright` | `#2a3f86` | Bright dark-mode surface — logo indigo-blue, dimmed |
+| `dim` | `#030514` | Dim dark-mode surface |
+| `scrim` | `rgba(3, 5, 17, 0.78)` | Media scrim for legible text over imagery |
+| `scrimStrong` | `rgba(1, 2, 10, 0.96)` | Near-opaque shell for immersive media viewers (lightbox, video) |
 
 ### Text
 
 | Token | Value | Notes |
 |-------|-------|-------|
-| `primary` | `#f8fcff` | High-contrast headers, body text |
-| `secondary` | `#d8e9f8` | Subheaders, descriptive text |
-| `tertiary` | `#b6cde0` | Captions, timestamps, metadata |
-| `inverse` | `#06121b` | Text on light/accent backgrounds |
+| `primary` | `#f7faff` | High-contrast headers, body text |
+| `secondary` | `#d5e0fa` | Subheaders, descriptive text |
+| `tertiary` | `#b3c3ec` | Captions, timestamps, metadata |
+| `inverse` | `#070a1f` | Text on light/accent backgrounds |
 | `media` | `#ffffff` | Text over photographic/video media scrims |
 
 ### Accent
 
 | Token | Value | Notes |
 |-------|-------|-------|
-| `default` | `#4fcdf7` | Logo cyan for dark surfaces; 10.3:1 on base |
-| `hover` | `#8ae1ff` | Accent hover state |
-| `active` | `#2da6d8` | Accent pressed state |
-| `subtle` | `rgba(79, 205, 247, 0.12)` | Accent background wash |
-| `muted` | `rgba(77, 154, 255, 0.24)` | Accent background medium |
-| `primary` | `#4d9aff` | Logo electric blue for primary emphasis and charts; AA on elevated |
-| `secondary` | `#4fcdf7` | Cyan glass tint for secondary emphasis |
-| `tertiary` | `#e8c170` | Champagne gold (logo aperture blade) for selective highlights |
+| `default` | `#1ee7ff` | Exact brand cyan (logo blade); 12.9:1 on base |
+| `hover` | `#84f1ff` | Accent hover state |
+| `active` | `#19a7d3` | Exact brand teal (logo blade) as pressed state; 4.7:1+ on all containers |
+| `subtle` | `rgba(30, 231, 255, 0.12)` | Brand-cyan accent background wash |
+| `muted` | `rgba(139, 148, 255, 0.24)` | Indigo accent background medium |
+| `primary` | `#8b94ff` | Brand indigo #2C36D4 tone-lifted for dark surfaces (raw value is 2.4:1 — fails AA); AA on all containers |
+| `secondary` | `#1ee7ff` | Brand cyan glass tint for secondary emphasis |
+| `tertiary` | `#cfa867` | Exact brand gold/bronze (logo's single gold blade) — thin luxury accent, used sparingly; 5.9:1+ everywhere |
 
 ### Semantic
 
 | Token | Value | Notes |
 |-------|-------|-------|
-| `success` | `#5be0b8` | Positive actions |
-| `warning` | `#f1c66f` | Caution states |
-| `destructive` | `#ff8d97` | Errors, destructive actions |
-| `info` | `#4fcdf7` | Informational states |
+| `success` | `#4ee0a8` | Positive actions |
+| `warning` | `#f0c668` | Caution states |
+| `destructive` | `#ff8fa0` | Errors, destructive actions |
+| `info` | `#1ee7ff` | Informational states — brand cyan |
 
 ### Border
 
 | Token | Value | Notes |
 |-------|-------|-------|
-| `default` | `rgba(110, 170, 215, 0.28)` | Default border color |
-| `strong` | `rgba(79, 205, 247, 0.42)` | Emphasized borders |
-| `subtle` | `rgba(110, 170, 215, 0.14)` | Subtle borders |
-| `focus` | `#7fd9ff` | Focus ring |
-| `outlineVariant` | `#2f6390` | Outline color used by translucent glass edges |
+| `default` | `rgba(138, 152, 235, 0.28)` | Default border color — indigo cast |
+| `strong` | `rgba(30, 231, 255, 0.45)` | Emphasized borders — brand-cyan lensing |
+| `subtle` | `rgba(138, 152, 235, 0.14)` | Subtle borders |
+| `focus` | `#84f1ff` | Focus ring — luminous brand cyan, 3:1+ on all dark surfaces |
+| `outlineVariant` | `#34479e` | Outline color used by translucent glass edges — indigo |
 
 ### Glass
 
 | Token | Value | Notes |
 |-------|-------|-------|
 | `blur` | `26px` | Slightly stronger blur on dark for contrast |
-| `saturation` | `155%` | Reduced saturation for dark mode |
+| `saturation` | `165%` | Slightly richer saturation for cinematic aurora glow |
 | `borderOpacity` | `0.24` | Softer glass edges in dark |
 | `surfaceOpacity` | `0.82` | Regular glass fill opacity |
 | `clearSurfaceOpacity` | `0.44` | Clear glass over media only; requires scrim |
@@ -176,68 +176,68 @@ Dark Liquid Glass. Ink-navy surfaces matching the logo field, electric-blue/cyan
 
 ## Theme: midnight
 
-AMOLED Liquid Glass. Near-black navy content layer with luminous logo cyan/blue/gold controls for long editing and proofing sessions.
+AMOLED Liquid Glass aligned to the aperture logo: true-black canvas with the logo's indigo cast, luminous indigo→royal-blue→turquoise aurora controls mirroring the rim gradient, and a rare champagne-gold luxury glint for long editing and proofing sessions.
 **Mode:** `dark`
 
 ### Surface
 
 | Token | Value | Notes |
 |-------|-------|-------|
-| `base` | `#020709` | Near-black base — AMOLED friendly |
-| `elevated` | `#08141a` | Slightly lifted cards |
-| `sunken` | `#000303` | True black insets |
-| `overlay` | `rgba(2, 7, 9, 0.94)` | Modal backdrop |
-| `container` | `#0a1a2a` | Grouped content containers |
-| `containerLow` | `#061119` | Low-emphasis grouped surfaces |
-| `containerHigh` | `#0f2740` | Raised grouped surfaces |
-| `containerHighest` | `#163a5c` | Highest midnight container before borders |
-| `variant` | `#0e2a44` | Subtle glass tint carrier |
-| `bright` | `#1c5586` | Bright midnight surface |
-| `dim` | `#000303` | Dim midnight surface |
-| `scrim` | `rgba(0, 3, 3, 0.90)` | Media scrim for legible text over imagery |
-| `scrimStrong` | `rgba(0, 2, 3, 0.97)` | Near-opaque shell for immersive media viewers (lightbox, video) |
+| `base` | `#030412` | Near-black base with the logo's indigo cast — AMOLED friendly |
+| `elevated` | `#080c21` | Slightly lifted cards |
+| `sunken` | `#00020a` | True black insets |
+| `overlay` | `rgba(3, 4, 18, 0.94)` | Modal backdrop |
+| `container` | `#0b132e` | Grouped content containers |
+| `containerLow` | `#060a1c` | Low-emphasis grouped surfaces |
+| `containerHigh` | `#121f4a` | Raised grouped surfaces |
+| `containerHighest` | `#182b66` | Highest midnight container before borders |
+| `variant` | `#0f1c44` | Subtle glass tint carrier — indigo cast |
+| `bright` | `#234494` | Bright midnight surface — logo indigo-blue, dimmed |
+| `dim` | `#00020a` | Dim midnight surface |
+| `scrim` | `rgba(0, 2, 10, 0.90)` | Media scrim for legible text over imagery |
+| `scrimStrong` | `rgba(0, 1, 6, 0.97)` | Near-opaque shell for immersive media viewers (lightbox, video) |
 
 ### Text
 
 | Token | Value | Notes |
 |-------|-------|-------|
 | `primary` | `#ffffff` | White for maximum dark-dashboard readability |
-| `secondary` | `#e2f1fb` | Near-white secondary text |
-| `tertiary` | `#b9cfe2` | Subdued metadata |
-| `inverse` | `#020709` | Text on accent backgrounds |
+| `secondary` | `#e2eafd` | Near-white secondary text |
+| `tertiary` | `#b8c5ee` | Subdued metadata |
+| `inverse` | `#030412` | Text on accent backgrounds |
 | `media` | `#ffffff` | Text over photographic/video media scrims |
 
 ### Accent
 
 | Token | Value | Notes |
 |-------|-------|-------|
-| `default` | `#6fdcff` | Luminous logo cyan |
-| `hover` | `#a8ecff` | Accent hover |
-| `active` | `#3cb2e6` | Accent pressed |
-| `subtle` | `rgba(111, 220, 255, 0.10)` | Cyan wash |
-| `muted` | `rgba(106, 176, 255, 0.22)` | Logo blue medium |
-| `primary` | `#6ab0ff` | Logo electric blue tint for primary emphasis and charts |
-| `secondary` | `#6fdcff` | Cyan glass tint for secondary emphasis |
-| `tertiary` | `#f6cd75` | Gold tint for selective highlights |
+| `default` | `#5af0ff` | Brand cyan #1EE7FF gently lifted for AMOLED luminosity |
+| `hover` | `#9df7ff` | Accent hover |
+| `active` | `#19a7d3` | Exact brand teal (logo blade) as pressed state |
+| `subtle` | `rgba(90, 240, 255, 0.10)` | Brand-cyan wash |
+| `muted` | `rgba(149, 160, 255, 0.22)` | Indigo medium wash |
+| `primary` | `#95a0ff` | Brand indigo #2C36D4 tone-lifted luminous for AMOLED emphasis and charts |
+| `secondary` | `#5af0ff` | Brand-cyan glass tint for secondary emphasis |
+| `tertiary` | `#cfa867` | Exact brand gold/bronze (logo's single gold blade) — thin luxury glint, used sparingly; 6:1+ everywhere |
 
 ### Semantic
 
 | Token | Value | Notes |
 |-------|-------|-------|
-| `success` | `#67e4bd` | Cyan-green success |
-| `warning` | `#f6cd75` | Logo gold warning |
-| `destructive` | `#ff8d97` | Muted red for dark context |
-| `info` | `#6fdcff` | Logo blue info |
+| `success` | `#5fe7b4` | Cyan-green success |
+| `warning` | `#f3ca6a` | Gold-amber warning, distinct from the champagne accent |
+| `destructive` | `#ff8fa0` | Muted red for dark context |
+| `info` | `#5af0ff` | Brand cyan info |
 
 ### Border
 
 | Token | Value | Notes |
 |-------|-------|-------|
-| `default` | `rgba(100, 170, 215, 0.28)` | Default border |
-| `strong` | `rgba(111, 220, 255, 0.46)` | Emphasized borders |
-| `subtle` | `rgba(100, 170, 215, 0.12)` | Barely visible borders |
-| `focus` | `#9fe5ff` | Cyan focus ring |
-| `outlineVariant` | `#1f5a86` | Outline color used by translucent glass edges |
+| `default` | `rgba(130, 148, 240, 0.28)` | Default border — indigo cast |
+| `strong` | `rgba(90, 240, 255, 0.48)` | Emphasized borders — brand-cyan lensing |
+| `subtle` | `rgba(130, 148, 240, 0.12)` | Barely visible borders |
+| `focus` | `#9df7ff` | Brand-cyan focus ring |
+| `outlineVariant` | `#2c3f96` | Outline color used by translucent glass edges — indigo |
 
 ### Glass
 
@@ -339,7 +339,7 @@ AMOLED Liquid Glass. Near-black navy content layer with luminous logo cyan/blue/
 | `lg` | `0 24px 60px rgba(22, 34, 42, 0.18), 0 8px 18px rgba(22, 34, 42, 0.08)` | High elevation (popovers, floating panels) |
 | `xl` | `0 34px 90px rgba(22, 34, 42, 0.24), 0 12px 28px rgba(22, 34, 42, 0.10)` | Max elevation (full modals, lightbox) |
 | `inner` | `inset 0 1px 0 rgba(255, 255, 255, 0.42), inset 0 -1px 0 rgba(22, 34, 42, 0.08)` | Sunken inputs, inset areas |
-| `glow` | `0 0 0 1px rgba(255, 255, 255, 0.36), 0 0 34px rgba(15, 141, 152, 0.18)` | Selective illuminated active controls |
+| `glow` | `0 0 0 1px rgba(255, 255, 255, 0.36), 0 0 34px rgba(20, 140, 220, 0.20)` | Selective illuminated active controls — logo blue-cyan aurora |
 
 ## Motion
 

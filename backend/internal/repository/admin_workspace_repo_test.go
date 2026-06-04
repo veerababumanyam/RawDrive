@@ -36,12 +36,17 @@ func TestAdminWorkspaceRow_Fields(t *testing.T) {
 		GalleryCount:     250,
 		CreatedAt:        now,
 	}
+	assert.NotEqual(t, uuid.Nil, row.ID)
 	assert.Equal(t, "Studio Kala", row.Name)
+	assert.NotEqual(t, uuid.Nil, row.OwnerID)
 	assert.Equal(t, "Rahul Sharma", row.OwnerName)
+	assert.Equal(t, "active", row.Status)
 	assert.Equal(t, "Maharashtra", *row.StateName)
 	assert.Equal(t, "agency", *row.SubscriptionTier)
+	assert.Equal(t, int64(5), row.MemberCount)
 	assert.Equal(t, int64(5368709120), row.StorageUsedBytes)
 	assert.Equal(t, int64(250), row.GalleryCount)
+	assert.Equal(t, now, row.CreatedAt)
 }
 
 func TestAdminWorkspaceDetail_Fields(t *testing.T) {
@@ -56,6 +61,11 @@ func TestAdminWorkspaceDetail_Fields(t *testing.T) {
 			{UserID: uuid.New(), FullName: "Bob", Role: "editor"},
 		},
 	}
+	assert.NotEqual(t, uuid.Nil, detail.ID)
+	assert.Equal(t, "Test Studio", detail.Name)
+	assert.NotEqual(t, uuid.Nil, detail.OwnerID)
+	assert.Equal(t, "Test Owner", detail.OwnerName)
+	assert.Equal(t, "active", detail.Status)
 	assert.Len(t, detail.Members, 2)
 	assert.Equal(t, "owner", detail.Members[0].Role)
 }

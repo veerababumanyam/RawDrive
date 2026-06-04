@@ -66,9 +66,11 @@ import {
   CheckCircle,
   Shield,
   Envelope,
+  ChatBubble,
   ChevronLeft,
 } from "@/components/icons";
 import { useUpload } from "@/hooks/use-upload";
+import { useInfiniteFetch } from "@/hooks/use-infinite-render";
 import { TermsAcceptanceModal } from "@/components/legal/terms-acceptance-modal";
 import { getTermsStatus } from "@/lib/api/legal";
 import { useAssetReadySubscription } from "@/hooks/use-asset-ready-subscription";
@@ -85,7 +87,8 @@ import {
 // public-gallery-enhancements still dispatches those events via the
 // FaceID gate (GAL-FR-107/108). If the dashboard ever needs the chip
 // strip back, re-add the import + the JSX render block.
-import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
+import { GalleryPageShell } from "@/components/gallery/gallery-page-shell";
+import { ShareQrPopover } from "@/components/gallery/share-qr-popover";
 import { galleryShareExpiryDays } from "@/lib/gallery-share-expiry";
 
 // PhotoLightbox (~1090 lines) only mounts when a tile is opened, so load it in
@@ -831,7 +834,10 @@ export default function GalleryDetailPage({
   );
 
   const createWorkingShareUrl = useCallback(
-    async (albumId: string | undefined, channel: "copy" | "email") => {
+    async (
+      albumId: string | undefined,
+      channel: "copy" | "email" | "whatsapp",
+    ) => {
       if (!gallery?.is_published) {
         throw new Error(SHARE_UNAVAILABLE_MESSAGE);
       }
@@ -888,6 +894,30 @@ export default function GalleryDetailPage({
       const href = buildShareEmailHref(gallery, label, url);
       window.location.href = href;
       setShareMessage("Email share link opened.");
+    },
+    [createWorkingShareUrl, gallery],
+  );
+
+  const openWhatsAppShare = useCallback(
+    async (albumId: string | undefined, label: string) => {
+      if (!gallery) return;
+      let url: string;
+      try {
+        url = await createWorkingShareUrl(albumId, "whatsapp");
+      } catch (err) {
+        setShareMessage(
+          err instanceof Error ? err.message : "Failed to create share link",
+        );
+        return;
+      }
+      window.open(
+        `https://wa.me/?text=${encodeURIComponent(
+          buildShareText(gallery, label, url),
+        )}`,
+        "_blank",
+        "noopener,noreferrer",
+      );
+      setShareMessage("WhatsApp share opened.");
     },
     [createWorkingShareUrl, gallery],
   );
@@ -1081,6 +1111,13 @@ export default function GalleryDetailPage({
     [visibleAssets, visibleLimit],
   );
   const hasMoreAssets = visibleAssets.length > pagedAssets.length;
+  // Continuous scrolling: grow the render window automatically as the
+  // photographer nears the end of the mounted tiles. The "Load more photos"
+  // button remains as a visible fallback (and for no-IntersectionObserver
+  // environments). Window growth keeps DOM size bounded per F-046.
+  const assetsSentinelRef = useInfiniteFetch(hasMoreAssets, () =>
+    setVisibleLimit((n) => n + GRID_PAGE_SIZE),
+  );
   const activeAlbumDetails = useMemo(
     () =>
       activeAlbum
@@ -2104,7 +2141,7 @@ export default function GalleryDetailPage({
               {tetheredEnabled && (
                 <span
                   className={cn(
-                    "rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                    "rounded-full px-2.5 py-1 text-2xs font-semibold",
                     tetheredIsWatching
                       ? "bg-success/10 text-success"
                       : tetheredIsPaused
@@ -2285,11 +2322,11 @@ export default function GalleryDetailPage({
 
   if (loading) {
     return (
-      <div className="py-8">
+      <div className="mx-auto w-full max-w-6xl px-4 py-8">
         <div className="animate-pulse space-y-4">
           <div className="h-8 w-64 rounded bg-surface-sunken" />
           <div className="grid gap-4">
-            <div className="h-[420px] rounded-2xl bg-surface-sunken" />
+            <div className="h-96 rounded-2xl bg-surface-sunken" />
           </div>
         </div>
       </div>
@@ -2298,7 +2335,7 @@ export default function GalleryDetailPage({
 
   if (!gallery) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-16 text-center">
+      <div className="mx-auto w-full max-w-6xl px-4 py-16 text-center">
         <p className="text-sm text-text-secondary">
           {error || "Gallery not found."}
         </p>
@@ -2310,9 +2347,7 @@ export default function GalleryDetailPage({
   }
 
   return (
-    <div className="space-y-6 py-8">
-      <GalleryWorkspaceNav galleryId={gallery.id} />
-
+    <GalleryPageShell galleryId={gallery.id}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-3">
           <div>
@@ -2768,6 +2803,35 @@ export default function GalleryDetailPage({
                           >
                             <Envelope />
                           </GlassIconButton>
+                          <GlassIconButton
+                            type="button"
+                            size="md"
+                            variant="ghost"
+                            onClick={() =>
+                              openWhatsAppShare(
+                                selectedAlbum?.id,
+                                selectedLabel,
+                              )
+                            }
+                            label={`WhatsApp ${selectedLabel} share link`}
+                            aria-disabled={!gallery.is_published}
+                            className="shrink-0 border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
+                          >
+                            <ChatBubble />
+                          </GlassIconButton>
+                          <ShareQrPopover
+                            url={
+                              gallery.is_published
+                                ? buildShareUrl(selectedAlbum?.id)
+                                : ""
+                            }
+                            disabled={!gallery.is_published}
+                            onUnavailable={() =>
+                              setShareMessage(SHARE_UNAVAILABLE_MESSAGE)
+                            }
+                            label={`Show QR code for ${selectedLabel} share link`}
+                            filename={`${gallery.slug || "gallery"}-share-qr`}
+                          />
                         </>
                       )}
                       {selectedAlbum && albumIsEditable(selectedAlbum) && (
@@ -2818,7 +2882,7 @@ export default function GalleryDetailPage({
                     <span>All Photos</span>
                     <span
                       className={cn(
-                        "rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
+                        "rounded-full px-1.5 py-0.5 text-2xs font-semibold tabular-nums",
                         !activeAlbum
                           ? "bg-accent-primary/15 text-accent-primary"
                           : "bg-surface-sunken text-text-tertiary",
@@ -2850,6 +2914,26 @@ export default function GalleryDetailPage({
                     >
                       <Envelope />
                     </GlassIconButton>
+                    <GlassIconButton
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => openWhatsAppShare(undefined, "All Photos")}
+                      label="WhatsApp All Photos share link"
+                      aria-disabled={!gallery.is_published}
+                      className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
+                    >
+                      <ChatBubble />
+                    </GlassIconButton>
+                    <ShareQrPopover
+                      url={gallery.is_published ? buildShareUrl() : ""}
+                      disabled={!gallery.is_published}
+                      onUnavailable={() =>
+                        setShareMessage(SHARE_UNAVAILABLE_MESSAGE)
+                      }
+                      label="Show QR code for All Photos share link"
+                      filename={`${gallery.slug || "gallery"}-all-photos-qr`}
+                    />
                   </div>
                 </div>
                 {albums.map((album) => {
@@ -2945,7 +3029,7 @@ export default function GalleryDetailPage({
                         <span className="truncate">{album.name}</span>
                         <span
                           className={cn(
-                            "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
+                            "shrink-0 rounded-full px-1.5 py-0.5 text-2xs font-semibold tabular-nums",
                             isActive
                               ? "bg-accent-primary/15 text-accent-primary"
                               : "bg-surface-sunken text-text-tertiary",
@@ -2981,6 +3065,34 @@ export default function GalleryDetailPage({
                             >
                               <Envelope />
                             </GlassIconButton>
+                            <GlassIconButton
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                openWhatsAppShare(album.id, album.name)
+                              }
+                              label={`WhatsApp ${album.name} share link`}
+                              aria-disabled={!gallery.is_published}
+                              className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
+                            >
+                              <ChatBubble />
+                            </GlassIconButton>
+                            <ShareQrPopover
+                              url={
+                                gallery.is_published
+                                  ? buildShareUrl(album.id)
+                                  : ""
+                              }
+                              disabled={!gallery.is_published}
+                              onUnavailable={() =>
+                                setShareMessage(SHARE_UNAVAILABLE_MESSAGE)
+                              }
+                              label={`Show QR code for ${album.name} share link`}
+                              filename={`${gallery.slug || "gallery"}-${album.name
+                                .toLowerCase()
+                                .replace(/\s+/g, "-")}-qr`}
+                            />
                             <GlassIconButton
                               type="button"
                               size="sm"
@@ -3028,7 +3140,7 @@ export default function GalleryDetailPage({
                 "rounded-2xl border-2 border-dashed px-6 py-8 text-center text-sm transition-colors cursor-pointer",
                 isDragOver
                   ? "border-accent bg-accent/5 text-accent"
-                  : "border-border-default bg-surface-sunken/40 text-text-secondary hover:border-accent/50 hover:bg-accent/[0.02]",
+                  : "border-border-default bg-surface-sunken/40 text-text-secondary hover:border-accent/50 hover:bg-accent/5",
               )}
               onClick={() => setShowUploadDialog(true)}
             >
@@ -3273,10 +3385,16 @@ export default function GalleryDetailPage({
                 mounting every tile up front. */}
             {hasMoreAssets && (
               <div className="flex flex-col items-center gap-2 py-4">
+                <div
+                  ref={assetsSentinelRef}
+                  data-testid="assets-load-more-sentinel"
+                  aria-hidden="true"
+                  className="h-px w-full"
+                />
                 <button
                   type="button"
                   onClick={() => setVisibleLimit((n) => n + GRID_PAGE_SIZE)}
-                  className="rounded-xl border border-border-default bg-surface-sunken/60 px-5 py-2 text-sm font-medium text-text-secondary transition-colors hover:border-accent/50 hover:bg-accent/[0.04] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
+                  className="rounded-xl border border-border-default bg-surface-sunken/60 px-5 py-2 text-sm font-medium text-text-secondary transition-colors hover:border-accent/50 hover:bg-accent/5 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
                 >
                   Load more photos
                 </button>
@@ -3327,7 +3445,7 @@ export default function GalleryDetailPage({
             aria-label="Upload photos to gallery"
             aria-describedby="gallery-upload-dialog-description"
             tabIndex={-1}
-            className="flex max-h-[100dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border-default bg-surface-elevated shadow-elevation-1"
+            className="flex max-h-dvh w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border-default bg-surface-elevated shadow-elevation-1"
           >
             <div className="flex items-start justify-between gap-3 border-b border-border-subtle px-4 py-3 sm:px-6 sm:py-4">
               <div className="flex min-w-0 items-start gap-3">
@@ -3834,6 +3952,26 @@ export default function GalleryDetailPage({
                     >
                       <Envelope />
                     </GlassIconButton>
+                    <GlassIconButton
+                      type="button"
+                      size="md"
+                      variant="ghost"
+                      onClick={() => openWhatsAppShare(undefined, "Gallery")}
+                      label="WhatsApp gallery share link"
+                      aria-disabled={!gallery.is_published}
+                      className="border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
+                    >
+                      <ChatBubble />
+                    </GlassIconButton>
+                    <ShareQrPopover
+                      url={gallery.is_published ? buildShareUrl() : ""}
+                      disabled={!gallery.is_published}
+                      onUnavailable={() =>
+                        setShareMessage(SHARE_UNAVAILABLE_MESSAGE)
+                      }
+                      label="Show QR code for gallery share link"
+                      filename={`${gallery.slug || "gallery"}-share-qr`}
+                    />
                   </div>
                 </div>
 
@@ -4125,7 +4263,7 @@ export default function GalleryDetailPage({
                   {formatDuplicateNames(duplicateWarning.duplicatesInBatch)}
                 </p>
               )}
-              <p className="text-[11px] text-text-tertiary pt-0.5">
+              <p className="text-2xs text-text-tertiary pt-0.5">
                 Rename the files locally and try again if you meant to upload
                 them.
               </p>
@@ -4157,7 +4295,7 @@ export default function GalleryDetailPage({
         onAccepted={handleTermsAccepted}
         onCancel={() => setTermsModalOpen(false)}
       />
-    </div>
+    </GalleryPageShell>
   );
 }
 

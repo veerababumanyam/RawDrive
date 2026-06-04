@@ -1,0 +1,13 @@
+# TEMP override — serve the gallery-UI-consistency worktree from the dev
+# frontend container so localhost:3000 shows the fix/gallery-ui-consistency
+# branch for manual testing. Revert by recreating frontend WITHOUT this file:
+#   docker compose up -d --force-recreate frontend
+# Then delete this file. The named volumes (node_modules/.next/pnpm store)
+# are kept so install/build stays fast.
+services:
+  frontend:
+    volumes:
+      - /Users/apple/merupuai/rawdrive-fix-gallery-ui/frontend:/app
+      - frontend_node_modules:/app/node_modules
+      - frontend_next:/app/.next
+      - frontend_pnpm_store:/pnpm/store

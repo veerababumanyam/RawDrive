@@ -47,6 +47,8 @@ func TestShareLink_AllFieldsSet(t *testing.T) {
 	assert.True(t, sl.DownloadAllowed)
 	assert.NotNil(t, sl.PinHash)
 	assert.NotNil(t, sl.ExpiresAt)
+	assert.Equal(t, map[string]interface{}{"view": true, "download": false}, sl.Permissions)
+	assert.False(t, sl.CreatedAt.IsZero())
 }
 
 func TestShareLinkPermissionsJSONB(t *testing.T) {

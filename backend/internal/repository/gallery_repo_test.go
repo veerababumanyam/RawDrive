@@ -59,11 +59,19 @@ func TestGallery_AllFieldsSet(t *testing.T) {
 	assert.NotEqual(t, uuid.Nil, g.ID)
 	assert.Equal(t, wsID, g.WorkspaceID)
 	assert.Equal(t, "Sharma Wedding", g.Title)
+	assert.Equal(t, "sharma-wedding-abc12345", g.Slug)
+	assert.Equal(t, "Beautiful wedding gallery", g.Description)
 	assert.Equal(t, "proofing", g.GalleryType)
+	assert.Equal(t, map[string]interface{}{"theme": "dark"}, g.Settings)
+	assert.Nil(t, g.PasswordHash)
+	assert.Equal(t, map[string]interface{}{"enabled": true}, g.WatermarkConfig)
 	assert.True(t, g.IsPublished)
 	assert.Equal(t, 50, g.MaxSelections)
 	assert.Equal(t, "active", g.Status)
 	assert.Equal(t, &coverID, g.CoverAssetID)
+	assert.Equal(t, &userID, g.CreatedBy)
+	assert.Equal(t, now, g.CreatedAt)
+	assert.Equal(t, now, g.UpdatedAt)
 }
 
 // ──────────────────────── GalleryFilter ────────────────────────
@@ -93,6 +101,7 @@ func TestGalleryFilter_AllFieldsSet(t *testing.T) {
 	assert.Equal(t, "wedding", f.GalleryType)
 	assert.Equal(t, "Sharma", f.Search)
 	assert.Equal(t, 25, f.Limit)
+	assert.Equal(t, 50, f.Offset)
 }
 
 func TestGalleryListBaseQueryUsesEffectiveCoverFallback(t *testing.T) {
@@ -173,6 +182,7 @@ func TestGallery_SoftDelete_Fields(t *testing.T) {
 		Status:    "deleted",
 		DeletedAt: &now,
 	}
+	assert.NotEqual(t, uuid.Nil, g.ID)
 	require.NotNil(t, g.DeletedAt)
 	assert.Equal(t, "deleted", g.Status)
 	assert.WithinDuration(t, now, *g.DeletedAt, time.Second)

@@ -121,11 +121,18 @@ func TestAdminUserRow_Fields(t *testing.T) {
 		WorkspaceCount: 2,
 		CreatedAt:      now,
 	}
+	assert.NotEqual(t, uuid.Nil, row.ID)
 	assert.Equal(t, "Alice Sharma", row.FullName)
 	assert.Equal(t, "alice@example.com", row.Email)
 	assert.Equal(t, "photographer", row.PlatformRole)
+	assert.Equal(t, "active", row.Status)
+	assert.Equal(t, stateID, *row.StateID)
 	assert.Equal(t, int64(2), row.WorkspaceCount)
 	assert.Equal(t, "Karnataka", *row.StateName)
+	assert.Equal(t, "pro", *row.TierSlug)
+	assert.Equal(t, "Pro", *row.TierName)
+	assert.Equal(t, int64(1024000), row.StorageUsed)
+	assert.Equal(t, now, row.CreatedAt)
 }
 
 func TestAdminUserRow_NullableFields(t *testing.T) {
@@ -136,6 +143,11 @@ func TestAdminUserRow_NullableFields(t *testing.T) {
 		PlatformRole: "photographer",
 		Status:       "active",
 	}
+	assert.NotEqual(t, uuid.Nil, row.ID)
+	assert.Equal(t, "Bob", row.FullName)
+	assert.Equal(t, "bob@test.com", row.Email)
+	assert.Equal(t, "photographer", row.PlatformRole)
+	assert.Equal(t, "active", row.Status)
 	assert.Nil(t, row.Phone)
 	assert.Nil(t, row.StateID)
 	assert.Nil(t, row.StateName)
@@ -159,6 +171,15 @@ func TestAdminUserRow_JSONFieldNames(t *testing.T) {
 		WorkspaceCount: 3,
 		CreatedAt:      time.Now(),
 	}
+	assert.NotEqual(t, uuid.Nil, row.ID)
+	assert.Equal(t, "Test", row.FullName)
+	assert.Equal(t, "test@example.com", row.Email)
+	assert.Equal(t, "photographer", row.PlatformRole)
+	assert.Equal(t, "active", row.Status)
+	assert.Equal(t, int64(1000), row.StorageUsed)
+	assert.Equal(t, int64(3), row.WorkspaceCount)
+	assert.False(t, row.CreatedAt.IsZero())
+
 	data, err := json.Marshal(row)
 	require.NoError(t, err)
 
@@ -185,8 +206,15 @@ func TestAdminUserDetail_WorkspacesSlice(t *testing.T) {
 			{ID: uuid.New(), Name: "Studio B", Role: "member"},
 		},
 	}
+	assert.NotEqual(t, uuid.Nil, detail.ID)
+	assert.Equal(t, "Test User", detail.FullName)
+	assert.Equal(t, "test@test.com", detail.Email)
+	assert.Equal(t, "studio_admin", detail.PlatformRole)
+	assert.Equal(t, "active", detail.Status)
 	assert.Len(t, detail.Workspaces, 2)
+	assert.NotEqual(t, uuid.Nil, detail.Workspaces[0].ID)
 	assert.Equal(t, "Studio A", detail.Workspaces[0].Name)
+	assert.NotEqual(t, uuid.Nil, detail.Workspaces[1].ID)
 	assert.Equal(t, "member", detail.Workspaces[1].Role)
 }
 

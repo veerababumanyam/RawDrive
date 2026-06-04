@@ -2,7 +2,7 @@
   "$schema": "https://design-tokens.github.io/community-group/format/",
   "_meta": {
     "name": "RawDrive Design Token System",
-    "version": "1.3.0",
+    "version": "1.5.1",
     "description": "Single source of truth for all visual styling across RawDrive. Every component, page, agent prompt, and design tool reads from this file. Change it once — everything cascades.",
     "lastUpdated": "2026-06-04",
     "generatesTo": [
@@ -319,77 +319,77 @@
       }
     },
     "liquid-glass-dark": {
-      "_description": "Dark Liquid Glass. Ink-navy surfaces matching the logo field, electric-blue/cyan lensing, restrained champagne-gold warmth, and high legibility in dim rooms.",
+      "_description": "Cinematic dark Liquid Glass aligned to the RawDrive aperture logo: deep ink-indigo surfaces from the logo's indigo-violet blades, indigo→royal-blue→turquoise aurora lensing mirroring the rim gradient, and a thin champagne-gold luxury accent for the single gold blade. 2026 gradient-glow aesthetic, WCAG AA verified.",
       "colorMode": "dark",
       "surface": {
         "base": {
-          "value": "#06121b",
-          "description": "Primary page background"
+          "value": "#070a1f",
+          "description": "Primary page background — the logo's indigo-violet blade taken to near-black"
         },
         "elevated": {
-          "value": "#0b1d2a",
+          "value": "#0b1229",
           "description": "Cards, modals, raised elements"
         },
         "sunken": {
-          "value": "#030e18",
+          "value": "#030514",
           "description": "Secondary backgrounds, inset areas"
         },
         "overlay": {
-          "value": "rgba(6, 17, 28, 0.88)",
+          "value": "rgba(7, 10, 31, 0.88)",
           "description": "Modal/dialog backdrop"
         },
         "container": {
-          "value": "#0e2336",
+          "value": "#101a38",
           "description": "Grouped content containers"
         },
         "containerLow": {
-          "value": "#0a1a2a",
+          "value": "#0a112b",
           "description": "Low-emphasis grouped surfaces"
         },
         "containerHigh": {
-          "value": "#14304a",
+          "value": "#16234a",
           "description": "Raised grouped surfaces"
         },
         "containerHighest": {
-          "value": "#1a3f5e",
+          "value": "#1c2d5e",
           "description": "Highest dark-mode container before borders"
         },
         "variant": {
-          "value": "#12324a",
-          "description": "Subtle glass tint carrier"
+          "value": "#141f48",
+          "description": "Subtle glass tint carrier — indigo cast"
         },
         "bright": {
-          "value": "#225a80",
-          "description": "Bright dark-mode surface"
+          "value": "#2a3f86",
+          "description": "Bright dark-mode surface — logo indigo-blue, dimmed"
         },
         "dim": {
-          "value": "#030e18",
+          "value": "#030514",
           "description": "Dim dark-mode surface"
         },
         "scrim": {
-          "value": "rgba(3, 14, 24, 0.78)",
+          "value": "rgba(3, 5, 17, 0.78)",
           "description": "Media scrim for legible text over imagery"
         },
         "scrimStrong": {
-          "value": "rgba(2, 8, 12, 0.96)",
+          "value": "rgba(1, 2, 10, 0.96)",
           "description": "Near-opaque shell for immersive media viewers (lightbox, video)"
         }
       },
       "text": {
         "primary": {
-          "value": "#f8fcff",
+          "value": "#f7faff",
           "description": "High-contrast headers, body text"
         },
         "secondary": {
-          "value": "#d8e9f8",
+          "value": "#d5e0fa",
           "description": "Subheaders, descriptive text"
         },
         "tertiary": {
-          "value": "#b6cde0",
+          "value": "#b3c3ec",
           "description": "Captions, timestamps, metadata"
         },
         "inverse": {
-          "value": "#06121b",
+          "value": "#070a1f",
           "description": "Text on light/accent backgrounds"
         },
         "media": {
@@ -399,76 +399,76 @@
       },
       "accent": {
         "default": {
-          "value": "#4fcdf7",
-          "description": "Logo cyan for dark surfaces; 10.3:1 on base"
+          "value": "#1ee7ff",
+          "description": "Exact brand cyan (logo blade); 12.9:1 on base"
         },
         "hover": {
-          "value": "#8ae1ff",
+          "value": "#84f1ff",
           "description": "Accent hover state"
         },
         "active": {
-          "value": "#2da6d8",
-          "description": "Accent pressed state"
+          "value": "#19a7d3",
+          "description": "Exact brand teal (logo blade) as pressed state; 4.7:1+ on all containers"
         },
         "subtle": {
-          "value": "rgba(79, 205, 247, 0.12)",
-          "description": "Accent background wash"
+          "value": "rgba(30, 231, 255, 0.12)",
+          "description": "Brand-cyan accent background wash"
         },
         "muted": {
-          "value": "rgba(77, 154, 255, 0.24)",
-          "description": "Accent background medium"
+          "value": "rgba(139, 148, 255, 0.24)",
+          "description": "Indigo accent background medium"
         },
         "primary": {
-          "value": "#4d9aff",
-          "description": "Logo electric blue for primary emphasis and charts; AA on elevated"
+          "value": "#8b94ff",
+          "description": "Brand indigo #2C36D4 tone-lifted for dark surfaces (raw value is 2.4:1 — fails AA); AA on all containers"
         },
         "secondary": {
-          "value": "#4fcdf7",
-          "description": "Cyan glass tint for secondary emphasis"
+          "value": "#1ee7ff",
+          "description": "Brand cyan glass tint for secondary emphasis"
         },
         "tertiary": {
-          "value": "#e8c170",
-          "description": "Champagne gold (logo aperture blade) for selective highlights"
+          "value": "#cfa867",
+          "description": "Exact brand gold/bronze (logo's single gold blade) — thin luxury accent, used sparingly; 5.9:1+ everywhere"
         }
       },
       "semantic": {
         "success": {
-          "value": "#5be0b8",
+          "value": "#4ee0a8",
           "description": "Positive actions"
         },
         "warning": {
-          "value": "#f1c66f",
+          "value": "#f0c668",
           "description": "Caution states"
         },
         "destructive": {
-          "value": "#ff8d97",
+          "value": "#ff8fa0",
           "description": "Errors, destructive actions"
         },
         "info": {
-          "value": "#4fcdf7",
-          "description": "Informational states"
+          "value": "#1ee7ff",
+          "description": "Informational states — brand cyan"
         }
       },
       "border": {
         "default": {
-          "value": "rgba(110, 170, 215, 0.28)",
-          "description": "Default border color"
+          "value": "rgba(138, 152, 235, 0.28)",
+          "description": "Default border color — indigo cast"
         },
         "strong": {
-          "value": "rgba(79, 205, 247, 0.42)",
-          "description": "Emphasized borders"
+          "value": "rgba(30, 231, 255, 0.45)",
+          "description": "Emphasized borders — brand-cyan lensing"
         },
         "subtle": {
-          "value": "rgba(110, 170, 215, 0.14)",
+          "value": "rgba(138, 152, 235, 0.14)",
           "description": "Subtle borders"
         },
         "focus": {
-          "value": "#7fd9ff",
-          "description": "Focus ring"
+          "value": "#84f1ff",
+          "description": "Focus ring — luminous brand cyan, 3:1+ on all dark surfaces"
         },
         "outlineVariant": {
-          "value": "#2f6390",
-          "description": "Outline color used by translucent glass edges"
+          "value": "#34479e",
+          "description": "Outline color used by translucent glass edges — indigo"
         }
       },
       "glass": {
@@ -477,8 +477,8 @@
           "description": "Slightly stronger blur on dark for contrast"
         },
         "saturation": {
-          "value": "155%",
-          "description": "Reduced saturation for dark mode"
+          "value": "165%",
+          "description": "Slightly richer saturation for cinematic aurora glow"
         },
         "borderOpacity": {
           "value": "0.24",
@@ -516,62 +516,93 @@
           "value": "0.78",
           "description": "Fallback edge opacity when increased contrast is preferred"
         }
+      },
+      "ambient": {
+        "_description": "2026 ambient background system: faint blueprint grid lines + slow-drifting brand aurora washes behind content. Purely decorative (≤6% opacity), never affects text contrast. Animation must respect prefers-reduced-motion.",
+        "gridLine": {
+          "value": "rgba(138, 152, 235, 0.05)",
+          "description": "Hairline blueprint grid over the base surface"
+        },
+        "gridSize": {
+          "value": "56px",
+          "description": "Grid cell size"
+        },
+        "auroraIndigo": {
+          "value": "rgba(44, 54, 212, 0.16)",
+          "description": "Brand indigo #2C36D4 aurora wash"
+        },
+        "auroraCyan": {
+          "value": "rgba(30, 231, 255, 0.07)",
+          "description": "Brand cyan #1EE7FF aurora wash"
+        },
+        "auroraGold": {
+          "value": "rgba(207, 168, 103, 0.05)",
+          "description": "Brand gold #CFA867 aurora glint"
+        },
+        "driftDuration": {
+          "value": "48s",
+          "description": "Aurora drift cycle; instant under reduced motion"
+        },
+        "hairline": {
+          "value": "rgba(138, 152, 235, 0.10)",
+          "description": "1px indigo hairline ring added to elevated-element shadows so cards separate from the ambient background"
+        }
       }
     },
     "midnight": {
-      "_description": "AMOLED Liquid Glass. Near-black navy content layer with luminous logo cyan/blue/gold controls for long editing and proofing sessions.",
+      "_description": "AMOLED Liquid Glass aligned to the aperture logo: true-black canvas with the logo's indigo cast, luminous indigo→royal-blue→turquoise aurora controls mirroring the rim gradient, and a rare champagne-gold luxury glint for long editing and proofing sessions.",
       "colorMode": "dark",
       "surface": {
         "base": {
-          "value": "#020709",
-          "description": "Near-black base — AMOLED friendly"
+          "value": "#030412",
+          "description": "Near-black base with the logo's indigo cast — AMOLED friendly"
         },
         "elevated": {
-          "value": "#08141a",
+          "value": "#080c21",
           "description": "Slightly lifted cards"
         },
         "sunken": {
-          "value": "#000303",
+          "value": "#00020a",
           "description": "True black insets"
         },
         "overlay": {
-          "value": "rgba(2, 7, 9, 0.94)",
+          "value": "rgba(3, 4, 18, 0.94)",
           "description": "Modal backdrop"
         },
         "container": {
-          "value": "#0a1a2a",
+          "value": "#0b132e",
           "description": "Grouped content containers"
         },
         "containerLow": {
-          "value": "#061119",
+          "value": "#060a1c",
           "description": "Low-emphasis grouped surfaces"
         },
         "containerHigh": {
-          "value": "#0f2740",
+          "value": "#121f4a",
           "description": "Raised grouped surfaces"
         },
         "containerHighest": {
-          "value": "#163a5c",
+          "value": "#182b66",
           "description": "Highest midnight container before borders"
         },
         "variant": {
-          "value": "#0e2a44",
-          "description": "Subtle glass tint carrier"
+          "value": "#0f1c44",
+          "description": "Subtle glass tint carrier — indigo cast"
         },
         "bright": {
-          "value": "#1c5586",
-          "description": "Bright midnight surface"
+          "value": "#234494",
+          "description": "Bright midnight surface — logo indigo-blue, dimmed"
         },
         "dim": {
-          "value": "#000303",
+          "value": "#00020a",
           "description": "Dim midnight surface"
         },
         "scrim": {
-          "value": "rgba(0, 3, 3, 0.90)",
+          "value": "rgba(0, 2, 10, 0.90)",
           "description": "Media scrim for legible text over imagery"
         },
         "scrimStrong": {
-          "value": "rgba(0, 2, 3, 0.97)",
+          "value": "rgba(0, 1, 6, 0.97)",
           "description": "Near-opaque shell for immersive media viewers (lightbox, video)"
         }
       },
@@ -581,15 +612,15 @@
           "description": "White for maximum dark-dashboard readability"
         },
         "secondary": {
-          "value": "#e2f1fb",
+          "value": "#e2eafd",
           "description": "Near-white secondary text"
         },
         "tertiary": {
-          "value": "#b9cfe2",
+          "value": "#b8c5ee",
           "description": "Subdued metadata"
         },
         "inverse": {
-          "value": "#020709",
+          "value": "#030412",
           "description": "Text on accent backgrounds"
         },
         "media": {
@@ -599,76 +630,76 @@
       },
       "accent": {
         "default": {
-          "value": "#6fdcff",
-          "description": "Luminous logo cyan"
+          "value": "#5af0ff",
+          "description": "Brand cyan #1EE7FF gently lifted for AMOLED luminosity"
         },
         "hover": {
-          "value": "#a8ecff",
+          "value": "#9df7ff",
           "description": "Accent hover"
         },
         "active": {
-          "value": "#3cb2e6",
-          "description": "Accent pressed"
+          "value": "#19a7d3",
+          "description": "Exact brand teal (logo blade) as pressed state"
         },
         "subtle": {
-          "value": "rgba(111, 220, 255, 0.10)",
-          "description": "Cyan wash"
+          "value": "rgba(90, 240, 255, 0.10)",
+          "description": "Brand-cyan wash"
         },
         "muted": {
-          "value": "rgba(106, 176, 255, 0.22)",
-          "description": "Logo blue medium"
+          "value": "rgba(149, 160, 255, 0.22)",
+          "description": "Indigo medium wash"
         },
         "primary": {
-          "value": "#6ab0ff",
-          "description": "Logo electric blue tint for primary emphasis and charts"
+          "value": "#95a0ff",
+          "description": "Brand indigo #2C36D4 tone-lifted luminous for AMOLED emphasis and charts"
         },
         "secondary": {
-          "value": "#6fdcff",
-          "description": "Cyan glass tint for secondary emphasis"
+          "value": "#5af0ff",
+          "description": "Brand-cyan glass tint for secondary emphasis"
         },
         "tertiary": {
-          "value": "#f6cd75",
-          "description": "Gold tint for selective highlights"
+          "value": "#cfa867",
+          "description": "Exact brand gold/bronze (logo's single gold blade) — thin luxury glint, used sparingly; 6:1+ everywhere"
         }
       },
       "semantic": {
         "success": {
-          "value": "#67e4bd",
+          "value": "#5fe7b4",
           "description": "Cyan-green success"
         },
         "warning": {
-          "value": "#f6cd75",
-          "description": "Logo gold warning"
+          "value": "#f3ca6a",
+          "description": "Gold-amber warning, distinct from the champagne accent"
         },
         "destructive": {
-          "value": "#ff8d97",
+          "value": "#ff8fa0",
           "description": "Muted red for dark context"
         },
         "info": {
-          "value": "#6fdcff",
-          "description": "Logo blue info"
+          "value": "#5af0ff",
+          "description": "Brand cyan info"
         }
       },
       "border": {
         "default": {
-          "value": "rgba(100, 170, 215, 0.28)",
-          "description": "Default border"
+          "value": "rgba(130, 148, 240, 0.28)",
+          "description": "Default border — indigo cast"
         },
         "strong": {
-          "value": "rgba(111, 220, 255, 0.46)",
-          "description": "Emphasized borders"
+          "value": "rgba(90, 240, 255, 0.48)",
+          "description": "Emphasized borders — brand-cyan lensing"
         },
         "subtle": {
-          "value": "rgba(100, 170, 215, 0.12)",
+          "value": "rgba(130, 148, 240, 0.12)",
           "description": "Barely visible borders"
         },
         "focus": {
-          "value": "#9fe5ff",
-          "description": "Cyan focus ring"
+          "value": "#9df7ff",
+          "description": "Brand-cyan focus ring"
         },
         "outlineVariant": {
-          "value": "#1f5a86",
-          "description": "Outline color used by translucent glass edges"
+          "value": "#2c3f96",
+          "description": "Outline color used by translucent glass edges — indigo"
         }
       },
       "glass": {
@@ -715,6 +746,37 @@
         "increasedContrastBorderOpacity": {
           "value": "0.82",
           "description": "Fallback edge opacity when increased contrast is preferred"
+        }
+      },
+      "ambient": {
+        "_description": "AMOLED ambient background: quieter grid + aurora than liquid-glass-dark to preserve true-black battery savings and editing focus.",
+        "gridLine": {
+          "value": "rgba(130, 148, 240, 0.04)",
+          "description": "Hairline blueprint grid over the base surface"
+        },
+        "gridSize": {
+          "value": "56px",
+          "description": "Grid cell size"
+        },
+        "auroraIndigo": {
+          "value": "rgba(44, 54, 212, 0.14)",
+          "description": "Brand indigo aurora wash"
+        },
+        "auroraCyan": {
+          "value": "rgba(90, 240, 255, 0.06)",
+          "description": "Brand cyan aurora wash"
+        },
+        "auroraGold": {
+          "value": "rgba(207, 168, 103, 0.04)",
+          "description": "Brand gold aurora glint"
+        },
+        "driftDuration": {
+          "value": "56s",
+          "description": "Slower drift on AMOLED; instant under reduced motion"
+        },
+        "hairline": {
+          "value": "rgba(130, 148, 240, 0.09)",
+          "description": "1px indigo hairline ring for elevated-element separation"
         }
       }
     }
@@ -952,8 +1014,8 @@
       "usage": "Sunken inputs, inset areas"
     },
     "glow": {
-      "value": "0 0 0 1px rgba(255, 255, 255, 0.36), 0 0 34px rgba(15, 141, 152, 0.18)",
-      "usage": "Selective illuminated active controls"
+      "value": "0 0 0 1px rgba(255, 255, 255, 0.36), 0 0 34px rgba(20, 140, 220, 0.20)",
+      "usage": "Selective illuminated active controls — logo blue-cyan aurora"
     }
   },
   "motion": {

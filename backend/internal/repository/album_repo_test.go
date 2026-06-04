@@ -48,8 +48,13 @@ func TestAlbum_AllFieldsSet(t *testing.T) {
 	assert.Equal(t, galleryID, a.GalleryID)
 	assert.Equal(t, &parentID, a.ParentID)
 	assert.Equal(t, "Ceremony", a.Name)
+	assert.Equal(t, "Wedding ceremony shots", a.Description)
+	assert.Equal(t, &coverID, a.CoverAssetID)
 	assert.Equal(t, 1, a.Position)
+	assert.Equal(t, map[string]interface{}{"type": "image"}, a.SmartFilter)
 	assert.Equal(t, 42, a.AssetCount)
+	assert.Equal(t, now, a.CreatedAt)
+	assert.Equal(t, now, a.UpdatedAt)
 }
 
 func TestAlbumAsset_Fields(t *testing.T) {
@@ -62,4 +67,5 @@ func TestAlbumAsset_Fields(t *testing.T) {
 	assert.NotEqual(t, uuid.Nil, aa.AlbumID)
 	assert.NotEqual(t, uuid.Nil, aa.AssetID)
 	assert.Equal(t, 3, aa.Position)
+	assert.False(t, aa.AddedAt.IsZero())
 }

@@ -46,8 +46,8 @@ export type Theme = (typeof themes)[number];
 export const themeMetaColors: Record<Theme, string> = {
   // Must equal themes.{name}.surface.base in design-tokens.json.
   "liquid-glass": "#f6f9fd",
-  "liquid-glass-dark": "#06121b",
-  midnight: "#020709",
+  "liquid-glass-dark": "#070a1f",
+  midnight: "#030412",
 } as const;
 
 export const viewportThemeColors = {

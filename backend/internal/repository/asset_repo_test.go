@@ -59,11 +59,19 @@ func TestAsset_AllFieldsSet(t *testing.T) {
 	assert.NotEqual(t, uuid.Nil, a.ID)
 	assert.Equal(t, wsID, a.WorkspaceID)
 	assert.Equal(t, "wedding_001.cr2", a.Filename)
+	assert.Equal(t, "image/x-canon-cr2", a.ContentType)
 	assert.Equal(t, int64(52428800), a.SizeBytes)
+	assert.Equal(t, "ws/abc/assets/wedding_001.cr2", a.StorageKey)
 	assert.Equal(t, "ready", a.Status)
 	assert.Equal(t, "local", a.StorageDriver)
 	assert.Equal(t, 6000, *a.Width)
+	assert.Equal(t, 4000, *a.Height)
 	assert.Equal(t, &blurhash, a.Blurhash)
+	assert.Equal(t, map[string]interface{}{"camera": "Canon EOS R5"}, a.ExifData)
+	assert.Equal(t, map[string]string{"small": "/thumb/200.webp"}, a.ThumbnailURLs)
+	assert.Equal(t, &userID, a.UploadedBy)
+	assert.Equal(t, now, a.CreatedAt)
+	assert.Equal(t, now, a.UpdatedAt)
 }
 
 func TestAssetRepoJSONBHelpersMarshalMapsForPgCasts(t *testing.T) {
@@ -130,6 +138,8 @@ func TestAssetFilter_AllFieldsSet(t *testing.T) {
 	assert.Equal(t, wsID, f.WorkspaceID)
 	assert.Equal(t, "image", f.ContentType)
 	assert.Equal(t, "ready", f.Status)
+	assert.Equal(t, 25, f.Limit)
+	assert.Equal(t, 0, f.Offset)
 }
 
 // ──────────────────────── Q-4: keyset pagination query shape ────────────────────────

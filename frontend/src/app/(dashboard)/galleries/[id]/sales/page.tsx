@@ -1,9 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { SalesContinuityPanel } from "@/components/gallery/sales-continuity-panel";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
+import { InlineAlert } from "@/components/ui/inline-alert";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageHeader } from "@/components/ui/page-header";
 import { getGallery, type Gallery } from "@/lib/api/galleries";
 import { getStoredAccessToken } from "@/lib/auth";
 
@@ -39,38 +41,24 @@ export default function GallerySalesPage({
   }, [id, token]);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
+    <PageContainer>
       {/* Workspace nav first so the section dropdown is the topmost
           element on mobile (matches the AI and settings sub-pages). */}
       <GalleryWorkspaceNav galleryId={id} />
 
-      <Link
-        href={`/galleries/${id}`}
-        className="btn-tertiary px-0 py-0 text-sm"
-      >
-        Back to gallery
-      </Link>
-
-      <div className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">
-          Sales
-        </p>
-        <h1 className="text-2xl font-semibold text-text-primary">
-          {gallery?.title
+      <PageHeader
+        eyebrow="Sales"
+        title={
+          gallery?.title
             ? `${gallery.title} sales continuity`
-            : "Sales continuity"}
-        </h1>
-        <p className="max-w-2xl text-sm leading-relaxed text-text-secondary">
-          Invoices, deals, and projects linked to this gallery roll up here so
-          commerce stays in the same workspace as the photos.
-        </p>
-      </div>
+            : "Sales continuity"
+        }
+        description="Invoices, deals, and projects linked to this gallery roll up here so commerce stays in the same workspace as the photos."
+        backHref={`/galleries/${id}`}
+        backLabel="Back to gallery"
+      />
 
-      {error && (
-        <div className="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
-          {error}
-        </div>
-      )}
+      {error && <InlineAlert variant="error">{error}</InlineAlert>}
 
       {/* The Gallery object carries the CRM linkage ids (invoice_id / deal_id /
           project_id). cartCount stays 0 — there is no per-gallery cart/order
@@ -83,6 +71,6 @@ export default function GallerySalesPage({
           cartCount={0}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }

@@ -464,10 +464,6 @@ func (r *AdminUserRepo) GetActivityTimeline(ctx context.Context, userID uuid.UUI
 }
 
 func (r *AdminUserRepo) ExportCSV(ctx context.Context, f AdminUserFilter, writer io.Writer) error {
-	// Reuse list logic but with no limit for export.
-	f.Limit = 0
-	f.Cursor = nil
-
 	var (
 		where []string
 		args  []interface{}

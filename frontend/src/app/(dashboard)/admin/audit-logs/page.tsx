@@ -12,6 +12,7 @@ import { Calendar, Clock, Download, Filter, X } from "@/components/icons";
 import { DataTable, type ColumnDef } from "@/components/ui/data-table";
 import { GlassButton } from "@/components/ui/glass-button";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { useInfiniteFetch } from "@/hooks/use-infinite-render";
 
 /* ------------------------------------------------------------------ */
 /*  Severity badge                                                     */
@@ -552,6 +553,15 @@ export default function AdminAuditLogsPage() {
     if (nextCursor && !loadingMore) fetchLogs(filters, nextCursor, true);
   }, [fetchLogs, filters, nextCursor, loadingMore]);
 
+  // Continuous scrolling: auto-fetch the next cursor page as the operator
+  // nears the bottom of the table. handleLoadMore self-guards on
+  // loadingMore, so repeated intersections cannot double-fetch. The button
+  // below remains as a fallback.
+  const auditSentinelRef = useInfiniteFetch(
+    Boolean(nextCursor) && !loadingMore,
+    handleLoadMore,
+  );
+
   // Row click → open detail
   const handleRowClick = useCallback(async (row: AuditLogRow) => {
     setDetailLoading(true);
@@ -685,9 +695,15 @@ export default function AdminAuditLogsPage() {
         }
       />
 
-      {/* Load more — cursor pagination */}
+      {/* Load more — cursor pagination, auto-triggered on scroll */}
       {(nextCursor || loadingMore) && (
         <div className="flex items-center justify-center gap-3 pt-1">
+          <div
+            ref={auditSentinelRef}
+            data-testid="audit-load-more-sentinel"
+            aria-hidden="true"
+            className="h-px w-px"
+          />
           <GlassButton
             type="button"
             onClick={handleLoadMore}

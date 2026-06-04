@@ -41,10 +41,12 @@ func TestAssetDerivative_AllFieldsSet(t *testing.T) {
 	assert.NotEqual(t, uuid.Nil, d.ID)
 	assert.Equal(t, assetID, d.AssetID)
 	assert.Equal(t, "cover_1920", d.Variant)
+	assert.Equal(t, "derivatives/abc/cover_1920.jpg", d.StorageKey)
 	assert.Equal(t, 1920, d.Width)
 	assert.Equal(t, 1080, d.Height)
 	assert.Equal(t, int64(245000), d.SizeBytes)
 	assert.Equal(t, "jpeg", d.Format)
+	assert.Equal(t, now, d.CreatedAt)
 }
 
 func TestAssetDerivative_Variants(t *testing.T) {

@@ -31,8 +31,9 @@ import Link from "next/link";
 // page). Photo Search renders the matched cluster's photos inline so
 // no client-side navigation is needed from this page.
 import { use } from "react";
-import { Camera, RefreshCw, Search, ChevronLeft } from "lucide-react";
-import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
+import { Camera, RefreshCw, Search } from "lucide-react";
+import { GalleryPageShell } from "@/components/gallery/gallery-page-shell";
+import { GalleryPageHeader } from "@/components/gallery/gallery-page-header";
 import { searchFaceInGallery, type FaceSearchResponse } from "@/lib/api/ai";
 import { getAsset, type Asset } from "@/lib/api/assets";
 import { listGalleryAssets } from "@/lib/api/galleries";
@@ -96,7 +97,7 @@ function MatchedAssetPreview({
         alt=""
         loading="lazy"
         decoding="async"
-        className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]"
+        className="h-full w-full object-cover transition-transform group-hover:scale-105"
       />
     );
   }
@@ -403,7 +404,9 @@ export default function PhotoSearchPage({
           result.asset_ids.map((aid) => getAsset(token, aid)),
         );
         ok = settled
-          .filter((r): r is PromiseFulfilledResult<Asset> => r.status === "fulfilled")
+          .filter(
+            (r): r is PromiseFulfilledResult<Asset> => r.status === "fulfilled",
+          )
           .map((r) => r.value);
       }
       setMatchedAssets(ok);
@@ -445,30 +448,13 @@ export default function PhotoSearchPage({
   }, [startCamera]);
 
   return (
-    <div className="space-y-6">
-      <GalleryWorkspaceNav galleryId={id} />
-
-      <Link
-        href={`/galleries/${id}`}
-        className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary"
-      >
-        <ChevronLeft className="h-4 w-4" />
-        Back to gallery
-      </Link>
-
-      <header className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">
-          Photo Search
-        </p>
-        <h1 className="text-2xl font-semibold text-text-primary">
-          Find a person in this gallery
-        </h1>
-        <p className="text-sm text-text-secondary">
-          Point your camera at someone&apos;s face and tap Capture. We&apos;ll
-          match it against the people already detected in this gallery and show
-          every photo they appear in.
-        </p>
-      </header>
+    <GalleryPageShell galleryId={id}>
+      <GalleryPageHeader
+        backHref={`/galleries/${id}`}
+        eyebrow="Photo Search"
+        title="Find a person in this gallery"
+        subtitle="Point your camera at someone's face and tap Capture. We'll match it against the people already detected in this gallery and show every photo they appear in."
+      />
 
       {/* Camera + capture area. The preview shape is a vertical 4:3 so
           it works well for a single face — wider 16:9 makes the face
@@ -504,7 +490,7 @@ export default function PhotoSearchPage({
 
         {(stage === "preview" || stage === "searching") && (
           <div className="space-y-3">
-            <div className="relative mx-auto aspect-[4/3] max-w-xl overflow-hidden rounded-2xl border border-border-subtle bg-surface-scrim-strong">
+            <div className="relative mx-auto aspect-4/3 max-w-xl overflow-hidden rounded-2xl border border-border-subtle bg-surface-scrim-strong">
               <video
                 ref={videoRef}
                 className="h-full w-full object-cover"
@@ -548,7 +534,7 @@ export default function PhotoSearchPage({
                 )}
               </button>
               {!videoReady && stage === "preview" && (
-                <p className="text-[11px] text-text-tertiary">
+                <p className="text-2xs text-text-tertiary">
                   Waiting for the first video frame…
                 </p>
               )}
@@ -616,7 +602,7 @@ export default function PhotoSearchPage({
         <section className="space-y-4">
           <div className="surface-panel p-4 flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-1">
-              <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">
+              <p className="text-xs uppercase tracking-widest text-text-tertiary">
                 Match
               </p>
               <p className="text-sm font-semibold text-text-primary">
@@ -672,7 +658,7 @@ export default function PhotoSearchPage({
           )}
         </section>
       )}
-    </div>
+    </GalleryPageShell>
   );
 }
 
@@ -846,7 +832,7 @@ function CameraErrorPanel({
         </div>
       )}
       {error?.rawName && (
-        <p className="text-center text-[11px] text-text-tertiary font-mono">
+        <p className="text-center text-2xs text-text-tertiary font-mono">
           {error.rawName}: {error.rawMessage}
         </p>
       )}

@@ -1,9 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { use, useEffect, useMemo, useState } from "react";
 import { DeliveryContinuityPanel } from "@/components/gallery/delivery-continuity-panel";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
+import { InlineAlert } from "@/components/ui/inline-alert";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   getGallery,
   listGalleryAssets,
@@ -75,38 +77,24 @@ export default function GalleryDeliveryPage({
   }, [selections]);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
+    <PageContainer>
       {/* Workspace nav first so the section dropdown is the topmost
           element on mobile (matches the AI and settings sub-pages). */}
       <GalleryWorkspaceNav galleryId={id} />
 
-      <Link
-        href={`/galleries/${id}`}
-        className="btn-tertiary px-0 py-0 text-sm"
-      >
-        Back to gallery
-      </Link>
-
-      <div className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.18em] text-text-tertiary">
-          Delivery
-        </p>
-        <h1 className="text-2xl font-semibold text-text-primary">
-          {gallery?.title
+      <PageHeader
+        eyebrow="Delivery"
+        title={
+          gallery?.title
             ? `${gallery.title} delivery continuity`
-            : "Delivery continuity"}
-        </h1>
-        <p className="max-w-2xl text-sm leading-relaxed text-text-secondary">
-          Downloads, views, and proofing progress stay attached to this gallery
-          workspace so hand-off status never drifts into a separate module.
-        </p>
-      </div>
+            : "Delivery continuity"
+        }
+        description="Downloads, views, and proofing progress stay attached to this gallery workspace so hand-off status never drifts into a separate module."
+        backHref={`/galleries/${id}`}
+        backLabel="Back to gallery"
+      />
 
-      {error && (
-        <div className="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
-          {error}
-        </div>
-      )}
+      {error && <InlineAlert variant="error">{error}</InlineAlert>}
 
       {token && (
         <DeliveryContinuityPanel
@@ -116,6 +104,6 @@ export default function GalleryDeliveryPage({
           totalCount={totalCount}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }
