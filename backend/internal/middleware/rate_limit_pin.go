@@ -27,16 +27,27 @@ type PINRateLimiter interface {
 }
 
 // memoryLimiter is a simple in-memory sliding window.
+//
+// CACHE-6: the hits map is keyed by (ip, streamID). The Allow path prunes the
+// per-key slice of expired hits, but a key whose client never returns would
+// otherwise live in the map forever, so the map grew unbounded by distinct
+// (IP, streamID) cardinality. A background janitor periodically sweeps and
+// deletes keys whose every hit has aged past the window, bounding the map to
+// the set of recently-active keys.
 type memoryLimiter struct {
 	mu     sync.Mutex
 	hits   map[string][]time.Time
 	max    int
 	window time.Duration
 	now    func() time.Time
+
+	stopJanitor chan struct{}
+	janitorOnce sync.Once
 }
 
 // NewMemoryPINRateLimiter returns a PINRateLimiter allowing `max`
-// attempts per `window` per key.
+// attempts per `window` per key. A background janitor evicts expired keys
+// roughly once per window so the underlying map cannot grow without bound.
 func NewMemoryPINRateLimiter(max int, window time.Duration) PINRateLimiter {
 	if max <= 0 {
 		max = 5
@@ -44,11 +55,86 @@ func NewMemoryPINRateLimiter(max int, window time.Duration) PINRateLimiter {
 	if window <= 0 {
 		window = 5 * time.Minute
 	}
-	return &memoryLimiter{
-		hits:   make(map[string][]time.Time),
-		max:    max,
-		window: window,
-		now:    time.Now,
+	m := &memoryLimiter{
+		hits:        make(map[string][]time.Time),
+		max:         max,
+		window:      window,
+		now:         time.Now,
+		stopJanitor: make(chan struct{}),
+	}
+	m.startJanitor(janitorInterval(window))
+	return m
+}
+
+// janitorInterval picks a sweep cadence proportional to the window so eviction
+// stays cheap while keeping the map close to the active key set. Clamped to a
+// sane floor so a tiny test window doesn't spin a hot ticker.
+func janitorInterval(window time.Duration) time.Duration {
+	iv := window
+	if iv < time.Minute {
+		iv = time.Minute
+	}
+	return iv
+}
+
+// startJanitor launches a single sweeper goroutine that calls sweep on the
+// given cadence until Stop is called. It is idempotent via janitorOnce.
+func (m *memoryLimiter) startJanitor(interval time.Duration) {
+	m.janitorOnce.Do(func() {
+		go func() {
+			t := time.NewTicker(interval)
+			defer t.Stop()
+			for {
+				select {
+				case <-t.C:
+					m.sweep()
+				case <-m.stopJanitor:
+					return
+				}
+			}
+		}()
+	})
+}
+
+// Stop terminates the background janitor goroutine. Safe to call multiple
+// times; intended for tests and graceful shutdown so the goroutine does not
+// leak.
+func (m *memoryLimiter) Stop() {
+	m.stopOnce()
+}
+
+// stopOnce closes stopJanitor exactly once.
+func (m *memoryLimiter) stopOnce() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	select {
+	case <-m.stopJanitor:
+		// already closed
+	default:
+		close(m.stopJanitor)
+	}
+}
+
+// sweep removes keys whose every recorded hit has aged past the window. It
+// holds the same mutex as Allow, so eviction is race-free with respect to
+// concurrent attempts. Exported behavior is unchanged: a swept key simply
+// starts fresh on its next request, exactly as an expired-then-pruned key did.
+func (m *memoryLimiter) sweep() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cutoff := m.now().Add(-m.window)
+	for key, hits := range m.hits {
+		live := false
+		for _, t := range hits {
+			if t.After(cutoff) {
+				live = true
+				break
+			}
+		}
+		if !live {
+			delete(m.hits, key)
+		}
 	}
 }
 

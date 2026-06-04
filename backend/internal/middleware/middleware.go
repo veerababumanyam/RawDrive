@@ -325,6 +325,108 @@ type rateLimitEntry struct {
 	windowEnd time.Time
 }
 
+// inMemoryRateLimiter is the per-node fixed-window store behind
+// RateLimitWithReset. It is keyed by client IP.
+//
+// CACHE-6: entries were only ever inserted or reset on access, so an IP that
+// stopped sending requests left a stale *rateLimitEntry in the map forever —
+// the map grew unbounded by distinct-IP cardinality. This path is the
+// fail-closed fallback exercised during a Valkey outage (see
+// RateLimitWithValkey), so the leak is slow but real. A background janitor
+// periodically sweeps entries whose window has fully elapsed and deletes them
+// under the same mutex the request path uses, so eviction is race-free and the
+// map stays bounded to recently-active IPs. The clock seam (now) makes the
+// sweep deterministically testable.
+type inMemoryRateLimiter struct {
+	mu      sync.Mutex
+	entries map[string]*rateLimitEntry
+	now     func() time.Time
+
+	stopJanitor chan struct{}
+	janitorOnce sync.Once
+}
+
+func newInMemoryRateLimiter() *inMemoryRateLimiter {
+	return &inMemoryRateLimiter{
+		entries:     make(map[string]*rateLimitEntry),
+		now:         time.Now,
+		stopJanitor: make(chan struct{}),
+	}
+}
+
+// reset clears all counters. Wired to the dev-only test-reset endpoint.
+func (l *inMemoryRateLimiter) reset() {
+	l.mu.Lock()
+	l.entries = make(map[string]*rateLimitEntry)
+	l.mu.Unlock()
+}
+
+// allow applies the fixed-window counter for ip and reports whether the
+// request is within maxRequests for the given window.
+func (l *inMemoryRateLimiter) allow(ip string, maxRequests int, window time.Duration) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	now := l.now()
+	entry, ok := l.entries[ip]
+	if !ok || now.After(entry.windowEnd) {
+		l.entries[ip] = &rateLimitEntry{
+			count:     1,
+			windowEnd: now.Add(window),
+		}
+		return true
+	}
+
+	entry.count++
+	return entry.count <= maxRequests
+}
+
+// sweep deletes entries whose window has fully elapsed. Holds the same mutex
+// as allow, so it is race-free with concurrent requests. A swept IP simply
+// starts a fresh window on its next request — identical observable behavior to
+// the existing reset-on-access branch, minus the unbounded retention.
+func (l *inMemoryRateLimiter) sweep() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	now := l.now()
+	for ip, entry := range l.entries {
+		if now.After(entry.windowEnd) {
+			delete(l.entries, ip)
+		}
+	}
+}
+
+// startJanitor launches a single sweeper goroutine on the given cadence until
+// stop is called. Idempotent via janitorOnce.
+func (l *inMemoryRateLimiter) startJanitor(interval time.Duration) {
+	l.janitorOnce.Do(func() {
+		go func() {
+			t := time.NewTicker(interval)
+			defer t.Stop()
+			for {
+				select {
+				case <-t.C:
+					l.sweep()
+				case <-l.stopJanitor:
+					return
+				}
+			}
+		}()
+	})
+}
+
+// stop terminates the background janitor. Safe to call multiple times.
+func (l *inMemoryRateLimiter) stop() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	select {
+	case <-l.stopJanitor:
+	default:
+		close(l.stopJanitor)
+	}
+}
+
 // defaultTrustedProxyCIDRs are the private/loopback ranges trusted to set
 // X-Forwarded-For / X-Real-IP when TRUSTED_PROXY_CIDR is not configured.
 // In production the only hop in front of the API is the nginx container on
@@ -437,8 +539,11 @@ func RateLimit(maxRequests int, window time.Duration) func(http.Handler) http.Ha
 // reset func behind a dev-only HTTP endpoint so automated test suites can
 // drain the in-memory bucket between test runs without restarting the server.
 func RateLimitWithReset(maxRequests int, window time.Duration) (func(http.Handler) http.Handler, func()) {
-	var mu sync.Mutex
-	entries := make(map[string]*rateLimitEntry)
+	limiter := newInMemoryRateLimiter()
+	// CACHE-6: start a background janitor so expired per-IP entries are evicted
+	// instead of accumulating forever. The cadence is proportional to the
+	// window (clamped to a 1m floor) so the sweep stays cheap.
+	limiter.startJanitor(janitorInterval(window))
 
 	// Parse the trusted-proxy allowlist once at construction time so every
 	// request handled by this limiter shares the same policy. All three
@@ -446,12 +551,6 @@ func RateLimitWithReset(maxRequests int, window time.Duration) (func(http.Handle
 	// the global 600/min limiter) route through here, so they all inherit
 	// the F-008 anti-spoofing fix.
 	trusted := parseTrustedProxyCIDRs()
-
-	reset := func() {
-		mu.Lock()
-		entries = make(map[string]*rateLimitEntry)
-		mu.Unlock()
-	}
 
 	handler := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -468,32 +567,16 @@ func RateLimitWithReset(maxRequests int, window time.Duration) (func(http.Handle
 			// the brute-force / TOTP / global limits. See clientIPForRateLimit.
 			ip := clientIPForRateLimit(r, trusted)
 
-			mu.Lock()
-			now := time.Now()
-			entry, ok := entries[ip]
-			if !ok || now.After(entry.windowEnd) {
-				entries[ip] = &rateLimitEntry{
-					count:     1,
-					windowEnd: now.Add(window),
-				}
-				mu.Unlock()
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			entry.count++
-			if entry.count > maxRequests {
-				mu.Unlock()
+			if !limiter.allow(ip, maxRequests, window) {
 				http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 				return
 			}
-			mu.Unlock()
 
 			next.ServeHTTP(w, r)
 		})
 	}
 
-	return handler, reset
+	return handler, limiter.reset
 }
 
 // ──────────────────────────── Admin Auth Middleware ────────────────────────────
