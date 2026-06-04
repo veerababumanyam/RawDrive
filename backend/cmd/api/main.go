@@ -30,6 +30,7 @@ import (
 	"github.com/rawdrive/backend/internal/ai"
 	"github.com/rawdrive/backend/internal/auth"
 	backendcrypto "github.com/rawdrive/backend/internal/crypto"
+	"github.com/rawdrive/backend/internal/database"
 	"github.com/rawdrive/backend/internal/email"
 	"github.com/rawdrive/backend/internal/events"
 	"github.com/rawdrive/backend/internal/face"
@@ -1313,6 +1314,12 @@ func main() {
 	// server sessions, especially after rolling restarts. Use extended query
 	// protocol without statement caching for pgbouncer compatibility.
 	poolCfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
+	// Exec mode does no Describe round-trip, so pgx cannot infer the OID for a
+	// Go []uuid.UUID — bulk `ANY($1::uuid[])` binds (gallery/asset hydration,
+	// bulk tag/rating ops) fail with "cannot find encode plan (OID 0)" and 500.
+	// Register the google/uuid -> uuid / uuid[] mapping on every connection so
+	// every array-bind site encodes. Without this, gallery open 500s in prod.
+	poolCfg.AfterConnect = database.RegisterUUIDTypes
 	poolCfg.MaxConns = 25
 	poolCfg.MinConns = 5
 	// Recycle pooled connections so a connection whose server-side session has

@@ -10,9 +10,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 
+	"github.com/rawdrive/backend/internal/database"
 	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
@@ -158,6 +160,13 @@ func includeAssetsTestPool(t *testing.T) *pgxpool.Pool {
 	if err != nil {
 		t.Skipf("gallery include_assets DB test: invalid DSN: %v", err)
 	}
+	// Mirror the PRODUCTION pool exactly (cmd/api/main.go): pgbouncer-safe exec
+	// mode + the google/uuid type registration. Exec mode is what made the
+	// `ANY($1::uuid[])` bulk-asset bind 500 in prod ("cannot find encode plan,
+	// OID 0") while the old cache_statement test pool masked it. With exec mode
+	// AND RegisterUUIDTypes this test now reproduces prod and guards the fix.
+	cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
+	cfg.AfterConnect = database.RegisterUUIDTypes
 	cfg.ConnConfig.ConnectTimeout = 3 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
