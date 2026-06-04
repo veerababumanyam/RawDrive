@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Banknote, BadgeCheck, MapPinned, Sparkles } from "lucide-react";
-import DealerApplicationButton from "@/components/DealerApplicationButton";
+import { DealerApplicationButton } from "@/components/DealerApplicationButton";
 import { createPageMetadata } from "@/lib/seo";
 
 export const metadata: Metadata = createPageMetadata("dealership");

@@ -33,7 +33,12 @@ const contactLinks = [
   { href: "mailto:contactus@rawdrive.in", label: "contactus@rawdrive.in" },
   {
     href: "tel:+91928112993",
-    label: "contact:+91 928112993 ,+91 9010012299",
+    label: "+91 92811 2993",
+    type: "phone",
+  },
+  {
+    href: "tel:+919010012299",
+    label: "+91 90100 12299",
     type: "phone",
   },
 ];

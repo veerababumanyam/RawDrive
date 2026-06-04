@@ -23,11 +23,16 @@ describe("Legal Notice Page", () => {
 });
 
 describe("Contact Page", () => {
-  it("shows the approved phone and WhatsApp contacts", () => {
+  it("shows each phone/WhatsApp number as its own tel: link", () => {
     render(<ContactPage />);
-    expect(
-      screen.getByText("contact:+91 928112993 ,+91 9010012299"),
-    ).toBeInTheDocument();
+    const firstPhone = screen.getByText("+91 92811 2993");
+    expect(firstPhone.closest("a")).toHaveAttribute("href", "tel:+91928112993");
+    const secondPhone = screen.getByText("+91 90100 12299");
+    expect(secondPhone.closest("a")).toHaveAttribute(
+      "href",
+      "tel:+919010012299",
+    );
+    expect(screen.queryByText(/contact:\+91/)).not.toBeInTheDocument();
   });
 });
 

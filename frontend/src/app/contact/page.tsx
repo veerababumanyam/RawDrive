@@ -1,11 +1,29 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Mail, MapPin, MessageSquareText, Phone } from "lucide-react";
+import {
+  Mail,
+  MapPin,
+  MessageSquareText,
+  Phone,
+  type LucideIcon,
+} from "lucide-react";
 import { createPageMetadata } from "@/lib/seo";
 
 export const metadata: Metadata = createPageMetadata("contact");
 
-const contactCards = [
+type ContactCard = {
+  icon: LucideIcon;
+  title: string;
+  // Single-destination cards (email, location) carry copy + href and render as
+  // one Link. The phone card instead carries `phones` and renders each number
+  // as its own tel: link, so the displayed numbers and the dialled numbers can
+  // never diverge.
+  copy?: string;
+  href?: string;
+  phones?: { display: string; href: string }[];
+};
+
+const contactCards: ContactCard[] = [
   {
     icon: Mail,
     title: "Sales & Partnerships",
@@ -27,8 +45,10 @@ const contactCards = [
   {
     icon: Phone,
     title: "Phone & WhatsApp",
-    copy: "contact:+91 928112993 ,+91 9010012299",
-    href: "tel:+91928112993",
+    phones: [
+      { display: "+91 92811 2993", href: "tel:+91928112993" },
+      { display: "+91 90100 12299", href: "tel:+919010012299" },
+    ],
   },
   {
     icon: MapPin,
@@ -57,23 +77,53 @@ export default function ContactPage() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            {contactCards.map((card) => (
-              <Link
-                key={card.title}
-                href={card.href}
-                className="surface-panel p-5 transition-colors hover:bg-surface-container-high"
-              >
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-accent-subtle text-accent">
-                  <card.icon className="h-5 w-5" />
-                </div>
-                <h2 className="mt-5 font-headline text-xl font-bold text-text-primary">
-                  {card.title}
-                </h2>
-                <p className="mt-2 text-sm leading-7 text-text-secondary">
-                  {card.copy}
-                </p>
-              </Link>
-            ))}
+            {contactCards.map((card) => {
+              const Icon = card.icon;
+              const head = (
+                <>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-accent-subtle text-accent">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <h2 className="mt-5 font-headline text-xl font-bold text-text-primary">
+                    {card.title}
+                  </h2>
+                </>
+              );
+
+              // Phone card: a container (not a Link) holding one tel: anchor per
+              // number — nesting anchors inside a Link would be invalid markup.
+              if (card.phones) {
+                return (
+                  <div key={card.title} className="surface-panel p-5">
+                    {head}
+                    <div className="mt-2 space-y-1">
+                      {card.phones.map((phone) => (
+                        <a
+                          key={phone.href}
+                          href={phone.href}
+                          className="block text-sm leading-7 text-text-secondary transition-colors hover:text-accent"
+                        >
+                          {phone.display}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <Link
+                  key={card.title}
+                  href={card.href ?? "#"}
+                  className="surface-panel p-5 transition-colors hover:bg-surface-container-high"
+                >
+                  {head}
+                  <p className="mt-2 text-sm leading-7 text-text-secondary">
+                    {card.copy}
+                  </p>
+                </Link>
+              );
+            })}
           </div>
         </div>
 

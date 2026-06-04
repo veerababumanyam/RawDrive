@@ -3,7 +3,7 @@
 import { useState } from "react";
 import DealerApplicationModal from "./DealerApplicationModal";
 
-export default function DealerApplicationButton() {
+export function DealerApplicationButton() {
   const [open, setOpen] = useState(false);
 
   return (

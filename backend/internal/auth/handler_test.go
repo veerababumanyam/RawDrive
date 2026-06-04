@@ -1411,6 +1411,31 @@ func TestRegisterHandler_AcceptsBoundaryLengthPassword(t *testing.T) {
 		"a 72-byte password is exactly at the cap and must still register")
 }
 
+// TestRegisterHandler_RejectsShortPassword pins the unified 12-char minimum
+// (public-pages review 2026-06-04, P0 #3). Registration previously accepted
+// 8-char passwords while password reset required 12; an 11-char password must
+// now be rejected so both flows share one floor. Existing register tests use a
+// 16-char password and are unaffected.
+func TestRegisterHandler_RejectsShortPassword(t *testing.T) {
+	handler, _, _, _ := setupAuthRouter()
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	shortPassword := "StrongP@ss1" // 11 chars — exactly one under the floor
+	require.Len(t, shortPassword, 11)
+
+	resp, err := postJSON(ts.URL+"/auth/register", map[string]any{
+		"email":    "shortpw@example.com",
+		"password": shortPassword,
+		"phone":    "9000000007",
+	})
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode,
+		"an 11-char password is below the 12-char minimum and must be rejected")
+}
+
 // ─────────────────────────── F-070: emails masked in logs ───────────────────────────
 
 // TestMaskEmail_RedactsLocalPart unit-tests the masking rule directly: only

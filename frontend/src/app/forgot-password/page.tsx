@@ -84,7 +84,7 @@ function ForgotPasswordForm() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-lg bg-surface-container p-8 shadow-lg border border-border-subtle">
+      <div className="w-full max-w-md rounded-lg bg-surface-container p-8 shadow-glass border border-border-subtle">
         {submitted ? (
           <>
             <h1 className="text-2xl font-semibold mb-2">Check your inbox</h1>
@@ -107,7 +107,7 @@ function ForgotPasswordForm() {
                 const q = new URLSearchParams({ email });
                 router.push(`/reset-password?${q.toString()}`);
               }}
-              className="w-full rounded-md px-4 py-2 bg-accent text-on-accent"
+              className="btn-primary w-full"
             >
               Continue to reset password
             </button>
@@ -161,22 +161,29 @@ function ForgotPasswordForm() {
                   Email
                 </span>
                 <input
+                  id="forgot-email"
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-md border border-border-subtle bg-surface px-3 py-2"
+                  aria-invalid={error ? true : undefined}
+                  aria-describedby={error ? "forgot-email-error" : undefined}
+                  className="input-base w-full"
                 />
               </label>
               {error && (
-                <p role="alert" className="text-feedback-error text-sm mb-3">
+                <p
+                  id="forgot-email-error"
+                  role="alert"
+                  className="text-feedback-error text-sm mb-3"
+                >
                   {error}
                 </p>
               )}
               <button
                 type="submit"
                 disabled={busy}
-                className="w-full rounded-md px-4 py-2 bg-accent text-on-accent disabled:opacity-50"
+                className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {busy ? "Sending…" : "Send reset code"}
               </button>

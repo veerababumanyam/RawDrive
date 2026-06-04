@@ -1468,8 +1468,8 @@ func (s *passwordService) resetPasswordPersistent(ctx context.Context, email, ot
 }
 
 func (s *passwordService) ValidatePassword(password string) error {
-	if len(password) < 8 {
-		return errors.New("password must be at least 8 characters")
+	if len(password) < 12 {
+		return errors.New("password must be at least 12 characters")
 	}
 	// F-056: cap length so overlong inputs never reach bcrypt.
 	if err := passwordpolicy.ValidateBcryptInput("password", password); err != nil {

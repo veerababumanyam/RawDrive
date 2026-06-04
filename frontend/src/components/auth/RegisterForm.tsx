@@ -158,8 +158,8 @@ export function RegisterForm() {
       return;
     }
 
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters long.");
+    if (password.length < 12) {
+      setError("Password must be at least 12 characters long.");
       return;
     }
 
@@ -502,6 +502,7 @@ export function RegisterForm() {
             placeholder="••••••••"
             className="input-base w-full pr-12"
             autoComplete="new-password"
+            aria-describedby="register-password-hint"
             required
           />
           <GlassIconButton
@@ -518,6 +519,12 @@ export function RegisterForm() {
             )}
           </GlassIconButton>
         </div>
+        <p
+          id="register-password-hint"
+          className="text-micro ml-1 text-text-tertiary"
+        >
+          At least 12 characters.
+        </p>
       </div>
 
       <div className="flex items-start gap-3 py-1">

@@ -41,7 +41,7 @@ function ResetPasswordInner() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-lg bg-surface-container p-8 shadow-lg border border-border-subtle">
+      <div className="w-full max-w-md rounded-lg bg-surface-container p-8 shadow-glass border border-border-subtle">
         <h1 className="text-2xl font-semibold mb-2">Reset your password</h1>
         <p className="text-sm text-text-secondary mb-6">
           Enter the code we sent to your email and choose a new password.
@@ -53,11 +53,14 @@ function ResetPasswordInner() {
               Email
             </span>
             <input
+              id="reset-email"
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-md border border-border-subtle bg-surface px-3 py-2"
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? "reset-error" : undefined}
+              className="input-base w-full"
             />
           </label>
           <label className="block mb-3">
@@ -65,50 +68,71 @@ function ResetPasswordInner() {
               Reset code
             </span>
             <input
+              id="reset-otp"
               type="text"
               required
               inputMode="numeric"
               minLength={4}
               value={otp}
               onChange={(e) => setOTP(e.target.value)}
-              className="w-full rounded-md border border-border-subtle bg-surface px-3 py-2 tracking-widest"
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? "reset-error" : undefined}
+              className="input-base w-full tracking-widest"
             />
           </label>
-          <label className="block mb-3">
+          <label className="block mb-1">
             <span className="block text-sm text-text-secondary mb-1">
               New password
             </span>
             <input
+              id="reset-password"
               type="password"
               required
               minLength={12}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-md border border-border-subtle bg-surface px-3 py-2"
+              aria-invalid={error ? true : undefined}
+              aria-describedby={
+                error ? "reset-password-hint reset-error" : "reset-password-hint"
+              }
+              className="input-base w-full"
             />
           </label>
+          <p
+            id="reset-password-hint"
+            className="mb-3 mt-1 text-xs text-text-tertiary"
+          >
+            At least 12 characters.
+          </p>
           <label className="block mb-4">
             <span className="block text-sm text-text-secondary mb-1">
               Confirm password
             </span>
             <input
+              id="reset-confirm"
               type="password"
               required
               minLength={12}
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              className="w-full rounded-md border border-border-subtle bg-surface px-3 py-2"
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? "reset-error" : undefined}
+              className="input-base w-full"
             />
           </label>
           {error && (
-            <p role="alert" className="text-feedback-error text-sm mb-3">
+            <p
+              id="reset-error"
+              role="alert"
+              className="text-feedback-error text-sm mb-3"
+            >
               {error}
             </p>
           )}
           <button
             type="submit"
             disabled={busy}
-            className="w-full rounded-md px-4 py-2 bg-accent text-on-accent disabled:opacity-50"
+            className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy ? "Resetting…" : "Reset password"}
           </button>

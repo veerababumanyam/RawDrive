@@ -125,11 +125,17 @@ func TestPasswordComplexity(t *testing.T) {
 		wantErr  bool
 	}{
 		{"too short", "Ab1", true},
-		{"no uppercase", "abcdefg1", true},
-		{"no number", "Abcdefgh", true},
-		{"no lowercase", "ABCDEFG1", true},
+		// Password policy unified at a 12-char floor (public-pages review
+		// 2026-06-04, P0 #3). An 11-char password that previously satisfied the
+		// old 8-char minimum must now be rejected so registration matches the
+		// reset/admin floor. The complexity cases use 12+ chars so they exercise
+		// the upper/lower/digit branches rather than tripping the length gate.
+		{"11 chars rejected", "StrongP@ss1", true},
+		{"no uppercase", "abcdefg12345", true},
+		{"no number", "Abcdefghijkl", true},
+		{"no lowercase", "ABCDEFG12345", true},
 		{"too long", "Aa1!" + strings.Repeat("x", 69), true},
-		{"valid password", "StrongP@ss1", false},
+		{"valid password", "StrongP@ss12", false},
 	}
 
 	for _, tt := range tests {
