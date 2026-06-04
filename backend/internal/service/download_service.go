@@ -56,14 +56,16 @@ func (a assetRepoAdapter) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*rep
 }
 
 // bulkGetAssetsFromPool fetches all live assets whose IDs are in the set with a
-// single `id = ANY($1)` query, mirroring AssetRepo.GetByID's column list.
+// single `id = ANY($1::uuid[])` query, mirroring AssetRepo.GetByID's column
+// list. The API pool registers google/uuid default types so pgx can encode the
+// UUID array in QueryExecModeExec.
 func bulkGetAssetsFromPool(ctx context.Context, pool *pgxpool.Pool, ids []uuid.UUID) ([]*repository.Asset, error) {
 	rows, err := pool.Query(ctx,
 		`SELECT id, workspace_id, filename, content_type, size_bytes, storage_key,
 		 storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by,
 		 status, processing_error, created_at, updated_at, deleted_at,
 		 is_encrypted, encryption_algo, encryption_version, media_encryption
-		 FROM assets WHERE id = ANY($1) AND deleted_at IS NULL`, ids,
+		 FROM assets WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL`, ids,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("download zip: bulk get assets: %w", err)

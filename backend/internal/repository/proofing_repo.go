@@ -159,7 +159,7 @@ func (r *ProofingRepo) CountExistingByGalleryClientAndAssets(ctx context.Context
 		   FROM proofing_selections
 		  WHERE gallery_id = $1
 		    AND client_email = $2
-		    AND asset_id = ANY($3)`,
+		    AND asset_id = ANY($3::uuid[])`,
 		galleryID, clientEmail, assetIDs,
 	).Scan(&count)
 	if err != nil {
@@ -180,7 +180,7 @@ func (r *ProofingRepo) CountAssetsInGallery(ctx context.Context, galleryID uuid.
 		`SELECT COUNT(DISTINCT asset_id)
 		   FROM gallery_assets
 		  WHERE gallery_id = $1
-		    AND asset_id = ANY($2)`,
+		    AND asset_id = ANY($2::uuid[])`,
 		galleryID, assetIDs,
 	).Scan(&count)
 	if err != nil {

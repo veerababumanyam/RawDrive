@@ -394,7 +394,7 @@ func (r *AdminUserRepo) UpdateRole(ctx context.Context, id uuid.UUID, role strin
 
 func (r *AdminUserRepo) BulkUpdateStatus(ctx context.Context, ids []uuid.UUID, status string, reason string, actorID uuid.UUID) (int64, error) {
 	tag, err := r.pool.Exec(ctx,
-		`UPDATE users SET status = $1, updated_at = NOW() WHERE id = ANY($2)`,
+		`UPDATE users SET status = $1, updated_at = NOW() WHERE id = ANY($2::uuid[])`,
 		status, ids)
 	if err != nil {
 		return 0, fmt.Errorf("admin bulk update status: %w", err)

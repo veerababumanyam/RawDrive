@@ -49,7 +49,8 @@ type PublicGalleryHandler struct {
 	// F-029: bulk asset lookup for the public list endpoints. Optional and
 	// nil-safe — when set (production wires it from the same pool injected via
 	// WithM13Deps) ListAssets/ListAlbumAssets fetch every asset for the gallery
-	// in a single `id = ANY($1)` query instead of one GetByID per junction row.
+	// in a single `id = ANY($1::uuid[])` query instead of one GetByID per
+	// junction row.
 	// When nil (e.g. tests that construct the handler without a pool) the
 	// enrichment path degrades to the previous per-ID lookups, so behaviour is
 	// unchanged for callers that never wired a batch source.
@@ -205,9 +206,10 @@ type publicAssetBatchSource interface {
 }
 
 // poolAssetBatchSource is the production publicAssetBatchSource: a thin wrapper
-// over the request pool that issues the bulk `id = ANY($1)` query. The column
-// list mirrors AssetRepo.GetByID so the enriched response carries the same
-// fields the per-ID path produced.
+// over the request pool that issues the bulk `id = ANY($1::uuid[])` query. The
+// API pool registers google/uuid default types so pgx can encode the UUID array
+// in QueryExecModeExec. The column list mirrors AssetRepo.GetByID so the
+// enriched response carries the same fields the per-ID path produced.
 type poolAssetBatchSource struct {
 	pool *pgxpool.Pool
 }
@@ -221,7 +223,7 @@ func (s poolAssetBatchSource) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]
 		 storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by,
 		 status, processing_error, created_at, updated_at, deleted_at,
 		 is_encrypted, encryption_algo, encryption_version, media_encryption
-		 FROM assets WHERE id = ANY($1) AND deleted_at IS NULL`, ids,
+		 FROM assets WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL`, ids,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("public gallery: bulk get assets: %w", err)
@@ -1238,8 +1240,9 @@ type publicAssetResponse struct {
 
 // resolveAssetsByID bulk-fetches the given asset IDs and returns an O(1)
 // lookup map keyed by asset ID (F-029). When a batch source is wired it issues
-// a single `id = ANY($1)` query, collapsing the previous one-GetByID-per-asset
-// N+1 on the unauthenticated hot read path. When no batch source is available
+// a single `id = ANY($1::uuid[])` query, collapsing the previous
+// one-GetByID-per-asset N+1 on the unauthenticated hot read path. When no batch
+// source is available
 // (handler constructed without a pool) it degrades to per-ID assetSvc.GetByID
 // calls so behaviour is unchanged for those callers.
 //

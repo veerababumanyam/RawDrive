@@ -940,6 +940,7 @@ func (h *GalleryHandler) ListAssets(w http.ResponseWriter, r *http.Request) {
 
 	assets, err := h.gallerySvc.ListAssets(r.Context(), galleryID)
 	if err != nil {
+		log.Printf("gallery list assets failed: gallery_id=%s err=%v", galleryID, err)
 		http.Error(w, `{"error":"list failed"}`, http.StatusInternalServerError)
 		return
 	}
@@ -952,6 +953,7 @@ func (h *GalleryHandler) ListAssets(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("include_assets") == "true" {
 		enriched, err := h.enrichGalleryAssets(r.Context(), assets)
 		if err != nil {
+			log.Printf("gallery list assets enrich failed: gallery_id=%s err=%v", galleryID, err)
 			http.Error(w, `{"error":"list failed"}`, http.StatusInternalServerError)
 			return
 		}

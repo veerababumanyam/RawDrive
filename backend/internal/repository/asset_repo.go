@@ -240,9 +240,10 @@ func (r *AssetRepo) GetByID(ctx context.Context, id uuid.UUID) (*Asset, error) {
 // soft-deleted). It is the batched counterpart to GetByID, used to collapse
 // the per-id N+1 loops in smart-album favorite + face-cluster loading.
 //
-// The result is UNORDERED — `WHERE id = ANY($1)` does not preserve the input
-// order. Callers that need the original ordering (e.g. most-favorited-first or
-// face-cluster resolver order) reshape the result with orderAssetsByIDs.
+// The result is UNORDERED — `WHERE id = ANY($1::uuid[])` does not preserve the
+// input order. Callers that need the original ordering (e.g.
+// most-favorited-first or face-cluster resolver order) reshape the result with
+// orderAssetsByIDs.
 //
 // IDs that are missing or soft-deleted are simply absent from the result; this
 // is NOT an error, so callers can drop them and continue rather than 500. An
@@ -257,7 +258,7 @@ func (r *AssetRepo) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*Asset, er
 		 storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by,
 		 status, processing_error, created_at, updated_at, deleted_at,
 		 is_encrypted, encryption_algo, encryption_version, media_encryption
-		 FROM assets WHERE id = ANY($1) AND deleted_at IS NULL`,
+		 FROM assets WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL`,
 		ids,
 	)
 	if err != nil {
@@ -1039,7 +1040,7 @@ const sqlBulkMoveInsert = `INSERT INTO gallery_assets (gallery_id, asset_id, sor
 // tag list is passed as a text[] param and filtered out of each row's
 // ai_tags in one JSONB rewrite per row via `!= ALL($1::text[])`, collapsing
 // the former per-tag loop into one round-trip.
-const sqlBulkRemoveTags = `UPDATE assets SET ai_tags = (SELECT COALESCE(jsonb_agg(elem), '[]'::jsonb) FROM jsonb_array_elements(COALESCE(ai_tags, '[]'::jsonb)) elem WHERE elem->>'tag' != ALL($1::text[])), updated_at = now() WHERE id = ANY($2) AND workspace_id = $3 AND deleted_at IS NULL`
+const sqlBulkRemoveTags = `UPDATE assets SET ai_tags = (SELECT COALESCE(jsonb_agg(elem), '[]'::jsonb) FROM jsonb_array_elements(COALESCE(ai_tags, '[]'::jsonb)) elem WHERE elem->>'tag' != ALL($1::text[])), updated_at = now() WHERE id = ANY($2::uuid[]) AND workspace_id = $3 AND deleted_at IS NULL`
 
 // BulkMoveToGallery moves multiple assets from one gallery to another,
 // but only for assets and galleries owned by the given workspaceID.
@@ -1076,7 +1077,7 @@ func (r *AssetRepo) BulkMoveToGallery(ctx context.Context, assetIDs []uuid.UUID,
 	// Guard 1: both galleries must belong to workspaceID.
 	var gCount int
 	if err := tx.QueryRow(ctx,
-		`SELECT COUNT(*) FROM galleries WHERE id = ANY($1) AND workspace_id = $2`,
+		`SELECT COUNT(*) FROM galleries WHERE id = ANY($1::uuid[]) AND workspace_id = $2`,
 		[]uuid.UUID{fromGalleryID, toGalleryID}, workspaceID,
 	).Scan(&gCount); err != nil {
 		return 0, fmt.Errorf("asset repo bulk move gallery check: %w", err)
@@ -1093,7 +1094,7 @@ func (r *AssetRepo) BulkMoveToGallery(ctx context.Context, assetIDs []uuid.UUID,
 	// subsequent sort_order assignment so drag-and-drop reorderings
 	// survive the move.
 	rows, err := tx.Query(ctx,
-		`SELECT id FROM assets WHERE id = ANY($1) AND workspace_id = $2 AND deleted_at IS NULL`,
+		`SELECT id FROM assets WHERE id = ANY($1::uuid[]) AND workspace_id = $2 AND deleted_at IS NULL`,
 		assetIDs, workspaceID,
 	)
 	if err != nil {
@@ -1125,7 +1126,7 @@ func (r *AssetRepo) BulkMoveToGallery(ctx context.Context, assetIDs []uuid.UUID,
 
 	// Remove owned assets from the source gallery.
 	if _, err := tx.Exec(ctx,
-		`DELETE FROM gallery_assets WHERE gallery_id = $1 AND asset_id = ANY($2)`,
+		`DELETE FROM gallery_assets WHERE gallery_id = $1 AND asset_id = ANY($2::uuid[])`,
 		fromGalleryID, owned,
 	); err != nil {
 		return 0, fmt.Errorf("asset repo bulk move remove: %w", err)
@@ -1164,7 +1165,7 @@ func (r *AssetRepo) GetWorkspaceStorageUsed(ctx context.Context, workspaceID uui
 }
 
 func (r *AssetRepo) BulkSetRating(ctx context.Context, ids []uuid.UUID, rating int, workspaceID uuid.UUID) (int64, error) {
-	tag, err := r.pool.Exec(ctx, `UPDATE assets SET rating = $1, updated_at = now() WHERE id = ANY($2) AND workspace_id = $3 AND deleted_at IS NULL`, rating, ids, workspaceID)
+	tag, err := r.pool.Exec(ctx, `UPDATE assets SET rating = $1, updated_at = now() WHERE id = ANY($2::uuid[]) AND workspace_id = $3 AND deleted_at IS NULL`, rating, ids, workspaceID)
 	if err != nil {
 		return 0, fmt.Errorf("bulk set rating: %w", err)
 	}
@@ -1172,7 +1173,7 @@ func (r *AssetRepo) BulkSetRating(ctx context.Context, ids []uuid.UUID, rating i
 }
 
 func (r *AssetRepo) BulkSetColorLabel(ctx context.Context, ids []uuid.UUID, label string, workspaceID uuid.UUID) (int64, error) {
-	tag, err := r.pool.Exec(ctx, `UPDATE assets SET color_label = $1, updated_at = now() WHERE id = ANY($2) AND workspace_id = $3 AND deleted_at IS NULL`, label, ids, workspaceID)
+	tag, err := r.pool.Exec(ctx, `UPDATE assets SET color_label = $1, updated_at = now() WHERE id = ANY($2::uuid[]) AND workspace_id = $3 AND deleted_at IS NULL`, label, ids, workspaceID)
 	if err != nil {
 		return 0, fmt.Errorf("bulk set color label: %w", err)
 	}
@@ -1195,7 +1196,7 @@ func (r *AssetRepo) BulkAddTags(ctx context.Context, ids []uuid.UUID, tags []str
 	if err != nil {
 		return 0, fmt.Errorf("bulk add tags marshal: %w", err)
 	}
-	tag, err := r.pool.Exec(ctx, `UPDATE assets SET ai_tags = COALESCE(ai_tags, '[]'::jsonb) || $1::jsonb, updated_at = now() WHERE id = ANY($2) AND workspace_id = $3 AND deleted_at IS NULL`, string(tagsJSON), ids, workspaceID)
+	tag, err := r.pool.Exec(ctx, `UPDATE assets SET ai_tags = COALESCE(ai_tags, '[]'::jsonb) || $1::jsonb, updated_at = now() WHERE id = ANY($2::uuid[]) AND workspace_id = $3 AND deleted_at IS NULL`, string(tagsJSON), ids, workspaceID)
 	if err != nil {
 		return 0, fmt.Errorf("bulk add tags: %w", err)
 	}
