@@ -3174,6 +3174,7 @@ func main() {
 	// reports "disabled" without failing the overall status.
 	deepHealth := handler.NewHealthHandler(dbPool, storageProvider, valkeyClient)
 	r.Get("/health/deep", deepHealth.Deep)
+	mountMetricsRoute(r, dbPool)
 
 	// ──────────────────────── ISSUE-006 MFA Mount Gate ────────────────────────
 	//
