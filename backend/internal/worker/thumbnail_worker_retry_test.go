@@ -41,6 +41,9 @@ func (f *fakeRetryRepo) ListByStatus(context.Context, string, int) ([]repository
 func (f *fakeRetryRepo) ListRetryable(context.Context, int) ([]repository.Asset, error) {
 	return f.assets, nil
 }
+func (f *fakeRetryRepo) ClaimRetryable(context.Context, int, float64) ([]repository.Asset, error) {
+	return f.assets, nil
+}
 func (f *fakeRetryRepo) GetRetryCount(context.Context, uuid.UUID) (int, error) {
 	return f.retryCount, nil
 }

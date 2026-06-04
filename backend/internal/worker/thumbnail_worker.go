@@ -53,10 +53,21 @@ type assetRepository interface {
 // a type assertion at construction). *repository.AssetRepo satisfies both.
 type retryableAssetRepository interface {
 	ListRetryable(ctx context.Context, limit int) ([]repository.Asset, error)
+	// ClaimRetryable is the atomic claim that replaces ListRetryable on the hot
+	// path: it stamps claimed_at so two workers can never claim — and therefore
+	// never double-encode — the same 'processing' asset. See AssetRepo.ClaimRetryable.
+	ClaimRetryable(ctx context.Context, limit int, leaseSeconds float64) ([]repository.Asset, error)
 	GetRetryCount(ctx context.Context, id uuid.UUID) (int, error)
 	MarkTransientFailure(ctx context.Context, id uuid.UUID, reason string) error
 	MarkTerminalFailure(ctx context.Context, id uuid.UUID, reason string) error
 }
+
+// thumbnailClaimLease bounds how long a claimed-but-unfinished asset stays out of
+// the derivative-claim set. WebP encoding of all variants for a large image can
+// take a while, so the lease is generous; only an asset stuck in 'processing'
+// past the lease (a crashed worker) is re-claimed. MarkTransientFailure clears
+// claimed_at, so scheduled retries are governed by next_retry_at, not this lease.
+const thumbnailClaimLease = 15 * time.Minute
 
 type thumbnailGenerator interface {
 	GenerateAll(ctx context.Context, assetID string, src io.Reader) (*service.ThumbnailResult, error)
@@ -255,12 +266,14 @@ func (w *ThumbnailWorker) processNextBatch(ctx context.Context) {
 		err    error
 	)
 	if w.retryRepo != nil {
-		assets, err = w.retryRepo.ListRetryable(ctx, 10)
+		// Atomic claim: stamps claimed_at so concurrent workers never double-claim
+		// (and therefore never double-encode) the same 'processing' asset.
+		assets, err = w.retryRepo.ClaimRetryable(ctx, 10, thumbnailClaimLease.Seconds())
 	} else {
 		assets, err = w.assetRepo.ListByStatus(ctx, "processing", 10)
 	}
 	if err != nil {
-		log.Printf("thumbnail worker: list error: %v", err)
+		log.Printf("thumbnail worker: claim error: %v", err)
 		return
 	}
 

@@ -99,6 +99,49 @@ func (r *JobRepo) ListPending(ctx context.Context, jobType string, limit int) ([
 	return jobs, rows.Err()
 }
 
+// ClaimPending atomically claims up to `limit` jobs of a given type, flipping
+// them pending → running and stamping claimed_at in a single
+// UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED) RETURNING statement.
+// This replaces the ListPending-then-UpdateProgress('running') pattern, whose
+// plain SELECT let two workers read the same still-'pending' job and run the
+// face-detection ML pipeline on its assets twice (duplicate face rows / wasted
+// compute). Jobs stuck in 'running' past leaseSeconds (a crashed worker) are
+// re-claimed.
+func (r *JobRepo) ClaimPending(ctx context.Context, jobType string, limit int, leaseSeconds float64) ([]*AIJob, error) {
+	rows, err := r.pool.Query(ctx,
+		// COALESCE(error, '') — AIJob.Error is non-nullable; see ListPending.
+		`UPDATE ai_jobs
+		    SET status = 'running', claimed_at = now()
+		  WHERE id IN (
+		      SELECT id FROM ai_jobs
+		      WHERE type = $1
+		        AND (status = 'pending'
+		             OR (status = 'running' AND claimed_at < now() - make_interval(secs => $3)))
+		      ORDER BY created_at ASC
+		      LIMIT $2
+		      FOR UPDATE SKIP LOCKED
+		  )
+		  RETURNING id, workspace_id, type, status, total_items, processed_items,
+		   result, COALESCE(error, '') AS error, created_at, updated_at`,
+		jobType, limit, leaseSeconds)
+	if err != nil {
+		return nil, fmt.Errorf("job repo: claim pending: %w", err)
+	}
+	defer rows.Close()
+
+	var jobs []*AIJob
+	for rows.Next() {
+		var job AIJob
+		if err := rows.Scan(&job.ID, &job.WorkspaceID, &job.Type, &job.Status,
+			&job.TotalItems, &job.ProcessedItems, &job.Result, &job.Error,
+			&job.CreatedAt, &job.UpdatedAt); err != nil {
+			return nil, err
+		}
+		jobs = append(jobs, &job)
+	}
+	return jobs, rows.Err()
+}
+
 // UpdateProgress updates job progress.
 func (r *JobRepo) UpdateProgress(ctx context.Context, id uuid.UUID, status string, processed int) error {
 	_, err := r.pool.Exec(ctx,

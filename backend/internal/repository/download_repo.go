@@ -153,6 +153,54 @@ func (r *DownloadRepo) ListPendingJobs(ctx context.Context, limit int) ([]Downlo
 	return jobs, nil
 }
 
+// ClaimPendingJobs atomically claims up to `limit` download jobs, flipping them
+// pending → processing and stamping claimed_at in a single
+// UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED) RETURNING statement.
+// This replaces the ListPendingJobs-then-UpdateJobStatus('processing') pattern,
+// whose SELECT lock released the instant the result set drained, letting a
+// second worker re-claim the same still-'pending' job and build the same ZIP
+// twice. Jobs stuck in 'processing' past leaseSeconds (a crashed worker) are
+// re-claimed. leaseSeconds must exceed the worst-case ZIP build time.
+func (r *DownloadRepo) ClaimPendingJobs(ctx context.Context, limit int, leaseSeconds float64) ([]DownloadJob, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	rows, err := r.pool.Query(ctx,
+		`UPDATE download_jobs
+		 SET status = 'processing', claimed_at = now()
+		 WHERE id IN (
+		     SELECT id FROM download_jobs
+		     WHERE status = 'pending'
+		        OR (status = 'processing' AND claimed_at < now() - make_interval(secs => $2))
+		     ORDER BY created_at ASC
+		     LIMIT $1
+		     FOR UPDATE SKIP LOCKED
+		 )
+		 RETURNING id, gallery_id, workspace_id, requested_by_name, requested_by_email,
+		           requested_by_user_id, asset_ids, variant, status, progress, total_assets,
+		           download_url, file_size_bytes, error_message, expires_at, created_at, completed_at`,
+		limit, leaseSeconds,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("download job claim: %w", err)
+	}
+	defer rows.Close()
+
+	var jobs []DownloadJob
+	for rows.Next() {
+		var j DownloadJob
+		if err := rows.Scan(&j.ID, &j.GalleryID, &j.WorkspaceID, &j.RequestedByName,
+			&j.RequestedByEmail, &j.RequestedByUserID, &j.AssetIDs, &j.Variant,
+			&j.Status, &j.Progress, &j.TotalAssets, &j.DownloadURL,
+			&j.FileSizeBytes, &j.ErrorMessage, &j.ExpiresAt, &j.CreatedAt,
+			&j.CompletedAt); err != nil {
+			return nil, fmt.Errorf("download job scan: %w", err)
+		}
+		jobs = append(jobs, j)
+	}
+	return jobs, rows.Err()
+}
+
 // MarkJobFailed records an error message and sets status=failed.
 // Used by the worker on terminal failures.
 func (r *DownloadRepo) MarkJobFailed(ctx context.Context, id uuid.UUID, errMsg string) error {

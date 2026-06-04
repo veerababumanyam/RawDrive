@@ -112,13 +112,19 @@ func (w *DownloadWorker) Stop() {
 	}
 }
 
-// drain pulls a batch of pending jobs and processes them one by one.
-// Errors are logged but do not stop the worker — the next tick will
-// retry any job that's still pending.
+// downloadClaimLease bounds how long a claimed-but-unfinished job stays out of
+// the claimable set. ZIP builds of hundreds of photos can take a while, so the
+// lease is generous; only a job stuck in 'processing' past the lease (a crashed
+// worker) is re-claimed.
+const downloadClaimLease = 30 * time.Minute
+
+// drain atomically claims a batch of pending jobs and processes them one by one.
+// Errors are logged but do not stop the worker — the next tick will retry any
+// job that's still pending (a transient failure resets the row to 'pending').
 func (w *DownloadWorker) drain(ctx context.Context) {
-	jobs, err := w.repo.ListPendingJobs(ctx, 5)
+	jobs, err := w.repo.ClaimPendingJobs(ctx, 5, downloadClaimLease.Seconds())
 	if err != nil {
-		log.Printf("download worker: list pending: %v", err)
+		log.Printf("download worker: claim pending: %v", err)
 		return
 	}
 	for i := range jobs {
@@ -127,15 +133,10 @@ func (w *DownloadWorker) drain(ctx context.Context) {
 }
 
 // processOne runs a single job through the processor and updates the
-// row with final status or an error message.
+// row with final status or an error message. The job is already claimed
+// (status='processing', claimed_at stamped) by ClaimPendingJobs, so no separate
+// mark is needed here.
 func (w *DownloadWorker) processOne(ctx context.Context, job *repository.DownloadJob) {
-	// Mark as processing so concurrent workers (or a restart) don't
-	// pick it up again until we finish or timeout.
-	if err := w.repo.UpdateJobStatus(ctx, job.ID, "processing", 0, "", 0); err != nil {
-		log.Printf("download worker: mark processing %s: %v", job.ID, err)
-		return
-	}
-
 	onProgress := func(pct int) {
 		if pct < 0 {
 			pct = 0

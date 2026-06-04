@@ -602,6 +602,60 @@ func (r *AssetRepo) ListRetryable(ctx context.Context, limit int) ([]Asset, erro
 	return assets, rows.Err()
 }
 
+// ClaimRetryable atomically claims up to `limit` assets that need derivative
+// generation, stamping claimed_at = now() inside a single UPDATE ... WHERE id IN
+// (SELECT ... FOR UPDATE SKIP LOCKED) statement. It is the atomic replacement for
+// ListRetryable (identical eligibility predicate) used by the thumbnail worker:
+// the plain ListRetryable left the 'processing' row visible for the whole encode,
+// so two workers double-encoded every WebP variant and double-counted
+// workspace_storage. The claim skips rows another worker holds (FOR UPDATE SKIP
+// LOCKED) or has claimed within leaseSeconds; a row whose claim lease has gone
+// stale (a crashed worker) is re-claimed. MarkTransientFailure clears claimed_at
+// so a scheduled retry is governed by next_retry_at, not the claim lease.
+func (r *AssetRepo) ClaimRetryable(ctx context.Context, limit int, leaseSeconds float64) ([]Asset, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	rows, err := r.pool.Query(ctx,
+		`UPDATE assets
+		    SET claimed_at = now()
+		  WHERE id IN (
+		      SELECT id FROM assets
+		      WHERE status = 'processing' AND deleted_at IS NULL
+		        AND (
+		              next_retry_at IS NULL
+		              OR (next_retry_at <= now() AND retry_count < $1)
+		            )
+		        AND (claimed_at IS NULL OR claimed_at < now() - make_interval(secs => $3))
+		      ORDER BY created_at ASC
+		      LIMIT $2
+		      FOR UPDATE SKIP LOCKED
+		  )
+		  RETURNING id, workspace_id, filename, content_type, size_bytes, storage_key,
+		   storage_driver, width, height, blurhash, exif_data, thumbnail_urls, uploaded_by,
+		   status, created_at, updated_at, deleted_at, retry_count, next_retry_at, decode_format`,
+		MaxDecodeRetries, limit, leaseSeconds,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("asset repo claim retryable: %w", err)
+	}
+	defer rows.Close()
+
+	var assets []Asset
+	for rows.Next() {
+		var a Asset
+		if err := rows.Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
+			&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash, &a.ExifData,
+			&a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+			&a.RetryCount, &a.NextRetryAt, &a.DecodeFormat,
+		); err != nil {
+			return nil, fmt.Errorf("asset repo claim retryable scan: %w", err)
+		}
+		assets = append(assets, a)
+	}
+	return assets, rows.Err()
+}
+
 // GetRetryCount returns the current retry_count for an asset. Used by the worker
 // to make the dead-letter (max-retries) decision against committed DB state
 // rather than a possibly-stale in-memory struct. Returns an error if the asset
@@ -645,6 +699,7 @@ func (r *AssetRepo) MarkTransientFailure(ctx context.Context, id uuid.UUID, reas
 		        next_retry_at = now() + ($2 * interval '1 second'),
 		        processing_error = $3,
 		        status = 'processing',
+		        claimed_at = NULL,
 		        updated_at = now()
 		  WHERE id = $1`,
 		id, backoff.Seconds(), reason,

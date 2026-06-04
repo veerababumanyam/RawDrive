@@ -68,10 +68,18 @@ func (w *FaceWorker) Stop() {
 	close(w.stopCh)
 }
 
+// faceClaimLease bounds how long a claimed-but-unfinished face job stays out of
+// the claimable set. Face-detection ML over a batch of assets can take a while,
+// so the lease is generous; only a job stuck in 'running' past the lease (a
+// crashed worker) is re-claimed.
+const faceClaimLease = 10 * time.Minute
+
 func (w *FaceWorker) processNextBatch(ctx context.Context) {
-	jobs, err := w.jobRepo.ListPending(ctx, "face_detection", 5)
+	// Atomic claim: flips pending → running + stamps claimed_at so two workers
+	// never claim — and therefore never double-detect — the same job's assets.
+	jobs, err := w.jobRepo.ClaimPending(ctx, "face_detection", 5, faceClaimLease.Seconds())
 	if err != nil {
-		log.Printf("face worker: list pending: %v", err)
+		log.Printf("face worker: claim pending: %v", err)
 		return
 	}
 
