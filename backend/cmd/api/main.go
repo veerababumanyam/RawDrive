@@ -2436,15 +2436,14 @@ func main() {
 		geminiClient := ai.NewGeminiClient(geminiModelID).WithEmbeddingModel(embeddingModel)
 
 		// AI services
-		faceSvc := ai.NewFaceService(aiFaceRepo, aiJobRepo, aiConfigRepo, aiSpendRepo, geminiClient, storageProvider)
+		faceSvc := ai.NewFaceService(aiFaceRepo, aiJobRepo, storageProvider)
 
-		// Face recognition: prefer the face-svc Python sidecar (insightface,
-		// 512-d embeddings) over the legacy Gemini path. The sidecar is
-		// reached on the compose network via FACE_SVC_URL (typically
-		// http://face-svc:8000). If unset we leave faceSvc on the Gemini
-		// path — but migration 110 widened the embedding column to
-		// vector(512), so the Gemini fallback fails-fast on insert. The
-		// canonical wiring path is to set FACE_SVC_URL in production.
+		// Face recognition runs on the face-svc Python sidecar (insightface,
+		// 512-d embeddings), reached on the compose network via FACE_SVC_URL
+		// (typically http://face-svc:8000). The sidecar is required — the
+		// legacy Gemini path was removed (it emitted 128-d vectors that the
+		// vector(512) column rejected). If FACE_SVC_URL is unset, face
+		// detection is disabled (DetectAndStore returns a clear error).
 		if earlyFaceClient != nil {
 			// Reuse the client built above for m2Deps so we don't open
 			// two HTTP clients to the same sidecar. Same instance is
@@ -2453,7 +2452,7 @@ func main() {
 			faceSvc = faceSvc.WithFaceClient(earlyFaceClient)
 			log.Printf("face: detection backend set to face-svc (%s)", os.Getenv("FACE_SVC_URL"))
 		} else {
-			log.Printf("face: FACE_SVC_URL not set; falling back to (now-incompatible) Gemini path")
+			log.Printf("face: FACE_SVC_URL not set; face detection is disabled (no fallback)")
 		}
 
 		// Bind the function-scope adapter (declared above the bare scope

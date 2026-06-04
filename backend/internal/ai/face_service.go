@@ -13,30 +13,23 @@ import (
 
 // FaceService handles face detection, clustering, and management.
 //
-// Detection backend (2026-05-18, PR-2a):
-//   - If faceClient is wired (FACE_SVC_URL set), DetectAndStore POSTs to the
-//     face-svc Python sidecar (insightface buffalo_l, 512-d embeddings).
-//   - Else it falls back to the original Gemini Vision path (128-d). Note:
-//     migration 110 widened face_clusters.embedding to vector(512), so the
-//     Gemini fallback now fails-fast on insert — keep it only as a stub
-//     until the Gemini path is ripped out in a follow-up cleanup.
+// Detection backend: DetectAndStore POSTs the image bytes to the face-svc
+// Python sidecar (insightface buffalo_l, 512-d L2-normalized embeddings). The
+// sidecar is required — the legacy Gemini Vision path (128-d) was removed once
+// migration 110 widened face_clusters.embedding to vector(512), a dimension the
+// 128-d Gemini vectors could never satisfy.
 type FaceService struct {
 	faceRepo   *FaceRepo
 	jobRepo    *JobRepo
-	configRepo *ConfigRepo
-	spendRepo  *SpendRepo
-	gemini     *GeminiClient
 	store      storage.Provider
-	faceClient *face.Client // optional; preferred detection backend when non-nil.
+	faceClient *face.Client // required; the face-svc detection backend.
 }
 
-// NewFaceService creates a FaceService. Wire the face-svc backend with
-// WithFaceClient — the constructor stays backward-compatible so existing
-// call sites in main.go continue to compile during the migration.
-func NewFaceService(faceRepo *FaceRepo, jobRepo *JobRepo, configRepo *ConfigRepo, spendRepo *SpendRepo, gemini *GeminiClient, store storage.Provider) *FaceService {
+// NewFaceService creates a FaceService. The face-svc detection backend is
+// required and is wired via WithFaceClient.
+func NewFaceService(faceRepo *FaceRepo, jobRepo *JobRepo, store storage.Provider) *FaceService {
 	return &FaceService{
-		faceRepo: faceRepo, jobRepo: jobRepo, configRepo: configRepo,
-		spendRepo: spendRepo, gemini: gemini, store: store,
+		faceRepo: faceRepo, jobRepo: jobRepo, store: store,
 	}
 }
 
@@ -73,10 +66,9 @@ func (s *FaceService) EnqueueDetection(ctx context.Context, workspaceID uuid.UUI
 // A disabled workspace returns nil — the worker treats this as a clean skip
 // so jobs don't pile up in the failed state.
 //
-// Backend selection: when faceClient is wired we use the face-svc sidecar
-// (insightface, 512-d); otherwise we fall back to the legacy Gemini path,
-// which is now effectively bricked because face_clusters.embedding is
-// vector(512) and Gemini emits 128-d.
+// Detection runs on the required face-svc sidecar (insightface, 512-d). The
+// legacy Gemini fallback was removed — it emitted 128-d vectors that are
+// incompatible with the vector(512) column.
 func (s *FaceService) DetectAndStore(ctx context.Context, assetID, workspaceID uuid.UUID, galleryID *uuid.UUID) error {
 	enabled, err := s.isFaceRecognitionEnabled(ctx, workspaceID)
 	if err != nil {
@@ -112,77 +104,34 @@ func (s *FaceService) DetectAndStore(ctx context.Context, assetID, workspaceID u
 		return fmt.Errorf("face service: read image: %w", err)
 	}
 
-	var clusters []*FaceCluster
-
-	if s.faceClient != nil {
-		// face-svc path (preferred). insightface buffalo_l: 512-d L2-normalized
-		// embeddings, det_score ∈ [0,1], no per-request cost so spend logging
-		// is intentionally skipped.
-		resp, err := s.faceClient.DetectAndEmbed(ctx, imageData, fmt.Sprintf("asset-%s.jpg", assetID))
-		if err != nil {
-			return fmt.Errorf("face service: face-svc detect: %w", err)
-		}
-		if len(resp.Faces) == 0 {
-			return nil
-		}
-		clusters = make([]*FaceCluster, len(resp.Faces))
-		for i, f := range resp.Faces {
-			clusters[i] = &FaceCluster{
-				WorkspaceID: workspaceID,
-				AssetID:     assetID,
-				GalleryID:   galleryID,
-				FaceIndex:   i,
-				BoundingBox: BoundingBox{
-					X: float64(f.Bbox.X),
-					Y: float64(f.Bbox.Y),
-					W: float64(f.Bbox.W),
-					H: float64(f.Bbox.H),
-				},
-				Embedding:  f.Embedding,
-				Confidence: float64(f.DetScore),
-				Source:     "insightface",
-			}
-		}
-	} else {
-		// Legacy Gemini fallback. Kept as a code path during the migration so
-		// the wider AI handler wiring doesn't have to change in lockstep,
-		// but inserts will fail at the pgvector dimension check until this
-		// is removed.
-		apiKey, _, err := s.configRepo.GetDecryptedKey(ctx, workspaceID)
-		if err != nil {
-			return err
-		}
-		faces, inputTokens, outputTokens, err := s.gemini.DetectFaces(ctx, apiKey, imageData, "image/jpeg")
-		if err != nil {
-			return fmt.Errorf("face service: gemini detect: %w", err)
-		}
-		cost := EstimateCost(s.gemini.modelID, int64(inputTokens), int64(outputTokens))
-		if err := s.spendRepo.LogUsage(ctx, &AIUsageLog{
-			WorkspaceID:       workspaceID,
-			Operation:         "face_detection",
-			Model:             s.gemini.modelID,
-			InputTokens:       int64(inputTokens),
-			OutputTokens:      int64(outputTokens),
-			CostEstimatePaisa: cost,
-			AssetID:           &assetID,
-		}); err != nil {
-			log.Printf("face service: log spend failed: %v", err)
-		}
-		if len(faces) == 0 {
-			return nil
-		}
-		clusters = make([]*FaceCluster, len(faces))
-		for i, f := range faces {
-			clusters[i] = &FaceCluster{
-				WorkspaceID: workspaceID,
-				AssetID:     assetID,
-				GalleryID:   galleryID,
-				FaceIndex:   f.Index,
-				BoundingBox: f.BoundingBox,
-				Embedding:   f.Embedding,
-				Confidence:  f.Confidence,
-				Source:      "gemini",
-			}
+	if s.faceClient == nil {
+		return fmt.Errorf("face service: face-svc client not configured for asset %s", assetID)
+	}
+	// face-svc path. insightface buffalo_l: 512-d L2-normalized embeddings,
+	// det_score ∈ [0,1], no per-request cost so spend logging is skipped.
+	resp, err := s.faceClient.DetectAndEmbed(ctx, imageData, fmt.Sprintf("asset-%s.jpg", assetID))
+	if err != nil {
+		return fmt.Errorf("face service: face-svc detect: %w", err)
+	}
+	if len(resp.Faces) == 0 {
+		return nil
+	}
+	clusters := make([]*FaceCluster, len(resp.Faces))
+	for i, f := range resp.Faces {
+		clusters[i] = &FaceCluster{
+			WorkspaceID: workspaceID,
+			AssetID:     assetID,
+			GalleryID:   galleryID,
+			FaceIndex:   i,
+			BoundingBox: BoundingBox{
+				X: float64(f.Bbox.X),
+				Y: float64(f.Bbox.Y),
+				W: float64(f.Bbox.W),
+				H: float64(f.Bbox.H),
+			},
+			Embedding:  f.Embedding,
+			Confidence: float64(f.DetScore),
+			Source:     "insightface",
 		}
 	}
 

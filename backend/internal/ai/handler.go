@@ -517,7 +517,10 @@ func (h *Handler) ValidateKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.faceSvc.gemini.ValidateKey(r.Context(), key); err != nil {
+	// Validate the workspace's AI key against the Gemini client. The search
+	// service owns a GeminiClient (captioning/tagging); reuse it here rather
+	// than reaching through the face service, which no longer holds one.
+	if err := h.searchSvc.gemini.ValidateKey(r.Context(), key); err != nil {
 		respondJSON(w, http.StatusOK, map[string]any{"valid": false, "error": err.Error()})
 		return
 	}
