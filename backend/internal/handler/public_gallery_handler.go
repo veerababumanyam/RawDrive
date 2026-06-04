@@ -682,7 +682,13 @@ func (h *PublicGalleryHandler) GetStudioLanding(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	respondJSON(w, http.StatusOK, publicStudioLandingResponse{
+	// PERF-HDR: this public studio-profile metadata read is served with
+	// conditional-request support — a content-hash ETag lets a repeat GET that
+	// echoes it in If-None-Match short-circuit to 304 (no re-serialize, no body
+	// transfer). The short s-maxage lets a shared/edge cache hold a
+	// revalidatable copy; must-revalidate forces a conditional re-check once
+	// stale so a profile/gallery-list edit is picked up promptly.
+	respondJSONWithETag(w, r, publicStudioLandingResponse{
 		Studio: publicStudioProfileResponse{
 			ID:                    workspaceID.String(),
 			Name:                  name,
@@ -709,7 +715,7 @@ func (h *PublicGalleryHandler) GetStudioLanding(w http.ResponseWriter, r *http.R
 		Counts: map[string]int{
 			"published_galleries": len(galleries),
 		},
-	})
+	}, "public, max-age=0, s-maxage=60, must-revalidate")
 }
 
 func (h *PublicGalleryHandler) listPublishedStudioGalleries(ctx context.Context, workspaceID uuid.UUID, subdomain string) ([]publicStudioGalleryResponse, error) {
@@ -846,6 +852,39 @@ func (h *PublicGalleryHandler) GetBySlug(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// PERF-HDR: conditional-request handling + a consistent caching policy for
+	// the public gallery metadata read. The ETag is derived from fields that are
+	// CONSTANT for an unchanged gallery (ID + DB-managed UpdatedAt), so it tracks
+	// "gallery changed" events without rotating per request (the per-request
+	// asset_access_token is deliberately excluded — see below).
+	//
+	// We compute + emit the ETag and the cache policy BEFORE the expensive
+	// enrichment (cover-thumbnail DB lookup, access-token minting, full JSON
+	// serialization). When the client echoes the current ETag in If-None-Match
+	// we short-circuit to 304 Not Modified with an empty body, skipping all of
+	// that work.
+	//
+	// Cache policy depends on whether the response carries a per-viewer secret:
+	//   - Session-bound galleries (password/share — hasSession) get a fresh,
+	//     session-scoped asset_access_token minted below. That token must NEVER
+	//     be held by a shared/edge cache and handed to another viewer, so we use
+	//     a strict no-store/private policy here.
+	//   - Open public/unlisted galleries serve an identical anonymous body to
+	//     everyone, so a short s-maxage lets a shared/edge cache hold a
+	//     revalidatable copy; must-revalidate forces a conditional re-check once
+	//     stale so a gallery edit is picked up promptly.
+	etag := fmt.Sprintf(`"g-%s-%d"`, gallery.ID, gallery.UpdatedAt.Unix())
+	w.Header().Set("ETag", etag)
+	if hasSession {
+		w.Header().Set("Cache-Control", "private, no-store, must-revalidate")
+	} else {
+		w.Header().Set("Cache-Control", "public, max-age=0, s-maxage=60, must-revalidate")
+	}
+	if ifNoneMatch(r, etag) {
+		writeNotModified(w, etag)
+		return
+	}
+
 	// M19 F-009: Enrich settings with computed fields for the public client
 	if gallery.Settings == nil {
 		gallery.Settings = make(map[string]interface{})
@@ -895,16 +934,12 @@ func (h *PublicGalleryHandler) GetBySlug(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	// Offline-gallery revalidation (Task 10): set a stable ETag derived from
-	// fields that are CONSTANT across requests for the same unchanged gallery.
-	// gallery.ID and gallery.UpdatedAt (a DB-managed timestamp, bumped on every
-	// write) are both stable per-request and change only when the gallery is
-	// modified — so this ETag correctly tracks "gallery changed" events.
-	//
-	// The per-request asset_access_token (minted just above) is intentionally
-	// EXCLUDED: including it would produce a different ETag on every request,
-	// defeating the cheap revalidation the offline viewer needs.
-	w.Header().Set("ETag", fmt.Sprintf(`"g-%s-%d"`, gallery.ID, gallery.UpdatedAt.Unix()))
+	// Offline-gallery revalidation (Task 10): the stable ETag + cache policy
+	// were already emitted above (PERF-HDR), before the expensive enrichment, so
+	// a matching If-None-Match could short-circuit to 304. The per-request
+	// asset_access_token (minted just above) is intentionally EXCLUDED from the
+	// ETag: including it would rotate the validator every request, defeating the
+	// cheap revalidation the offline viewer and edge cache rely on.
 
 	respondJSON(w, http.StatusOK, gallery)
 }

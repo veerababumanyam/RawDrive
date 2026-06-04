@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -334,4 +337,79 @@ func respondJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
+}
+
+// ifNoneMatch reports whether the request's If-None-Match header matches the
+// supplied (already quoted) ETag, per RFC 7232 §3.2. Callers use it to
+// short-circuit a fresh GET to 304 Not Modified, skipping the expensive
+// re-query + re-serialize of an unchanged representation.
+//
+// Matching is the weak comparison the RFC mandates for If-None-Match: the
+// optional weak-validator "W/" prefix is ignored on both sides, "*" matches any
+// current representation, and the header may carry a comma-separated list of
+// candidate ETags (any one match wins).
+func ifNoneMatch(r *http.Request, etag string) bool {
+	header := r.Header.Get("If-None-Match")
+	if header == "" || etag == "" {
+		return false
+	}
+	want := strings.TrimPrefix(etag, "W/")
+	for _, candidate := range strings.Split(header, ",") {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "*" {
+			return true
+		}
+		if strings.TrimPrefix(candidate, "W/") == want {
+			return true
+		}
+	}
+	return false
+}
+
+// writeNotModified emits a 304 Not Modified with an empty body, re-echoing the
+// ETag (RFC 7232 requires the validators that would have been sent on a 200 to
+// accompany the 304) so the client's cache entry keeps revalidating. Cache
+// headers are expected to already be set on w by the caller before this runs.
+func writeNotModified(w http.ResponseWriter, etag string) {
+	if etag != "" {
+		w.Header().Set("ETag", etag)
+	}
+	w.WriteHeader(http.StatusNotModified)
+}
+
+// contentETag derives a strong, stable ETag from the JSON serialization of a
+// response value. Identical payloads yield identical ETags, so a public read
+// whose representation hasn't changed revalidates with a 304 and no body
+// transfer. Returns "" when the value can't be marshaled (caller then skips
+// conditional handling and serves a normal 200).
+func contentETag(data interface{}) string {
+	b, err := json.Marshal(data)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(b)
+	return fmt.Sprintf(`"c-%s"`, hex.EncodeToString(sum[:16]))
+}
+
+// respondJSONWithETag serializes a public read with conditional-request support
+// (PERF-HDR). It computes a content-hash ETag, sets it plus the supplied
+// Cache-Control, and — when the request's If-None-Match matches — short-circuits
+// to 304 Not Modified with an empty body instead of writing the payload. This
+// lets browsers and shared/edge caches revalidate cheaply without re-fetching
+// an unchanged representation. cacheControl is emitted verbatim; pass a policy
+// appropriate to the surface (e.g. a short s-maxage for revalidatable public
+// metadata). E2EE/authed surfaces must NOT use a public policy here.
+func respondJSONWithETag(w http.ResponseWriter, r *http.Request, data interface{}, cacheControl string) {
+	etag := contentETag(data)
+	if etag != "" {
+		w.Header().Set("ETag", etag)
+	}
+	if cacheControl != "" {
+		w.Header().Set("Cache-Control", cacheControl)
+	}
+	if etag != "" && ifNoneMatch(r, etag) {
+		writeNotModified(w, etag)
+		return
+	}
+	respondJSON(w, http.StatusOK, data)
 }

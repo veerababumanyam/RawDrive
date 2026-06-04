@@ -53,6 +53,12 @@ func TestThumbnailServableAnonymously_OnlyOpenGalleries(t *testing.T) {
 		{"password protected", thumbnailGalleryProtection{published: true, passwordProtected: true, accessMode: "public"}, false},
 		{"private", thumbnailGalleryProtection{published: true, accessMode: "private"}, false},
 		{"invite-only", thumbnailGalleryProtection{published: true, accessMode: "invite-only"}, false},
+		// PERF-HDR / E2EE invariant: a client-side-encrypted asset's thumbnail
+		// must NEVER take the anonymous-public path — even in an open gallery —
+		// so its ciphertext bytes stay private + proxied (forced down the
+		// session-token branch) and can never be served public/immutable.
+		{"e2ee in open gallery", thumbnailGalleryProtection{published: true, accessMode: "public", clientSideEncrypted: true}, false},
+		{"e2ee in unlisted gallery", thumbnailGalleryProtection{published: true, accessMode: "unlisted", clientSideEncrypted: true}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -100,6 +106,9 @@ func TestAuthorizeThumbnailByte_QueriesGalleryMembership(t *testing.T) {
 		"password_hash",
 		"access_mode",
 		"expires_at",
+		// E2EE invariant: the gate must know whether the asset is client-side
+		// encrypted so it never serves E2EE ciphertext on the anonymous path.
+		"encryption_algo",
 	} {
 		if !strings.Contains(body, fragment) {
 			t.Fatalf("loadThumbnailGalleryProtection must query %q", fragment)

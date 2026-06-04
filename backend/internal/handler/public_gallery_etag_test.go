@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -135,6 +136,140 @@ func TestGetBySlug_ETag_ChangesWithUpdatedAt(t *testing.T) {
 
 	if etag1 == etag2 {
 		t.Fatalf("ETags must differ when UpdatedAt changes: both are %s", etag1)
+	}
+}
+
+// TestGetBySlug_IfNoneMatch_Returns304 is the PERF-HDR regression guard:
+// a repeat GET that echoes the gallery's current ETag in If-None-Match must
+// short-circuit to 304 Not Modified with an EMPTY body, skipping the expensive
+// re-query + re-serialize of the full gallery payload. Before the fix the
+// handler ignored If-None-Match entirely and always returned 200 + full body.
+func TestGetBySlug_IfNoneMatch_Returns304(t *testing.T) {
+	gallery := publishedGalleryWithTimestamp()
+	h := buildETagTestHandler(gallery)
+
+	// First request establishes the ETag the client would cache.
+	first := httptest.NewRecorder()
+	h.GetBySlug(first, requestWithGallerySlug("/api/v1/public/galleries/etag-test", "etag-test"))
+	if first.Code != http.StatusOK {
+		t.Fatalf("priming request: expected 200, got %d", first.Code)
+	}
+	etag := first.Header().Get("ETag")
+	if etag == "" {
+		t.Fatal("priming request must set an ETag")
+	}
+
+	// Repeat request with If-None-Match: <etag> must yield 304 + empty body.
+	req := requestWithGallerySlug("/api/v1/public/galleries/etag-test", "etag-test")
+	req.Header.Set("If-None-Match", etag)
+	rec := httptest.NewRecorder()
+	h.GetBySlug(rec, req)
+
+	if rec.Code != http.StatusNotModified {
+		t.Fatalf("matching If-None-Match must return 304 Not Modified, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec.Body.Len() != 0 {
+		t.Fatalf("304 response must have an empty body, got %d bytes: %s", rec.Body.Len(), rec.Body.String())
+	}
+	// The ETag must still be echoed on the 304 so the cache keeps revalidating.
+	if rec.Header().Get("ETag") != etag {
+		t.Fatalf("304 must echo the ETag: got %q want %q", rec.Header().Get("ETag"), etag)
+	}
+}
+
+// TestGetBySlug_IfNoneMatch_StaleEtagReturnsFullBody verifies that a stale /
+// non-matching If-None-Match value does NOT short-circuit — the client gets a
+// fresh 200 with the full payload and the new ETag.
+func TestGetBySlug_IfNoneMatch_StaleEtagReturnsFullBody(t *testing.T) {
+	gallery := publishedGalleryWithTimestamp()
+	h := buildETagTestHandler(gallery)
+
+	req := requestWithGallerySlug("/api/v1/public/galleries/etag-test", "etag-test")
+	req.Header.Set("If-None-Match", `"g-stale-0"`)
+	rec := httptest.NewRecorder()
+	h.GetBySlug(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("non-matching If-None-Match must return 200, got %d", rec.Code)
+	}
+	if rec.Body.Len() == 0 {
+		t.Fatal("non-matching If-None-Match must return the full body")
+	}
+	if rec.Header().Get("ETag") != expectedETag(gallery) {
+		t.Fatalf("200 must carry the current ETag: got %q", rec.Header().Get("ETag"))
+	}
+}
+
+// TestGetBySlug_IfNoneMatch_Wildcard verifies RFC 7232 §3.2 semantics: an
+// If-None-Match of "*" matches any current representation, so it must 304.
+func TestGetBySlug_IfNoneMatch_Wildcard(t *testing.T) {
+	gallery := publishedGalleryWithTimestamp()
+	h := buildETagTestHandler(gallery)
+
+	req := requestWithGallerySlug("/api/v1/public/galleries/etag-test", "etag-test")
+	req.Header.Set("If-None-Match", "*")
+	rec := httptest.NewRecorder()
+	h.GetBySlug(rec, req)
+
+	if rec.Code != http.StatusNotModified {
+		t.Fatalf(`If-None-Match: * must return 304, got %d`, rec.Code)
+	}
+}
+
+// TestGetBySlug_PublicMetadata_HasSharedCacheHint verifies PERF-HDR part 3:
+// public gallery metadata carries a short s-maxage so a future shared/edge
+// cache can serve revalidatable copies. It must stay private-scoped enough not
+// to be over-cached: assert the s-maxage directive is present and bounded.
+func TestGetBySlug_PublicMetadata_HasSharedCacheHint(t *testing.T) {
+	gallery := publishedGalleryWithTimestamp()
+	h := buildETagTestHandler(gallery)
+
+	rec := httptest.NewRecorder()
+	h.GetBySlug(rec, requestWithGallerySlug("/api/v1/public/galleries/etag-test", "etag-test"))
+
+	cc := rec.Header().Get("Cache-Control")
+	if cc == "" {
+		t.Fatal("public gallery metadata must set Cache-Control with a shared-cache hint")
+	}
+	if !strings.Contains(cc, "s-maxage=") {
+		t.Fatalf("public gallery metadata Cache-Control must include s-maxage for shared/edge caching, got %q", cc)
+	}
+	if !strings.Contains(cc, "must-revalidate") {
+		t.Fatalf("public gallery metadata Cache-Control must require revalidation (must-revalidate) so changes are picked up, got %q", cc)
+	}
+}
+
+// TestGetBySlug_SessionBound_NoSharedCache is the confidentiality guard for the
+// PERF-HDR cache policy: a session-bound (password/share) gallery mints a
+// per-viewer asset_access_token in its body, so its Cache-Control must NOT carry
+// a shared-cache directive (no s-maxage / no "public") — otherwise a shared/edge
+// cache could hand one viewer's token to another. It must be private + no-store.
+func TestGetBySlug_SessionBound_NoSharedCache(t *testing.T) {
+	h, accessSvc := newGatedHandler(t)
+	gallery := publishedGalleryWithTimestamp()
+	gallery.PasswordHash = strptr("$2a$10$abcdefghijklmnopqrstuv") // password-protected
+	h.gallerySvc = &fakePublicGalleryResolver{gallery: gallery}
+
+	// Mint a valid session so GetBySlug treats this as session-bound (hasSession).
+	token, err := accessSvc.IssueShareSession(gallery.ID, "")
+	if err != nil {
+		t.Fatalf("issue session: %v", err)
+	}
+
+	req := requestWithGallerySlug("/api/v1/public/galleries/etag-test", "etag-test")
+	req.Header.Set("X-Gallery-Session", token)
+	rec := httptest.NewRecorder()
+	h.GetBySlug(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for session-bound gallery, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	cc := rec.Header().Get("Cache-Control")
+	if strings.Contains(cc, "s-maxage") || strings.Contains(cc, "public") {
+		t.Fatalf("session-bound gallery must NOT be shared-cacheable, got Cache-Control %q", cc)
+	}
+	if !strings.Contains(cc, "no-store") {
+		t.Fatalf("session-bound gallery must be no-store, got Cache-Control %q", cc)
 	}
 }
 

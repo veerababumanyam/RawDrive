@@ -464,6 +464,12 @@ type thumbnailGalleryProtection struct {
 	expired           bool
 	passwordProtected bool
 	accessMode        string
+	// clientSideEncrypted is true when the asset behind the thumbnail is
+	// client-side end-to-end encrypted (ciphertext on the wire, decrypted only
+	// in the browser). Such assets must never be served on the anonymous-public
+	// path nor carry a public/immutable cache directive — they stay private +
+	// proxied behind a gallery-session token. (PERF-HDR E2EE invariant.)
+	clientSideEncrypted bool
 }
 
 // loadThumbnailGalleryProtection resolves every gallery that contains the asset
@@ -481,9 +487,14 @@ func loadThumbnailGalleryProtection(ctx context.Context, pool *pgxpool.Pool, ass
 		       g.is_published,
 		       (g.expires_at IS NOT NULL AND g.expires_at < now()) AS expired,
 		       (g.password_hash IS NOT NULL AND g.password_hash <> '') AS password_protected,
-		       COALESCE(g.access_mode, 'private') AS access_mode
+		       COALESCE(g.access_mode, 'private') AS access_mode,
+		       -- Client-side E2EE signal: the asset carries an explicit
+		       -- client-side encryption algorithm or a media_encryption manifest.
+		       -- Either marks the bytes as ciphertext that must stay private.
+		       (a.encryption_algo = 'client-side-aes-256-gcm' OR a.media_encryption IS NOT NULL) AS client_side_encrypted
 		  FROM gallery_assets ga
 		  JOIN galleries g ON g.id = ga.gallery_id
+		  JOIN assets a ON a.id = ga.asset_id
 		 WHERE ga.asset_id = $1
 		   AND g.deleted_at IS NULL`,
 		assetID,
@@ -496,7 +507,7 @@ func loadThumbnailGalleryProtection(ctx context.Context, pool *pgxpool.Pool, ass
 	var out []thumbnailGalleryProtection
 	for rows.Next() {
 		var p thumbnailGalleryProtection
-		if err := rows.Scan(&p.galleryID, &p.published, &p.expired, &p.passwordProtected, &p.accessMode); err != nil {
+		if err := rows.Scan(&p.galleryID, &p.published, &p.expired, &p.passwordProtected, &p.accessMode, &p.clientSideEncrypted); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -511,6 +522,13 @@ func loadThumbnailGalleryProtection(ctx context.Context, pool *pgxpool.Pool, ass
 // gallery delivery case must keep working for anonymous clients. (S4-G1.)
 func thumbnailServableAnonymously(p thumbnailGalleryProtection) bool {
 	if !p.published || p.expired || p.passwordProtected {
+		return false
+	}
+	// PERF-HDR E2EE invariant: client-side end-to-end-encrypted assets are
+	// ciphertext on the wire. They are never served anonymously and never
+	// public-cached — even inside an open gallery they must take the
+	// session-token path and keep the private cache policy.
+	if p.clientSideEncrypted {
 		return false
 	}
 	switch strings.ToLower(strings.TrimSpace(p.accessMode)) {
@@ -3111,7 +3129,21 @@ func main() {
 			ct = "image/gif"
 		}
 		w.Header().Set("Content-Type", ct)
-		w.Header().Set("Cache-Control", "private, max-age=3600")
+		// PERF-HDR: standardize derivative cache headers, respecting E2EE.
+		// A derivative reached the public-thumbnail branch (isPublicThumbnail)
+		// only when authorizeThumbnailByte proved the asset belongs to an
+		// openly delivered (published, non-expired, non-password,
+		// public/unlisted) gallery — i.e. NON-encrypted, content-addressed,
+		// immutable bytes safe to cache in browsers and shared/edge caches. We
+		// match the edge-delivery policy for those (public, immutable).
+		// Everything else — workspace-authed originals/derivatives, session- or
+		// asset-token-gated bytes, and encrypted (.enc) E2EE content — MUST stay
+		// private so encrypted/authed bytes never become public-cacheable.
+		if isPublicThumbnail {
+			w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
+		} else {
+			w.Header().Set("Cache-Control", "private, max-age=3600")
+		}
 		if _, err := io.Copy(w, rc); err != nil {
 			// Connection dropped mid-stream — nothing we can do.
 			return
