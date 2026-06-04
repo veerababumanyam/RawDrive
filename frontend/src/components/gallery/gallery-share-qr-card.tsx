@@ -28,14 +28,16 @@ function useIsClient(): boolean {
   );
 }
 
+type ShareUrlGetter = () => string | Promise<string>;
+
 interface GalleryShareQrCardProps {
   /**
-   * Returns the durable, gallery-wide public share URL — the same value the
-   * Copy/Share buttons use, including the `#rd_key` end-to-end-encryption
-   * fragment when one is present. Called only on the client (it reads
-   * window.location) so the card stays SSR- and hydration-safe.
+   * Returns the durable, gallery-wide public share URL - the same value the
+   * Copy/Share buttons use, including the `?share=` session handoff and
+   * `#rd_key` end-to-end-encryption fragment when present. Called only on the
+   * client so the card stays SSR- and hydration-safe.
    */
-  getShareUrl: () => string;
+  getShareUrl: ShareUrlGetter;
   /** Gallery title — used in the accessible QR label. */
   title: string;
   /** Gallery slug — used to name the downloaded files. */
@@ -58,20 +60,50 @@ export function GalleryShareQrCard({
   className,
 }: GalleryShareQrCardProps) {
   const isClient = useIsClient();
-  const url = isClient ? getShareUrl() : "";
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [url, setUrl] = useState("");
+  const [urlResolved, setUrlResolved] = useState(false);
   const [renderError, setRenderError] = useState(false);
   const [copied, setCopied] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const fileBase = `${slug || "gallery"}-qr`;
-  // Clean, human-readable address for display — strips the protocol and the
-  // `#rd_key` fragment so non-technical users see a tidy "studio.rawdrive.in/
-  // event" rather than a wall of base64. The QR and Copy use the full `url`
-  // (the fragment carries the decryption key for E2E galleries and must travel
-  // with the link for it to open).
-  const displayUrl = url ? url.replace(/^https?:\/\//, "").split("#")[0] : "";
+  // Clean, human-readable address for display - strips the protocol, share
+  // token, and `#rd_key` fragment so non-technical users see a tidy
+  // "studio.rawdrive.in/event" rather than a wall of key material. The QR and
+  // Copy use the full `url`; both the share token and fragment must travel with
+  // the link for private/E2E galleries to open.
+  const displayUrl = url
+    ? url.replace(/^https?:\/\//, "").split(/[?#]/)[0]
+    : "";
+  const preparingUrl = isClient && !url && !actionError && !urlResolved;
+
+  useEffect(() => {
+    if (!isClient) return;
+    let cancelled = false;
+    Promise.resolve()
+      .then(() => {
+        if (cancelled) return "";
+        setUrlResolved(false);
+        setActionError(null);
+        return getShareUrl();
+      })
+      .then((nextUrl) => {
+        if (cancelled) return;
+        setUrl(nextUrl);
+        setUrlResolved(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setUrl("");
+        setUrlResolved(true);
+        setActionError("Couldn't prepare the share QR - try Copy instead.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [getShareUrl, isClient]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -134,7 +166,12 @@ export function GalleryShareQrCard({
           className="flex items-center gap-3 text-sm text-text-secondary"
         >
           <QRCode aria-hidden="true" className="h-5 w-5 text-text-tertiary" />
-          <p>Publish this gallery to generate its shareable QR code.</p>
+          <p>
+            {actionError ||
+              (preparingUrl
+                ? "Preparing this gallery's shareable QR code..."
+                : "Publish this gallery to generate its shareable QR code.")}
+          </p>
         </div>
       </section>
     );

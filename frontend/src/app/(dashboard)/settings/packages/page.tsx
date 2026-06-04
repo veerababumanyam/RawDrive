@@ -12,6 +12,16 @@ import {
 } from "@/lib/api/billing";
 import { getStoredAccessToken } from "@/lib/auth";
 import { CRMSecondaryNav } from "@/components/crm/crm-secondary-nav";
+import { Pencil, Plus, Trash } from "@/components/icons";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { GlassButton } from "@/components/ui/glass-button";
 
 type PackageForm = {
   name: string;
@@ -36,6 +46,9 @@ const blankForm: PackageForm = {
   addon_price_rupees: 0,
   addon_description: "",
 };
+
+const INPUT_CLASS = "input-base w-full text-sm";
+const TEXTAREA_CLASS = "input-base textarea-min-block w-full resize-y text-sm";
 
 export default function ServicePackagesPage() {
   const [packages, setPackages] = useState<ServicePackage[]>([]);
@@ -135,14 +148,22 @@ export default function ServicePackagesPage() {
 
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="h-8 w-56 rounded-lg bg-surface-sunken animate-pulse" />
+      <div className="mx-auto max-w-7xl px-4 py-8">
+        <Card
+          variant="panel"
+          padding="md"
+          className="max-w-xl animate-pulse"
+          aria-label="Loading service packages"
+        >
+          <div className="h-5 w-56 rounded-md bg-surface-sunken" />
+          <div className="mt-3 h-4 w-80 max-w-full rounded-md bg-surface-sunken" />
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
       <CRMSecondaryNav />
 
       <div>
@@ -155,137 +176,164 @@ export default function ServicePackagesPage() {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
+        <div className="rounded-xl border border-feedback-error/20 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error">
           {error}
         </div>
       )}
 
-      <section className="rounded-2xl border border-border-default bg-surface-raised p-6 space-y-4">
-        <h2 className="text-lg font-semibold text-text-primary">
-          {editingId ? "Edit Package" : "New Package"}
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <input
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            className="input-field"
-            placeholder="Package name"
-          />
-          <input
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            className="input-field"
-            placeholder="Short description"
-          />
-          <input
-            type="number"
-            min="0"
-            value={form.base_price_rupees}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                base_price_rupees: Number(e.target.value) || 0,
-              })
-            }
-            className="input-field"
-            placeholder="Base price"
-          />
-          <div className="grid grid-cols-2 gap-3">
+      <Card variant="panel" padding="md" aria-labelledby="package-form-title">
+        <CardHeader>
+          <CardTitle id="package-form-title">
+            {editingId ? "Edit Package" : "New Package"}
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <input
+              aria-label="Package name"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className={INPUT_CLASS}
+              placeholder="Package name"
+            />
+            <input
+              aria-label="Short description"
+              value={form.description}
+              onChange={(e) =>
+                setForm({ ...form, description: e.target.value })
+              }
+              className={INPUT_CLASS}
+              placeholder="Short description"
+            />
             <input
               type="number"
               min="0"
-              max="28"
-              value={form.gst_rate}
+              aria-label="Base price"
+              value={form.base_price_rupees}
               onChange={(e) =>
-                setForm({ ...form, gst_rate: Number(e.target.value) || 18 })
+                setForm({
+                  ...form,
+                  base_price_rupees: Number(e.target.value) || 0,
+                })
               }
-              className="input-field"
-              placeholder="GST %"
+              className={INPUT_CLASS}
+              placeholder="Base price"
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                type="number"
+                min="0"
+                max="28"
+                aria-label="GST rate"
+                value={form.gst_rate}
+                onChange={(e) =>
+                  setForm({ ...form, gst_rate: Number(e.target.value) || 18 })
+                }
+                className={INPUT_CLASS}
+                placeholder="GST %"
+              />
+              <input
+                aria-label="SAC code"
+                value={form.sac_code}
+                onChange={(e) => setForm({ ...form, sac_code: e.target.value })}
+                className={INPUT_CLASS}
+                placeholder="SAC"
+              />
+            </div>
+          </div>
+
+          <textarea
+            aria-label="Package inclusions"
+            value={form.inclusions}
+            onChange={(e) => setForm({ ...form, inclusions: e.target.value })}
+            className={TEXTAREA_CLASS}
+            placeholder={
+              "One inclusion per line\nTwo photographers\nEdited photos\nAlbum design"
+            }
+          />
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <input
+              aria-label="Add-on name"
+              value={form.addon_name}
+              onChange={(e) => setForm({ ...form, addon_name: e.target.value })}
+              className={INPUT_CLASS}
+              placeholder="Optional add-on"
             />
             <input
-              value={form.sac_code}
-              onChange={(e) => setForm({ ...form, sac_code: e.target.value })}
-              className="input-field"
-              placeholder="SAC"
+              type="number"
+              min="0"
+              aria-label="Add-on price"
+              value={form.addon_price_rupees}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  addon_price_rupees: Number(e.target.value) || 0,
+                })
+              }
+              className={INPUT_CLASS}
+              placeholder="Add-on price"
+            />
+            <input
+              aria-label="Add-on note"
+              value={form.addon_description}
+              onChange={(e) =>
+                setForm({ ...form, addon_description: e.target.value })
+              }
+              className={INPUT_CLASS}
+              placeholder="Add-on note"
             />
           </div>
-        </div>
-        <textarea
-          value={form.inclusions}
-          onChange={(e) => setForm({ ...form, inclusions: e.target.value })}
-          className="input-field min-h-28 resize-y"
-          placeholder={
-            "One inclusion per line\nTwo photographers\nEdited photos\nAlbum design"
-          }
-        />
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <input
-            value={form.addon_name}
-            onChange={(e) => setForm({ ...form, addon_name: e.target.value })}
-            className="input-field"
-            placeholder="Optional add-on"
-          />
-          <input
-            type="number"
-            min="0"
-            value={form.addon_price_rupees}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                addon_price_rupees: Number(e.target.value) || 0,
-              })
-            }
-            className="input-field"
-            placeholder="Add-on price"
-          />
-          <input
-            value={form.addon_description}
-            onChange={(e) =>
-              setForm({ ...form, addon_description: e.target.value })
-            }
-            className="input-field"
-            placeholder="Add-on note"
-          />
-        </div>
-        <div className="flex justify-end gap-2">
+        </CardContent>
+
+        <CardFooter className="flex-wrap justify-end gap-2">
           {editingId && (
-            <button
+            <GlassButton
               type="button"
+              variant="surface"
               onClick={() => {
                 setEditingId(null);
                 setForm(blankForm);
               }}
-              className="rounded-xl border border-border-default px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-sunken min-h-[44px]"
             >
               Cancel
-            </button>
+            </GlassButton>
           )}
-          <button
+          <GlassButton
             type="button"
+            variant="primary"
+            icon={
+              editingId ? (
+                <Pencil aria-hidden="true" />
+              ) : (
+                <Plus aria-hidden="true" />
+              )
+            }
             onClick={savePackage}
             disabled={saving || !payload.name}
-            className="rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-text-inverse hover:bg-accent-primary/90 disabled:opacity-50 min-h-[44px]"
           >
             {saving
               ? "Saving..."
               : editingId
                 ? "Save Package"
                 : "Create Package"}
-          </button>
-        </div>
-      </section>
+          </GlassButton>
+        </CardFooter>
+      </Card>
 
       <section className="space-y-3">
         {packages.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border-default p-10 text-center text-sm text-text-secondary">
+          <Card
+            variant="panel"
+            padding="lg"
+            className="text-center text-sm text-text-secondary"
+          >
             No packages yet.
-          </div>
+          </Card>
         ) : (
           packages.map((pkg) => (
-            <article
-              key={pkg.id}
-              className="rounded-2xl border border-border-default bg-surface-raised p-5"
-            >
+            <Card key={pkg.id} variant="panel" padding="md">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h2 className="text-lg font-semibold text-text-primary">
@@ -294,33 +342,39 @@ export default function ServicePackagesPage() {
                   <p className="mt-1 text-sm text-text-secondary">
                     {pkg.description}
                   </p>
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-text-tertiary">
-                    <span>{formatPaisa(pkg.base_price_paisa)}</span>
-                    <span>{pkg.gst_rate}% GST</span>
-                    <span>SAC {pkg.sac_code}</span>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Badge variant="accent">
+                      {formatPaisa(pkg.base_price_paisa)}
+                    </Badge>
+                    <Badge variant="neutral">{pkg.gst_rate}% GST</Badge>
+                    <Badge variant="neutral">SAC {pkg.sac_code}</Badge>
                     {pkg.addons?.length ? (
-                      <span>{pkg.addons.length} add-on</span>
+                      <Badge variant="neutral">
+                        {pkg.addons.length} add-on
+                      </Badge>
                     ) : null}
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button
+                <div className="flex flex-wrap gap-2">
+                  <GlassButton
                     type="button"
+                    variant="surface"
+                    icon={<Pencil aria-hidden="true" />}
                     onClick={() => editPackage(pkg)}
-                    className="rounded-xl border border-border-default px-4 py-2 text-sm text-text-secondary hover:bg-surface-sunken min-h-[44px]"
                   >
                     Edit
-                  </button>
-                  <button
+                  </GlassButton>
+                  <GlassButton
                     type="button"
+                    variant="danger"
+                    icon={<Trash aria-hidden="true" />}
                     onClick={() => deactivatePackage(pkg.id)}
-                    className="rounded-xl border border-error/30 px-4 py-2 text-sm text-error hover:bg-error/10 min-h-[44px]"
                   >
                     Deactivate
-                  </button>
+                  </GlassButton>
                 </div>
               </div>
-            </article>
+            </Card>
           ))
         )}
       </section>

@@ -1,7 +1,24 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { CRMSecondaryNav } from "@/components/crm/crm-secondary-nav";
+import {
+  ArrowRight,
+  Briefcase,
+  CalendarDays,
+  ReceiptText,
+  UserPlus,
+} from "@/components/icons";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { InlineAlert } from "@/components/ui/inline-alert";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageHeader } from "@/components/ui/page-header";
 import { listEvents, type CalendarEvent } from "@/lib/api/calendar";
 import { listInvoices, formatPaisa, type Invoice } from "@/lib/api/billing";
 import { listGalleries, type Gallery } from "@/lib/api/galleries";
@@ -53,31 +70,30 @@ function StatCard({
   return (
     <Link
       href={href}
-      className="rounded-2xl border border-border-default bg-surface-raised p-4 transition-colors hover:bg-surface-sunken"
+      className="surface-panel card-pad-sm crm-stat-card"
     >
-      {" "}
-      <p className="text-xs font-medium uppercase text-text-tertiary">
-        {label}
-      </p>{" "}
-      <p className="mt-2 text-2xl font-semibold text-text-primary">{value}</p>{" "}
-      <p className="mt-1 text-sm text-text-secondary">{detail}</p>{" "}
+      <span className="crm-stat-card__label">{label}</span>
+      <span className="crm-stat-card__value">{value}</span>
+      <span className="crm-stat-card__detail">{detail}</span>
     </Link>
   );
 }
 function ActionLink({
   href,
+  icon,
   children,
 }: {
   href: string;
-  children: React.ReactNode;
+  icon: ReactNode;
+  children: ReactNode;
 }) {
   return (
     <Link
       href={href}
-      className="inline-flex touch-min items-center rounded-xl border border-border-default px-4 py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-sunken"
+      className="glass-button glass-button--surface glass-button--md"
     >
-      {" "}
-      {children}{" "}
+      <span className="glass-button__icon">{icon}</span>
+      <span>{children}</span>
     </Link>
   );
 }
@@ -159,200 +175,194 @@ export default function CRMPage() {
     };
   }, [state]);
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
-      {" "}
-      <CRMSecondaryNav />{" "}
+    <PageContainer width="wide">
+      <CRMSecondaryNav />
       {state.error && (
-        <div className="rounded-xl border border-feedback-error/20 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error">
-          {" "}
-          {state.error}{" "}
-        </div>
-      )}{" "}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        {" "}
-        <div>
-          {" "}
-          <p className="text-sm font-medium text-accent-primary">
-            Studio CRM
-          </p>{" "}
-          <h1 className="mt-1 text-3xl font-semibold text-text-primary">
-            Studio CRM
-          </h1>{" "}
-          <p className="mt-2 max-w-3xl text-sm text-text-secondary">
-            {" "}
-            Today in your studio: inquiries, projects, bookings, billing,
-            delivery, and tax in one operating view.{" "}
-          </p>{" "}
-        </div>{" "}
-        <div className="flex flex-wrap gap-2">
-          {" "}
-          <ActionLink href="/crm/inquiries">New Inquiry</ActionLink>{" "}
-          <ActionLink href="/crm/projects?create=true">New Project</ActionLink>{" "}
-          <ActionLink href="/calendar?create=true">Book Shoot</ActionLink>{" "}
-          <ActionLink href="/billing?create=true">
-            Create Invoice
-          </ActionLink>{" "}
-        </div>{" "}
-      </div>{" "}
+        <InlineAlert variant="error">{state.error}</InlineAlert>
+      )}
+      <PageHeader
+        eyebrow="Studio CRM"
+        title="Studio CRM"
+        description="Today in your studio: inquiries, projects, bookings, billing, delivery, and tax in one operating view."
+        actions={
+          <>
+            <ActionLink
+              href="/crm/inquiries"
+              icon={<UserPlus aria-hidden="true" />}
+            >
+              New Inquiry
+            </ActionLink>
+            <ActionLink
+              href="/crm/projects?create=true"
+              icon={<Briefcase aria-hidden="true" />}
+            >
+              New Project
+            </ActionLink>
+            <ActionLink
+              href="/calendar?create=true"
+              icon={<CalendarDays aria-hidden="true" />}
+            >
+              Book Shoot
+            </ActionLink>
+            <ActionLink
+              href="/billing?create=true"
+              icon={<ReceiptText aria-hidden="true" />}
+            >
+              Create Invoice
+            </ActionLink>
+          </>
+        }
+      />
       {loading ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {" "}
           {[1, 2, 3, 4, 5, 6, 7, 8].map((item) => (
-            <div
+            <Card
               key={item}
-              className="h-32 animate-pulse rounded-2xl bg-surface-sunken"
+              variant="panel"
+              padding="none"
+              className="crm-overview-skeleton"
+              aria-hidden="true"
             />
-          ))}{" "}
+          ))}
         </div>
       ) : (
         <>
-          {" "}
           <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {" "}
             <StatCard
               label="Hot inquiries"
               value={String(summary.hotInquiries.length)}
               detail="Open leads needing conversion"
               href="/crm/inquiries"
-            />{" "}
+            />
             <StatCard
               label="Upcoming shoots"
               value={String(summary.upcomingShoots.length)}
               detail="Next 30 days on calendar"
               href="/calendar"
-            />{" "}
+            />
             <StatCard
               label="Pending contracts"
               value="0"
               detail="Documents workspace lands next"
               href="/crm/documents"
-            />{" "}
+            />
             <StatCard
               label="Overdue invoices"
               value={String(summary.overdueInvoices.length)}
               detail={`${formatPaisa(summary.outstanding)} outstanding`}
               href="/billing"
-            />{" "}
+            />
             <StatCard
               label="Active galleries"
               value={String(state.galleries.length)}
               detail="Delivery and proofing work"
               href="/galleries"
-            />{" "}
+            />
             <StatCard
               label="Booked value"
               value={formatPaisa(summary.bookedValue)}
               detail="Booked and delivered projects"
               href="/crm/projects"
-            />{" "}
+            />
             <StatCard
               label="GST tracked"
               value={formatPaisa(summary.taxCollected)}
               detail="From listed invoices"
               href="/reports/gstr1"
-            />{" "}
+            />
             <StatCard
               label="Price book"
               value="Open"
               detail="Packages that feed quotes and invoices"
               href="/settings/packages"
-            />{" "}
-          </section>{" "}
+            />
+          </section>
           <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-            {" "}
-            <div className="rounded-2xl border border-border-default bg-surface-raised p-5 xl:col-span-2">
-              {" "}
-              <div className="flex items-center justify-between gap-4">
-                {" "}
-                <div>
-                  {" "}
-                  <h2 className="text-lg font-semibold text-text-primary">
-                    Project pipeline
-                  </h2>{" "}
-                  <p className="mt-1 text-sm text-text-secondary">
+            <Card variant="panel" padding="md" className="xl:col-span-2">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <CardHeader className="mb-0">
+                  <CardTitle>Project pipeline</CardTitle>
+                  <CardDescription>
                     Projects are the shared job record for bookings, billing,
                     documents, and galleries.
-                  </p>{" "}
-                </div>{" "}
+                  </CardDescription>
+                </CardHeader>
                 <Link
                   href="/crm/projects"
-                  className="text-sm font-medium text-accent-primary hover:underline"
+                  className="glass-button glass-button--quiet glass-button--sm"
                 >
-                  Open Projects
-                </Link>{" "}
-              </div>{" "}
-              <div className="mt-4 space-y-2">
-                {" "}
+                  <span className="glass-button__icon">
+                    <Briefcase aria-hidden="true" />
+                  </span>
+                  <span>Open Projects</span>
+                </Link>
+              </div>
+              <CardContent className="mt-4 space-y-2">
                 {state.projects.slice(0, 5).map((project) => (
                   <Link
                     key={project.id}
                     href={`/crm/projects/${project.id}`}
-                    className="flex items-center justify-between rounded-xl border border-border-default px-4 py-3 hover:bg-surface-sunken"
+                    className="crm-overview-list-link"
                   >
-                    {" "}
-                    <span className="font-medium text-text-primary">
+                    <span className="crm-overview-list-link__title">
                       {project.name}
-                    </span>{" "}
-                    <span className="text-sm text-text-secondary">
+                    </span>
+                    <span className="crm-overview-list-link__meta">
                       {formatPaisa(project.expected_value_paisa || 0)}
-                    </span>{" "}
+                    </span>
                   </Link>
-                ))}{" "}
+                ))}
                 {state.projects.length === 0 && (
-                  <p className="text-sm text-text-secondary">
+                  <p className="crm-empty-copy">
                     No projects yet. Convert an inquiry or create a project.
                   </p>
-                )}{" "}
-              </div>{" "}
-            </div>{" "}
-            <div className="rounded-2xl border border-border-default bg-surface-raised p-5">
-              {" "}
-              <div className="flex items-center justify-between gap-4">
-                {" "}
-                <div>
-                  {" "}
-                  <h2 className="text-lg font-semibold text-text-primary">
-                    Follow-up queue
-                  </h2>{" "}
-                  <p className="mt-1 text-sm text-text-secondary">
+                )}
+              </CardContent>
+            </Card>
+            <Card variant="panel" padding="md">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <CardHeader className="mb-0">
+                  <CardTitle>Follow-up queue</CardTitle>
+                  <CardDescription>
                     M25 surfaces the queue; M28 adds cross-entity automation.
-                  </p>{" "}
-                </div>{" "}
+                  </CardDescription>
+                </CardHeader>
                 <Link
                   href="/crm/inquiries"
-                  className="text-sm font-medium text-accent-primary hover:underline"
+                  className="glass-button glass-button--quiet glass-button--sm"
                 >
-                  Review
-                </Link>{" "}
-              </div>{" "}
-              <div className="mt-4 space-y-2">
-                {" "}
+                  <span className="glass-button__icon">
+                    <ArrowRight aria-hidden="true" />
+                  </span>
+                  <span>Review</span>
+                </Link>
+              </div>
+              <CardContent className="mt-4 space-y-2">
                 {summary.hotInquiries.slice(0, 5).map((lead) => (
                   <Link
                     key={lead.id}
                     href="/crm/inquiries"
-                    className="block rounded-xl border border-border-default px-4 py-3 hover:bg-surface-sunken"
+                    className="crm-overview-list-link crm-overview-list-link--stacked"
                   >
-                    {" "}
-                    <p className="font-medium text-text-primary">
+                    <span className="crm-overview-list-link__title">
                       {lead.name}
-                    </p>{" "}
-                    <p className="mt-1 text-xs capitalize text-text-secondary">
+                    </span>
+                    <span className="crm-overview-list-link__meta capitalize">
                       {lead.event_type || "event"} via{" "}
                       {lead.source || "unknown source"}
-                    </p>{" "}
+                    </span>
                   </Link>
-                ))}{" "}
+                ))}
                 {summary.hotInquiries.length === 0 && (
-                  <p className="text-sm text-text-secondary">
+                  <p className="crm-empty-copy">
                     No open inquiries need action.
                   </p>
-                )}{" "}
-              </div>{" "}
-            </div>{" "}
-          </section>{" "}
+                )}
+              </CardContent>
+            </Card>
+          </section>
         </>
-      )}{" "}
-    </div>
+      )}
+    </PageContainer>
   );
 }

@@ -1,8 +1,18 @@
-﻿"use client";
+"use client";
+
 import Link from "next/link";
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState, type ReactNode } from "react";
 import { CRMSecondaryNav } from "@/components/crm/crm-secondary-nav";
-import { BackButton } from "@/components/ui/back-button";
+import {
+  CalendarDays,
+  FileSignature,
+  Photo,
+  ReceiptText,
+} from "@/components/icons";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { InlineAlert } from "@/components/ui/inline-alert";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageHeader } from "@/components/ui/page-header";
 import { getProject, type StudioProjectAggregate } from "@/lib/api/crm";
 import { formatPaisa } from "@/lib/api/billing";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -11,6 +21,7 @@ import {
   PROJECT_STATUS_CLASS,
   getProjectStatusLabel,
 } from "@/lib/crm-taxonomy";
+
 function formatDate(value?: string) {
   if (!value) return "Not scheduled";
   return new Date(value).toLocaleDateString("en-IN", {
@@ -19,6 +30,7 @@ function formatDate(value?: string) {
     year: "numeric",
   });
 }
+
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString("en-IN", {
     day: "numeric",
@@ -28,20 +40,36 @@ function formatDateTime(value: string) {
     minute: "2-digit",
   });
 }
+
 function ActionLink({
   href,
+  icon,
   children,
 }: {
   href: string;
-  children: React.ReactNode;
+  icon: ReactNode;
+  children: ReactNode;
 }) {
   return (
-    <Link href={href} className="surface-button text-sm font-medium">
-      {" "}
-      {children}{" "}
+    <Link
+      href={href}
+      className="glass-button glass-button--surface glass-button--sm"
+    >
+      <span className="glass-button__icon">{icon}</span>
+      <span>{children}</span>
     </Link>
   );
 }
+
+function ProjectStatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <Card variant="panel" padding="sm" className="crm-stat-card">
+      <span className="crm-stat-card__label">{label}</span>
+      <span className="crm-stat-card__value">{value}</span>
+    </Card>
+  );
+}
+
 export default function ProjectDetailPage({
   params,
 }: {
@@ -56,6 +84,7 @@ export default function ProjectDetailPage({
   const [error, setError] = useState<string | null>(
     token ? null : "Missing access token",
   );
+
   useEffect(() => {
     if (!token) return;
     getProject(token, id)
@@ -68,6 +97,7 @@ export default function ProjectDetailPage({
       )
       .finally(() => setLoading(false));
   }, [id, token]);
+
   const project = aggregate?.project;
   const paid = useMemo(
     () =>
@@ -77,208 +107,177 @@ export default function ProjectDetailPage({
       ) ?? 0,
     [aggregate],
   );
+
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
-      {" "}
-      <CRMSecondaryNav />{" "}
-      <BackButton href="/crm/projects" label="Back to projects" />{" "}
-      {error && (
-        <div className="rounded-xl border border-feedback-error/20 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error">
-          {error}
-        </div>
-      )}{" "}
+    <PageContainer width="wide">
+      <CRMSecondaryNav />
+
+      {error && <InlineAlert variant="error">{error}</InlineAlert>}
+
       {loading ? (
         <div className="space-y-3">
-          {" "}
-          <div className="h-24 animate-pulse rounded-2xl bg-surface-sunken" />{" "}
+          <Card
+            variant="panel"
+            padding="none"
+            className="crm-overview-skeleton"
+            aria-hidden="true"
+          />
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-            {" "}
             {[1, 2, 3].map((item) => (
-              <div
+              <Card
                 key={item}
-                className="h-44 animate-pulse rounded-2xl bg-surface-sunken"
+                variant="panel"
+                padding="none"
+                className="crm-overview-skeleton"
+                aria-hidden="true"
               />
-            ))}{" "}
-          </div>{" "}
+            ))}
+          </div>
         </div>
-      ) : !project ? (
-        <div className="rounded-2xl border border-dashed border-border-default p-10 text-center">
-          {" "}
+      ) : !aggregate || !project ? (
+        <Card variant="panel" padding="lg" className="text-center">
           <p className="font-medium text-text-primary">
             Project could not be loaded
-          </p>{" "}
+          </p>
           <p className="mt-1 text-sm text-text-secondary">
             Check the project link or return to the project board.
-          </p>{" "}
+          </p>
           <Link
             href="/crm/projects"
-            className="surface-button mt-4 text-sm font-medium"
+            className="glass-button glass-button--surface glass-button--md mt-4"
           >
-            Open Project Board
-          </Link>{" "}
-        </div>
+            <span>Open Project Board</span>
+          </Link>
+        </Card>
       ) : (
         <>
-          {" "}
-          <section className="rounded-3xl border border-border-default bg-surface-raised p-6">
-            {" "}
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              {" "}
-              <div>
-                {" "}
-                <div className="flex flex-wrap items-center gap-2">
-                  {" "}
-                  <p className="text-sm font-medium text-accent-primary">
-                    Studio Project
-                  </p>{" "}
-                  <span
-                    className={cn(
-                      PROJECT_STATUS_CLASS[project.status] ||
-                        "status-badge status-badge--neutral",
-                    )}
-                  >
-                    {getProjectStatusLabel(project.status)}
-                  </span>{" "}
-                </div>{" "}
-                <h1 className="mt-2 text-3xl font-semibold text-text-primary">
-                  {project.name}
-                </h1>{" "}
-                <p className="mt-2 text-sm text-text-secondary">
-                  {" "}
-                  {[
-                    aggregate.contact?.name,
-                    project.project_type?.replaceAll("_", " "),
-                    formatDate(project.event_date),
-                    project.venue_name,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}{" "}
-                </p>{" "}
-              </div>{" "}
-              <div className="flex flex-wrap gap-2">
-                {" "}
+          <PageHeader
+            backHref="/crm/projects"
+            backLabel="Back to projects"
+            eyebrow="Studio Project"
+            title={project.name}
+            description={[
+              aggregate.contact?.name,
+              project.project_type?.replaceAll("_", " "),
+              formatDate(project.event_date),
+              project.venue_name,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+            actions={
+              <>
+                <span
+                  className={cn(
+                    PROJECT_STATUS_CLASS[project.status] ||
+                      "status-badge status-badge--neutral",
+                  )}
+                >
+                  {getProjectStatusLabel(project.status)}
+                </span>
                 <ActionLink
                   href={`/calendar?create=true&client=${project.contact_id}&project=${project.id}`}
+                  icon={<CalendarDays aria-hidden="true" />}
                 >
                   Create Booking
-                </ActionLink>{" "}
-                <ActionLink href={`/crm/documents?project=${project.id}`}>
+                </ActionLink>
+                <ActionLink
+                  href={`/crm/documents?project=${project.id}`}
+                  icon={<FileSignature aria-hidden="true" />}
+                >
                   Create Contract
-                </ActionLink>{" "}
+                </ActionLink>
                 <ActionLink
                   href={`/billing?create=true&client=${project.contact_id}&project=${project.id}`}
+                  icon={<ReceiptText aria-hidden="true" />}
                 >
                   Create Invoice
-                </ActionLink>{" "}
+                </ActionLink>
                 <ActionLink
                   href={`/galleries?create=true&client=${project.contact_id}&project=${project.id}`}
+                  icon={<Photo aria-hidden="true" />}
                 >
                   Link Gallery
-                </ActionLink>{" "}
-              </div>{" "}
-            </div>{" "}
-          </section>{" "}
+                </ActionLink>
+              </>
+            }
+          />
+
           <section className="grid grid-cols-1 gap-3 md:grid-cols-4">
-            {" "}
-            <div className="rounded-2xl border border-border-default bg-surface-raised p-4">
-              {" "}
-              <p className="text-xs uppercase text-text-tertiary">
-                Expected value
-              </p>{" "}
-              <p className="mt-2 text-xl font-semibold text-text-primary">
-                {formatPaisa(project.expected_value_paisa || 0)}
-              </p>{" "}
-            </div>{" "}
-            <div className="rounded-2xl border border-border-default bg-surface-raised p-4">
-              {" "}
-              <p className="text-xs uppercase text-text-tertiary">
-                Booked value
-              </p>{" "}
-              <p className="mt-2 text-xl font-semibold text-text-primary">
-                {formatPaisa(project.booked_value_paisa || 0)}
-              </p>{" "}
-            </div>{" "}
-            <div className="rounded-2xl border border-border-default bg-surface-raised p-4">
-              {" "}
-              <p className="text-xs uppercase text-text-tertiary">Paid</p>{" "}
-              <p className="mt-2 text-xl font-semibold text-text-primary">
-                {formatPaisa(paid)}
-              </p>{" "}
-            </div>{" "}
-            <div className="rounded-2xl border border-border-default bg-surface-raised p-4">
-              {" "}
-              <p className="text-xs uppercase text-text-tertiary">
-                Balance due
-              </p>{" "}
-              <p className="mt-2 text-xl font-semibold text-text-primary">
-                {formatPaisa(project.balance_due_paisa || 0)}
-              </p>{" "}
-            </div>{" "}
-          </section>{" "}
+            <ProjectStatCard
+              label="Expected value"
+              value={formatPaisa(project.expected_value_paisa || 0)}
+            />
+            <ProjectStatCard
+              label="Booked value"
+              value={formatPaisa(project.booked_value_paisa || 0)}
+            />
+            <ProjectStatCard label="Paid" value={formatPaisa(paid)} />
+            <ProjectStatCard
+              label="Balance due"
+              value={formatPaisa(project.balance_due_paisa || 0)}
+            />
+          </section>
+
           <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-            {" "}
-            <div className="rounded-2xl border border-border-default bg-surface-raised p-5 xl:col-span-2">
-              {" "}
-              <h2 className="text-lg font-semibold text-text-primary">
-                Lifecycle Timeline
-              </h2>{" "}
-              <div className="mt-4 space-y-3">
-                {" "}
+            <Card variant="panel" padding="md" className="xl:col-span-2">
+              <CardHeader>
+                <CardTitle>Lifecycle Timeline</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
                 {aggregate.timeline.map((entry) => (
                   <div
                     key={`${entry.type}-${entry.timestamp}-${entry.title}`}
-                    className="rounded-xl border border-border-default px-4 py-3"
+                    className="crm-overview-list-link crm-overview-list-link--stacked"
                   >
-                    {" "}
-                    <p className="font-medium text-text-primary">
+                    <span className="crm-overview-list-link__title">
                       {entry.title}
-                    </p>{" "}
-                    <p className="mt-1 text-xs text-text-tertiary">
+                    </span>
+                    <span className="crm-overview-list-link__meta">
                       {formatDateTime(entry.timestamp)}
-                    </p>{" "}
+                    </span>
                   </div>
-                ))}{" "}
+                ))}
                 {aggregate.timeline.length === 0 && (
-                  <p className="text-sm text-text-secondary">
-                    No project timeline yet.
-                  </p>
-                )}{" "}
-              </div>{" "}
-            </div>{" "}
+                  <p className="crm-empty-copy">No project timeline yet.</p>
+                )}
+              </CardContent>
+            </Card>
+
             <div className="space-y-4">
-              {" "}
-              <div className="rounded-2xl border border-border-default bg-surface-raised p-5">
-                {" "}
-                <h2 className="text-lg font-semibold text-text-primary">
-                  Next Action
-                </h2>{" "}
-                <p className="mt-2 text-sm text-text-secondary">
-                  {project.next_action || "No next action set."}
-                </p>{" "}
-              </div>{" "}
-              <div className="rounded-2xl border border-border-default bg-surface-raised p-5">
-                {" "}
-                <h2 className="text-lg font-semibold text-text-primary">
-                  Client
-                </h2>{" "}
-                {aggregate.contact ? (
-                  <Link
-                    href={`/crm/contacts/${aggregate.contact.id}`}
-                    className="mt-2 block text-sm font-medium text-accent-primary hover:underline"
-                  >
-                    {" "}
-                    {aggregate.contact.name}{" "}
-                  </Link>
-                ) : (
-                  <p className="mt-2 text-sm text-text-secondary">
-                    No client loaded.
+              <Card variant="panel" padding="md">
+                <CardHeader>
+                  <CardTitle>Next Action</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-text-secondary">
+                    {project.next_action || "No next action set."}
                   </p>
-                )}{" "}
-              </div>{" "}
-            </div>{" "}
-          </section>{" "}
+                </CardContent>
+              </Card>
+
+              <Card variant="panel" padding="md">
+                <CardHeader>
+                  <CardTitle>Client</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {aggregate.contact ? (
+                    <Link
+                      href={`/crm/contacts/${aggregate.contact.id}`}
+                      className="text-sm font-medium text-accent-primary hover:underline"
+                    >
+                      {aggregate.contact.name}
+                    </Link>
+                  ) : (
+                    <p className="text-sm text-text-secondary">
+                      No client loaded.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+
           <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {" "}
             <LinkedList
               title="Bookings"
               empty="No bookings linked yet."
@@ -286,14 +285,14 @@ export default function ProjectDetailPage({
                 (booking) =>
                   `${booking.title} · ${formatDateTime(booking.start_at)}`,
               )}
-            />{" "}
+            />
             <LinkedList
               title="Documents"
               empty="No contracts linked yet."
               items={aggregate.contracts.map(
                 (contract) => `${contract.title} · ${contract.status}`,
               )}
-            />{" "}
+            />
             <LinkedList
               title="Billing"
               empty="No invoices linked yet."
@@ -301,7 +300,7 @@ export default function ProjectDetailPage({
                 (invoice) =>
                   `${invoice.invoice_number} · ${formatPaisa(invoice.total_paisa)} · ${invoice.status}`,
               )}
-            />{" "}
+            />
             <LinkedList
               title="Galleries"
               empty="No galleries linked yet."
@@ -309,13 +308,14 @@ export default function ProjectDetailPage({
                 (gallery) =>
                   `${gallery.title} · ${gallery.status} · ${gallery.photo_count} photos`,
               )}
-            />{" "}
-          </section>{" "}
+            />
+          </section>
         </>
-      )}{" "}
-    </div>
+      )}
+    </PageContainer>
   );
 }
+
 function LinkedList({
   title,
   empty,
@@ -326,23 +326,21 @@ function LinkedList({
   items: string[];
 }) {
   return (
-    <div className="rounded-2xl border border-border-default bg-surface-raised p-5">
-      {" "}
-      <h2 className="text-lg font-semibold text-text-primary">{title}</h2>{" "}
-      <div className="mt-4 space-y-2">
-        {" "}
+    <Card variant="panel" padding="md">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
         {items.map((item) => (
           <div
             key={item}
-            className="rounded-xl border border-border-default px-4 py-3 text-sm text-text-primary"
+            className="crm-overview-list-link crm-overview-list-link--stacked"
           >
-            {item}
+            <span className="crm-overview-list-link__title">{item}</span>
           </div>
-        ))}{" "}
-        {items.length === 0 && (
-          <p className="text-sm text-text-secondary">{empty}</p>
-        )}{" "}
-      </div>{" "}
-    </div>
+        ))}
+        {items.length === 0 && <p className="crm-empty-copy">{empty}</p>}
+      </CardContent>
+    </Card>
   );
 }

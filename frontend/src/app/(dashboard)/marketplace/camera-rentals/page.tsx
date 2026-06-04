@@ -1,17 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  listGear,
-  getMyGearListings,
   deleteGearListing,
+  getMyGearListings,
+  listGear,
   type GearListing,
 } from "@/lib/api/gear";
-import { getStoredAccessTokenClaims, getStoredAccessToken } from "@/lib/auth";
-import { availabilityClasses } from "@/lib/dashboard-ui";
-import { cn } from "@/lib/utils";
-import { Plus } from "@/components/icons";
+import { getStoredAccessToken, getStoredAccessTokenClaims } from "@/lib/auth";
+import { Plus, Trash } from "@/components/icons";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { GlassButton } from "@/components/ui/glass-button";
+import { InlineAlert } from "@/components/ui/inline-alert";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageHeader } from "@/components/ui/page-header";
 
 type Tab = "gear-rental" | "my-gear";
 
@@ -39,6 +43,14 @@ const CATEGORY_LABELS: Record<string, string> = {
   audio: "Audio",
   accessory: "Accessory",
 };
+
+function formatCategory(category: string) {
+  return CATEGORY_LABELS[category] ?? category.replace(/_/g, " ");
+}
+
+function formatPrice(pricePaisa: number) {
+  return (pricePaisa / 100).toLocaleString("en-IN");
+}
 
 function GearRentalTab() {
   const myUserID =
@@ -68,16 +80,18 @@ function GearRentalTab() {
     let ignore = false;
     listGear({ category: category || undefined })
       .then((data) => {
-        if (!ignore)
+        if (!ignore) {
           setRequestState({ key: requestKey, gear: data, error: null });
+        }
       })
       .catch((err) => {
-        if (!ignore)
+        if (!ignore) {
           setRequestState({
             key: requestKey,
             gear: [],
             error: err?.message || "Failed to load rental listings",
           });
+        }
       });
     return () => {
       ignore = true;
@@ -85,24 +99,20 @@ function GearRentalTab() {
   }, [category, requestKey]);
 
   return (
-    <div className="space-y-6">
-      {error && (
-        <div className="rounded-xl border border-feedback-error/20 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error">
-          {error}
-        </div>
-      )}
+    <div className="marketplace-stack">
+      {error && <InlineAlert variant="error">{error}</InlineAlert>}
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      <div
+        aria-label="Gear rental categories"
+        className="glass-segmented marketplace-category-tabs"
+      >
         {CATEGORIES.map((entry) => (
           <button
             key={entry.value}
+            type="button"
+            aria-pressed={category === entry.value}
             onClick={() => setCategory(entry.value)}
-            className={cn(
-              "segmented-control-button whitespace-nowrap text-sm",
-              category === entry.value
-                ? "segmented-control-button--active"
-                : "segmented-control-button--inactive",
-            )}
+            className="glass-segmented-option"
           >
             {entry.label}
           </button>
@@ -110,69 +120,69 @@ function GearRentalTab() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div
-              key={i}
-              className="h-64 bg-surface-sunken rounded-xl animate-pulse"
+        <div className="marketplace-card-grid">
+          {[1, 2, 3, 4, 5, 6].map((item) => (
+            <Card
+              key={item}
+              variant="panel"
+              padding="none"
+              className="marketplace-listing-skeleton"
+              aria-hidden="true"
             />
           ))}
         </div>
       ) : gear.length === 0 ? (
-        <div className="text-center py-12 text-text-secondary">
+        <Card
+          variant="panel"
+          padding="none"
+          className="marketplace-empty-state"
+        >
           No rental listings found. Try a different category.
-        </div>
+        </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="marketplace-card-grid">
           {gear.map((entry) => (
             <Link
               key={entry.id}
               href={`/marketplace/gear/${entry.id}`}
-              className="surface-panel block overflow-hidden transition-colors hover:bg-surface-container-high"
+              className="surface-panel card-pad-sm marketplace-listing-card marketplace-gear-card"
             >
-              {entry.images && entry.images.length > 0 ? (
-                <div className="h-40 bg-surface-sunken flex items-center justify-center">
-                  <span className="text-text-secondary text-xs">Image</span>
-                </div>
-              ) : (
-                <div className="h-40 bg-surface-sunken flex items-center justify-center">
-                  <span className="text-text-secondary text-xs">
-                    {entry.category.replace(/_/g, " ")}
-                  </span>
-                </div>
-              )}
-              <div className="p-4 space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-text-primary leading-snug">
-                    {entry.title}
-                  </h3>
-                  <span
-                    className={cn(
-                      "shrink-0",
-                      availabilityClasses[
-                        entry.is_available ? "available" : "unavailable"
-                      ],
+              <div className="marketplace-gear-media">
+                <span className="marketplace-gear-media__label">
+                  {entry.images && entry.images.length > 0
+                    ? "Image"
+                    : formatCategory(entry.category)}
+                </span>
+              </div>
+              <div className="marketplace-gear-body">
+                <div className="marketplace-card-header">
+                  <div className="marketplace-card-heading">
+                    <h3 className="marketplace-card-title">{entry.title}</h3>
+                    {entry.brand && (
+                      <p className="marketplace-card-meta">{entry.brand}</p>
                     )}
-                  >
+                  </div>
+                  <Badge variant={entry.is_available ? "success" : "warning"}>
                     {entry.is_available ? "Available" : "Booked"}
-                  </span>
+                  </Badge>
                 </div>
-                {entry.brand && (
-                  <span className="status-badge status-badge--neutral">
-                    {entry.brand}
-                  </span>
-                )}
-                <div className="flex items-center justify-between pt-2">
-                  <span className="text-base font-bold text-text-primary">
-                    ₹{(entry.price_paisa / 100).toLocaleString("en-IN")}
-                    <span className="text-xs font-normal text-text-secondary">
-                      /day
-                    </span>
+                <div className="marketplace-badge-row">
+                  <Badge variant="accent">
+                    {formatCategory(entry.category)}
+                  </Badge>
+                  {entry.condition && (
+                    <Badge variant="neutral">
+                      {CONDITION_LABELS[entry.condition] ?? entry.condition}
+                    </Badge>
+                  )}
+                </div>
+                <div className="marketplace-listing-card__footer">
+                  <span className="marketplace-rate">
+                    ₹{formatPrice(entry.price_paisa)}
+                    <span className="marketplace-rate__unit">/day</span>
                   </span>
                   {entry.city && (
-                    <span className="text-xs text-text-secondary">
-                      {entry.city}
-                    </span>
+                    <span className="marketplace-card-meta">{entry.city}</span>
                   )}
                 </div>
               </div>
@@ -202,8 +212,9 @@ function MyGearTab() {
         if (!cancelled) setGear(data);
       })
       .catch((err) => {
-        if (!cancelled)
+        if (!cancelled) {
           setError(err instanceof Error ? err.message : "Failed to load gear");
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -229,11 +240,14 @@ function MyGearTab() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        {[1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className="h-28 rounded-2xl bg-surface-sunken animate-pulse"
+      <div className="marketplace-stack-sm">
+        {[1, 2, 3].map((item) => (
+          <Card
+            key={item}
+            variant="panel"
+            padding="none"
+            className="marketplace-skeleton"
+            aria-hidden="true"
           />
         ))}
       </div>
@@ -241,138 +255,123 @@ function MyGearTab() {
   }
 
   return (
-    <div className="space-y-6">
-      {error && (
-        <div className="rounded-xl border border-feedback-error/30 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error">
-          {error}
-        </div>
-      )}
+    <div className="marketplace-stack">
+      {error && <InlineAlert variant="error">{error}</InlineAlert>}
 
       {gear.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border-default p-10 text-center space-y-4">
-          <p className="font-medium text-text-primary">No gear listed yet</p>
-          <p className="text-sm text-text-secondary">
+        <Card
+          variant="panel"
+          padding="none"
+          className="marketplace-empty-state"
+        >
+          <p className="marketplace-empty-state__title">No gear listed yet</p>
+          <p className="marketplace-empty-state__copy">
             List your cameras, lenses, and accessories to rent them out to other
             photographers.
           </p>
           <Link
             href="/marketplace/gear/new"
-            className="btn-primary px-5 py-2.5 text-sm"
+            className="glass-button glass-button--primary glass-button--md"
           >
-            List Your First Gear
+            <span>List Your First Gear</span>
           </Link>
-        </div>
+        </Card>
       ) : (
-        <div className="space-y-3">
+        <div className="marketplace-stack-sm">
           {gear.map((entry) => (
-            <div
+            <Card
               key={entry.id}
-              className="rounded-2xl border border-border-default bg-surface-raised p-5"
+              variant="panel"
+              padding="none"
+              className="marketplace-profile-card marketplace-gear-row"
             >
-              <div className="flex items-start gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h2 className="text-base font-semibold text-text-primary truncate">
-                      {entry.title}
-                    </h2>
-                    <span
-                      className={cn(
-                        "status-badge",
-                        entry.is_published
-                          ? "status-badge--success"
-                          : "status-badge--neutral",
-                      )}
-                    >
+              <div className="marketplace-card-header">
+                <div className="marketplace-card-heading">
+                  <div className="marketplace-title-row">
+                    <h2 className="marketplace-card-title">{entry.title}</h2>
+                    <Badge variant={entry.is_published ? "success" : "neutral"}>
                       {entry.is_published ? "Published" : "Draft"}
-                    </span>
+                    </Badge>
                   </div>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    <span className="status-badge status-badge--accent">
-                      {CATEGORY_LABELS[entry.category] ?? entry.category}
-                    </span>
+                  <div className="marketplace-badge-row">
+                    <Badge variant="accent">
+                      {formatCategory(entry.category)}
+                    </Badge>
                     {entry.brand && (
-                      <span className="status-badge status-badge--neutral">
-                        {entry.brand}
-                      </span>
+                      <Badge variant="neutral">{entry.brand}</Badge>
                     )}
                     {entry.condition && (
-                      <span className="status-badge status-badge--neutral">
+                      <Badge variant="neutral">
                         {CONDITION_LABELS[entry.condition] ?? entry.condition}
-                      </span>
+                      </Badge>
                     )}
-                    <span
-                      className={cn(
-                        "status-badge",
-                        entry.is_available
-                          ? "status-badge--success"
-                          : "status-badge--warning",
-                      )}
-                    >
+                    <Badge variant={entry.is_available ? "success" : "warning"}>
                       {entry.is_available ? "Available" : "Booked"}
-                    </span>
+                    </Badge>
                   </div>
                   {entry.city && (
-                    <p className="text-xs text-text-tertiary mt-1">
-                      {entry.city}
-                    </p>
+                    <p className="marketplace-card-meta">{entry.city}</p>
                   )}
                 </div>
-                <div className="text-right shrink-0">
-                  <p className="text-base font-bold text-text-primary">
-                    ₹{(entry.price_paisa / 100).toLocaleString("en-IN")}
-                    <span className="text-xs font-normal text-text-secondary">
-                      /{entry.listing_type === "rental" ? "day" : "sale"}
-                    </span>
-                  </p>
-                </div>
+                <span className="marketplace-rate">
+                  ₹{formatPrice(entry.price_paisa)}
+                  <span className="marketplace-rate__unit">
+                    /{entry.listing_type === "rental" ? "day" : "sale"}
+                  </span>
+                </span>
               </div>
 
-              <div className="flex items-center gap-3 mt-4 pt-4 border-t border-border-subtle">
+              <div className="marketplace-action-row">
                 <Link
                   href={`/marketplace/gear/${entry.id}`}
-                  className="surface-button text-sm px-3 py-1.5"
+                  className="glass-button glass-button--surface glass-button--sm"
                 >
-                  View
+                  <span>View</span>
                 </Link>
                 <Link
                   href={`/marketplace/gear/${entry.id}/edit`}
-                  className="surface-button text-sm px-3 py-1.5"
+                  className="glass-button glass-button--surface glass-button--sm"
                 >
-                  Edit
+                  <span>Edit</span>
                 </Link>
 
                 {confirmDeleteId === entry.id ? (
-                  <div className="flex items-center gap-2 ml-auto">
-                    <span className="text-sm text-text-secondary">
+                  <div className="marketplace-confirm-inline">
+                    <span className="marketplace-confirm-copy">
                       Remove this listing?
                     </span>
-                    <button
+                    <GlassButton
                       type="button"
+                      variant="danger"
+                      size="sm"
                       onClick={() => handleDelete(entry.id)}
                       disabled={deletingId === entry.id}
-                      className="text-sm font-medium text-feedback-error hover:underline disabled:opacity-50"
                     >
                       {deletingId === entry.id ? "Removing…" : "Yes, remove"}
-                    </button>
-                    <button
+                    </GlassButton>
+                    <GlassButton
                       type="button"
+                      variant="quiet"
+                      size="sm"
                       onClick={() => setConfirmDeleteId(null)}
-                      className="text-sm text-text-secondary hover:underline"
                     >
                       Cancel
-                    </button>
+                    </GlassButton>
                   </div>
                 ) : (
-                  <button
+                  <GlassButton
                     type="button"
+                    variant="quiet"
+                    size="sm"
+                    icon={<Trash aria-hidden="true" />}
+                    className="marketplace-action-row__end"
                     onClick={() => setConfirmDeleteId(entry.id)}
-                    className="ml-auto text-sm text-text-tertiary hover:text-feedback-error transition-colors"
                   >
                     Remove
-                  </button>
+                  </GlassButton>
                 )}
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}
@@ -384,27 +383,28 @@ export default function CameraRentalsPage() {
   const [tab, setTab] = useState<Tab>("gear-rental");
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">
-            Camera Rentals
-          </h1>
-          <p className="text-sm text-text-secondary mt-1">
-            Rent cameras, lenses, lighting, and accessories from other
-            photographers
-          </p>
-        </div>
-        <Link
-          href="/marketplace/gear/new"
-          className="btn-primary inline-flex items-center gap-1.5 px-4 py-2.5 text-sm"
-        >
-          <Plus className="h-4 w-4" />
-          List Your Gear
-        </Link>
-      </div>
+    <PageContainer width="wide">
+      <PageHeader
+        title="Camera Rentals"
+        description="Rent cameras, lenses, lighting, and accessories from other photographers."
+        actions={
+          <Link
+            href="/marketplace/gear/new"
+            className="glass-button glass-button--primary glass-button--md"
+          >
+            <span className="glass-button__icon">
+              <Plus aria-hidden="true" />
+            </span>
+            <span>List Your Gear</span>
+          </Link>
+        }
+      />
 
-      <div className="flex gap-2 border-b border-border-default pb-0">
+      <div
+        role="tablist"
+        aria-label="Camera rental marketplace sections"
+        className="glass-segmented marketplace-page-tabs"
+      >
         {(
           [
             { id: "gear-rental", label: "Gear Rental" },
@@ -413,20 +413,20 @@ export default function CameraRentalsPage() {
         ).map(({ id, label }) => (
           <button
             key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
             onClick={() => setTab(id)}
-            className={cn(
-              "px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
-              tab === id
-                ? "border-accent text-accent"
-                : "border-transparent text-text-secondary hover:text-text-primary",
-            )}
+            className="glass-segmented-option"
           >
             {label}
           </button>
         ))}
       </div>
 
-      {tab === "gear-rental" ? <GearRentalTab /> : <MyGearTab />}
-    </div>
+      <div role="tabpanel">
+        {tab === "gear-rental" ? <GearRentalTab /> : <MyGearTab />}
+      </div>
+    </PageContainer>
   );
 }

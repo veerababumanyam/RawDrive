@@ -4,6 +4,18 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CRMSecondaryNav } from "@/components/crm/crm-secondary-nav";
+import { Plus } from "@/components/icons";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { GlassButton } from "@/components/ui/glass-button";
+import { InlineAlert } from "@/components/ui/inline-alert";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   createProjectAuth,
   listContacts,
@@ -19,6 +31,8 @@ import {
   PROJECT_STATUSES,
   getProjectStatusLabel,
 } from "@/lib/crm-taxonomy";
+
+const FIELD_CLASS = "input-base w-full text-sm";
 
 const PROJECT_TYPES = [
   "wedding",
@@ -38,6 +52,19 @@ function formatDate(value?: string) {
     month: "short",
     year: "numeric",
   });
+}
+
+function formatProjectType(value: string) {
+  return value.replaceAll("_", " ");
+}
+
+function ProjectStatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <Card variant="panel" padding="sm" className="crm-stat-card">
+      <span className="crm-stat-card__label">{label}</span>
+      <span className="crm-stat-card__value">{value}</span>
+    </Card>
+  );
 }
 
 function emptyForm() {
@@ -164,83 +191,59 @@ export default function ProjectsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
+    <PageContainer width="wide">
       <CRMSecondaryNav />
 
-      {error && (
-        <div className="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
-          {error}
-        </div>
-      )}
+      {error && <InlineAlert variant="error">{error}</InlineAlert>}
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-sm font-medium text-accent-primary">
-            Studio Projects
-          </p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-text-primary">
-            Project Board
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm text-text-secondary">
-            One job record for the client, shoot date, documents, billing,
-            gallery delivery, and next action.
-          </p>
-        </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="min-h-[44px] rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-text-inverse hover:bg-accent-hover"
-        >
-          New Project
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Studio Projects"
+        title="Project Board"
+        description="One job record for the client, shoot date, documents, billing, gallery delivery, and next action."
+        actions={
+          <GlassButton
+            type="button"
+            onClick={() => setShowCreate(true)}
+            variant="primary"
+            icon={<Plus aria-hidden="true" />}
+          >
+            New Project
+          </GlassButton>
+        }
+      />
 
       <section className="grid grid-cols-1 gap-3 md:grid-cols-4">
-        <div className="rounded-2xl border border-border-default bg-surface-raised p-4">
-          <p className="text-xs uppercase tracking-wide text-text-tertiary">
-            Active projects
-          </p>
-          <p className="mt-2 text-2xl font-semibold text-text-primary">
-            {summary.activeProjects.length}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-border-default bg-surface-raised p-4">
-          <p className="text-xs uppercase tracking-wide text-text-tertiary">
-            Booked value
-          </p>
-          <p className="mt-2 text-2xl font-semibold text-text-primary">
-            {formatPaisa(summary.bookedValue)}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-border-default bg-surface-raised p-4">
-          <p className="text-xs uppercase tracking-wide text-text-tertiary">
-            Balance due
-          </p>
-          <p className="mt-2 text-2xl font-semibold text-text-primary">
-            {formatPaisa(summary.balanceDue)}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-border-default bg-surface-raised p-4">
-          <p className="text-xs uppercase tracking-wide text-text-tertiary">
-            Next actions
-          </p>
-          <p className="mt-2 text-2xl font-semibold text-text-primary">
-            {summary.nextActions.length}
-          </p>
-        </div>
+        <ProjectStatCard
+          label="Active projects"
+          value={String(summary.activeProjects.length)}
+        />
+        <ProjectStatCard
+          label="Booked value"
+          value={formatPaisa(summary.bookedValue)}
+        />
+        <ProjectStatCard
+          label="Balance due"
+          value={formatPaisa(summary.balanceDue)}
+        />
+        <ProjectStatCard
+          label="Next actions"
+          value={String(summary.nextActions.length)}
+        />
       </section>
 
       {showCreate && (
-        <section className="rounded-2xl border border-border-default bg-surface-raised p-6">
-          <h2 className="text-lg font-semibold text-text-primary">
-            New Studio Project
-          </h2>
-          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+        <Card variant="glass" padding="md" aria-labelledby="new-project-title">
+          <CardHeader>
+            <CardTitle id="new-project-title">New Studio Project</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <select
               value={form.contact_id}
               onChange={(event) =>
                 setForm({ ...form, contact_id: event.target.value })
               }
-              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
+              className={FIELD_CLASS}
+              aria-label="Project client"
             >
               <option value="">Select client *</option>
               {contacts.map((contact) => (
@@ -254,15 +257,17 @@ export default function ProjectsPage() {
               onChange={(event) =>
                 setForm({ ...form, name: event.target.value })
               }
-              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
+              className={FIELD_CLASS}
               placeholder="Project name *"
+              aria-label="Project name"
             />
             <select
               value={form.status}
               onChange={(event) =>
                 setForm({ ...form, status: event.target.value })
               }
-              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
+              className={FIELD_CLASS}
+              aria-label="Project status"
             >
               {PROJECT_STATUSES.map((status) => (
                 <option key={status} value={status}>
@@ -275,11 +280,12 @@ export default function ProjectsPage() {
               onChange={(event) =>
                 setForm({ ...form, project_type: event.target.value })
               }
-              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
+              className={FIELD_CLASS}
+              aria-label="Project type"
             >
               {PROJECT_TYPES.map((type) => (
                 <option key={type} value={type}>
-                  {type.replaceAll("_", " ")}
+                  {formatProjectType(type)}
                 </option>
               ))}
             </select>
@@ -289,23 +295,26 @@ export default function ProjectsPage() {
               onChange={(event) =>
                 setForm({ ...form, event_date: event.target.value })
               }
-              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
+              className={FIELD_CLASS}
+              aria-label="Project event date"
             />
             <input
               value={form.venue_name}
               onChange={(event) =>
                 setForm({ ...form, venue_name: event.target.value })
               }
-              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
+              className={FIELD_CLASS}
               placeholder="Venue"
+              aria-label="Project venue"
             />
             <input
               value={form.city}
               onChange={(event) =>
                 setForm({ ...form, city: event.target.value })
               }
-              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
+              className={FIELD_CLASS}
               placeholder="City"
+              aria-label="Project city"
             />
             <input
               type="number"
@@ -317,8 +326,9 @@ export default function ProjectsPage() {
                   expected_value_rupees: Number(event.target.value) || 0,
                 })
               }
-              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
+              className={FIELD_CLASS}
               placeholder="Expected value"
+              aria-label="Project expected value"
             />
             <input
               type="number"
@@ -330,76 +340,83 @@ export default function ProjectsPage() {
                   booked_value_rupees: Number(event.target.value) || 0,
                 })
               }
-              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
+              className={FIELD_CLASS}
               placeholder="Booked value"
+              aria-label="Project booked value"
             />
             <input
               value={form.next_action}
               onChange={(event) =>
                 setForm({ ...form, next_action: event.target.value })
               }
-              className="rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
+              className={FIELD_CLASS}
               placeholder="Next action"
+              aria-label="Project next action"
             />
             <textarea
               value={form.notes}
               onChange={(event) =>
                 setForm({ ...form, notes: event.target.value })
               }
-              className="md:col-span-2 min-h-[88px] rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary"
+              className={cn(FIELD_CLASS, "resize-y md:col-span-2")}
               placeholder="Notes"
+              aria-label="Project notes"
+              rows={3}
             />
-          </div>
-          <div className="mt-4 flex justify-end gap-2">
-            <button
+          </CardContent>
+          <CardFooter className="justify-end">
+            <GlassButton
+              type="button"
               onClick={() => setShowCreate(false)}
-              className="min-h-[44px] rounded-xl border border-border-default px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-sunken"
+              variant="surface"
               disabled={creating}
             >
               Cancel
-            </button>
-            <button
+            </GlassButton>
+            <GlassButton
+              type="button"
               onClick={handleCreate}
               disabled={creating || !form.contact_id || !form.name.trim()}
-              className="min-h-[44px] rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-text-inverse hover:bg-accent-hover disabled:opacity-50"
+              variant="primary"
             >
               {creating ? "Creating..." : "Create Project"}
-            </button>
-          </div>
-        </section>
+            </GlassButton>
+          </CardFooter>
+        </Card>
       )}
 
       {loading ? (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           {[1, 2, 3].map((item) => (
-            <div
+            <Card
               key={item}
-              className="h-44 animate-pulse rounded-2xl bg-surface-sunken"
+              variant="panel"
+              padding="none"
+              className="crm-overview-skeleton"
+              aria-hidden="true"
             />
           ))}
         </div>
       ) : projects.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border-default p-10 text-center">
+        <Card variant="panel" padding="lg" className="text-center">
           <p className="font-medium text-text-primary">No projects yet</p>
           <p className="mt-1 text-sm text-text-secondary">
             Create a project from a client or convert an inquiry into a booked
             job.
           </p>
-        </div>
+        </Card>
       ) : (
         <section className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {projects.map((project) => (
             <Link
               key={project.id}
               href={`/crm/projects/${project.id}`}
-              className="rounded-2xl border border-border-default bg-surface-raised p-5 transition-colors hover:bg-surface-sunken"
+              className="surface-panel card-pad-md crm-project-card"
             >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="font-semibold text-text-primary">
-                    {project.name}
-                  </p>
-                  <p className="mt-1 text-sm text-text-secondary">
+              <div className="crm-project-card__header">
+                <div className="min-w-0">
+                  <p className="crm-project-card__title">{project.name}</p>
+                  <p className="crm-project-card__meta">
                     {[
                       project.contact_name,
                       formatDate(project.event_date),
@@ -418,28 +435,22 @@ export default function ProjectsPage() {
                   {getProjectStatusLabel(project.status)}
                 </span>
               </div>
-              <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
+              <dl className="crm-project-card__metrics">
                 <div>
-                  <p className="text-text-tertiary">Expected</p>
-                  <p className="font-medium text-text-primary">
-                    {formatPaisa(project.expected_value_paisa || 0)}
-                  </p>
+                  <dt>Expected</dt>
+                  <dd>{formatPaisa(project.expected_value_paisa || 0)}</dd>
                 </div>
                 <div>
-                  <p className="text-text-tertiary">Booked</p>
-                  <p className="font-medium text-text-primary">
-                    {formatPaisa(project.booked_value_paisa || 0)}
-                  </p>
+                  <dt>Booked</dt>
+                  <dd>{formatPaisa(project.booked_value_paisa || 0)}</dd>
                 </div>
                 <div>
-                  <p className="text-text-tertiary">Balance</p>
-                  <p className="font-medium text-text-primary">
-                    {formatPaisa(project.balance_due_paisa || 0)}
-                  </p>
+                  <dt>Balance</dt>
+                  <dd>{formatPaisa(project.balance_due_paisa || 0)}</dd>
                 </div>
-              </div>
+              </dl>
               {project.next_action && (
-                <p className="mt-4 rounded-xl bg-accent-subtle px-3 py-2 text-sm text-accent-primary">
+                <p className="crm-project-card__next">
                   Next: {project.next_action}
                 </p>
               )}
@@ -447,6 +458,6 @@ export default function ProjectsPage() {
           ))}
         </section>
       )}
-    </div>
+    </PageContainer>
   );
 }

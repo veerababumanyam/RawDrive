@@ -3,6 +3,8 @@ import {
   CONTACT_TYPE_OPTIONS,
   CALENDAR_EVENT_TYPE_OPTIONS,
   PROJECT_STATUSES,
+  DEAL_STAGE_CLASS,
+  PROJECT_STATUS_CLASS,
   getProjectStatusLabel,
   isBookedOrDeliveredDealStage,
   getDealStageLabel,
@@ -56,5 +58,17 @@ describe("CRM taxonomy", () => {
     ]);
     expect(getProjectStatusLabel("booked")).toBe("Booked");
     expect(getProjectStatusLabel("proofing")).toBe("Proofing");
+  });
+
+  it("maps CRM destructive states to an existing token-backed badge variant", () => {
+    expect(DEAL_STAGE_CLASS.cancelled).toContain("status-badge--danger");
+    expect(PROJECT_STATUS_CLASS.cancelled).toContain("status-badge--danger");
+    expect(PROJECT_STATUS_CLASS.lost).toContain("status-badge--danger");
+    expect(Object.values(DEAL_STAGE_CLASS).join(" ")).not.toContain(
+      "status-badge--error",
+    );
+    expect(Object.values(PROJECT_STATUS_CLASS).join(" ")).not.toContain(
+      "status-badge--error",
+    );
   });
 });

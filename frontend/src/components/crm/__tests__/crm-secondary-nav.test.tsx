@@ -36,8 +36,12 @@ describe("CRMSecondaryNav project route", () => {
       "href",
       "/crm/projects",
     );
+    expect(screen.getByRole("link", { name: "Projects" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     expect(screen.getByRole("link", { name: "Projects" }).className).toContain(
-      "bg-accent-primary",
+      "glass-segmented-option",
     );
   });
 
@@ -45,8 +49,9 @@ describe("CRMSecondaryNav project route", () => {
     mockUsePathname.mockReturnValue("/crm/projects/project-1");
     render(<CRMSecondaryNav />);
 
-    expect(screen.getByRole("link", { name: "Projects" }).className).toContain(
-      "bg-accent-primary",
+    expect(screen.getByRole("link", { name: "Projects" })).toHaveAttribute(
+      "aria-current",
+      "page",
     );
   });
 });

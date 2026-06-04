@@ -9,9 +9,13 @@ import { calendarEventClasses } from "@/lib/dashboard-ui";
 import { listContacts, type Contact } from "@/lib/api/crm";
 import { CRMSecondaryNav } from "@/components/crm/crm-secondary-nav";
 import { CALENDAR_EVENT_TYPE_OPTIONS } from "@/lib/crm-taxonomy";
-import { ChevronLeft, ChevronRight, XMark } from "@/components/icons";
+import { ChevronLeft, ChevronRight, Plus, XMark } from "@/components/icons";
+import { Card } from "@/components/ui/card";
 import { GlassButton } from "@/components/ui/glass-button";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { InlineAlert } from "@/components/ui/inline-alert";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageHeader } from "@/components/ui/page-header";
 
 interface CalendarEvent {
   id: string;
@@ -28,6 +32,8 @@ interface CalendarEvent {
   notes?: string;
   all_day?: boolean;
 }
+
+const FIELD_CLASS = "input-base calendar-field";
 
 function toLocalInput(d: Date): string {
   // Convert a Date to the "YYYY-MM-DDTHH:MM" format expected by
@@ -306,77 +312,80 @@ export default function CalendarPage() {
   });
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+    <PageContainer>
       <CRMSecondaryNav />
 
-      {error && (
-        <div className="mb-4 rounded-xl border border-feedback-error/20 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error">
-          {error}
-        </div>
-      )}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Calendar</h1>
-          <p className="text-sm text-text-secondary mt-1">{monthName}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <GlassButton
-            type="button"
-            onClick={() => openCreate()}
-            variant="primary"
-            size="md"
-          >
-            + New Event
-          </GlassButton>
-          <GlassIconButton
-            label="Previous month"
-            variant="ghost"
-            onClick={() =>
-              setCurrentDate(
-                new Date(
-                  currentDate.getFullYear(),
-                  currentDate.getMonth() - 1,
-                  1,
-                ),
-              )
-            }
-          >
-            <ChevronLeft />
-          </GlassIconButton>
-          <GlassButton
-            type="button"
-            onClick={() => setCurrentDate(new Date())}
-            variant="surface"
-            size="md"
-          >
-            Today
-          </GlassButton>
-          <GlassIconButton
-            label="Next month"
-            variant="ghost"
-            onClick={() =>
-              setCurrentDate(
-                new Date(
-                  currentDate.getFullYear(),
-                  currentDate.getMonth() + 1,
-                  1,
-                ),
-              )
-            }
-          >
-            <ChevronRight />
-          </GlassIconButton>
-        </div>
-      </div>
+      {error && <InlineAlert variant="error">{error}</InlineAlert>}
+
+      <PageHeader
+        title="Calendar"
+        description={monthName}
+        actions={
+          <>
+            <GlassButton
+              type="button"
+              onClick={() => openCreate()}
+              variant="primary"
+              size="md"
+              icon={<Plus aria-hidden="true" />}
+            >
+              New Event
+            </GlassButton>
+            <GlassIconButton
+              label="Previous month"
+              variant="ghost"
+              onClick={() =>
+                setCurrentDate(
+                  new Date(
+                    currentDate.getFullYear(),
+                    currentDate.getMonth() - 1,
+                    1,
+                  ),
+                )
+              }
+            >
+              <ChevronLeft />
+            </GlassIconButton>
+            <GlassButton
+              type="button"
+              onClick={() => setCurrentDate(new Date())}
+              variant="surface"
+              size="md"
+            >
+              Today
+            </GlassButton>
+            <GlassIconButton
+              label="Next month"
+              variant="ghost"
+              onClick={() =>
+                setCurrentDate(
+                  new Date(
+                    currentDate.getFullYear(),
+                    currentDate.getMonth() + 1,
+                    1,
+                  ),
+                )
+              }
+            >
+              <ChevronRight />
+            </GlassIconButton>
+          </>
+        }
+      />
 
       {showCreate && (
-        <div className="rounded-2xl border border-border-default bg-surface-raised p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-text-primary">
+        <Card
+          variant="panel"
+          padding="lg"
+          className="calendar-create-card"
+          aria-labelledby="calendar-create-title"
+        >
+          <h2 id="calendar-create-title" className="calendar-section-title">
             New Calendar Event
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="calendar-form-grid">
             <label
-              className="sm:col-span-2 flex flex-col gap-1 text-xs text-text-secondary"
+              className="calendar-field-label calendar-field-label--span"
               htmlFor="calendar-event-title"
             >
               Title *
@@ -386,12 +395,12 @@ export default function CalendarPage() {
                 placeholder="Title (e.g. Sharma Wedding Shoot)"
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
-                className="input-base w-full"
+                className={FIELD_CLASS}
                 autoFocus
               />
             </label>
             <label
-              className="flex flex-col gap-1 text-xs text-text-secondary"
+              className="calendar-field-label"
               htmlFor="calendar-event-type"
             >
               Event Type
@@ -401,7 +410,7 @@ export default function CalendarPage() {
                 onChange={(e) =>
                   setForm({ ...form, event_type: e.target.value })
                 }
-                className="input-base w-full"
+                className={FIELD_CLASS}
               >
                 {CALENDAR_EVENT_TYPE_OPTIONS.map((t) => (
                   <option key={t.value} value={t.value}>
@@ -411,7 +420,7 @@ export default function CalendarPage() {
               </select>
             </label>
             <label
-              className="flex flex-col gap-1 text-xs text-text-secondary"
+              className="calendar-field-label"
               htmlFor="calendar-event-contact"
             >
               Linked Client
@@ -421,7 +430,7 @@ export default function CalendarPage() {
                 onChange={(e) =>
                   setForm({ ...form, contact_id: e.target.value })
                 }
-                className="input-base w-full"
+                className={FIELD_CLASS}
               >
                 <option value="">No linked client</option>
                 {contacts.map((c) => (
@@ -431,26 +440,34 @@ export default function CalendarPage() {
                 ))}
               </select>
             </label>
-            <label className="flex flex-col gap-1 text-xs text-text-secondary">
+            <label
+              className="calendar-field-label"
+              htmlFor="calendar-event-start"
+            >
               Start
               <input
+                id="calendar-event-start"
                 type="datetime-local"
                 value={form.start_at}
                 onChange={(e) => setForm({ ...form, start_at: e.target.value })}
-                className="input-base w-full"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-text-secondary">
-              End
-              <input
-                type="datetime-local"
-                value={form.end_at}
-                onChange={(e) => setForm({ ...form, end_at: e.target.value })}
-                className="input-base w-full"
+                className={FIELD_CLASS}
               />
             </label>
             <label
-              className="sm:col-span-2 flex flex-col gap-1 text-xs text-text-secondary"
+              className="calendar-field-label"
+              htmlFor="calendar-event-end"
+            >
+              End
+              <input
+                id="calendar-event-end"
+                type="datetime-local"
+                value={form.end_at}
+                onChange={(e) => setForm({ ...form, end_at: e.target.value })}
+                className={FIELD_CLASS}
+              />
+            </label>
+            <label
+              className="calendar-field-label calendar-field-label--span"
               htmlFor="calendar-event-location"
             >
               Location
@@ -460,11 +477,11 @@ export default function CalendarPage() {
                 placeholder="Location"
                 value={form.location}
                 onChange={(e) => setForm({ ...form, location: e.target.value })}
-                className="input-base w-full"
+                className={FIELD_CLASS}
               />
             </label>
             <label
-              className="sm:col-span-2 flex flex-col gap-1 text-xs text-text-secondary"
+              className="calendar-field-label calendar-field-label--span"
               htmlFor="calendar-event-notes"
             >
               Notes
@@ -473,21 +490,22 @@ export default function CalendarPage() {
                 placeholder="Notes"
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                className="input-base textarea-min-block w-full resize-y"
+                className={cn(FIELD_CLASS, "calendar-textarea")}
               />
             </label>
-            <label className="flex items-center gap-2 text-sm text-text-secondary">
+            <label className="calendar-checkbox-label">
               <input
                 type="checkbox"
                 checked={form.all_day}
                 onChange={(e) =>
                   setForm({ ...form, all_day: e.target.checked })
                 }
+                className="calendar-checkbox"
               />
-              All-day event
+              <span>All-day event</span>
             </label>
           </div>
-          <div className="flex gap-2 justify-end">
+          <div className="calendar-form-actions">
             <GlassButton
               type="button"
               onClick={() => setShowCreate(false)}
@@ -507,24 +525,31 @@ export default function CalendarPage() {
               {creating ? "Creating…" : "Save Event"}
             </GlassButton>
           </div>
-        </div>
+        </Card>
       )}
 
       {loading ? (
-        <div className="animate-pulse h-96 bg-surface-sunken rounded-xl" />
+        <Card
+          variant="panel"
+          padding="none"
+          className="calendar-loading-skeleton"
+          aria-hidden="true"
+        />
       ) : (
-        <div className="bg-surface-raised rounded-xl border border-border-default overflow-hidden">
-          <div className="grid grid-cols-7 text-center text-xs font-medium text-text-tertiary py-2 border-b border-border-default">
+        <Card variant="panel" padding="none" className="calendar-month-panel">
+          <div className="calendar-weekdays">
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-              <div key={day}>{day}</div>
+              <div key={day} className="calendar-weekday">
+                {day}
+              </div>
             ))}
           </div>
 
-          <div className="grid grid-cols-7">
+          <div className="calendar-month-grid">
             {Array.from({ length: firstDayOfWeek }).map((_, index) => (
               <div
                 key={`empty-${index}`}
-                className="h-24 border-b border-r border-border-default bg-surface-sunken/30"
+                className="calendar-day-cell calendar-day-cell--empty"
               />
             ))}
             {days.map((day) => {
@@ -545,19 +570,20 @@ export default function CalendarPage() {
                       openCreate(day);
                     }
                   }}
-                  className={`h-24 border-b border-r border-border-default p-1 cursor-pointer hover:bg-accent/5 transition-colors ${isToday ? "bg-accent/5" : ""}`}
+                  className={cn(
+                    "calendar-day-cell",
+                    isToday && "calendar-day-cell--today",
+                  )}
                 >
                   <span
                     className={cn(
-                      "inline-flex h-5 w-5 items-center justify-center rounded-full text-xs font-medium",
-                      isToday
-                        ? "bg-accent text-text-inverse"
-                        : "text-text-secondary",
+                      "calendar-day-number",
+                      isToday && "calendar-day-number--today",
                     )}
                   >
                     {day}
                   </span>
-                  <div className="mt-1 space-y-0.5">
+                  <div className="calendar-day-events">
                     {dayEvents.slice(0, 2).map((event) => (
                       <button
                         type="button"
@@ -570,7 +596,7 @@ export default function CalendarPage() {
                           setSelectedEvent(event);
                         }}
                         className={cn(
-                          "w-full justify-start rounded-md px-1 py-0.5 text-micro font-medium truncate text-left hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-border-focus",
+                          "calendar-event-chip",
                           calendarEventClasses[event.event_type] ||
                             "status-badge status-badge--neutral",
                         )}
@@ -580,7 +606,7 @@ export default function CalendarPage() {
                       </button>
                     ))}
                     {dayEvents.length > 2 && (
-                      <div className="text-micro px-1 text-text-tertiary">
+                      <div className="calendar-more-count">
                         +{dayEvents.length - 2} more
                       </div>
                     )}
@@ -589,7 +615,7 @@ export default function CalendarPage() {
               );
             })}
           </div>
-        </div>
+        </Card>
       )}
 
       {selectedEvent && (
@@ -597,17 +623,14 @@ export default function CalendarPage() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="event-detail-title"
-          className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center px-4"
+          className="modal-backdrop calendar-modal-backdrop"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) setSelectedEvent(null);
           }}
         >
-          <div className="w-full max-w-md rounded-2xl border border-border-default bg-surface-raised p-6 shadow-2xl">
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <h2
-                id="event-detail-title"
-                className="font-headline text-xl font-bold text-text-primary"
-              >
+          <Card variant="panel" padding="lg" className="calendar-detail-dialog">
+            <div className="calendar-detail-header">
+              <h2 id="event-detail-title" className="calendar-detail-title">
                 {selectedEvent.title}
               </h2>
               <GlassIconButton
@@ -619,19 +642,19 @@ export default function CalendarPage() {
               </GlassIconButton>
             </div>
 
-            <dl className="space-y-3 text-sm">
-              <div>
-                <dt className="text-caption mb-1 uppercase">Type</dt>
-                <dd className="text-text-primary">
+            <dl className="calendar-detail-list">
+              <div className="calendar-detail-item">
+                <dt className="calendar-detail-label">Type</dt>
+                <dd className="calendar-detail-value">
                   {CALENDAR_EVENT_TYPE_OPTIONS.find(
                     (t) => t.value === selectedEvent.event_type,
                   )?.label ?? selectedEvent.event_type}
                 </dd>
               </div>
 
-              <div>
-                <dt className="text-caption mb-1 uppercase">When</dt>
-                <dd className="text-text-primary">
+              <div className="calendar-detail-item">
+                <dt className="calendar-detail-label">When</dt>
+                <dd className="calendar-detail-value">
                   {formatEventInstant(
                     selectedEvent.start_at,
                     selectedEvent.all_day,
@@ -646,17 +669,15 @@ export default function CalendarPage() {
                     </>
                   )}
                   {selectedEvent.all_day ? (
-                    <span className="ml-2 text-xs text-text-secondary">
-                      (all day)
-                    </span>
+                    <span className="calendar-detail-note">(all day)</span>
                   ) : null}
                 </dd>
               </div>
 
               {selectedEvent.contact_id ? (
-                <div>
-                  <dt className="text-caption mb-1 uppercase">Client</dt>
-                  <dd className="text-text-primary">
+                <div className="calendar-detail-item">
+                  <dt className="calendar-detail-label">Client</dt>
+                  <dd className="calendar-detail-value">
                     {contactNameById.get(selectedEvent.contact_id) ??
                       selectedEvent.contact_id}
                   </dd>
@@ -664,34 +685,34 @@ export default function CalendarPage() {
               ) : null}
 
               {selectedEvent.location ? (
-                <div>
-                  <dt className="text-caption mb-1 uppercase">Location</dt>
-                  <dd className="text-text-primary whitespace-pre-wrap">
+                <div className="calendar-detail-item">
+                  <dt className="calendar-detail-label">Location</dt>
+                  <dd className="calendar-detail-value calendar-detail-value--prewrap">
                     {selectedEvent.location}
                   </dd>
                 </div>
               ) : null}
 
               {selectedEvent.notes ? (
-                <div>
-                  <dt className="text-caption mb-1 uppercase">Notes</dt>
-                  <dd className="text-text-primary whitespace-pre-wrap">
+                <div className="calendar-detail-item">
+                  <dt className="calendar-detail-label">Notes</dt>
+                  <dd className="calendar-detail-value calendar-detail-value--prewrap">
                     {selectedEvent.notes}
                   </dd>
                 </div>
               ) : null}
 
               {selectedEvent.status ? (
-                <div>
-                  <dt className="text-caption mb-1 uppercase">Status</dt>
-                  <dd className="text-text-primary capitalize">
+                <div className="calendar-detail-item">
+                  <dt className="calendar-detail-label">Status</dt>
+                  <dd className="calendar-detail-value calendar-detail-value--capitalize">
                     {selectedEvent.status}
                   </dd>
                 </div>
               ) : null}
             </dl>
 
-            <div className="mt-6 flex justify-end">
+            <div className="calendar-detail-actions">
               <GlassButton
                 type="button"
                 onClick={() => setSelectedEvent(null)}
@@ -701,9 +722,9 @@ export default function CalendarPage() {
                 Close
               </GlassButton>
             </div>
-          </div>
+          </Card>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

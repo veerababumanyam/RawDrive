@@ -13,10 +13,11 @@ vi.mock("qrcode", () => ({ default: { toCanvas, toDataURL, toString } }));
 
 import { GalleryShareQrCard } from "@/components/gallery/gallery-share-qr-card";
 
-// A per-business subdomain URL carrying the E2E `#rd_key` fragment, exactly
-// what buildShareUrl() returns on the gallery page.
+// A per-business subdomain URL carrying both the public share-session token and
+// the E2E `#rd_key` fragment, exactly what the gallery page's tokenized share
+// helper returns.
 const SHARE_URL =
-  "https://studio-ab12.rawdrive.in/sharma-wedding#rd_key=SECRETKEY";
+  "https://studio-ab12.rawdrive.in/sharma-wedding?share=SHARETOKEN#rd_key=SECRETKEY";
 
 describe("GalleryShareQrCard", () => {
   beforeEach(() => {
@@ -113,6 +114,21 @@ describe("GalleryShareQrCard", () => {
 
     fireEvent.click(await screen.findByTestId("share-qr-card-copy"));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(SHARE_URL));
+  });
+
+  it("accepts async share URL preparation before rendering QR actions", async () => {
+    const getShareUrl = vi.fn().mockResolvedValue(SHARE_URL);
+
+    render(
+      <GalleryShareQrCard
+        getShareUrl={getShareUrl}
+        title="Sharma Wedding"
+        slug="sharma-wedding"
+      />,
+    );
+
+    expect(await screen.findByTestId("share-qr-card-canvas")).toBeVisible();
+    await waitFor(() => expect(getShareUrl).toHaveBeenCalledTimes(1));
   });
 
   it("shows an unavailable state (no QR) when no URL is available", () => {

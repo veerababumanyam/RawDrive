@@ -30,8 +30,11 @@ import { cn } from "@/lib/utils";
 // Pure client component — the `qrcode` package is bundled into the
 // frontend chunk per the same convention used by InviteGenerator.tsx
 // (no server-side QR endpoint).
+type ShareUrlGetter = () => string | Promise<string>;
+
 interface ShareQrPopoverProps {
-  url: string;
+  url?: string;
+  getShareUrl?: ShareUrlGetter;
   disabled?: boolean;
   label?: string;
   filename?: string;
@@ -56,7 +59,8 @@ const PANEL_WIDTH = 256; // matches the `w-64` Tailwind class below — kept in 
 const PANEL_GAP = 8; // vertical gap between the toggle and the panel
 
 export function ShareQrPopover({
-  url,
+  url = "",
+  getShareUrl,
   disabled = false,
   label = "Show QR code",
   filename = "share-qr",
@@ -66,6 +70,8 @@ export function ShareQrPopover({
 }: ShareQrPopoverProps) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resolvedUrl, setResolvedUrl] = useState("");
+  const [loadingUrl, setLoadingUrl] = useState(false);
   const [anchor, setAnchor] = useState<AnchorRect | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -76,6 +82,7 @@ export function ShareQrPopover({
   // would fire on the typical `useEffect(() => setMounted(true), [])`
   // pattern — we read the side-effect-free environment value directly.
   const portalTarget = typeof document !== "undefined" ? document.body : null;
+  const currentUrl = resolvedUrl || url;
 
   // Recompute the toggle's bounding rect whenever the popover opens, and
   // again on scroll/resize so the panel follows. Layout-effect runs after
@@ -113,8 +120,8 @@ export function ShareQrPopover({
   // on URL change so a photographer flipping between sub-album previews
   // or rotating share tokens sees the matching QR without a remount.
   useEffect(() => {
-    if (!open || !url || !canvasRef.current) return;
-    QRCodeLib.toCanvas(canvasRef.current, url, {
+    if (!open || !currentUrl || !canvasRef.current) return;
+    QRCodeLib.toCanvas(canvasRef.current, currentUrl, {
       width: size,
       margin: 1,
       // ECC level "H" (~30% recovery) so a printed QR survives folding
@@ -125,7 +132,7 @@ export function ShareQrPopover({
       .catch(() => {
         setError("Could not render QR — try copying the URL instead.");
       });
-  }, [open, url, size]);
+  }, [currentUrl, open, size]);
 
   // Close on Escape and on outside-click. Both the toggle and the portaled
   // panel are "inside" — clicking anywhere else dismisses.
@@ -161,16 +168,56 @@ export function ShareQrPopover({
     }
   }, [filename]);
 
-  const unavailable = disabled || !url;
-  const nativeDisabled = unavailable && !onUnavailable;
+  const unavailable = disabled || (!currentUrl && !getShareUrl);
+  const nativeDisabled = (unavailable && !onUnavailable) || loadingUrl;
 
-  const handleToggle = useCallback(() => {
-    if (unavailable) {
+  const handleToggle = useCallback(async () => {
+    if (loadingUrl) return;
+    if (disabled) {
       onUnavailable?.();
       return;
     }
-    setOpen((current) => !current);
-  }, [onUnavailable, unavailable]);
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    if (currentUrl) {
+      setOpen(true);
+      return;
+    }
+    if (!getShareUrl) {
+      onUnavailable?.();
+      return;
+    }
+
+    setLoadingUrl(true);
+    setError(null);
+    try {
+      const nextUrl = await getShareUrl();
+      if (!nextUrl) {
+        onUnavailable?.();
+        return;
+      }
+      setResolvedUrl(nextUrl);
+      setOpen(true);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not prepare QR — try copying the URL instead.",
+      );
+      onUnavailable?.();
+    } finally {
+      setLoadingUrl(false);
+    }
+  }, [
+    currentUrl,
+    disabled,
+    getShareUrl,
+    loadingUrl,
+    onUnavailable,
+    open,
+  ]);
 
   // Resolve the panel position. We prefer right-anchored (panel's right
   // edge aligned to the toggle's right edge) so the panel hangs to the
@@ -237,16 +284,16 @@ export function ShareQrPopover({
         <canvas
           ref={canvasRef}
           role="img"
-          aria-label={`QR code for ${url}`}
+          aria-label={`QR code for ${currentUrl}`}
           data-testid="share-qr-canvas"
           className="max-w-full"
         />
       </div>
       <p
         className="mt-2 break-all text-[10px] leading-tight text-text-tertiary"
-        title={url}
+        title={currentUrl}
       >
-        {url}
+        {currentUrl}
       </p>
       <button
         type="button"
@@ -271,20 +318,24 @@ export function ShareQrPopover({
         type="button"
         onClick={handleToggle}
         disabled={nativeDisabled}
-        aria-disabled={unavailable ? true : undefined}
+        aria-disabled={unavailable || loadingUrl ? true : undefined}
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label={label}
         data-testid="share-qr-toggle"
-        title={url ? label : "Publish to generate a share QR"}
+        title={
+          currentUrl || getShareUrl
+            ? label
+            : "Publish to generate a share QR"
+        }
         className={cn(
           "inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
-          unavailable
+          unavailable || loadingUrl
             ? "bg-surface-container-high text-text-tertiary cursor-not-allowed"
             : "bg-surface-container-high text-text-primary hover:bg-surface-container-highest",
         )}
       >
-        <QrCode className="h-3.5 w-3.5" /> QR
+        <QrCode className="h-3.5 w-3.5" /> {loadingUrl ? "QR..." : "QR"}
       </button>
       {panel && portalTarget ? createPortal(panel, portalTarget) : null}
     </span>

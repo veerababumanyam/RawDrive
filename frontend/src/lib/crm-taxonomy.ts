@@ -45,7 +45,7 @@ export const DEAL_STAGE_CLASS: Record<string, string> = {
   confirmed: "status-badge status-badge--success",
   in_progress: "status-badge status-badge--accent",
   completed: "status-badge status-badge--accent",
-  cancelled: "status-badge status-badge--error",
+  cancelled: "status-badge status-badge--danger",
 };
 
 export const DEFAULT_PHOTOGRAPHY_SAC = "998386";
@@ -90,8 +90,8 @@ export const PROJECT_STATUS_CLASS: Record<string, string> = {
   proofing: "status-badge status-badge--info",
   delivered: "status-badge status-badge--success",
   archived: "status-badge status-badge--neutral",
-  cancelled: "status-badge status-badge--error",
-  lost: "status-badge status-badge--error",
+  cancelled: "status-badge status-badge--danger",
+  lost: "status-badge status-badge--danger",
 };
 
 export function getProjectStatusLabel(status: string): string {

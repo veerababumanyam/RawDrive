@@ -18,25 +18,35 @@ export default function InquiriesPage() {
       </div>
 
       <div className="mx-auto max-w-7xl px-4">
-        <div className="flex gap-1 rounded-xl bg-surface-sunken p-1 w-fit">
+        <div
+          role="tablist"
+          aria-label="Inquiry sources"
+          className="flex w-fit gap-2 overflow-x-auto pb-1"
+        >
           <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "pipeline"}
             onClick={() => setTab("pipeline")}
             className={cn(
-              "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+              "segmented-control-button whitespace-nowrap text-sm",
               tab === "pipeline"
-                ? "bg-surface-raised text-text-primary shadow-sm"
-                : "text-text-secondary hover:text-text-primary",
+                ? "segmented-control-button--active"
+                : "segmented-control-button--inactive",
             )}
           >
             Pipeline
           </button>
           <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "marketplace"}
             onClick={() => setTab("marketplace")}
             className={cn(
-              "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+              "segmented-control-button whitespace-nowrap text-sm",
               tab === "marketplace"
-                ? "bg-surface-raised text-text-primary shadow-sm"
-                : "text-text-secondary hover:text-text-primary",
+                ? "segmented-control-button--active"
+                : "segmented-control-button--inactive",
             )}
           >
             Marketplace Inquiries

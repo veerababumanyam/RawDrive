@@ -698,7 +698,7 @@ export default function MessagesPage() {
                               inq.status === "replied"
                                 ? "status-badge--success"
                                 : inq.status === "declined"
-                                  ? "status-badge--error"
+                                  ? "status-badge--danger"
                                   : "status-badge--neutral"
                             }`}
                           >

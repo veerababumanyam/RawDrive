@@ -12,7 +12,7 @@ const STATUS_CLASSES: Record<string, string> = {
   sent: "status-badge status-badge--neutral",
   read: "status-badge status-badge--neutral",
   replied: "status-badge status-badge--success",
-  declined: "status-badge status-badge--error",
+  declined: "status-badge status-badge--danger",
 };
 
 function formatDate(iso: string) {

@@ -39,12 +39,16 @@ describe("gallery detail page — share QR regression (#123)", () => {
     expect(qrUsages.length).toBeGreaterThanOrEqual(4);
   });
 
-  it("wires the QR to the publish-gated gallery share URL with a download-capable popover", () => {
+  it("wires QR surfaces to tokenized share links with a download-capable popover", () => {
     const source = readDetailPage();
-    // Publish gating mirrors the Copy/Email buttons: no QR for an unpublished
-    // gallery (empty url disables the popover, which surfaces the unavailable
-    // message instead of a broken QR).
-    expect(source).toContain("url={gallery.is_published ? buildShareUrl()");
+    // Private published galleries still require a ?share= token. QR must use
+    // the same minted URL as Copy, not the bare /g/<slug> fallback.
+    expect(source).toContain("getCachedWorkingShareUrl");
+    expect(source).toContain("getGalleryShareQrUrl");
+    expect(source).toContain("getAlbumShareQrUrl");
+    expect(source).toContain("getShareUrl={getGalleryShareQrUrl}");
+    expect(source).not.toContain("url={gallery.is_published ? buildShareUrl()");
+    expect(source).not.toContain("getShareUrl={buildShareUrl}");
     expect(source).toContain("disabled={!gallery.is_published}");
     // The popover surfaces the publish-required message rather than a broken QR.
     expect(source).toContain("setShareMessage(SHARE_UNAVAILABLE_MESSAGE)");

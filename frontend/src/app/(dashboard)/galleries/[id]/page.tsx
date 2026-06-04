@@ -177,6 +177,7 @@ const TETHERED_MAX_POLL_MS = 5000;
 const TETHERED_POLL_STEP_MS = 500;
 const SHARE_UNAVAILABLE_MESSAGE =
   "Publish this gallery before sharing client links.";
+type ShareLinkChannel = "copy" | "email" | "whatsapp";
 const ASSET_SETTLE_REFRESH_DELAYS_MS = [1200, 4000] as const;
 const UPLOAD_DROPZONE_BACKEND_PREVIEW_VARIANTS = [
   "display_webp",
@@ -519,6 +520,7 @@ export default function GalleryDetailPage({
   const [creatingAlbum, setCreatingAlbum] = useState(false);
   const [savingAlbumId, setSavingAlbumId] = useState<string | null>(null);
   const [shareMessage, setShareMessage] = useState("");
+  const shareUrlCacheRef = useRef<Map<string, string>>(new Map());
   const [copiedAssetId, setCopiedAssetId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{
     assetId: string;
@@ -834,10 +836,7 @@ export default function GalleryDetailPage({
   );
 
   const createWorkingShareUrl = useCallback(
-    async (
-      albumId: string | undefined,
-      channel: "copy" | "email" | "whatsapp",
-    ) => {
+    async (albumId: string | undefined, channel: ShareLinkChannel) => {
       if (!gallery?.is_published) {
         throw new Error(SHARE_UNAVAILABLE_MESSAGE);
       }
@@ -862,10 +861,36 @@ export default function GalleryDetailPage({
     [buildShareUrl, gallery],
   );
 
+  useEffect(() => {
+    shareUrlCacheRef.current.clear();
+  }, [createWorkingShareUrl]);
+
+  const getCachedWorkingShareUrl = useCallback(
+    async (albumId: string | undefined, channel: ShareLinkChannel) => {
+      const cacheKey = `${channel}:${albumId ?? "all"}`;
+      const cached = shareUrlCacheRef.current.get(cacheKey);
+      if (cached) return cached;
+      const url = await createWorkingShareUrl(albumId, channel);
+      shareUrlCacheRef.current.set(cacheKey, url);
+      return url;
+    },
+    [createWorkingShareUrl],
+  );
+
+  const getGalleryShareQrUrl = useCallback(
+    () => getCachedWorkingShareUrl(undefined, "copy"),
+    [getCachedWorkingShareUrl],
+  );
+
+  const getAlbumShareQrUrl = useCallback(
+    (albumId?: string) => getCachedWorkingShareUrl(albumId, "copy"),
+    [getCachedWorkingShareUrl],
+  );
+
   const copyShareUrl = useCallback(
     async (albumId?: string) => {
       try {
-        const url = await createWorkingShareUrl(albumId, "copy");
+        const url = await getCachedWorkingShareUrl(albumId, "copy");
         await navigator.clipboard.writeText(url);
         setShareMessage(
           albumId ? "Sub-gallery link copied." : "Gallery link copied.",
@@ -876,7 +901,7 @@ export default function GalleryDetailPage({
         );
       }
     },
-    [createWorkingShareUrl],
+    [getCachedWorkingShareUrl],
   );
 
   const openShareLink = useCallback(
@@ -2565,12 +2590,12 @@ export default function GalleryDetailPage({
       {/* Once published, surface the public link as a scannable QR right here
           on the workspace — non-technical photographers get it the moment they
           flip the publish toggle, with print-quality PNG + vector SVG
-          downloads. The QR encodes buildShareUrl() (the durable gallery-wide
-          public URL, incl. the #rd_key E2E fragment when present) — the same
-          link the Copy/Share actions use. */}
+          downloads. The QR uses the same tokenized client URL as the
+          Copy/Share actions; private galleries must never encode bare
+          /g/<slug> URLs because those show the public lock screen. */}
       {gallery.is_published && (
         <GalleryShareQrCard
-          getShareUrl={buildShareUrl}
+          getShareUrl={getGalleryShareQrUrl}
           title={gallery.title}
           slug={gallery.slug}
         />
@@ -2766,7 +2791,7 @@ export default function GalleryDetailPage({
                 {(() => {
                   // Derive the share metadata for whichever option the
                   // dropdown currently has selected. activeAlbum === null
-                  // means "All Photos" — copyShareUrl/buildShareUrl with
+                  // means "All Photos" — copyShareUrl/getAlbumShareQrUrl with
                   // no argument is the gallery-wide canonical share URL.
                   const selectedAlbum = activeAlbum
                     ? albums.find((a) => a.id === activeAlbum)
@@ -2821,10 +2846,9 @@ export default function GalleryDetailPage({
                             <ChatBubble />
                           </GlassIconButton>
                           <ShareQrPopover
-                            url={
-                              gallery.is_published
-                                ? buildShareUrl(selectedAlbum?.id)
-                                : ""
+                            key={`mobile-share-qr-${selectedAlbum?.id ?? "all"}`}
+                            getShareUrl={() =>
+                              getAlbumShareQrUrl(selectedAlbum?.id)
                             }
                             disabled={!gallery.is_published}
                             onUnavailable={() =>
@@ -2927,7 +2951,7 @@ export default function GalleryDetailPage({
                       <ChatBubble />
                     </GlassIconButton>
                     <ShareQrPopover
-                      url={gallery.is_published ? buildShareUrl() : ""}
+                      getShareUrl={getGalleryShareQrUrl}
                       disabled={!gallery.is_published}
                       onUnavailable={() =>
                         setShareMessage(SHARE_UNAVAILABLE_MESSAGE)
@@ -3080,11 +3104,7 @@ export default function GalleryDetailPage({
                               <ChatBubble />
                             </GlassIconButton>
                             <ShareQrPopover
-                              url={
-                                gallery.is_published
-                                  ? buildShareUrl(album.id)
-                                  : ""
-                              }
+                              getShareUrl={() => getAlbumShareQrUrl(album.id)}
                               disabled={!gallery.is_published}
                               onUnavailable={() =>
                                 setShareMessage(SHARE_UNAVAILABLE_MESSAGE)
@@ -3965,7 +3985,7 @@ export default function GalleryDetailPage({
                       <ChatBubble />
                     </GlassIconButton>
                     <ShareQrPopover
-                      url={gallery.is_published ? buildShareUrl() : ""}
+                      getShareUrl={getGalleryShareQrUrl}
                       disabled={!gallery.is_published}
                       onUnavailable={() =>
                         setShareMessage(SHARE_UNAVAILABLE_MESSAGE)

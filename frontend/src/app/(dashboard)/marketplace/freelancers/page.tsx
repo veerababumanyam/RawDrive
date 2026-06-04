@@ -9,8 +9,15 @@ import {
   type FreelancerListing,
 } from "@/lib/api/marketplace";
 import { getStoredAccessToken, getStoredAccessTokenClaims } from "@/lib/auth";
-import { cn } from "@/lib/utils";
 import { getDistrictsForState } from "@/lib/data/india-districts";
+import { XMark } from "@/components/icons";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { GlassButton } from "@/components/ui/glass-button";
+import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { InlineAlert } from "@/components/ui/inline-alert";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageHeader } from "@/components/ui/page-header";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -162,11 +169,14 @@ function MyProfileTab() {
 
   if (loading) {
     return (
-      <div className="space-y-4 pt-2">
+      <div className="marketplace-stack">
         {[1, 2, 3].map((i) => (
-          <div
+          <Card
             key={i}
-            className="h-24 rounded-2xl bg-surface-sunken animate-pulse"
+            variant="panel"
+            padding="none"
+            className="marketplace-skeleton"
+            aria-hidden="true"
           />
         ))}
       </div>
@@ -174,95 +184,92 @@ function MyProfileTab() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="marketplace-stack">
+      <div className="marketplace-section-header">
         <div>
-          <h2 className="text-lg font-semibold text-text-primary">
-            My Freelance Profile
-          </h2>
-          <p className="text-sm text-text-secondary mt-0.5">
+          <h2 className="marketplace-section-title">My Freelance Profile</h2>
+          <p className="marketplace-section-copy">
             Manage your freelancer listing visibility and availability.
           </p>
         </div>
         {listing && (
           <Link
             href={`/marketplace/freelancers/${listing.id}`}
-            className="surface-button text-sm px-4 py-2"
+            className="glass-button glass-button--surface glass-button--md"
           >
-            View / Edit Profile
+            <span>View / Edit Profile</span>
           </Link>
         )}
       </div>
 
-      {error && (
-        <div className="rounded-xl border border-feedback-error/30 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error">
-          {error}
-        </div>
-      )}
+      {error && <InlineAlert variant="error">{error}</InlineAlert>}
 
       {!listing ? (
-        <div className="rounded-2xl border border-dashed border-border-default p-10 text-center space-y-4">
-          <p className="font-medium text-text-primary">
+        <Card
+          variant="panel"
+          padding="none"
+          className="marketplace-empty-state"
+        >
+          <p className="marketplace-empty-state__title">
             No freelance profile yet
           </p>
-          <p className="text-sm text-text-secondary">
+          <p className="marketplace-empty-state__copy">
             Create a profile so clients can find and contact you from the
             marketplace.
           </p>
           <Link
             href="/marketplace/freelancers/edit"
-            className="btn-primary px-5 py-2.5 text-sm"
+            className="glass-button glass-button--primary glass-button--md"
           >
-            Create Profile
+            <span>Create Profile</span>
           </Link>
-        </div>
+        </Card>
       ) : (
         <>
-          <div className="rounded-2xl border border-border-default bg-surface-raised p-5 space-y-3">
-            <div className="flex items-start justify-between gap-4">
+          <Card
+            variant="panel"
+            padding="none"
+            className="marketplace-profile-card"
+          >
+            <div className="marketplace-card-header">
               <div className="min-w-0">
-                <h3 className="text-base font-semibold text-text-primary truncate">
-                  {listing.title}
-                </h3>
+                <h3 className="marketplace-card-title">{listing.title}</h3>
                 {listing.city && (
-                  <p className="text-sm text-text-secondary mt-0.5">
-                    {listing.city}
-                  </p>
+                  <p className="marketplace-card-meta">{listing.city}</p>
                 )}
               </div>
               {listing.daily_rate_paisa && (
-                <span className="text-sm font-semibold text-text-primary shrink-0">
+                <span className="marketplace-rate">
                   ₹{(listing.daily_rate_paisa / 100).toLocaleString("en-IN")}
                   /day
                 </span>
               )}
             </div>
             {listing.specializations.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
+              <div className="marketplace-badge-row">
                 {listing.specializations.map((s) => (
-                  <span
-                    key={s}
-                    className="status-badge status-badge--accent capitalize"
-                  >
+                  <Badge key={s} variant="accent" className="capitalize">
                     {s}
-                  </span>
+                  </Badge>
                 ))}
               </div>
             )}
             {listing.description && (
-              <p className="text-sm text-text-secondary line-clamp-2">
-                {listing.description}
-              </p>
+              <p className="marketplace-card-copy">{listing.description}</p>
             )}
-          </div>
+          </Card>
 
-          <div className="rounded-2xl border border-border-default bg-surface-raised p-5">
-            <div className="flex items-center justify-between gap-4">
+          <Card
+            variant="panel"
+            padding="none"
+            className="marketplace-profile-card"
+          >
+            <div className="marketplace-card-header marketplace-card-header--center">
               <div>
-                <h3 className="text-sm font-semibold text-text-primary">
+                <h3 className="marketplace-subsection-title">
                   Available for bookings
                 </h3>
-                <p className="text-xs text-text-secondary mt-0.5">
+                <p className="marketplace-subsection-copy">
                   {listing.is_published
                     ? "Your profile is visible and accepting inquiries."
                     : "Your profile is hidden. Clients cannot find or contact you."}
@@ -274,116 +281,120 @@ function MyProfileTab() {
                 aria-checked={listing.is_published}
                 onClick={handleTogglePublished}
                 disabled={toggling}
-                className={cn(
-                  "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 disabled:opacity-50",
-                  listing.is_published
-                    ? "bg-feedback-success"
-                    : "bg-surface-sunken",
-                )}
+                data-state={listing.is_published ? "published" : "hidden"}
+                className="publish-state-toggle"
               >
                 <span
-                  className={cn(
-                    "pointer-events-none inline-block h-5 w-5 rounded-full bg-surface-elevated shadow ring-0 transition-transform duration-200",
-                    listing.is_published ? "translate-x-5" : "translate-x-0",
-                  )}
-                />
+                  className="publish-state-toggle__track"
+                  aria-hidden="true"
+                >
+                  <span className="publish-state-toggle__thumb" />
+                </span>
+                <span className="publish-state-toggle__label">
+                  {listing.is_published ? "Visible" : "Hidden"}
+                </span>
               </button>
             </div>
-          </div>
+          </Card>
 
-          <div className="rounded-2xl border border-border-default bg-surface-raised p-5 space-y-4">
-            <div className="flex items-center justify-between">
+          <Card
+            variant="panel"
+            padding="none"
+            className="marketplace-profile-card"
+          >
+            <div className="marketplace-card-header">
               <div>
-                <h3 className="text-sm font-semibold text-text-primary">
+                <h3 className="marketplace-subsection-title">
                   Unavailable dates
                 </h3>
-                <p className="text-xs text-text-secondary mt-0.5">
+                <p className="marketplace-subsection-copy">
                   Dates you cannot accept bookings — shown on your public
                   profile.
                 </p>
               </div>
-              {datesSaved && (
-                <span className="text-xs text-feedback-success">Saved</span>
-              )}
+              {datesSaved && <Badge variant="success">Saved</Badge>}
             </div>
 
-            <div className="flex gap-2">
+            <div className="marketplace-inline-form">
               <input
                 type="date"
                 value={newBlockDate}
                 onChange={(e) => setNewBlockDate(e.target.value)}
                 min={new Date().toISOString().slice(0, 10)}
-                className="input-base flex-1"
+                className="input-base marketplace-inline-form__input"
               />
-              <button
+              <GlassButton
                 type="button"
+                variant="primary"
+                size="md"
                 onClick={handleAddBlockDate}
                 disabled={!newBlockDate || savingDates}
-                className="btn-primary px-4 text-sm disabled:opacity-50"
               >
                 {savingDates ? "Saving…" : "Block date"}
-              </button>
+              </GlassButton>
             </div>
 
             {availability && availability.blocked_dates.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
+              <div className="marketplace-date-list">
                 {availability.blocked_dates.map((date) => (
-                  <span
-                    key={date}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-surface-container-low border border-border-default px-3 py-1 text-xs text-text-primary"
-                  >
+                  <span key={date} className="marketplace-date-chip">
                     {formatDate(date)}
-                    <button
-                      type="button"
+                    <GlassIconButton
+                      size="sm"
+                      variant="ghost"
+                      label={`Remove ${date}`}
                       onClick={() => handleRemoveBlockDate(date)}
-                      aria-label={`Remove ${date}`}
-                      className="text-text-tertiary hover:text-feedback-error transition-colors"
                     >
-                      ✕
-                    </button>
+                      <XMark aria-hidden="true" />
+                    </GlassIconButton>
                   </span>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-text-tertiary">
+              <p className="marketplace-muted-copy">
                 No dates blocked — you appear available every day.
               </p>
             )}
 
             {availability && availability.booked_dates.length > 0 && (
-              <div>
-                <p className="text-xs font-medium text-text-secondary mb-2">
+              <div className="marketplace-stack-sm">
+                <p className="marketplace-subsection-copy">
                   Auto-blocked from calendar
                 </p>
-                <div className="flex flex-wrap gap-2">
+                <div className="marketplace-date-list">
                   {availability.booked_dates.map((date) => (
-                    <span
-                      key={date}
-                      className="inline-flex items-center rounded-lg bg-feedback-warning/10 border border-feedback-warning/30 px-3 py-1 text-xs text-text-secondary"
-                    >
+                    <Badge key={date} variant="warning">
                       {formatDate(date)}
-                    </span>
+                    </Badge>
                   ))}
                 </div>
               </div>
             )}
-          </div>
+          </Card>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-border-default bg-surface-raised p-4 text-center">
-              <p className="text-2xl font-bold text-text-primary">
+          <div className="marketplace-stat-grid">
+            <Card
+              variant="panel"
+              padding="none"
+              className="marketplace-stat-card"
+            >
+              <p className="marketplace-stat-card__value">
                 {listing.rating_avg?.toFixed(1) ?? "—"}
               </p>
-              <p className="text-xs text-text-secondary mt-1">
+              <p className="marketplace-stat-card__label">
                 Avg rating ({listing.review_count} reviews)
               </p>
-            </div>
-            <div className="rounded-2xl border border-border-default bg-surface-raised p-4 text-center">
-              <p className="text-2xl font-bold text-text-primary capitalize">
+            </Card>
+            <Card
+              variant="panel"
+              padding="none"
+              className="marketplace-stat-card"
+            >
+              <p className="marketplace-stat-card__value capitalize">
                 {listing.is_published ? "Active" : "Hidden"}
               </p>
-              <p className="text-xs text-text-secondary mt-1">Profile status</p>
-            </div>
+              <p className="marketplace-stat-card__label">Profile status</p>
+            </Card>
           </div>
         </>
       )}
@@ -487,9 +498,9 @@ function PhotographersTab() {
   }, [city, district, myUserID, requestKey, specialization, stateID]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-text-secondary">
+    <div className="marketplace-stack">
+      <div className="marketplace-section-header">
+        <p className="marketplace-section-copy">
           {loading
             ? "Loading…"
             : `${freelancers.length} ${freelancers.length === 1 ? "photographer" : "photographers"} available`}
@@ -497,27 +508,23 @@ function PhotographersTab() {
         {!hasProfile && (
           <Link
             href="/marketplace/freelancers/edit"
-            className="btn-primary px-4 py-2.5 text-sm"
+            className="glass-button glass-button--primary glass-button--md"
           >
-            Create Profile
+            <span>Create Profile</span>
           </Link>
         )}
       </div>
 
-      {error && (
-        <div className="rounded-xl border border-feedback-error/20 bg-feedback-error/10 px-4 py-3 text-sm text-feedback-error">
-          {error}
-        </div>
-      )}
+      {error && <InlineAlert variant="error">{error}</InlineAlert>}
 
-      <div className="flex flex-wrap gap-3">
+      <Card variant="panel" padding="none" className="marketplace-filter-panel">
         <select
           value={stateID}
           onChange={(e) => {
             setStateID(e.target.value ? Number(e.target.value) : "");
             setDistrict("");
           }}
-          className="input-base min-w-[160px]"
+          className="input-base marketplace-filter-control"
           aria-label="Filter by state"
         >
           <option value="">All States</option>
@@ -536,7 +543,7 @@ function PhotographersTab() {
               value={district}
               onChange={(e) => setDistrict(e.target.value)}
               disabled={districts.length === 0}
-              className="input-base min-w-[160px] disabled:opacity-50"
+              className="input-base marketplace-filter-control"
               aria-label="Filter by district"
             >
               <option value="">
@@ -555,13 +562,14 @@ function PhotographersTab() {
           placeholder="Filter by city…"
           value={city}
           onChange={(e) => setCity(e.target.value)}
-          className="input-base min-w-[160px]"
+          className="input-base marketplace-filter-control"
           aria-label="Filter by city"
         />
         <select
           value={specialization}
           onChange={(e) => setSpecialization(e.target.value)}
-          className="input-base"
+          className="input-base marketplace-filter-control"
+          aria-label="Filter by specialization"
         >
           <option value="">All Specializations</option>
           {SPECIALIZATIONS.map((entry) => (
@@ -570,59 +578,59 @@ function PhotographersTab() {
             </option>
           ))}
         </select>
-      </div>
+      </Card>
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="marketplace-card-grid">
           {[1, 2, 3, 4, 5, 6].map((item) => (
-            <div
+            <Card
               key={item}
-              className="h-48 bg-surface-sunken rounded-xl animate-pulse"
+              variant="panel"
+              padding="none"
+              className="marketplace-listing-skeleton"
+              aria-hidden="true"
             />
           ))}
         </div>
       ) : freelancers.length === 0 ? (
-        <div className="text-center py-12 text-text-secondary">
+        <Card
+          variant="panel"
+          padding="none"
+          className="marketplace-empty-state"
+        >
           No freelancers found. Try adjusting your filters.
-        </div>
+        </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="marketplace-card-grid">
           {freelancers.map((freelancer) => (
             <Link
               key={freelancer.id}
               href={`/marketplace/freelancers/${freelancer.id}`}
-              className="block p-5 rounded-xl border border-border-default bg-surface-raised hover:bg-surface-sunken transition-colors"
+              className="surface-panel card-pad-sm marketplace-listing-card"
             >
-              <h3 className="text-base font-semibold text-text-primary">
-                {freelancer.title}
-              </h3>
+              <h3 className="marketplace-card-title">{freelancer.title}</h3>
               {freelancer.city && (
-                <p className="text-sm text-text-secondary mt-1">
-                  {freelancer.city}
-                </p>
+                <p className="marketplace-card-meta">{freelancer.city}</p>
               )}
-              <div className="flex flex-wrap gap-1.5 mt-3">
+              <div className="marketplace-badge-row">
                 {freelancer.specializations.map((entry) => (
-                  <span
-                    key={entry}
-                    className="status-badge status-badge--accent"
-                  >
+                  <Badge key={entry} variant="accent" className="capitalize">
                     {entry}
-                  </span>
+                  </Badge>
                 ))}
               </div>
-              <div className="flex items-center justify-between mt-4">
-                <div className="flex items-center gap-1">
+              <div className="marketplace-listing-card__footer">
+                <div className="marketplace-rating">
                   <span className="rating-star">★</span>
-                  <span className="text-sm font-medium text-text-primary">
+                  <span className="marketplace-rating__value">
                     {freelancer.rating_avg?.toFixed(1) || "New"}
                   </span>
-                  <span className="text-xs text-text-secondary">
+                  <span className="marketplace-rating__count">
                     ({freelancer.review_count})
                   </span>
                 </div>
                 {freelancer.daily_rate_paisa && (
-                  <span className="text-sm font-semibold text-text-primary">
+                  <span className="marketplace-rate">
                     ₹
                     {(freelancer.daily_rate_paisa / 100).toLocaleString(
                       "en-IN",
@@ -647,17 +655,17 @@ export default function FreelancersPage() {
   const [tab, setTab] = useState<Tab>("photographers");
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-text-primary">
-          Freelancers
-        </h1>
-        <p className="text-sm text-text-secondary mt-1">
-          Find photographers for hire or manage your own freelance profile
-        </p>
-      </div>
+    <PageContainer width="wide">
+      <PageHeader
+        title="Freelancers"
+        description="Find photographers for hire or manage your own freelance profile."
+      />
 
-      <div className="flex gap-2 border-b border-border-default pb-0">
+      <div
+        role="tablist"
+        aria-label="Freelancer marketplace sections"
+        className="glass-segmented marketplace-page-tabs"
+      >
         {(
           [
             { id: "photographers", label: "Freelance photographers" },
@@ -666,20 +674,20 @@ export default function FreelancersPage() {
         ).map(({ id, label }) => (
           <button
             key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
             onClick={() => setTab(id)}
-            className={cn(
-              "px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
-              tab === id
-                ? "border-accent text-accent"
-                : "border-transparent text-text-secondary hover:text-text-primary",
-            )}
+            className="glass-segmented-option"
           >
             {label}
           </button>
         ))}
       </div>
 
-      {tab === "photographers" ? <PhotographersTab /> : <MyProfileTab />}
-    </div>
+      <div role="tabpanel">
+        {tab === "photographers" ? <PhotographersTab /> : <MyProfileTab />}
+      </div>
+    </PageContainer>
   );
 }

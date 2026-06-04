@@ -145,7 +145,7 @@ describe("CoverDesignPage", () => {
       target: { value: "scenes" },
     });
     fireEvent.click(
-      screen.getByRole("checkbox", { name: /haldi scene header/i }),
+      screen.getByRole("switch", { name: /haldi scene header/i }),
     );
 
     fireEvent.change(screen.getByLabelText("Editor section"), {

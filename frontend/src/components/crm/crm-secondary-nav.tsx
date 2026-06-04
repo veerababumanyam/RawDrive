@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
 
 const CRM_NAV_ITEMS = [
   { href: "/crm", label: "Overview", active: ["/crm"] },
@@ -33,7 +32,7 @@ export function CRMSecondaryNav() {
 
   return (
     <nav aria-label="Studio CRM sections" className="overflow-x-auto pb-1">
-      <div className="flex gap-2 rounded-2xl border border-border-default bg-surface-raised p-2">
+      <div className="glass-segmented min-w-max">
         {CRM_NAV_ITEMS.map((item) => {
           const active =
             item.href === "/crm"
@@ -43,12 +42,8 @@ export function CRMSecondaryNav() {
             <Link
               key={item.href}
               href={item.href}
-              className={cn(
-                "whitespace-nowrap rounded-xl px-3 py-2 text-sm font-medium transition-colors",
-                active
-                  ? "bg-accent-primary text-text-inverse"
-                  : "text-text-secondary hover:bg-surface-sunken hover:text-text-primary",
-              )}
+              aria-current={active ? "page" : undefined}
+              className="glass-segmented-option whitespace-nowrap"
             >
               {item.label}
             </Link>

@@ -8,8 +8,12 @@ import {
   type GSTR1Report,
 } from "@/lib/api/billing";
 import { getStoredAccessToken } from "@/lib/auth";
-import { cn } from "@/lib/utils";
 import { CRMSecondaryNav } from "@/components/crm/crm-secondary-nav";
+import { Card } from "@/components/ui/card";
+import { GlassButton } from "@/components/ui/glass-button";
+import { InlineAlert } from "@/components/ui/inline-alert";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageHeader } from "@/components/ui/page-header";
 
 function currentFinancialYear(): string {
   const now = new Date();
@@ -19,6 +23,7 @@ function currentFinancialYear(): string {
 }
 
 const GSTR_PAGE_SIZE = 25;
+const GSTR_TABS = ["all", "B2B", "B2C"] as const;
 
 export default function GSTR1ReportPage() {
   const [fy, setFy] = useState(currentFinancialYear());
@@ -82,155 +87,161 @@ export default function GSTR1ReportPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+    <PageContainer width="wide">
       <CRMSecondaryNav />
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">
-            GSTR-1 Export
-          </h1>
-          <p className="mt-1 text-sm text-text-secondary">
-            Outward supply data for your CA, grouped by financial year.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <label className="flex flex-col gap-1 text-xs text-text-secondary">
-            Financial year
-            <input
-              value={fy}
-              onChange={(e) => {
-                setFy(e.target.value);
-                setPage(0);
-              }}
-              className="input-field"
-              placeholder="2026-27"
-            />
-          </label>
-          <button
-            type="button"
-            onClick={handleDownload}
-            className="self-end rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-text-inverse hover:bg-accent-primary/90 min-h-[44px]"
-          >
-            Download CSV
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="GSTR-1 Export"
+        description="Outward supply data for your CA, grouped by financial year."
+        actions={
+          <>
+            <label className="gstr-year-field">
+              <span className="form-label">Financial year</span>
+              <input
+                value={fy}
+                onChange={(e) => {
+                  setFy(e.target.value);
+                  setPage(0);
+                }}
+                className="input-base gstr-year-input"
+                placeholder="2026-27"
+              />
+            </label>
+            <GlassButton
+              type="button"
+              variant="primary"
+              size="md"
+              className="gstr-download-button"
+              onClick={handleDownload}
+            >
+              Download CSV
+            </GlassButton>
+          </>
+        }
+      />
 
-      {error && (
-        <div className="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
-          {error}
-        </div>
-      )}
+      {error && <InlineAlert variant="error">{error}</InlineAlert>}
 
       {loading ? (
-        <div className="h-32 rounded-2xl bg-surface-sunken animate-pulse" />
+        <Card
+          variant="panel"
+          padding="none"
+          className="gstr-report-skeleton"
+          aria-label="Loading GSTR-1 report"
+        />
       ) : report ? (
         <>
-          <section className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-            <div className="rounded-2xl border border-border-default bg-surface-raised p-4">
-              <p className="text-xs text-text-tertiary">Taxable value</p>
-              <p className="mt-1 text-lg font-semibold text-text-primary">
+          <section className="gstr-summary-grid" aria-label="GSTR-1 summary">
+            <Card variant="panel" padding="none" className="gstr-metric-card">
+              <p className="gstr-metric-card__label">Taxable value</p>
+              <p className="gstr-metric-card__value">
                 {formatPaisa(report.total_taxable_paisa)}
               </p>
-            </div>
-            <div className="rounded-2xl border border-border-default bg-surface-raised p-4">
-              <p className="text-xs text-text-tertiary">CGST + SGST</p>
-              <p className="mt-1 text-lg font-semibold text-text-primary">
+            </Card>
+            <Card variant="panel" padding="none" className="gstr-metric-card">
+              <p className="gstr-metric-card__label">CGST + SGST</p>
+              <p className="gstr-metric-card__value">
                 {formatPaisa(report.total_cgst_paisa + report.total_sgst_paisa)}
               </p>
-            </div>
-            <div className="rounded-2xl border border-border-default bg-surface-raised p-4">
-              <p className="text-xs text-text-tertiary">IGST</p>
-              <p className="mt-1 text-lg font-semibold text-text-primary">
+            </Card>
+            <Card variant="panel" padding="none" className="gstr-metric-card">
+              <p className="gstr-metric-card__label">IGST</p>
+              <p className="gstr-metric-card__value">
                 {formatPaisa(report.total_igst_paisa)}
               </p>
-            </div>
-            <div className="rounded-2xl border border-border-default bg-surface-raised p-4">
-              <p className="text-xs text-text-tertiary">B2B / B2C</p>
-              <p className="mt-1 text-lg font-semibold text-text-primary">
+            </Card>
+            <Card variant="panel" padding="none" className="gstr-metric-card">
+              <p className="gstr-metric-card__label">B2B / B2C</p>
+              <p className="gstr-metric-card__value">
                 {report.b2b_count} / {report.b2c_count}
               </p>
-            </div>
+            </Card>
           </section>
 
-          <div className="flex gap-2">
-            {(["all", "B2B", "B2C"] as const).map((tab) => (
+          <div
+            role="tablist"
+            aria-label="Supply type"
+            className="glass-segmented gstr-filter-tabs"
+          >
+            {GSTR_TABS.map((tab) => (
               <button
                 key={tab}
                 type="button"
+                role="tab"
+                aria-selected={activeTab === tab}
                 onClick={() => {
                   setActiveTab(tab);
                   setPage(0);
                 }}
-                className={cn(
-                  "segmented-control-button text-sm",
-                  activeTab === tab
-                    ? "segmented-control-button--active"
-                    : "segmented-control-button--inactive",
-                )}
+                className="glass-segmented-option"
               >
-                {tab}
+                {tab === "all" ? "All" : tab}
               </button>
             ))}
           </div>
 
-          <section className="overflow-hidden rounded-2xl border border-border-default bg-surface-raised">
+          <Card variant="panel" padding="none" className="gstr-table-panel">
             {entries.length === 0 ? (
-              <div className="p-10 text-center text-sm text-text-secondary">
+              <div className="gstr-empty-state">
                 No filing rows for this period.
               </div>
             ) : (
               <>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full table-auto text-left text-sm">
-                    <thead className="bg-surface-sunken text-xs text-text-tertiary">
+                <div className="gstr-table-scroll">
+                  <table className="gstr-table">
+                    <thead className="gstr-table__head">
                       <tr>
-                        <th className="px-4 py-3">Invoice</th>
-                        <th className="px-4 py-3">Client</th>
-                        <th className="px-4 py-3">Supply</th>
-                        <th className="px-4 py-3 text-right">Taxable</th>
-                        <th className="px-4 py-3 text-right">GST</th>
-                        <th className="px-4 py-3 text-right">Total</th>
+                        <th className="gstr-table__heading">Invoice</th>
+                        <th className="gstr-table__heading">Client</th>
+                        <th className="gstr-table__heading">Supply</th>
+                        <th className="gstr-table__heading gstr-table__heading--numeric">
+                          Taxable
+                        </th>
+                        <th className="gstr-table__heading gstr-table__heading--numeric">
+                          GST
+                        </th>
+                        <th className="gstr-table__heading gstr-table__heading--numeric">
+                          Total
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {pageEntries.map((entry) => (
                         <tr
                           key={`${entry.invoice_number}-${entry.invoice_date}`}
-                          className="border-t border-border-default"
+                          className="gstr-table__row"
                         >
-                          <td className="px-4 py-3 font-mono text-xs text-text-primary">
+                          <td className="gstr-table__cell gstr-table__cell--mono">
                             {entry.invoice_number}
-                            <span className="block pt-1 font-sans text-text-tertiary">
+                            <span className="gstr-table__secondary">
                               {entry.invoice_date}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-text-secondary">
+                          <td className="gstr-table__cell">
                             {entry.client_name || "Client"}
                             {entry.client_gstin ? (
-                              <span className="block pt-1 text-xs text-text-tertiary">
+                              <span className="gstr-table__secondary">
                                 {entry.client_gstin}
                               </span>
                             ) : null}
                           </td>
-                          <td className="px-4 py-3 text-text-secondary">
+                          <td className="gstr-table__cell">
                             {entry.supply_type}
-                            <span className="block pt-1 text-xs text-text-tertiary">
+                            <span className="gstr-table__secondary">
                               SAC {entry.sac_code}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-right text-text-primary">
+                          <td className="gstr-table__cell gstr-table__cell--numeric">
                             {formatPaisa(entry.taxable_value_paisa)}
                           </td>
-                          <td className="px-4 py-3 text-right text-text-secondary">
+                          <td className="gstr-table__cell gstr-table__cell--numeric">
                             {formatPaisa(
                               entry.cgst_paisa +
                                 entry.sgst_paisa +
                                 entry.igst_paisa,
                             )}
                           </td>
-                          <td className="px-4 py-3 text-right font-semibold text-text-primary">
+                          <td className="gstr-table__cell gstr-table__cell--numeric gstr-table__cell--strong">
                             {formatPaisa(entry.total_paisa)}
                           </td>
                         </tr>
@@ -239,35 +250,37 @@ export default function GSTR1ReportPage() {
                   </table>
                 </div>
                 {pageCount > 1 && (
-                  <div className="flex items-center justify-between border-t border-border-default bg-surface-raised px-4 py-3 text-sm text-text-secondary">
-                    <span>
+                  <div className="gstr-pagination">
+                    <span className="gstr-pagination__status">
                       Page {page + 1} of {pageCount} ({entries.length} entries)
                     </span>
-                    <div className="flex gap-2">
-                      <button
+                    <div className="gstr-pagination__actions">
+                      <GlassButton
                         type="button"
+                        variant="surface"
+                        size="md"
                         onClick={() => setPage((p) => p - 1)}
                         disabled={page === 0}
-                        className="rounded-lg border border-border-default px-3 py-1.5 text-xs hover:bg-surface-sunken disabled:opacity-40 disabled:pointer-events-none transition-colors"
                       >
                         Previous
-                      </button>
-                      <button
+                      </GlassButton>
+                      <GlassButton
                         type="button"
+                        variant="surface"
+                        size="md"
                         onClick={() => setPage((p) => p + 1)}
                         disabled={page >= pageCount - 1}
-                        className="rounded-lg border border-border-default px-3 py-1.5 text-xs hover:bg-surface-sunken disabled:opacity-40 disabled:pointer-events-none transition-colors"
                       >
                         Next
-                      </button>
+                      </GlassButton>
                     </div>
                   </div>
                 )}
               </>
             )}
-          </section>
+          </Card>
         </>
       ) : null}
-    </div>
+    </PageContainer>
   );
 }

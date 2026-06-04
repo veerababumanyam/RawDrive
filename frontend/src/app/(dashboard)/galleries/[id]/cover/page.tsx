@@ -62,6 +62,12 @@ import {
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { GalleryPageShell } from "@/components/gallery/gallery-page-shell";
 import { GalleryPageHeader } from "@/components/gallery/gallery-page-header";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { GlassButton } from "@/components/ui/glass-button";
+import { SelectableTile } from "@/components/ui/selectable-tile";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import { Check, Key, Loader2, Photo, RefreshCw } from "@/components/icons";
 import { components as designComponents } from "@/lib/tokens";
 
 // ──────────────────────────── Data ────────────────────────────
@@ -145,7 +151,6 @@ interface DesignConfig {
     aspectRatio: string;
   };
   typography: {
-    pairingId: string;
     headingFont: string;
     bodyFont: string;
     titleSize: number;
@@ -226,6 +231,9 @@ const GRID_LAYOUTS: { id: GridLayout; label: string }[] = [
 // viewer renders with grid.gap=8 — typical wedding gallery spacing.
 const DEFAULT_GRID_GAP = 8;
 const COVER_COLORS = designComponents.mediaCover.presetColors;
+const COVER_FIELD_CLASS = "input-base w-full text-sm";
+const COVER_RANGE_CLASS = "cover-range-input";
+const COVER_COLOR_CLASS = "cover-color-input";
 
 const COVER_PRESETS: Array<{
   id: CoverPresetId;
@@ -533,7 +541,6 @@ const DEFAULT_CONFIG: DesignConfig = {
     aspectRatio: "16/9",
   },
   typography: {
-    pairingId: "elegant",
     headingFont: "Playfair Display",
     bodyFont: "Inter",
     titleSize: 48,
@@ -870,6 +877,11 @@ export default function CoverDesignPage() {
     token,
   );
   const hasCoverPreview = Boolean(coverMedia.src);
+  const coverPreviewStatus = coverMedia.loading
+    ? "Decrypting cover preview"
+    : coverMedia.error
+      ? "Cover key needed"
+      : "Cover preview unavailable";
 
   // ───────────── Drag handlers ─────────────
 
@@ -1039,37 +1051,37 @@ export default function CoverDesignPage() {
         subtitle={gallery?.title || "Loading…"}
         actions={
           <>
-          {/* Section selector — replaces the horizontal tab strip that
+            {/* Section selector — replaces the horizontal tab strip that
               used to sit under the preview. A dropdown is denser (one
               element instead of five) and pairs naturally with the
               Preview/Save buttons. Native <select> for predictable
               keyboard nav + iOS picker UX; styled to match the dark
               theme rather than rebuilt as a custom popover. */}
-          <label htmlFor="cover-tab-select" className="sr-only">
-            Editor section
-          </label>
-          <select
-            id="cover-tab-select"
-            value={tab}
-            onChange={(e) => setTab(e.target.value as TabId)}
-            className="touch-min flex-1 cursor-pointer rounded-xl border border-border-subtle bg-surface px-3 py-2 pr-8 text-sm capitalize focus:border-primary focus:outline-none sm:flex-none"
-          >
-            <option value="cover">Cover</option>
-            <option value="text">Text</option>
-            <option value="media">Media</option>
-            <option value="scenes">Scenes</option>
-            <option value="brand">Brand</option>
-            <option value="grid">Grid</option>
-          </select>
-          {gallery?.slug && (
-            <Link
-              href={`/galleries/${galleryId}/preview`}
-              className="touch-min flex-1 rounded-xl border border-border-subtle px-4 py-2 text-center text-sm transition-colors hover:bg-accent-subtle sm:flex-none"
+            <label htmlFor="cover-tab-select" className="sr-only">
+              Editor section
+            </label>
+            <select
+              id="cover-tab-select"
+              value={tab}
+              onChange={(e) => setTab(e.target.value as TabId)}
+              className="input-base cover-header-select"
             >
-              Preview
-            </Link>
-          )}
-          {/* Save button — three visual states that give the user
+              <option value="cover">Cover</option>
+              <option value="text">Text</option>
+              <option value="media">Media</option>
+              <option value="scenes">Scenes</option>
+              <option value="brand">Brand</option>
+              <option value="grid">Grid</option>
+            </select>
+            {gallery?.slug && (
+              <Link
+                href={`/galleries/${galleryId}/preview`}
+                className="glass-button glass-button--surface glass-button--md cover-header-action"
+              >
+                Preview
+              </Link>
+            )}
+            {/* Save button — three visual states that give the user
               concrete feedback at every step of the save cycle:
                 1. Idle (clean)   — neutral primary gradient, "Save"
                 2. Idle (dirty)   — same gradient + a small amber dot in
@@ -1081,66 +1093,37 @@ export default function CoverDesignPage() {
               The previous version only swapped text from "Save" → "Saving…"
               for one render tick — users genuinely couldn't tell whether
               the click registered. */}
-          <button
-            onClick={handleSave}
-            disabled={saving || !config.cover.assetId}
-            aria-live="polite"
-            aria-label={
-              saving
-                ? "Saving cover and design"
-                : justSaved
-                  ? "Cover and design saved"
-                  : isDirty
-                    ? "Save cover and design (unsaved changes)"
-                    : "Save cover and design"
-            }
-            className={`touch-min relative flex-1 overflow-hidden rounded-xl px-5 py-2 text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed sm:flex-none sm:px-6 ${
-              justSaved
-                ? "bg-success/85 text-on-primary shadow-lg shadow-success/30 scale-[1.02]"
-                : saving
-                  ? "bg-gradient-to-r from-primary to-primary-container text-on-primary opacity-90"
-                  : "bg-gradient-to-r from-primary to-primary-container text-on-primary hover:shadow-md hover:shadow-primary/20 active:scale-[0.98] disabled:opacity-50"
-            }`}
-          >
-            <span className="flex items-center justify-center gap-2">
-              {saving && (
-                <svg
-                  className="h-4 w-4 animate-spin"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  aria-hidden
-                >
-                  <path d="M12 2a10 10 0 0 1 10 10" />
-                </svg>
-              )}
-              {justSaved && (
-                <svg
-                  className="h-4 w-4"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden
-                >
-                  <path d="M3 8.5 6.5 12 13 4" />
-                </svg>
-              )}
-              <span>{saving ? "Saving…" : justSaved ? "Saved" : "Save"}</span>
-            </span>
-            {/* Unsaved-changes dot in the button corner. Only visible in
+            <GlassButton
+              type="button"
+              onClick={handleSave}
+              disabled={saving || !config.cover.assetId}
+              aria-live="polite"
+              aria-label={
+                saving
+                  ? "Saving cover and design"
+                  : justSaved
+                    ? "Cover and design saved"
+                    : isDirty
+                      ? "Save cover and design (unsaved changes)"
+                      : "Save cover and design"
+              }
+              variant={justSaved ? "success" : "primary"}
+              icon={
+                saving ? (
+                  <Loader2 className="cover-save-button__spinner" aria-hidden />
+                ) : justSaved ? (
+                  <Check aria-hidden />
+                ) : undefined
+              }
+              className="cover-save-button"
+            >
+              {saving ? "Saving..." : justSaved ? "Saved" : "Save"}
+              {/* Unsaved-changes dot in the button corner. Only visible in
                 the idle-dirty state — not during save or right after. */}
-            {isDirty && !saving && !justSaved && (
-              <span
-                className="absolute right-2 top-2 h-2 w-2 rounded-full bg-warning shadow-sm shadow-warning/40"
-                aria-hidden
-              />
-            )}
-          </button>
+              {isDirty && !saving && !justSaved && (
+                <span className="cover-save-button__dirty" aria-hidden />
+              )}
+            </GlassButton>
           </>
         }
       />
@@ -1148,40 +1131,12 @@ export default function CoverDesignPage() {
       {(saveMessage || saveError) && (
         <div role="status" aria-live="polite">
           {saveMessage && (
-            <div className="inline-flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-3 py-1.5 text-xs font-medium text-success">
-              <svg
-                className="h-3.5 w-3.5"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <path d="M3 8.5 6.5 12 13 4" />
-              </svg>
+            <Badge variant="success">
+              <Check aria-hidden />
               {saveMessage}
-            </div>
+            </Badge>
           )}
-          {saveError && (
-            <div className="inline-flex items-center gap-2 rounded-lg border border-error/30 bg-error/10 px-3 py-1.5 text-xs font-medium text-error">
-              <svg
-                className="h-3.5 w-3.5"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <circle cx="8" cy="8" r="6" />
-                <path d="M8 5v4M8 11.5v.01" />
-              </svg>
-              {saveError}
-            </div>
-          )}
+          {saveError && <Badge variant="danger">{saveError}</Badge>}
         </div>
       )}
 
@@ -1195,7 +1150,11 @@ export default function CoverDesignPage() {
         {/* ───────── LIVE PREVIEW ───────── */}
         <section>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <div className="cover-editor-segmented inline-flex">
+            <div
+              className="glass-segmented cover-device-toggle"
+              role="group"
+              aria-label="Preview device"
+            >
               {(["desktop", "phone"] as PreviewDevice[]).map((device) => (
                 <button
                   key={device}
@@ -1205,11 +1164,7 @@ export default function CoverDesignPage() {
                   aria-label={
                     device === "desktop" ? "Desktop preview" : "Phone preview"
                   }
-                  className={`touch-min rounded-full px-4 text-sm font-medium transition-colors ${
-                    previewDevice === device
-                      ? "bg-primary text-on-primary"
-                      : "text-on-surface-variant hover:bg-accent-subtle"
-                  }`}
+                  className="glass-segmented-option"
                 >
                   {device === "desktop" ? "Desktop" : "Phone"}
                 </button>
@@ -1260,10 +1215,20 @@ export default function CoverDesignPage() {
             ) : (
               <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-surface-container to-surface-container-high">
                 {selectedAsset && (
-                  <span className="rounded-full bg-surface-overlay px-3 py-1 text-xs font-medium text-on-surface-variant">
-                    {coverMedia.loading
-                      ? "Decrypting cover preview..."
-                      : coverMedia.error || "Cover preview unavailable"}
+                  <span
+                    className="cover-preview-status"
+                    aria-label={`${selectedAsset.filename}: ${coverMedia.error || coverPreviewStatus}`}
+                    title={coverMedia.error || coverPreviewStatus}
+                  >
+                    {coverMedia.loading ? (
+                      <Photo
+                        className="cover-preview-status__icon"
+                        aria-hidden
+                      />
+                    ) : (
+                      <Key className="cover-preview-status__icon" aria-hidden />
+                    )}
+                    <span>{coverPreviewStatus}</span>
                   </span>
                 )}
               </div>
@@ -1402,7 +1367,7 @@ export default function CoverDesignPage() {
           {/* Section picker moved into the page header as a dropdown
               next to Preview/Save. The panel body renders the active
               section's controls without a tab bar above it. */}
-          <div className="cover-editor-panel p-4 sm:p-6">
+          <Card variant="panel" padding="md">
             {tab === "cover" && (
               <PanelCover
                 assets={assets}
@@ -1444,7 +1409,7 @@ export default function CoverDesignPage() {
             {tab === "brand" && (
               <PanelBrand config={config} setConfig={setConfig} />
             )}
-          </div>
+          </Card>
         </section>
       </div>
     </GalleryPageShell>
@@ -1559,7 +1524,11 @@ function FontPicker({
   }, [open, value]);
 
   return (
-    <div ref={containerRef} className="relative" onKeyDown={handleKeyDown}>
+    <div
+      ref={containerRef}
+      className="cover-font-picker"
+      onKeyDown={handleKeyDown}
+    >
       <button
         id={id}
         type="button"
@@ -1567,10 +1536,10 @@ function FontPicker({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={ariaLabel || `Select font, current: ${value}`}
-        className="flex w-full items-center justify-between rounded-lg border border-border-subtle bg-surface px-3 py-2 text-sm transition-colors hover:border-border-default focus:border-primary focus:outline-none"
+        className="cover-font-trigger"
       >
         <span
-          className="truncate text-left"
+          className="cover-font-trigger__value"
           style={{ fontFamily: fontFamilyFor(value) }}
         >
           {value}
@@ -1578,7 +1547,7 @@ function FontPicker({
         <svg
           aria-hidden
           viewBox="0 0 12 8"
-          className={`ml-2 h-2 w-3 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`cover-font-trigger__chevron ${open ? "cover-font-trigger__chevron--open" : ""}`}
           fill="none"
           stroke="currentColor"
           strokeWidth="1.5"
@@ -1594,7 +1563,7 @@ function FontPicker({
           ref={listRef}
           role="listbox"
           aria-label={ariaLabel || "Font options"}
-          className="absolute left-0 right-0 top-[calc(100%+4px)] z-30 max-h-72 overflow-y-auto rounded-lg border border-border-subtle bg-surface-container py-1 shadow-2xl shadow-lg"
+          className="cover-font-popover"
         >
           {FONT_OPTIONS.map((f) => {
             const selected = f.name === value;
@@ -1605,18 +1574,17 @@ function FontPicker({
                 role="option"
                 aria-selected={selected}
                 data-font-option={f.name}
+                data-state={selected ? "selected" : "unselected"}
                 onClick={() => {
                   onChange(f.name);
                   setOpen(false);
                 }}
-                className={`flex w-full items-baseline justify-between gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-accent-subtle focus:bg-accent-subtle focus:outline-none ${
-                  selected ? "bg-primary/10 text-primary" : "text-on-surface"
-                }`}
+                className="cover-font-option"
                 style={{ fontFamily: fontFamilyFor(f.name) }}
               >
-                <span className="truncate">{f.name}</span>
+                <span className="cover-font-option__name">{f.name}</span>
                 <span
-                  className="shrink-0 text-base text-on-surface-variant"
+                  className="cover-font-option__sample"
                   style={{ fontFamily: fontFamilyFor(f.name) }}
                   aria-hidden
                 >
@@ -1645,62 +1613,64 @@ function PanelCover({
   setConfig: React.Dispatch<React.SetStateAction<DesignConfig>>;
 }) {
   return (
-    <div className="space-y-4">
-      <div>
-        <div className="mb-2 flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold">Design presets</h3>
-            <p className="text-xs text-on-surface-variant">
+    <div className="cover-panel-stack">
+      <section className="cover-section" aria-labelledby="cover-presets-title">
+        <div className="cover-section-header">
+          <div className="cover-section-heading">
+            <h3 id="cover-presets-title" className="cover-section-title">
+              Design presets
+            </h3>
+            <p className="cover-section-copy">
               One-tap cover direction for wedding galleries.
             </p>
           </div>
-          <span className="rounded-full bg-primary/10 px-2 py-1 text-2xs font-medium uppercase tracking-wider text-primary">
+          <Badge variant="accent" className="uppercase">
             {config.cover.layoutPreset.replace(/-/g, " ")}
-          </span>
+          </Badge>
         </div>
         <div
-          className="grid grid-cols-2 gap-1 rounded-xl border border-border-subtle bg-surface-sunken p-1 sm:grid-cols-2 sm:gap-2 sm:border-0 sm:bg-transparent sm:p-0 lg:grid-cols-4"
+          className="cover-preset-grid"
           role="group"
           aria-label="Cover design presets"
         >
           {COVER_PRESETS.map((preset) => {
             const active = config.cover.layoutPreset === preset.id;
             return (
-              <button
+              <SelectableTile
                 key={preset.id}
-                type="button"
                 onClick={() => setConfig((c) => applyCoverPreset(c, preset.id))}
-                aria-pressed={active}
-                className={`min-h-11 rounded-lg border px-2 py-2 text-center text-xs transition-colors sm:min-h-18 sm:rounded-xl sm:p-3 sm:text-left ${
-                  active
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-transparent text-on-surface hover:bg-accent-subtle sm:border-border-subtle"
-                }`}
-              >
-                <span className="block font-semibold sm:text-sm">
-                  {preset.name}
-                </span>
-                <span className="mt-1 hidden text-xs text-on-surface-variant sm:block">
-                  {preset.mood}
-                </span>
-              </button>
+                selected={active}
+                title={preset.name}
+                description={preset.mood}
+              />
             );
           })}
         </div>
-      </div>
+      </section>
 
-      <div>
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Cover photo</h3>
-          <span className="text-xs text-on-surface-variant">
+      <section
+        className="cover-section cover-photo-picker"
+        aria-labelledby="cover-photo-title"
+      >
+        <div className="cover-section-header">
+          <div className="cover-section-heading">
+            <h3 id="cover-photo-title" className="cover-section-title">
+              Cover photo
+            </h3>
+          </div>
+          <Badge variant="neutral" className="cover-section-count">
             {assets.length} {assets.length === 1 ? "photo" : "photos"}
-          </span>
+          </Badge>
         </div>
-        <div className="grid max-h-80 grid-cols-4 gap-2 overflow-y-auto pr-1 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10">
-          {assets.map((a) => {
+        <div
+          className="cover-photo-grid"
+          role="group"
+          aria-label="Cover photo choices"
+        >
+          {assets.map((a, index) => {
             const active = config.cover.assetId === a.id;
             return (
-              <button
+              <SelectableTile
                 key={a.id}
                 onClick={() =>
                   setConfig((c) => ({
@@ -1708,34 +1678,38 @@ function PanelCover({
                     cover: { ...c.cover, assetId: a.id },
                   }))
                 }
-                className={`aspect-square overflow-hidden rounded-md transition-all ${
-                  active
-                    ? "ring-2 ring-primary"
-                    : "ring-1 ring-border-subtle hover:ring-border-default"
-                }`}
+                selected={active}
+                className="cover-photo-tile"
+                title={a.filename || `Photo ${index + 1}`}
+                description={active ? "Current cover" : `Photo ${index + 1}`}
+                media={
+                  <DecryptedPreviewImage
+                    asset={a}
+                    token={token}
+                    variants={FILMSTRIP_VARIANTS}
+                    alt={a.filename}
+                    className="cover-photo-tile__image"
+                    fallbackMode="compact"
+                  />
+                }
                 aria-label={`Use ${a.filename} as cover`}
-                aria-pressed={active}
-              >
-                <DecryptedPreviewImage
-                  asset={a}
-                  token={token}
-                  variants={FILMSTRIP_VARIANTS}
-                  alt={a.filename}
-                  className="h-full w-full object-cover"
-                />
-              </button>
+              />
             );
           })}
         </div>
         {assets.length === 0 && (
-          <p className="mt-2 text-xs text-on-surface-variant">
+          <p className="cover-empty-note">
             Upload photos to the gallery to choose a cover.
           </p>
         )}
-      </div>
+      </section>
 
-      <div className="border-t border-border-subtle pt-4">
-        <button
+      <div className="cover-panel-divider">
+        <GlassButton
+          type="button"
+          variant="surface"
+          size="md"
+          icon={<RefreshCw aria-hidden />}
           onClick={() =>
             setConfig((c) => ({
               ...c,
@@ -1746,12 +1720,12 @@ function PanelCover({
               },
             }))
           }
-          className="touch-min w-full rounded-lg border border-border-subtle px-4 py-2 text-sm transition-colors hover:bg-accent-subtle"
+          className="cover-panel-reset-button"
         >
           Reset focal points ({config.cover.focalPoint.x}%,{" "}
           {config.cover.focalPoint.y}% / phone {config.cover.mobileFocalPoint.x}
           %, {config.cover.mobileFocalPoint.y}%)
-        </button>
+        </GlassButton>
       </div>
     </div>
   );
@@ -1763,18 +1737,33 @@ function DecryptedPreviewImage({
   variants,
   alt,
   className,
+  fallbackMode = "default",
 }: {
   asset: Asset | null;
   token: string | null;
   variants: readonly string[];
   alt: string;
   className: string;
+  fallbackMode?: "default" | "compact";
 }) {
   const media = useDecryptedAssetUrl(asset, variants, token);
 
   if (!asset) return null;
 
   if (media.loading) {
+    if (fallbackMode === "compact") {
+      return (
+        <span
+          className="cover-photo-tile__fallback"
+          role="status"
+          aria-label={`Preparing ${asset.filename}`}
+        >
+          <Photo className="cover-photo-tile__fallback-icon" aria-hidden />
+          <span className="cover-photo-tile__fallback-text">Preparing</span>
+        </span>
+      );
+    }
+
     return (
       <div
         className="flex h-full w-full animate-pulse items-center justify-center bg-surface-container-high"
@@ -1794,6 +1783,19 @@ function DecryptedPreviewImage({
         decoding="async"
         draggable={false}
       />
+    );
+  }
+
+  if (fallbackMode === "compact") {
+    return (
+      <span
+        className="cover-photo-tile__fallback"
+        aria-label={`${asset.filename}: ${media.error || "Preview unavailable"}`}
+        title={media.error || "Preview unavailable"}
+      >
+        <Key className="cover-photo-tile__fallback-icon" aria-hidden />
+        <span className="cover-photo-tile__fallback-text">Key needed</span>
+      </span>
     );
   }
 
@@ -1848,22 +1850,14 @@ function PanelText({
           slider, color. Section heading + position chip up top. Active
           ring on inputs syncs to the preview overlay's selection. */}
       <section
-        className={`space-y-3 rounded-xl border p-3 transition-colors ${
-          activeText === "title"
-            ? "border-primary/40 bg-primary/[0.03]"
-            : "border-border-subtle"
-        }`}
+        className="cover-control-card"
+        data-state={activeText === "title" ? "active" : "idle"}
       >
-        <div className="flex items-baseline justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
-            Title
-          </h3>
+        <div className="cover-control-card__header">
+          <h3 className="form-label">Title</h3>
           <span
-            className={`rounded-full px-2 py-0.5 font-mono text-2xs tabular-nums transition-colors ${
-              activeText === "title"
-                ? "bg-primary/15 text-primary"
-                : "text-on-surface-variant/70"
-            }`}
+            className="cover-position-badge"
+            data-state={activeText === "title" ? "active" : "idle"}
             aria-label={`Title position ${config.cover.titlePosition.x}% horizontal, ${config.cover.titlePosition.y}% vertical`}
           >
             {config.cover.titlePosition.x}, {config.cover.titlePosition.y}
@@ -1881,18 +1875,15 @@ function PanelText({
           }
           onFocus={() => setActiveText("title")}
           placeholder="Your gallery title"
-          className="w-full rounded-lg border border-border-subtle bg-surface px-3 py-2 text-sm transition-colors hover:border-border-default focus:border-primary focus:outline-none"
+          className={COVER_FIELD_CLASS}
         />
 
         {/* Per-element font picker — custom popover dropdown so each
             option renders styled in its own font (native <select>
             doesn't honor per-option font-family in Chromium/Webkit).
             See FontPicker for keyboard nav + click-outside behavior. */}
-        <div className="space-y-1.5">
-          <label
-            htmlFor="cover-title-font"
-            className="text-2xs text-on-surface-variant"
-          >
+        <div className="cover-field-stack">
+          <label htmlFor="cover-title-font" className="form-label">
             Font
           </label>
           <FontPicker
@@ -1911,16 +1902,13 @@ function PanelText({
           />
         </div>
 
-        <div className="grid grid-cols-[1fr_auto] items-center gap-3">
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label
-                htmlFor="cover-title-size"
-                className="text-2xs text-on-surface-variant"
-              >
+        <div className="cover-range-color-grid">
+          <div className="cover-field-stack">
+            <div className="cover-field-row">
+              <label htmlFor="cover-title-size" className="form-label">
                 Size
               </label>
-              <span className="text-2xs tabular-nums">
+              <span className="cover-range-value">
                 {config.typography.titleSize}px
               </span>
             </div>
@@ -1941,14 +1929,11 @@ function PanelText({
                 }))
               }
               onFocus={() => setActiveText("title")}
-              className="w-full accent-primary"
+              className={COVER_RANGE_CLASS}
             />
           </div>
-          <div className="space-y-1.5">
-            <label
-              htmlFor="cover-title-color"
-              className="text-2xs text-on-surface-variant"
-            >
+          <div className="cover-field-stack">
+            <label htmlFor="cover-title-color" className="form-label">
               Color
             </label>
             <input
@@ -1966,7 +1951,7 @@ function PanelText({
                 }))
               }
               onFocus={() => setActiveText("title")}
-              className="h-8 w-12 cursor-pointer rounded border border-border-subtle bg-surface p-0"
+              className={COVER_COLOR_CLASS}
               aria-label="Title color picker"
             />
           </div>
@@ -1978,22 +1963,14 @@ function PanelText({
           two parallel cards. Slight visual differentiation comes only
           from the active-ring (which the focus on either input drives). */}
       <section
-        className={`space-y-3 rounded-xl border p-3 transition-colors ${
-          activeText === "subtitle"
-            ? "border-primary/40 bg-primary/[0.03]"
-            : "border-border-subtle"
-        }`}
+        className="cover-control-card"
+        data-state={activeText === "subtitle" ? "active" : "idle"}
       >
-        <div className="flex items-baseline justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
-            Subtitle
-          </h3>
+        <div className="cover-control-card__header">
+          <h3 className="form-label">Subtitle</h3>
           <span
-            className={`rounded-full px-2 py-0.5 font-mono text-2xs tabular-nums transition-colors ${
-              activeText === "subtitle"
-                ? "bg-primary/15 text-primary"
-                : "text-on-surface-variant/70"
-            }`}
+            className="cover-position-badge"
+            data-state={activeText === "subtitle" ? "active" : "idle"}
             aria-label={`Subtitle position ${config.cover.subtitlePosition.x}% horizontal, ${config.cover.subtitlePosition.y}% vertical`}
           >
             {config.cover.subtitlePosition.x}, {config.cover.subtitlePosition.y}
@@ -2011,14 +1988,11 @@ function PanelText({
           }
           onFocus={() => setActiveText("subtitle")}
           placeholder="Optional subtitle"
-          className="w-full rounded-lg border border-border-subtle bg-surface px-3 py-2 text-sm transition-colors hover:border-border-default focus:border-primary focus:outline-none"
+          className={COVER_FIELD_CLASS}
         />
 
-        <div className="space-y-1.5">
-          <label
-            htmlFor="cover-subtitle-font"
-            className="text-2xs text-on-surface-variant"
-          >
+        <div className="cover-field-stack">
+          <label htmlFor="cover-subtitle-font" className="form-label">
             Font
           </label>
           <FontPicker
@@ -2037,16 +2011,13 @@ function PanelText({
           />
         </div>
 
-        <div className="grid grid-cols-[1fr_auto] items-center gap-3">
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label
-                htmlFor="cover-subtitle-size"
-                className="text-2xs text-on-surface-variant"
-              >
+        <div className="cover-range-color-grid">
+          <div className="cover-field-stack">
+            <div className="cover-field-row">
+              <label htmlFor="cover-subtitle-size" className="form-label">
                 Size
               </label>
-              <span className="text-2xs tabular-nums">
+              <span className="cover-range-value">
                 {config.typography.subtitleSize}px
               </span>
             </div>
@@ -2067,14 +2038,11 @@ function PanelText({
                 }))
               }
               onFocus={() => setActiveText("subtitle")}
-              className="w-full accent-primary"
+              className={COVER_RANGE_CLASS}
             />
           </div>
-          <div className="space-y-1.5">
-            <label
-              htmlFor="cover-subtitle-color"
-              className="text-2xs text-on-surface-variant"
-            >
+          <div className="cover-field-stack">
+            <label htmlFor="cover-subtitle-color" className="form-label">
               Color
             </label>
             <input
@@ -2088,7 +2056,7 @@ function PanelText({
                 }))
               }
               onFocus={() => setActiveText("subtitle")}
-              className="h-8 w-12 cursor-pointer rounded border border-border-subtle bg-surface p-0"
+              className={COVER_COLOR_CLASS}
               aria-label="Subtitle color picker"
             />
           </div>
@@ -2105,31 +2073,30 @@ function PanelText({
             anchor math keeps working.
           - Only the readability-shadow toggle remained shared, so it
             lives inline at the bottom of the panel as a compact row. */}
-      <section className="space-y-3 rounded-xl border border-border-subtle p-3">
-        <div className="flex items-center justify-between gap-3">
+      <section className="cover-control-card">
+        <div className="cover-control-card__header">
           <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
-              Readability assistant
-            </h3>
-            <p className="mt-1 text-2xs text-on-surface-variant/80">
+            <h3 className="form-label">Readability assistant</h3>
+            <p className="cover-helper-text">
               Checks the cover text setup and offers safe one-click fixes.
             </p>
           </div>
-          <span
-            className={`rounded-full px-2 py-1 text-2xs font-semibold uppercase tracking-wider ${
+          <Badge
+            variant={
               readabilityPoints >= 3
-                ? "bg-success/10 text-success"
+                ? "success"
                 : readabilityPoints >= 2
-                  ? "bg-warning/10 text-warning"
-                  : "bg-error/10 text-error"
-            }`}
+                  ? "warning"
+                  : "danger"
+            }
           >
             {readabilityLabel}
-          </span>
+          </Badge>
         </div>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <button
+        <div className="cover-action-grid">
+          <GlassButton
             type="button"
+            variant="surface"
             onClick={() =>
               setConfig((c) => ({
                 ...c,
@@ -2140,24 +2107,26 @@ function PanelText({
                 },
               }))
             }
-            className="touch-min rounded-lg border border-border-subtle px-3 py-2 text-left text-sm transition-colors hover:bg-accent-subtle"
+            className="cover-action-button"
           >
             Gradient scrim
-          </button>
-          <button
+          </GlassButton>
+          <GlassButton
             type="button"
+            variant="surface"
             onClick={() =>
               setConfig((c) => ({
                 ...c,
                 cover: { ...c.cover, textBackdrop: "glass", textShadow: true },
               }))
             }
-            className="touch-min rounded-lg border border-border-subtle px-3 py-2 text-left text-sm transition-colors hover:bg-accent-subtle"
+            className="cover-action-button"
           >
             Glass title plate
-          </button>
-          <button
+          </GlassButton>
+          <GlassButton
             type="button"
+            variant="surface"
             onClick={() =>
               setConfig((c) => ({
                 ...c,
@@ -2168,12 +2137,13 @@ function PanelText({
                 },
               }))
             }
-            className="touch-min rounded-lg border border-border-subtle px-3 py-2 text-left text-sm transition-colors hover:bg-accent-subtle"
+            className="cover-action-button"
           >
             Blur band
-          </button>
-          <button
+          </GlassButton>
+          <GlassButton
             type="button"
+            variant="surface"
             onClick={() =>
               setConfig((c) => ({
                 ...c,
@@ -2185,31 +2155,29 @@ function PanelText({
                 },
               }))
             }
-            className="touch-min rounded-lg border border-border-subtle px-3 py-2 text-left text-sm transition-colors hover:bg-accent-subtle"
+            className="cover-action-button"
           >
             Darker overlay
-          </button>
+          </GlassButton>
         </div>
       </section>
 
-      <label className="flex cursor-pointer items-center justify-between gap-3 border-t border-border-subtle pt-4">
-        <span className="text-2xs font-medium text-on-surface-variant">
-          Readability shadow
-        </span>
-        <input
-          type="checkbox"
+      <div className="cover-panel-divider">
+        <ToggleSwitch
           checked={config.cover.textShadow}
-          onChange={(e) =>
+          label="Readability shadow"
+          checkedLabel="Shadow on"
+          uncheckedLabel="Shadow off"
+          onCheckedChange={(checked) =>
             setConfig((c) => ({
               ...c,
-              cover: { ...c.cover, textShadow: e.target.checked },
+              cover: { ...c.cover, textShadow: checked },
             }))
           }
-          className="h-4 w-4 cursor-pointer accent-primary"
         />
-      </label>
+      </div>
 
-      <p className="text-2xs text-on-surface-variant/80">
+      <p className="cover-helper-text">
         Drag the title or subtitle on the preview to reposition.
       </p>
     </div>
@@ -2238,40 +2206,30 @@ function PanelMedia({
           grid.
         </p>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="cover-option-grid cover-option-grid--2">
         {MEDIA_MODES.map((mode) => {
           const active = config.cover.mediaMode === mode.id;
           const disabled = mode.id === "short-video" && videoCount === 0;
           return (
-            <button
+            <SelectableTile
               key={mode.id}
-              type="button"
               onClick={() => {
-                if (disabled) return;
                 setConfig((c) => ({
                   ...c,
                   cover: { ...c.cover, mediaMode: mode.id },
                 }));
               }}
-              aria-pressed={active}
-              aria-disabled={disabled}
-              className={`min-h-18 rounded-xl border p-3 text-left transition-colors ${
-                active
-                  ? "border-primary bg-primary/10 text-primary"
-                  : disabled
-                    ? "border-border-subtle opacity-50"
-                    : "border-border-subtle hover:bg-accent-subtle"
-              }`}
-            >
-              <span className="block text-sm font-semibold">{mode.label}</span>
-              <span className="mt-1 block text-xs text-on-surface-variant">
-                {disabled ? "Upload a video to use this mode" : mode.detail}
-              </span>
-            </button>
+              disabled={disabled}
+              selected={active}
+              title={mode.label}
+              description={
+                disabled ? "Upload a video to use this mode" : mode.detail
+              }
+            />
           );
         })}
       </div>
-      <div className="rounded-xl border border-border-subtle bg-surface/40 p-3 text-xs text-on-surface-variant">
+      <div className="cover-info-panel">
         {config.cover.mediaMode === "single-photo" &&
           "A single cover photo gives the fastest first paint and cleanest hero."}
         {config.cover.mediaMode === "slideshow" &&
@@ -2303,46 +2261,38 @@ function PanelScenes({
           photographers deliver most often.
         </p>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="cover-option-grid cover-option-grid--2">
         {config.sceneHeaders.map((scene) => (
           <div
             key={scene.id}
-            className={`space-y-3 rounded-xl border p-3 transition-colors ${
-              scene.enabled
-                ? "border-primary bg-primary/10"
-                : "border-border-subtle hover:bg-accent-subtle"
-            }`}
+            className="cover-control-card cover-scene-card"
+            data-state={scene.enabled ? "active" : "idle"}
           >
-            <label className="flex touch-min cursor-pointer items-center justify-between gap-3">
-              <span>
-                <span className="block text-sm font-semibold">
-                  {scene.label}
-                </span>
-                <span className="block text-xs text-on-surface-variant">
-                  Scene header
-                </span>
+            <div className="cover-control-card__header">
+              <span className="cover-scene-card__copy">
+                <span className="cover-scene-card__title">{scene.label}</span>
+                <span className="cover-helper-text">Scene header</span>
               </span>
-              <input
-                type="checkbox"
+              <ToggleSwitch
                 checked={scene.enabled}
-                onChange={(e) =>
+                label={`${scene.label} scene header`}
+                checkedLabel="On"
+                uncheckedLabel="Off"
+                className="cover-scene-card__toggle"
+                onCheckedChange={(checked) =>
                   setConfig((c) => ({
                     ...c,
                     sceneHeaders: c.sceneHeaders.map((item) =>
                       item.id === scene.id
-                        ? { ...item, enabled: e.target.checked }
+                        ? { ...item, enabled: checked }
                         : item,
                     ),
                   }))
                 }
-                aria-label={`${scene.label} scene header`}
-                className="h-4 w-4 accent-primary"
               />
-            </label>
-            <label className="block space-y-1">
-              <span className="text-2xs text-on-surface-variant">
-                Mini-cover
-              </span>
+            </div>
+            <label className="cover-field-stack">
+              <span className="form-label">Mini-cover</span>
               <select
                 value={scene.assetId || ""}
                 disabled={!scene.enabled}
@@ -2357,7 +2307,7 @@ function PanelScenes({
                   }))
                 }
                 aria-label={`${scene.label} mini-cover`}
-                className="touch-min w-full rounded-lg border border-border-subtle bg-surface px-3 py-2 text-sm disabled:opacity-50"
+                className={COVER_FIELD_CLASS}
               >
                 <option value="">Use gallery cover</option>
                 {assets.map((asset) => (
@@ -2370,7 +2320,7 @@ function PanelScenes({
           </div>
         ))}
       </div>
-      <p className="text-2xs text-on-surface-variant/80">
+      <p className="cover-helper-text">
         Enabled scenes are saved with this cover design and can power future
         album/ritual section headers.
       </p>
@@ -2395,9 +2345,9 @@ function PanelBrand({
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="space-y-1.5">
-          <span className="text-2xs text-on-surface-variant">Monogram</span>
+      <div className="cover-field-grid cover-field-grid--2">
+        <label className="cover-field-stack">
+          <span className="form-label">Monogram</span>
           <input
             value={config.branding.monogram}
             onChange={(e) =>
@@ -2410,14 +2360,12 @@ function PanelBrand({
               }))
             }
             placeholder="AR"
-            className="w-full rounded-lg border border-border-subtle bg-surface px-3 py-2 text-sm uppercase transition-colors hover:border-border-default focus:border-primary focus:outline-none"
+            className={`${COVER_FIELD_CLASS} uppercase`}
             aria-label="Monogram"
           />
         </label>
-        <label className="space-y-1.5">
-          <span className="text-2xs text-on-surface-variant">
-            Brand color
-          </span>
+        <label className="cover-field-stack">
+          <span className="form-label">Brand color</span>
           <input
             type="color"
             value={
@@ -2432,95 +2380,80 @@ function PanelBrand({
                 theme: { ...c.theme, accentColor: e.target.value },
               }))
             }
-            className="h-10 w-full cursor-pointer rounded-lg border border-border-subtle bg-surface p-1"
+            className={COVER_COLOR_CLASS}
             aria-label="Brand color"
           />
         </label>
       </div>
 
-      <section className="space-y-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
-          Logo placement
-        </h4>
-        <div className="grid gap-2 sm:grid-cols-3">
+      <section className="cover-control-card">
+        <h4 className="form-label">Logo placement</h4>
+        <div className="cover-option-grid cover-option-grid--3">
           {LOGO_PLACEMENTS.map((placement) => {
             const active = config.branding.logoPlacement === placement.id;
             return (
-              <button
+              <SelectableTile
                 key={placement.id}
-                type="button"
                 onClick={() =>
                   setConfig((c) => ({
                     ...c,
                     branding: { ...c.branding, logoPlacement: placement.id },
                   }))
                 }
-                aria-pressed={active}
-                className={`touch-min rounded-lg border px-3 py-2 text-sm transition-colors ${
-                  active
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border-subtle hover:bg-accent-subtle"
-                }`}
-              >
-                {placement.label}
-              </button>
+                selected={active}
+                title={placement.label}
+                className="cover-compact-tile"
+              />
             );
           })}
         </div>
       </section>
 
-      <section className="space-y-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
-          Watermark style
-        </h4>
-        <div className="grid gap-2 sm:grid-cols-2">
+      <section className="cover-control-card">
+        <h4 className="form-label">Watermark style</h4>
+        <div className="cover-option-grid cover-option-grid--2">
           {WATERMARK_STYLES.map((watermark) => {
             const active = config.branding.watermarkStyle === watermark.id;
             return (
-              <button
+              <SelectableTile
                 key={watermark.id}
-                type="button"
                 onClick={() =>
                   setConfig((c) => ({
                     ...c,
                     branding: { ...c.branding, watermarkStyle: watermark.id },
                   }))
                 }
-                aria-pressed={active}
-                className={`touch-min rounded-lg border px-3 py-2 text-sm transition-colors ${
-                  active
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border-subtle hover:bg-accent-subtle"
-                }`}
-              >
-                {watermark.label}
-              </button>
+                selected={active}
+                title={watermark.label}
+                className="cover-compact-tile"
+              />
             );
           })}
         </div>
       </section>
 
-      <label className="flex cursor-pointer items-center justify-between gap-3 border-t border-border-subtle pt-4">
-        <span>
-          <span className="block text-sm font-medium">
+      <div className="cover-panel-divider cover-toggle-row">
+        <span className="cover-toggle-row__copy">
+          <span className="cover-scene-card__title">
             Apply this look to all galleries
           </span>
-          <span className="block text-xs text-on-surface-variant">
+          <span className="cover-helper-text">
             Saved as intent for the studio design system.
           </span>
         </span>
-        <input
-          type="checkbox"
+        <ToggleSwitch
           checked={config.branding.applyToAll}
-          onChange={(e) =>
+          label="Apply this look to all galleries"
+          checkedLabel="On"
+          uncheckedLabel="Off"
+          onCheckedChange={(checked) =>
             setConfig((c) => ({
               ...c,
-              branding: { ...c.branding, applyToAll: e.target.checked },
+              branding: { ...c.branding, applyToAll: checked },
             }))
           }
-          className="h-4 w-4 accent-primary"
         />
-      </label>
+      </div>
     </div>
   );
 }
@@ -2553,33 +2486,26 @@ function PanelGrid({
           How photos arrange in the public gallery.
         </p>
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="cover-option-grid cover-option-grid--2">
         {GRID_LAYOUTS.map((g) => (
-          <button
+          <SelectableTile
             key={g.id}
+            selected={config.grid.layout === g.id}
             onClick={() =>
               setConfig((c) => ({ ...c, grid: { ...c.grid, layout: g.id } }))
             }
-            className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
-              config.grid.layout === g.id
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-border-subtle hover:bg-accent-subtle"
-            }`}
-          >
-            {g.label}
-          </button>
+            title={g.label}
+            className="cover-compact-tile"
+          />
         ))}
       </div>
 
-      <div className="space-y-2 border-t border-border-subtle pt-4">
-        <div className="flex items-center justify-between">
-          <label
-            htmlFor="cover-grid-cols"
-            className="text-xs font-medium text-on-surface-variant"
-          >
+      <div className="cover-panel-divider cover-field-stack">
+        <div className="cover-field-row">
+          <label htmlFor="cover-grid-cols" className="form-label">
             Columns
           </label>
-          <span className="text-xs">{config.grid.columns}</span>
+          <span className="cover-range-value">{config.grid.columns}</span>
         </div>
         <input
           id="cover-grid-cols"
@@ -2594,23 +2520,30 @@ function PanelGrid({
               grid: { ...c.grid, columns: Number(e.target.value) },
             }))
           }
-          className="w-full accent-primary"
+          className={COVER_RANGE_CLASS}
         />
       </div>
 
-      <label className="flex items-center gap-2 border-t border-border-subtle pt-4 text-xs text-on-surface-variant">
-        <input
-          type="checkbox"
+      <div className="cover-panel-divider cover-toggle-row">
+        <span className="cover-toggle-row__copy">
+          <span className="cover-scene-card__title">Filename captions</span>
+          <span className="cover-helper-text">
+            Show filename caption under photos
+          </span>
+        </span>
+        <ToggleSwitch
           checked={config.grid.showInfo}
-          onChange={(e) =>
+          label="Filename captions"
+          checkedLabel="On"
+          uncheckedLabel="Off"
+          onCheckedChange={(checked) =>
             setConfig((c) => ({
               ...c,
-              grid: { ...c.grid, showInfo: e.target.checked },
+              grid: { ...c.grid, showInfo: checked },
             }))
           }
         />
-        Show filename caption under photos
-      </label>
+      </div>
 
       {/* Live grid preview — renders the user's actual gallery assets in
           the chosen layout so they see exactly how the published page
@@ -2618,7 +2551,7 @@ function PanelGrid({
           grid uses N square cells, justified uses varied-width flex rows.
           (Masonry/carousel branches retained inside GridLivePreview for
           legacy galleries that have those saved.) */}
-      <div className="space-y-2 border-t border-border-subtle pt-4">
+      <div className="cover-panel-divider cover-field-stack">
         <div className="flex items-baseline justify-between">
           <h3 className="text-sm font-semibold">Preview</h3>
           <span className="text-2xs text-on-surface-variant/70">
@@ -2652,19 +2585,15 @@ function GridLivePreview({
 
   if (grid.layout === "carousel") {
     return (
-      <div
-        className="overflow-x-auto rounded-lg border border-border-subtle bg-surface/40 p-3"
-        style={{ maxHeight: 200 }}
-      >
-        <div className="flex" style={{ gap }}>
+      <div className="cover-grid-preview-surface cover-grid-preview-surface--scroll">
+        <div className="cover-grid-preview-carousel" style={{ gap }}>
           {(empty ? Array.from({ length: placeholderCount }) : sample).map(
             (a, i) => {
               const asset = empty ? null : (a as Asset);
               return (
                 <div
                   key={i}
-                  className="shrink-0 overflow-hidden rounded-md bg-surface-container-high"
-                  style={{ width: 120, height: 80 }}
+                  className="cover-grid-preview-tile cover-grid-preview-tile--carousel"
                 >
                   <DecryptedPreviewImage
                     asset={asset}
@@ -2686,20 +2615,33 @@ function GridLivePreview({
     // CSS columns + break-inside-avoid is the same technique
     // public-gallery-grid uses for masonry. Heights vary so the asymmetry
     // is visible at preview scale.
-    const heights = [70, 100, 80, 120, 90, 110, 75, 95, 105, 85, 115, 90];
+    const tokenHeights = [
+      "calc(var(--space-16) + var(--space-1))",
+      "var(--space-20)",
+      "calc(var(--space-16) + var(--space-4))",
+      "calc(var(--space-20) + var(--space-5))",
+      "calc(var(--space-20) + var(--space-2))",
+      "calc(var(--space-20) + var(--space-4))",
+      "calc(var(--space-16) + var(--space-3))",
+      "calc(var(--space-20) + var(--space-1))",
+      "calc(var(--space-20) + var(--space-3))",
+      "calc(var(--space-20) + var(--space-1))",
+      "calc(var(--space-20) + var(--space-4))",
+      "calc(var(--space-20) + var(--space-2))",
+    ];
     return (
       <div
-        className="rounded-lg border border-border-subtle bg-surface/40 p-3"
+        className="cover-grid-preview-surface"
         style={{ columnCount: cols, columnGap: gap }}
       >
         {(empty ? Array.from({ length: placeholderCount }) : sample).map(
           (a, i) => {
             const asset = empty ? null : (a as Asset);
-            const h = heights[i % heights.length];
+            const h = tokenHeights[i % tokenHeights.length];
             return (
               <div
                 key={i}
-                className="mb-[var(--gap)] overflow-hidden rounded-md bg-surface-container-high"
+                className="cover-grid-preview-tile"
                 style={{
                   ["--gap" as never]: `${gap}px`,
                   marginBottom: gap,
@@ -2728,7 +2670,7 @@ function GridLivePreview({
     const widthWeights = [1.5, 1, 2, 1, 1.7, 1.2, 1, 1.8, 1.3, 1.4, 1, 1.6];
     return (
       <div
-        className="rounded-lg border border-border-subtle bg-surface/40 p-3"
+        className="cover-grid-preview-surface"
         style={{ display: "flex", flexWrap: "wrap", gap }}
       >
         {(empty ? Array.from({ length: placeholderCount }) : sample).map(
@@ -2738,8 +2680,8 @@ function GridLivePreview({
             return (
               <div
                 key={i}
-                className="overflow-hidden rounded-md bg-surface-container-high"
-                style={{ flex: `${w} 1 ${w * 60}px`, height: 80 }}
+                className="cover-grid-preview-tile"
+                style={{ flex: `${w} 1 0`, height: "var(--space-20)" }}
               >
                 <DecryptedPreviewImage
                   asset={asset}
@@ -2759,7 +2701,7 @@ function GridLivePreview({
   // grid (default) — uniform square cells in N columns.
   return (
     <div
-      className="rounded-lg border border-border-subtle bg-surface/40 p-3"
+      className="cover-grid-preview-surface"
       style={{
         display: "grid",
         gridTemplateColumns: `repeat(${cols}, 1fr)`,
@@ -2770,10 +2712,7 @@ function GridLivePreview({
         (a, i) => {
           const asset = empty ? null : (a as Asset);
           return (
-            <div
-              key={i}
-              className="aspect-square overflow-hidden rounded-md bg-surface-container-high"
-            >
+            <div key={i} className="cover-grid-preview-tile aspect-square">
               <DecryptedPreviewImage
                 asset={asset}
                 token={token}

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ShareQrPopover } from "../share-qr-popover";
 
@@ -9,6 +9,30 @@ vi.mock("qrcode", () => ({
 }));
 
 describe("ShareQrPopover", () => {
+  it("prepares a tokenized share URL before opening the QR", async () => {
+    const shareUrl = "https://studio.rawdrive.in/event?share=SHARETOKEN";
+    const getShareUrl = vi.fn().mockResolvedValue(shareUrl);
+
+    render(
+      <ShareQrPopover
+        getShareUrl={getShareUrl}
+        label="Show QR code for gallery share link"
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Show QR code for gallery share link",
+      }),
+    );
+
+    await waitFor(() => expect(getShareUrl).toHaveBeenCalledTimes(1));
+    expect(
+      await screen.findByRole("dialog", { name: "Share QR code" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(shareUrl)).toBeInTheDocument();
+  });
+
   it("can report why QR is unavailable instead of becoming a silent disabled button", () => {
     const onUnavailable = vi.fn();
 
