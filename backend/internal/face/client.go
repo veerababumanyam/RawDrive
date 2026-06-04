@@ -45,6 +45,16 @@ const (
 	// should assert len(emb)==EmbeddingDim before insert to surface model
 	// mismatches as a clear error instead of an opaque pgvector reject.
 	EmbeddingDim = 512
+
+	// defaultMaxRetries — transient face-svc failures (mid-cold-start 503,
+	// upstream 502/504, network resets) are retried this many times BEYOND
+	// the first attempt, with linear backoff, before failing. Keeps guest
+	// Find Me + the detection worker from failing on a sidecar that is
+	// briefly restarting. 4xx (bad request) is never retried.
+	defaultMaxRetries = 2
+	// defaultRetryBackoff — base linear backoff between retries (attempt N
+	// waits N×backoff). 2 retries → ~1.5s added latency worst case.
+	defaultRetryBackoff = 500 * time.Millisecond
 )
 
 // ErrServiceUnavailable is returned when face-svc is reachable but
@@ -63,14 +73,21 @@ type Config struct {
 	HTTPClient *http.Client
 	// Timeout for individual /detect calls. 0 → defaultTimeout.
 	Timeout time.Duration
+	// MaxRetries beyond the first attempt for transient failures. <0 →
+	// disable retries; 0 → defaultMaxRetries.
+	MaxRetries int
+	// RetryBackoff base linear backoff between retries. 0 → defaultRetryBackoff.
+	RetryBackoff time.Duration
 }
 
 // Client talks to face-svc over HTTP. Cheap to construct; safe for
 // concurrent use (the underlying http.Client is the standard library's,
 // which is goroutine-safe).
 type Client struct {
-	baseURL string
-	http    *http.Client
+	baseURL      string
+	http         *http.Client
+	maxRetries   int
+	retryBackoff time.Duration
 }
 
 // NewClient returns a Client wired against cfg. BaseURL must be non-empty
@@ -89,7 +106,18 @@ func NewClient(cfg Config) (*Client, error) {
 		}
 		hc = &http.Client{Timeout: t}
 	}
-	return &Client{baseURL: base, http: hc}, nil
+	retries := cfg.MaxRetries
+	switch {
+	case retries < 0:
+		retries = 0 // explicitly disabled
+	case retries == 0:
+		retries = defaultMaxRetries
+	}
+	backoff := cfg.RetryBackoff
+	if backoff <= 0 {
+		backoff = defaultRetryBackoff
+	}
+	return &Client{baseURL: base, http: hc, maxRetries: retries, retryBackoff: backoff}, nil
 }
 
 // Bbox is the top-left + width/height of a detected face, in pixels of
@@ -184,31 +212,67 @@ func (c *Client) DetectAndEmbed(ctx context.Context, imageBytes []byte, filename
 		return nil, fmt.Errorf("face: close multipart: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/detect", buf)
-	if err != nil {
-		return nil, fmt.Errorf("face: build request: %w", err)
+	// The multipart body is fully buffered, so we can replay it on each
+	// retry attempt (a fresh bytes.Reader per attempt — http.Do consumes
+	// the body). Transient face-svc failures (mid-cold-start 503, 502/504,
+	// network resets) are retried with linear backoff; 4xx and decode/dim
+	// errors are terminal.
+	bodyBytes := buf.Bytes()
+	contentType := mw.FormDataContentType()
+
+	for attempt := 0; ; attempt++ {
+		out, retryable, derr := c.detectOnce(ctx, bodyBytes, contentType)
+		if derr == nil {
+			return out, nil
+		}
+		if !retryable || attempt >= c.maxRetries {
+			return nil, derr
+		}
+		// Linear backoff, cancellable via the caller's context.
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(time.Duration(attempt+1) * c.retryBackoff):
+		}
 	}
-	req.Header.Set("Content-Type", mw.FormDataContentType())
+}
+
+// detectOnce performs a single /detect POST. retryable is true for
+// transient upstream failures (transport error, 502/503/504) so the caller
+// can back off and retry; false for terminal failures (4xx, decode errors,
+// dimension mismatch). A 503 surfaces as ErrServiceUnavailable so callers
+// that exhaust retries can still branch on it.
+func (c *Client) detectOnce(ctx context.Context, body []byte, contentType string) (*DetectResponse, bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/detect", bytes.NewReader(body))
+	if err != nil {
+		return nil, false, fmt.Errorf("face: build request: %w", err)
+	}
+	req.Header.Set("Content-Type", contentType)
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("face: request: %w", err)
+		// Transport failures (connection refused/reset, timeout) are transient.
+		return nil, true, fmt.Errorf("face: request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusServiceUnavailable {
-		return nil, ErrServiceUnavailable
+		return nil, true, ErrServiceUnavailable
+	}
+	if resp.StatusCode == http.StatusBadGateway || resp.StatusCode == http.StatusGatewayTimeout {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+		return nil, true, fmt.Errorf("face: detect HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	if resp.StatusCode != http.StatusOK {
 		// Cap the error body so a misconfigured upstream returning a
 		// 1 MB HTML error page can't blow up logs.
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
-		return nil, fmt.Errorf("face: detect HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, false, fmt.Errorf("face: detect HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var out DetectResponse
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, fmt.Errorf("face: decode detect: %w", err)
+		return nil, false, fmt.Errorf("face: decode detect: %w", err)
 	}
 
 	// Defensive dimension check — if face-svc is ever swapped to a
@@ -216,9 +280,9 @@ func (c *Client) DetectAndEmbed(ctx context.Context, imageBytes []byte, filename
 	// here, not silently corrupt pgvector inserts downstream.
 	for i, f := range out.Faces {
 		if len(f.Embedding) != EmbeddingDim {
-			return nil, fmt.Errorf("face: face[%d] embedding dim=%d, want %d (model=%s)", i, len(f.Embedding), EmbeddingDim, out.Model)
+			return nil, false, fmt.Errorf("face: face[%d] embedding dim=%d, want %d (model=%s)", i, len(f.Embedding), EmbeddingDim, out.Model)
 		}
 	}
 
-	return &out, nil
+	return &out, false, nil
 }

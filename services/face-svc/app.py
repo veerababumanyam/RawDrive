@@ -49,6 +49,16 @@ MIN_DET_SCORE = float(os.environ.get("FACE_SVC_MIN_DET_SCORE", "0.5"))
 MAX_IMAGE_BYTES = int(os.environ.get("FACE_SVC_MAX_IMAGE_BYTES", str(20 * 1024 * 1024)))
 MODEL_NAME = os.environ.get("FACE_SVC_MODEL", "buffalo_l")
 
+# Execution providers — default CPU (the only provider installed in the base
+# image). On a GPU host with onnxruntime-gpu available, set FACE_SVC_USE_GPU=1
+# to prefer CUDA (5-10x faster detection). CPU is always listed as the
+# fallback, so onnxruntime degrades gracefully if CUDA can't initialize —
+# this flag is safe to leave on even where no GPU is present.
+_USE_GPU = os.environ.get("FACE_SVC_USE_GPU", "").strip().lower() in ("1", "true", "yes", "on")
+EXECUTION_PROVIDERS = (
+    ["CUDAExecutionProvider", "CPUExecutionProvider"] if _USE_GPU else ["CPUExecutionProvider"]
+)
+
 # Process-wide singleton — insightface FaceAnalysis is expensive to construct
 # (~3 s warm-up). We load once at startup and reuse across requests.
 _face_app: Any = None
@@ -62,8 +72,8 @@ async def lifespan(app: FastAPI):
     try:
         from insightface.app import FaceAnalysis
 
-        log.info(f"loading insightface model={MODEL_NAME} det_size={DET_SIZE}")
-        _face_app = FaceAnalysis(name=MODEL_NAME, providers=["CPUExecutionProvider"])
+        log.info(f"loading insightface model={MODEL_NAME} det_size={DET_SIZE} providers={EXECUTION_PROVIDERS}")
+        _face_app = FaceAnalysis(name=MODEL_NAME, providers=EXECUTION_PROVIDERS)
         _face_app.prepare(ctx_id=0, det_size=(DET_SIZE, DET_SIZE))
         _ready = True
         log.info("face-svc ready")
