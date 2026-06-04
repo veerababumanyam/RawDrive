@@ -17,6 +17,7 @@ import { GalleryPasswordGate } from "@/components/gallery/gallery-password-gate"
 import { GalleryLockedShell } from "@/components/gallery/gallery-locked-shell";
 import { SharePinGate } from "@/components/gallery/share-pin-gate";
 import { PublicGalleryHero } from "@/components/gallery/public-gallery-hero";
+import { PublicGallerySessionBridge } from "@/components/gallery/public-gallery-session-bridge";
 import { GalleryExpiryBanner } from "@/components/gallery/gallery-expiry-banner";
 import {
   galleryAccentCssVars,
@@ -92,6 +93,15 @@ export default async function PublicGalleryPage({
 
   let gallery;
   let effectiveSessionToken = sessionToken;
+  // When the visitor had no gallery_session cookie but the backend minted a
+  // fresh share-scoped session during THIS server-side render (returned via the
+  // X-Gallery-Session header), that token unlocked the SSR render only — it was
+  // never installed in the browser. Capture it so PublicGallerySessionBridge can
+  // persist it client-side (cookie + sessionStorage); otherwise the next client
+  // navigation (Find me, People, Back to gallery, photo links) has no session
+  // and is denied. Null whenever a cookie already exists or nothing was minted.
+  // See issue #156.
+  let freshlyMintedSessionToken: string | null = null;
   try {
     const result = await getPublicGalleryWithSession(
       slug,
@@ -100,6 +110,9 @@ export default async function PublicGalleryPage({
       shareToken,
     );
     gallery = result.gallery;
+    if (!sessionToken && result.gallerySessionToken) {
+      freshlyMintedSessionToken = result.gallerySessionToken;
+    }
     effectiveSessionToken =
       sessionToken ?? result.gallerySessionToken ?? undefined;
   } catch (err) {
@@ -322,6 +335,16 @@ export default async function PublicGalleryPage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(galleryJsonLd) }}
       />
+      {/* Install the server-render-minted share session into the browser so
+          "Find me", People, "Back to gallery", and photo links keep working
+          after a no-PIN share-link unlock. Mounts only when a fresh session was
+          minted this render (no pre-existing cookie). See issue #156. */}
+      {freshlyMintedSessionToken && (
+        <PublicGallerySessionBridge
+          slug={slug}
+          gallerySessionToken={freshlyMintedSessionToken}
+        />
+      )}
       <OfflineCacher
         gallery={gallery}
         assets={assets}
