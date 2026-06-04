@@ -40,7 +40,7 @@ data, no plaintext image) to the server index, and keep matching/clustering serv
 | Slice | Scope | Flag | Status |
 |---|---|---|---|
 | **0 — access fix** | **L1**: route the 3 public face/people clients same-origin (`/api/v1/...` rewrite) + `credentials:"include"` so the `gallery_session` cookie reaches the gate. Honest empty states already present. Frontend-only. | — | **this PR (#135)** |
-| 1 — ingest endpoint | Authenticated `POST /api/v1/assets/{id}/face-embeddings` → validate 512-d → `faceRepo.StoreFaces` (`source="client"`) → `ClusterFaces`. openapi + migration (source tag). Reuses consent gates. | `client_face_index` | TODO |
+| 1 — ingest endpoint | Authenticated `POST /api/v1/assets/{id}/face-embeddings` → validate 512-d → `faceRepo.StoreFaces` (`source="client"`) → `ClusterFaces`. openapi updated; no migration (the `source` column already exists). Reuses `guardAssetWorkspace` (IDOR-safe) + `face_recognition_enabled` biometric gate. Idempotent re-POST via `DeleteFacesByAssetAndSource`. | `client_face_index` | **issue #137 (this PR)** |
 | 2 — in-browser indexing | buffalo_l ONNX at upload (`onnxruntime-web`): detect+embed plaintext in-browser, POST embeddings to slice-1. Model hosting/caching, WebGPU/WASM, parity harness vs face-svc on `tests/photos/`. | `client_face_index` | TODO |
 | 3 — query + decrypt (**L2**) | Guest selfie → buffalo_l → match the now-valid index; render People/result thumbnails via `useDecryptedAssetUrl`; enable the flag end-to-end. | `client_face_index` | TODO |
 

@@ -2502,6 +2502,18 @@ func main() {
 		designAIHandler := handler.NewDesignAIHandler(designAISvc)
 		api.Get("/api/v1/galleries/{id}/ai-suggest", designAIHandler.Suggest)
 
+		// Client-computed face-embedding ingest (E2EE face-search epic, slice 1).
+		// Registered here (not in routes_m2.go) because it needs faceSvc, which is
+		// only constructed after AI init. Gated behind the client_face_index flag
+		// (platform_settings → env FEATURE_CLIENT_FACE_INDEX → default off), so the
+		// route is inert until deliberately enabled.
+		clientFaceIndexFlag := featureflag.NewClientFaceIndexFlag(
+			platformSettingsRepo,
+			strings.EqualFold(os.Getenv("FEATURE_CLIENT_FACE_INDEX"), "true"),
+		)
+		faceEmbeddingHandler := handler.NewFaceEmbeddingHandler(assetRepo, aiFaceRepo, faceSvc, clientFaceIndexFlag)
+		api.Post("/api/v1/assets/{id}/face-embeddings", faceEmbeddingHandler.StoreEmbeddings)
+
 		// ──────────────────────── M4: Business Operations ──────────────────────
 
 		// M4 Repositories

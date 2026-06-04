@@ -1207,6 +1207,78 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /api/v1/assets/{id}/face-embeddings:
+    parameters:
+      - $ref: '#/components/parameters/AssetIdPath'
+    post:
+      operationId: storeAssetFaceEmbeddings
+      tags: [asset]
+      summary: Ingest client-computed face embeddings for an asset
+      description: |
+        Stores browser-computed 512-d face embeddings + bounding boxes in the
+        face index so Find Me / People work on end-to-end-encrypted galleries
+        (the server never sees plaintext and cannot detect faces itself). Only
+        embeddings + boxes are sent — never the plaintext image — so E2EE is
+        preserved. Gated behind the `client_face_index` feature flag and the
+        workspace `face_recognition_enabled` biometric opt-in. Idempotent:
+        re-POSTing replaces this asset's prior client-sourced faces.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [faces]
+              properties:
+                gallery_id:
+                  type: string
+                  format: uuid
+                  description: Optional gallery scope for the stored faces.
+                faces:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items:
+                    type: object
+                    required: [embedding]
+                    properties:
+                      face_index:
+                        type: integer
+                      bounding_box:
+                        type: object
+                        properties:
+                          x: { type: number }
+                          y: { type: number }
+                          w: { type: number }
+                          h: { type: number }
+                      embedding:
+                        type: array
+                        description: 512-d insightface buffalo_l embedding.
+                        minItems: 512
+                        maxItems: 512
+                        items:
+                          type: number
+                      det_score:
+                        type: number
+      responses:
+        '200':
+          description: Faces stored and clustered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stored:
+                    type: integer
+        '400':
+          description: Invalid request (bad asset id, wrong embedding dimension, too many faces)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Workspace has not opted into face recognition
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /api/v1/assets/{id}/download:
     parameters:
       - $ref: '#/components/parameters/AssetIdPath'

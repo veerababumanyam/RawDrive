@@ -380,6 +380,16 @@ func (r *FaceRepo) DeleteFacesByAsset(ctx context.Context, assetID uuid.UUID) er
 	return err
 }
 
+// DeleteFacesByAssetAndSource removes only the face rows for an asset that were
+// produced by a given source (e.g. "client"). The client-face-index ingest
+// (epic slice 1) calls this before re-storing so a re-POST is idempotent
+// WITHOUT clobbering server-side ("insightface") detections on the same asset.
+func (r *FaceRepo) DeleteFacesByAssetAndSource(ctx context.Context, assetID uuid.UUID, source string) error {
+	_, err := r.pool.Exec(ctx,
+		`DELETE FROM face_clusters WHERE asset_id = $1 AND source = $2`, assetID, source)
+	return err
+}
+
 // MergeClusters moves all faces from src cluster to dst cluster within a workspace.
 func (r *FaceRepo) MergeClusters(ctx context.Context, workspaceID, srcLabel, dstLabel uuid.UUID, dstName string) (int, error) {
 	tag, err := r.pool.Exec(ctx,

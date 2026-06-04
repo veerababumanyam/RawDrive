@@ -208,6 +208,14 @@ func (s *FaceService) isFaceRecognitionEnabled(ctx context.Context, workspaceID 
 	return enabled, nil
 }
 
+// IsFaceRecognitionEnabled is the exported view of the workspace biometric
+// opt-in gate (workspaces.face_recognition_enabled, migration 110). The
+// client-face-index ingest handler (epic slice 1) uses it to refuse storing
+// biometric embeddings for a workspace that hasn't opted in (DPDP/GDPR).
+func (s *FaceService) IsFaceRecognitionEnabled(ctx context.Context, workspaceID uuid.UUID) (bool, error) {
+	return s.isFaceRecognitionEnabled(ctx, workspaceID)
+}
+
 // ClusterFaces assigns cluster labels to newly detected faces using cosine similarity.
 func (s *FaceService) ClusterFaces(ctx context.Context, faces []*FaceCluster, workspaceID uuid.UUID) error {
 	for _, face := range faces {
