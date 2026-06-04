@@ -61,6 +61,14 @@ These are load-bearing — breaking them causes real bugs and has burned us befo
   and arms auto-merge so CI-green PRs squash-merge and self-delete. **Never commit/push to `main`
   directly** (a force-push to `main` once caused a prod incident). Production ships separately and
   deliberately via `npm run deploy:prod`. Full flow: `docs/runbooks/cicd.md`.
+- **One unit per branch; large features ship as flag-gated slices.** A change is one issue = one
+  short-lived branch = one worktree = one PR. A *large* feature is **not** a long-lived mega-branch —
+  decompose it into a dependency-ordered sequence of small, independently-shippable slices
+  (`schema → service → API → frontend → flag-on`), each its own one-unit PR landing on `main` **behind a
+  feature flag** so a partial merge never exposes a half-built feature (the flag-on slice goes last). The
+  `rawdrive-add-feature` skill automates this (its Phase-4 size gate decides when to slice, and routes
+  true multi-feature milestones to `cobolt-build` instead); the *rule* — small units, no mega-branch,
+  flag-gate incremental delivery — holds however you build.
 - **Auth model:** OTP is **registration-only**. All subsequent logins are password-only.
   Do not add OTP paths to login flows.
 - **Upload UX:** Upload lives **inside a gallery / sub-gallery**. There is no standalone
