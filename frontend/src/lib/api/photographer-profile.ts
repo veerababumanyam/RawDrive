@@ -50,6 +50,9 @@ export interface PhotographerProfile {
   avatar_url: string;
   avatar_cropped_url: string;
   avatar_position: AvatarPosition;
+  business_logo_url: string;
+  business_logo_rendered_url: string;
+  business_logo_position: AvatarPosition;
   cover_url: string;
   cover_position: Record<string, unknown>;
   short_bio: string;
@@ -162,6 +165,9 @@ export function emptyPhotographerProfile(): PhotographerProfile {
     avatar_url: "",
     avatar_cropped_url: "",
     avatar_position: { x: 0, y: 0, zoom: 1, aspect: 1 },
+    business_logo_url: "",
+    business_logo_rendered_url: "",
+    business_logo_position: { x: 0, y: 0, zoom: 1, aspect: 0 },
     cover_url: "",
     cover_position: { x: 0, y: 0, zoom: 1 },
     short_bio: "",
@@ -274,6 +280,37 @@ export async function cropProfileAvatar(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...position, aspect: 1 }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+// Public business logo — free-aspect (no forced 1:1), unencrypted, mirrors the
+// avatar upload/crop. The server preserves the logo's aspect ratio.
+export async function uploadProfileLogo(
+  file: File,
+): Promise<ProfileResponse> {
+  const form = new FormData();
+  form.append("logo", file);
+  const res = await authFetch("/api/v1/profile/logo/upload", {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function cropProfileLogo(
+  position: AvatarPosition,
+): Promise<ProfileResponse> {
+  const res = await authFetch("/api/v1/profile/logo/crop", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      x: position.x,
+      y: position.y,
+      zoom: position.zoom,
+    }),
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();

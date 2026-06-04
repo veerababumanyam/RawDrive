@@ -86,6 +86,9 @@ export default async function PublicPhotographerProfilePage({ params }: Props) {
   const { slug } = await params;
   const { profile, galleries, public_url } = await loadProfile(slug);
   const avatar = profile.avatar_cropped_url || profile.avatar_url;
+  // Public business logo (brand mark). Already a presigned absolute URL from the
+  // API — rendered as a plain <img>, never decrypted (it is not a gallery asset).
+  const logo = profile.business_logo_rendered_url || profile.business_logo_url;
   const displayName =
     profile.display_name || profile.business_name || "Wedding Photographer";
   const location = [profile.primary_city, profile.state, profile.country]
@@ -128,6 +131,15 @@ export default async function PublicPhotographerProfilePage({ params }: Props) {
 
       <div className="mx-auto min-h-screen max-w-xl px-4 py-6 sm:py-10">
         <section className="text-center">
+          {logo ? (
+            <div className="mx-auto mb-5 flex h-12 max-w-xs items-center justify-center">
+              <img
+                src={logo}
+                alt={`${displayName} logo`}
+                className="max-h-full max-w-full object-contain"
+              />
+            </div>
+          ) : null}
           <div className="mx-auto flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border border-border-subtle bg-surface-raised shadow-glass">
             {avatar ? (
               <img

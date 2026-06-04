@@ -59,6 +59,8 @@ func (h *PhotographerProfileHandler) RegisterProtectedRoutes(r chi.Router) {
 	r.Post("/api/v1/profile/avatar/upload", h.UploadAvatar)
 	r.Post("/api/v1/profile/avatar/crop", h.CropAvatar)
 	r.Get("/api/v1/profile/avatar/preview", h.AvatarPreview)
+	r.Post("/api/v1/profile/logo/upload", h.UploadLogo)
+	r.Post("/api/v1/profile/logo/crop", h.CropLogo)
 	r.Get("/api/v1/profile/galleries", h.ListSelectableGalleries)
 	r.Post("/api/v1/profile/galleries/featured", h.AddFeaturedGallery)
 	r.Delete("/api/v1/profile/galleries/featured/{gallery_id}", h.RemoveFeaturedGallery)
@@ -373,6 +375,125 @@ func (h *PhotographerProfileHandler) AvatarPreview(w http.ResponseWriter, r *htt
 	respondJSON(w, http.StatusOK, map[string]string{"avatar_cropped_url": profile.AvatarCroppedURL})
 }
 
+// UploadLogo stores a PUBLIC business logo: the raw upload plus a free-aspect,
+// fit-to-contain WebP render. Both go to plain storage (no encryption); the
+// public profile presigns them for anonymous viewers. Mirrors UploadAvatar but
+// preserves the logo's aspect ratio instead of forcing a 1:1 square.
+func (h *PhotographerProfileHandler) UploadLogo(w http.ResponseWriter, r *http.Request) {
+	userID, workspaceID, ok := currentProfileActor(w, r)
+	if !ok {
+		return
+	}
+	profile, err := h.profiles.GetByOwner(r.Context(), userID, workspaceID)
+	if err != nil {
+		http.Error(w, `{"error":"save your profile before uploading a logo"}`, http.StatusBadRequest)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, profileAvatarMaxBytes)
+	if err := r.ParseMultipartForm(profileAvatarMaxBytes); err != nil {
+		http.Error(w, `{"error":"logo upload is too large or invalid"}`, http.StatusBadRequest)
+		return
+	}
+	file, header, err := r.FormFile("logo")
+	if err != nil {
+		http.Error(w, `{"error":"logo file is required"}`, http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, profileAvatarMaxBytes))
+	if err != nil {
+		http.Error(w, `{"error":"failed to read logo"}`, http.StatusBadRequest)
+		return
+	}
+	contentType := header.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = http.DetectContentType(data[:min(len(data), 512)])
+	}
+	if !strings.HasPrefix(strings.ToLower(contentType), "image/") {
+		http.Error(w, `{"error":"logo must be an image"}`, http.StatusBadRequest)
+		return
+	}
+	rendered, err := service.RenderLogoCropWebP(r.Context(), bytes.NewReader(data), service.LogoCropPosition{Zoom: 1}, 640)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"failed to process logo: %s"}`, jsonEscape(err.Error())), http.StatusBadRequest)
+		return
+	}
+
+	logoID := uuid.New()
+	ext := profileImageExt(header.Filename, contentType)
+	originalKey := fmt.Sprintf("profiles/%s/%s/logo/%s/original%s", workspaceID, profile.ProfileID, logoID, ext)
+	renderedKey := fmt.Sprintf("profiles/%s/%s/logo/%s/render.webp", workspaceID, profile.ProfileID, logoID)
+	if err := h.store.Put(r.Context(), originalKey, bytes.NewReader(data), int64(len(data)), contentType); err != nil {
+		http.Error(w, `{"error":"failed to store logo"}`, http.StatusInternalServerError)
+		return
+	}
+	if err := h.store.Put(r.Context(), renderedKey, bytes.NewReader(rendered), int64(len(rendered)), "image/webp"); err != nil {
+		http.Error(w, `{"error":"failed to store logo render"}`, http.StatusInternalServerError)
+		return
+	}
+	now := time.Now()
+	position := json.RawMessage(`{"x":0,"y":0,"zoom":1,"aspect":0}`)
+	if err := h.profiles.UpdateBusinessLogo(r.Context(), profile.ProfileID, originalKey, renderedKey, position, &now); err != nil {
+		http.Error(w, `{"error":"failed to save logo"}`, http.StatusInternalServerError)
+		return
+	}
+	saved, err := h.profiles.GetByOwner(r.Context(), userID, workspaceID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to load profile"}`, http.StatusInternalServerError)
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]any{"profile": saved})
+}
+
+// CropLogo re-renders the stored logo original with a new free-aspect crop.
+func (h *PhotographerProfileHandler) CropLogo(w http.ResponseWriter, r *http.Request) {
+	userID, workspaceID, ok := currentProfileActor(w, r)
+	if !ok {
+		return
+	}
+	profile, err := h.profiles.GetByOwner(r.Context(), userID, workspaceID)
+	if err != nil {
+		http.Error(w, `{"error":"profile not found"}`, http.StatusNotFound)
+		return
+	}
+	if profile.BusinessLogoURL == "" {
+		http.Error(w, `{"error":"upload a logo before cropping"}`, http.StatusBadRequest)
+		return
+	}
+	var pos service.LogoCropPosition
+	if err := json.NewDecoder(r.Body).Decode(&pos); err != nil {
+		http.Error(w, `{"error":"invalid crop body"}`, http.StatusBadRequest)
+		return
+	}
+	rc, err := h.store.Get(r.Context(), profile.BusinessLogoURL)
+	if err != nil {
+		http.Error(w, `{"error":"logo original not found"}`, http.StatusNotFound)
+		return
+	}
+	defer rc.Close()
+	rendered, err := service.RenderLogoCropWebP(r.Context(), rc, pos, 640)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"failed to crop logo: %s"}`, jsonEscape(err.Error())), http.StatusBadRequest)
+		return
+	}
+	renderedKey := fmt.Sprintf("profiles/%s/%s/logo/%s/render.webp", workspaceID, profile.ProfileID, uuid.New())
+	if err := h.store.Put(r.Context(), renderedKey, bytes.NewReader(rendered), int64(len(rendered)), "image/webp"); err != nil {
+		http.Error(w, `{"error":"failed to store logo crop"}`, http.StatusInternalServerError)
+		return
+	}
+	encoded, _ := json.Marshal(service.LogoCropPosition{X: pos.X, Y: pos.Y, Zoom: pos.Zoom})
+	if err := h.profiles.UpdateBusinessLogo(r.Context(), profile.ProfileID, profile.BusinessLogoURL, renderedKey, encoded, profile.BusinessLogoUploadedAt); err != nil {
+		http.Error(w, `{"error":"failed to save logo crop"}`, http.StatusInternalServerError)
+		return
+	}
+	saved, err := h.profiles.GetByOwner(r.Context(), userID, workspaceID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to load profile"}`, http.StatusInternalServerError)
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]any{"profile": saved})
+}
+
 func (h *PhotographerProfileHandler) ListSelectableGalleries(w http.ResponseWriter, r *http.Request) {
 	_, workspaceID, ok := currentProfileActor(w, r)
 	if !ok {
@@ -616,6 +737,12 @@ func (h *PhotographerProfileHandler) GetPublic(w http.ResponseWriter, r *http.Re
 	if publicProfile.AvatarURL != "" {
 		publicProfile.AvatarURL = h.presignOrBlank(r, publicProfile.AvatarURL)
 	}
+	if publicProfile.BusinessLogoRenderedURL != "" {
+		publicProfile.BusinessLogoRenderedURL = h.presignOrBlank(r, publicProfile.BusinessLogoRenderedURL)
+	}
+	if publicProfile.BusinessLogoURL != "" {
+		publicProfile.BusinessLogoURL = h.presignOrBlank(r, publicProfile.BusinessLogoURL)
+	}
 	if publicProfile.CoverURL != "" {
 		publicProfile.CoverURL = h.presignOrBlank(r, publicProfile.CoverURL)
 	}
@@ -796,6 +923,7 @@ var profileSlugDashRe = regexp.MustCompile(`-+`)
 var profileReservedSlugs = map[string]struct{}{
 	"avatar":     {},
 	"galleries":  {},
+	"logo":       {},
 	"publish":    {},
 	"qr":         {},
 	"seo":        {},

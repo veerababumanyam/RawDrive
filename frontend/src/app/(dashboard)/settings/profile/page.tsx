@@ -29,6 +29,7 @@ import {
   SettingsPageShell,
 } from "../_components/settings-page-shell";
 import { AvatarCrop } from "./_components/avatar-crop";
+import { LogoCrop } from "./_components/logo-crop";
 import { EditForm } from "./_components/edit-form";
 import { GalleryPicker } from "./_components/gallery-picker";
 import { LivePreview } from "./_components/live-preview";
@@ -304,6 +305,11 @@ export default function ProfileSettingsPage() {
       <div className="settings-profile-layout">
         <div className="settings-profile-main">
           <AvatarCrop
+            profile={profile}
+            onProfileChange={setProfile}
+            onError={reportError}
+          />
+          <LogoCrop
             profile={profile}
             onProfileChange={setProfile}
             onError={reportError}

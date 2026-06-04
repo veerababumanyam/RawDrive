@@ -16,80 +16,86 @@ import (
 var ErrPhotographerProfileNotFound = errors.New("photographer profile not found")
 
 type PhotographerProfile struct {
-	ProfileID            uuid.UUID       `json:"profile_id"`
-	PhotographerID       uuid.UUID       `json:"photographer_id"`
-	WorkspaceID          uuid.UUID       `json:"workspace_id"`
-	CreatedAt            time.Time       `json:"created_at"`
-	UpdatedAt            time.Time       `json:"updated_at"`
-	PublishedAt          *time.Time      `json:"published_at,omitempty"`
-	Status               string          `json:"status"`
-	FirstName            string          `json:"first_name"`
-	LastName             string          `json:"last_name"`
-	DisplayName          string          `json:"display_name"`
-	ProfessionalTitle    string          `json:"professional_title"`
-	Tagline              string          `json:"tagline"`
-	AvatarURL            string          `json:"avatar_url"`
-	AvatarCroppedURL     string          `json:"avatar_cropped_url"`
-	AvatarPosition       json.RawMessage `json:"avatar_position"`
-	AvatarUploadedAt     *time.Time      `json:"avatar_uploaded_at,omitempty"`
-	CoverURL             string          `json:"cover_url"`
-	CoverPosition        json.RawMessage `json:"cover_position"`
-	ShortBio             string          `json:"short_bio"`
-	LongBio              string          `json:"long_bio"`
-	PrimaryEmail         string          `json:"primary_email"`
-	PrimaryPhone         string          `json:"primary_phone"`
-	WhatsappNumber       string          `json:"whatsapp_number"`
-	SecondaryEmail       string          `json:"secondary_email"`
-	ContactPreferences   json.RawMessage `json:"contact_preferences"`
-	PrimaryCity          string          `json:"primary_city"`
-	State                string          `json:"state"`
-	Country              string          `json:"country"`
-	ServiceRadiusKM      *int            `json:"service_radius_km,omitempty"`
-	TravelAvailability   string          `json:"travel_availability"`
-	CoveredCities        []string        `json:"covered_cities"`
-	YearsExperience      *int            `json:"years_experience,omitempty"`
-	TotalWeddingsShot    *int            `json:"total_weddings_shot,omitempty"`
-	PhotographyStyles    []string        `json:"photography_styles"`
-	Specializations      []string        `json:"specializations"`
-	LanguagesSpoken      []string        `json:"languages_spoken"`
-	Equipment            json.RawMessage `json:"equipment"`
-	StartingPrice        *int            `json:"starting_price,omitempty"`
-	PriceRangeMax        *int            `json:"price_range_max,omitempty"`
-	CustomQuoteAvailable bool            `json:"custom_quote_available"`
-	PaymentTerms         string          `json:"payment_terms"`
-	DepositRequired      bool            `json:"deposit_required"`
-	DepositAmount        *int            `json:"deposit_amount,omitempty"`
-	Packages             json.RawMessage `json:"packages"`
-	FeaturedGalleries    []uuid.UUID     `json:"featured_galleries"`
-	Testimonials         json.RawMessage `json:"testimonials"`
-	VideoTestimonials    []string        `json:"video_testimonials"`
-	AverageRating        *float64        `json:"average_rating,omitempty"`
-	SocialInstagram      string          `json:"social_instagram"`
-	SocialFacebook       string          `json:"social_facebook"`
-	SocialLinkedin       string          `json:"social_linkedin"`
-	SocialYoutube        string          `json:"social_youtube"`
-	SocialPinterest      string          `json:"social_pinterest"`
-	CustomLinks          json.RawMessage `json:"custom_links"`
-	Awards               json.RawMessage `json:"awards"`
-	Certifications       json.RawMessage `json:"certifications"`
-	FeaturedIn           []string        `json:"featured_in"`
-	BusinessName         string          `json:"business_name"`
-	GSTNumber            string          `json:"gst_number"`
-	BusinessAddress      string          `json:"business_address"`
-	PaymentMethods       []string        `json:"payment_methods"`
-	IsPublic             bool            `json:"is_public"`
-	VisibilityConfig     json.RawMessage `json:"visibility_config"`
-	MetaTitle            string          `json:"meta_title"`
-	MetaDescription      string          `json:"meta_description"`
-	MetaKeywords         []string        `json:"meta_keywords"`
-	OGImageURL           string          `json:"og_image_url"`
-	URLSlug              string          `json:"url_slug"`
-	SelectedTheme        string          `json:"selected_theme"`
-	BrandColor           string          `json:"brand_color"`
-	LayoutStyle          string          `json:"layout_style"`
-	TotalProfileViews    int             `json:"total_profile_views"`
-	UniqueVisitors       int             `json:"unique_visitors"`
-	LastViewedAt         *time.Time      `json:"last_viewed_at,omitempty"`
+	ProfileID         uuid.UUID       `json:"profile_id"`
+	PhotographerID    uuid.UUID       `json:"photographer_id"`
+	WorkspaceID       uuid.UUID       `json:"workspace_id"`
+	CreatedAt         time.Time       `json:"created_at"`
+	UpdatedAt         time.Time       `json:"updated_at"`
+	PublishedAt       *time.Time      `json:"published_at,omitempty"`
+	Status            string          `json:"status"`
+	FirstName         string          `json:"first_name"`
+	LastName          string          `json:"last_name"`
+	DisplayName       string          `json:"display_name"`
+	ProfessionalTitle string          `json:"professional_title"`
+	Tagline           string          `json:"tagline"`
+	AvatarURL         string          `json:"avatar_url"`
+	AvatarCroppedURL  string          `json:"avatar_cropped_url"`
+	AvatarPosition    json.RawMessage `json:"avatar_position"`
+	AvatarUploadedAt  *time.Time      `json:"avatar_uploaded_at,omitempty"`
+	// Public business logo (brand mark) — plaintext, presigned-public like the
+	// avatar; free-aspect (BusinessLogoPosition aspect=0 = preserve source).
+	BusinessLogoURL         string          `json:"business_logo_url"`
+	BusinessLogoRenderedURL string          `json:"business_logo_rendered_url"`
+	BusinessLogoPosition    json.RawMessage `json:"business_logo_position"`
+	BusinessLogoUploadedAt  *time.Time      `json:"business_logo_uploaded_at,omitempty"`
+	CoverURL                string          `json:"cover_url"`
+	CoverPosition           json.RawMessage `json:"cover_position"`
+	ShortBio                string          `json:"short_bio"`
+	LongBio                 string          `json:"long_bio"`
+	PrimaryEmail            string          `json:"primary_email"`
+	PrimaryPhone            string          `json:"primary_phone"`
+	WhatsappNumber          string          `json:"whatsapp_number"`
+	SecondaryEmail          string          `json:"secondary_email"`
+	ContactPreferences      json.RawMessage `json:"contact_preferences"`
+	PrimaryCity             string          `json:"primary_city"`
+	State                   string          `json:"state"`
+	Country                 string          `json:"country"`
+	ServiceRadiusKM         *int            `json:"service_radius_km,omitempty"`
+	TravelAvailability      string          `json:"travel_availability"`
+	CoveredCities           []string        `json:"covered_cities"`
+	YearsExperience         *int            `json:"years_experience,omitempty"`
+	TotalWeddingsShot       *int            `json:"total_weddings_shot,omitempty"`
+	PhotographyStyles       []string        `json:"photography_styles"`
+	Specializations         []string        `json:"specializations"`
+	LanguagesSpoken         []string        `json:"languages_spoken"`
+	Equipment               json.RawMessage `json:"equipment"`
+	StartingPrice           *int            `json:"starting_price,omitempty"`
+	PriceRangeMax           *int            `json:"price_range_max,omitempty"`
+	CustomQuoteAvailable    bool            `json:"custom_quote_available"`
+	PaymentTerms            string          `json:"payment_terms"`
+	DepositRequired         bool            `json:"deposit_required"`
+	DepositAmount           *int            `json:"deposit_amount,omitempty"`
+	Packages                json.RawMessage `json:"packages"`
+	FeaturedGalleries       []uuid.UUID     `json:"featured_galleries"`
+	Testimonials            json.RawMessage `json:"testimonials"`
+	VideoTestimonials       []string        `json:"video_testimonials"`
+	AverageRating           *float64        `json:"average_rating,omitempty"`
+	SocialInstagram         string          `json:"social_instagram"`
+	SocialFacebook          string          `json:"social_facebook"`
+	SocialLinkedin          string          `json:"social_linkedin"`
+	SocialYoutube           string          `json:"social_youtube"`
+	SocialPinterest         string          `json:"social_pinterest"`
+	CustomLinks             json.RawMessage `json:"custom_links"`
+	Awards                  json.RawMessage `json:"awards"`
+	Certifications          json.RawMessage `json:"certifications"`
+	FeaturedIn              []string        `json:"featured_in"`
+	BusinessName            string          `json:"business_name"`
+	GSTNumber               string          `json:"gst_number"`
+	BusinessAddress         string          `json:"business_address"`
+	PaymentMethods          []string        `json:"payment_methods"`
+	IsPublic                bool            `json:"is_public"`
+	VisibilityConfig        json.RawMessage `json:"visibility_config"`
+	MetaTitle               string          `json:"meta_title"`
+	MetaDescription         string          `json:"meta_description"`
+	MetaKeywords            []string        `json:"meta_keywords"`
+	OGImageURL              string          `json:"og_image_url"`
+	URLSlug                 string          `json:"url_slug"`
+	SelectedTheme           string          `json:"selected_theme"`
+	BrandColor              string          `json:"brand_color"`
+	LayoutStyle             string          `json:"layout_style"`
+	TotalProfileViews       int             `json:"total_profile_views"`
+	UniqueVisitors          int             `json:"unique_visitors"`
+	LastViewedAt            *time.Time      `json:"last_viewed_at,omitempty"`
 }
 
 type ProfileGallery struct {
@@ -128,7 +134,8 @@ const photographerProfileSelect = `
 	       COALESCE(business_address, ''), payment_methods, is_public, visibility_config,
 	       COALESCE(meta_title, ''), COALESCE(meta_description, ''), meta_keywords, COALESCE(og_image_url, ''),
 	       COALESCE(url_slug, ''), selected_theme, COALESCE(brand_color, ''), layout_style,
-	       total_profile_views, unique_visitors, last_viewed_at
+	       total_profile_views, unique_visitors, last_viewed_at,
+	       COALESCE(business_logo_url, ''), COALESCE(business_logo_rendered_url, ''), business_logo_position, business_logo_uploaded_at
 	  FROM photographer_profiles`
 
 func (r *PhotographerProfileRepo) GetByOwner(ctx context.Context, photographerID, workspaceID uuid.UUID) (*PhotographerProfile, error) {
@@ -155,6 +162,26 @@ func (r *PhotographerProfileRepo) GetByID(ctx context.Context, profileID uuid.UU
 		return nil, err
 	}
 	return profile, nil
+}
+
+// UpdateBusinessLogo persists the public business-logo keys + crop position for
+// an existing profile. Targeted UPDATE (the row already exists by upload time),
+// deliberately avoiding the large positional Upsert. The keys are plain storage
+// keys (no encryption); GetPublic presigns them for anonymous viewers.
+func (r *PhotographerProfileRepo) UpdateBusinessLogo(ctx context.Context, profileID uuid.UUID, originalKey, renderedKey string, position json.RawMessage, uploadedAt *time.Time) error {
+	if len(position) == 0 {
+		position = json.RawMessage(`{"x":0,"y":0,"zoom":1,"aspect":0}`)
+	}
+	_, err := r.pool.Exec(ctx, `
+		UPDATE photographer_profiles
+		   SET business_logo_url = $2,
+		       business_logo_rendered_url = $3,
+		       business_logo_position = $4::jsonb,
+		       business_logo_uploaded_at = $5,
+		       updated_at = now()
+		 WHERE profile_id = $1`,
+		profileID, originalKey, renderedKey, string(position), uploadedAt)
+	return err
 }
 
 func (r *PhotographerProfileRepo) GetPublishedBySlug(ctx context.Context, slug string) (*PhotographerProfile, error) {
@@ -303,7 +330,8 @@ func (r *PhotographerProfileRepo) Upsert(ctx context.Context, p *PhotographerPro
 	       COALESCE(business_address, ''), payment_methods, is_public, visibility_config,
 	       COALESCE(meta_title, ''), COALESCE(meta_description, ''), meta_keywords, COALESCE(og_image_url, ''),
 	       COALESCE(url_slug, ''), selected_theme, COALESCE(brand_color, ''), layout_style,
-	       total_profile_views, unique_visitors, last_viewed_at`,
+	       total_profile_views, unique_visitors, last_viewed_at,
+	       COALESCE(business_logo_url, ''), COALESCE(business_logo_rendered_url, ''), business_logo_position, business_logo_uploaded_at`,
 		p.ProfileID, p.PhotographerID, p.WorkspaceID, p.PublishedAt, p.Status,
 		p.FirstName, p.LastName, p.ProfessionalTitle, p.Tagline,
 		p.AvatarURL, p.AvatarCroppedURL, string(p.AvatarPosition), p.AvatarUploadedAt,
@@ -528,6 +556,7 @@ func scanPhotographerProfile(row profileScanner) (*PhotographerProfile, error) {
 		&p.MetaTitle, &p.MetaDescription, &p.MetaKeywords, &p.OGImageURL, &p.URLSlug,
 		&p.SelectedTheme, &p.BrandColor, &p.LayoutStyle,
 		&p.TotalProfileViews, &p.UniqueVisitors, &p.LastViewedAt,
+		&p.BusinessLogoURL, &p.BusinessLogoRenderedURL, &p.BusinessLogoPosition, &p.BusinessLogoUploadedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -547,6 +576,7 @@ func normalizePhotographerProfile(p *PhotographerProfile) {
 		p.Status = "draft"
 	}
 	p.AvatarPosition = jsonWithDefault(p.AvatarPosition, `{"x":0,"y":0,"zoom":1,"aspect":1}`)
+	p.BusinessLogoPosition = jsonWithDefault(p.BusinessLogoPosition, `{"x":0,"y":0,"zoom":1,"aspect":0}`)
 	p.CoverPosition = jsonWithDefault(p.CoverPosition, `{"x":0,"y":0,"zoom":1}`)
 	p.ContactPreferences = jsonWithDefault(p.ContactPreferences, `{}`)
 	p.Equipment = jsonWithDefault(p.Equipment, `{}`)

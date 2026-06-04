@@ -11,6 +11,7 @@ func TestProfileSlugReservedPublicShareWords(t *testing.T) {
 	reserved := []string{
 		"avatar",
 		"galleries",
+		"logo",
 		"publish",
 		"qr",
 		"seo",
