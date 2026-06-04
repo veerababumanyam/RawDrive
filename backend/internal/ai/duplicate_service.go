@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
-	pgvector "github.com/pgvector/pgvector-go"
 
 	"github.com/rawdrive/backend/internal/storage"
 )
@@ -43,78 +42,130 @@ func (s *DuplicateService) ScanForDuplicates(ctx context.Context, workspaceID uu
 	return job, nil
 }
 
+// Duplicate detection tuning for the HNSW ANN self-join that replaced the
+// original O(n²) pairwise scan.
+const (
+	// duplicateSimThreshold is the cosine similarity at/above which two images
+	// count as near-identical (preserved from the original scan).
+	duplicateSimThreshold = 0.92
+	// duplicateNeighbors caps how many nearest neighbours the HNSW search returns
+	// per asset. Clusters larger than this are still fully grouped via transitive
+	// union-find (each near-identical member finds the others among its neighbours).
+	duplicateNeighbors = 50
+	// duplicateEfSearch raises hnsw.ef_search for the scan so recall stays high in
+	// the near-duplicate regime; pgvector requires it to be >= the LIMIT.
+	duplicateEfSearch = 100
+)
+
 // DetectDuplicates finds near-identical images using embedding similarity.
+//
+// Rather than load every embedding and compare all O(n²) pairs in Go (the
+// previous implementation, which also recomputed cosine similarity with a
+// hand-rolled Newton's-method sqrt), this runs a single ANN self-join over the
+// HNSW index idx_assets_embedding_hnsw (assets.embedding, vector_cosine_ops): for
+// each asset the LATERAL subquery asks the index for its nearest neighbours
+// (ORDER BY b.embedding <=> a.embedding LIMIT K) and we keep only those within the
+// similarity threshold (cosine distance <= 1-threshold). Grouping stays a
+// transitive union-find in Go but now consumes index-found candidate pairs, so the
+// cost is ~O(n·log n·K) instead of O(n²).
 func (s *DuplicateService) DetectDuplicates(ctx context.Context, workspaceID uuid.UUID, galleryID *uuid.UUID) ([]DuplicateGroup, error) {
-	// Get all assets with embeddings in the workspace/gallery
-	query := `SELECT id, embedding FROM assets
-		WHERE workspace_id = $1 AND embedding IS NOT NULL AND deleted_at IS NULL`
-	args := []any{workspaceID}
+	maxDist := 1.0 - duplicateSimThreshold
+
+	innerGalleryFilter, outerGalleryFilter := "", ""
+	args := []any{workspaceID, maxDist, duplicateNeighbors}
 	if galleryID != nil {
-		query += ` AND id IN (SELECT asset_id FROM gallery_assets WHERE gallery_id = $2)`
 		args = append(args, *galleryID)
+		innerGalleryFilter = ` AND b.id IN (SELECT asset_id FROM gallery_assets WHERE gallery_id = $4)`
+		outerGalleryFilter = ` AND a.id IN (SELECT asset_id FROM gallery_assets WHERE gallery_id = $4)`
 	}
 
-	rows, err := s.pool.Query(ctx, query, args...)
+	// ANN self-join: the inner ORDER BY b.embedding <=> a.embedding LIMIT $3 is the
+	// canonical HNSW-served nearest-neighbour query, evaluated once per outer asset.
+	pairQuery := `
+		SELECT a.id, n.id, 1 - (a.embedding <=> n.embedding) AS sim
+		FROM assets a
+		CROSS JOIN LATERAL (
+			SELECT b.id, b.embedding
+			FROM assets b
+			WHERE b.workspace_id = $1
+			  AND b.embedding IS NOT NULL
+			  AND b.deleted_at IS NULL
+			  AND b.id <> a.id` + innerGalleryFilter + `
+			ORDER BY b.embedding <=> a.embedding
+			LIMIT $3
+		) n
+		WHERE a.workspace_id = $1
+		  AND a.embedding IS NOT NULL
+		  AND a.deleted_at IS NULL` + outerGalleryFilter + `
+		  AND (a.embedding <=> n.embedding) <= $2`
+
+	// Run inside a transaction so SET LOCAL hnsw.ef_search applies to the self-join
+	// (LOCAL is transaction-scoped) without leaking onto the pooled connection. The
+	// scan is read-only, so the deferred rollback simply releases the setting.
+	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("duplicate service: query assets: %w", err)
+		return nil, fmt.Errorf("duplicate service: begin: %w", err)
 	}
-	defer rows.Close()
+	defer tx.Rollback(ctx)
 
-	type assetEmbed struct {
-		ID        uuid.UUID
-		Embedding pgvector.Vector
-	}
-	var assets []assetEmbed
-	for rows.Next() {
-		var ae assetEmbed
-		if err := rows.Scan(&ae.ID, &ae.Embedding); err != nil {
-			return nil, err
-		}
-		assets = append(assets, ae)
+	if _, err := tx.Exec(ctx, fmt.Sprintf("SET LOCAL hnsw.ef_search = %d", duplicateEfSearch)); err != nil {
+		// Non-fatal: the scan still works at the default ef_search, just lower recall.
+		log.Printf("duplicate service: set ef_search: %v", err)
 	}
 
-	// Find duplicate pairs using cosine similarity >= 0.92
+	rows, err := tx.Query(ctx, pairQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("duplicate service: ann self-join: %w", err)
+	}
+
+	// Transitive union-find over the index-found candidate pairs. The self-join
+	// yields each pair from both ends (a→b and b→a); the both-grouped branch makes
+	// the duplicate row a no-op.
 	grouped := make(map[uuid.UUID]*DuplicateGroup)
 	assetToGroup := make(map[uuid.UUID]uuid.UUID)
-
-	for i := 0; i < len(assets); i++ {
-		for j := i + 1; j < len(assets); j++ {
-			sim := cosineSimilarity(assets[i].Embedding.Slice(), assets[j].Embedding.Slice())
-			if sim >= 0.92 {
-				// Check if either asset is already in a group
-				gid1, ok1 := assetToGroup[assets[i].ID]
-				gid2, ok2 := assetToGroup[assets[j].ID]
-
-				var groupID uuid.UUID
-				if ok1 {
-					groupID = gid1
-				} else if ok2 {
-					groupID = gid2
-				} else {
-					groupID = uuid.New()
-					grouped[groupID] = &DuplicateGroup{
-						ID:          groupID,
-						WorkspaceID: workspaceID,
-						GalleryID:   galleryID,
-						Status:      "pending",
-						Members: []DuplicateGroupMember{{
-							ID: uuid.New(), GroupID: groupID, AssetID: assets[i].ID,
-							SimilarityScore: 1.0, IsRepresentative: true,
-						}},
-					}
-					assetToGroup[assets[i].ID] = groupID
-				}
-
-				if _, exists := assetToGroup[assets[j].ID]; !exists {
-					group := grouped[groupID]
-					group.Members = append(group.Members, DuplicateGroupMember{
-						ID: uuid.New(), GroupID: groupID, AssetID: assets[j].ID,
-						SimilarityScore: sim,
-					})
-					assetToGroup[assets[j].ID] = groupID
-				}
-			}
+	for rows.Next() {
+		var aID, bID uuid.UUID
+		var sim float64
+		if err := rows.Scan(&aID, &bID, &sim); err != nil {
+			rows.Close()
+			return nil, err
 		}
+		gid1, ok1 := assetToGroup[aID]
+		gid2, ok2 := assetToGroup[bID]
+		switch {
+		case ok1 && ok2:
+			continue
+		case ok1:
+			g := grouped[gid1]
+			g.Members = append(g.Members, DuplicateGroupMember{
+				ID: uuid.New(), GroupID: gid1, AssetID: bID, SimilarityScore: sim,
+			})
+			assetToGroup[bID] = gid1
+		case ok2:
+			g := grouped[gid2]
+			g.Members = append(g.Members, DuplicateGroupMember{
+				ID: uuid.New(), GroupID: gid2, AssetID: aID, SimilarityScore: sim,
+			})
+			assetToGroup[aID] = gid2
+		default:
+			gid := uuid.New()
+			grouped[gid] = &DuplicateGroup{
+				ID:          gid,
+				WorkspaceID: workspaceID,
+				GalleryID:   galleryID,
+				Status:      "pending",
+				Members: []DuplicateGroupMember{
+					{ID: uuid.New(), GroupID: gid, AssetID: aID, SimilarityScore: 1.0, IsRepresentative: true},
+					{ID: uuid.New(), GroupID: gid, AssetID: bID, SimilarityScore: sim},
+				},
+			}
+			assetToGroup[aID] = gid
+			assetToGroup[bID] = gid
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	// Persist groups
@@ -283,32 +334,4 @@ func (s *DuplicateService) ScoreQuality(ctx context.Context, assetID, workspaceI
 	}
 
 	return score, nil
-}
-
-// cosineSimilarity computes cosine similarity between two float32 vectors.
-func cosineSimilarity(a, b []float32) float64 {
-	if len(a) != len(b) || len(a) == 0 {
-		return 0
-	}
-	var dot, normA, normB float64
-	for i := range a {
-		dot += float64(a[i]) * float64(b[i])
-		normA += float64(a[i]) * float64(a[i])
-		normB += float64(b[i]) * float64(b[i])
-	}
-	if normA == 0 || normB == 0 {
-		return 0
-	}
-	return dot / (sqrt(normA) * sqrt(normB))
-}
-
-func sqrt(x float64) float64 {
-	if x <= 0 {
-		return 0
-	}
-	z := x
-	for i := 0; i < 50; i++ {
-		z = (z + x/z) / 2
-	}
-	return z
 }
