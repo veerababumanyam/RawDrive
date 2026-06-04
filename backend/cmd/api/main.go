@@ -1022,16 +1022,19 @@ func loadEnvFiles(paths ...string) {
 // RedisValkeyClient; when unset (or unparseable) it returns nil, and the
 // RateLimitWithValkey limiters fall back to per-node in-memory enforcement. A
 // startup ping is attempted and logged but is not fatal.
-func newValkeyClient() middleware.ValkeyClient {
+// It also returns the raw go-redis client (or nil) so other cross-node caches —
+// e.g. the storage analytics cache — can share the same connection pool. The
+// raw client is nil whenever the wrapped client is nil.
+func newValkeyClient() (middleware.ValkeyClient, *redis.Client) {
 	vurl := os.Getenv("VALKEY_URL")
 	if vurl == "" {
 		log.Println("valkey: VALKEY_URL not set — using per-node in-memory rate limiting")
-		return nil
+		return nil, nil
 	}
 	opts, parseErr := redis.ParseURL(vurl)
 	if parseErr != nil {
 		log.Printf("valkey: invalid VALKEY_URL %q: %v — using per-node in-memory rate limiting", vurl, parseErr)
-		return nil
+		return nil, nil
 	}
 	// Bound the rate limiter's backend round trips with explicit dial/read/write
 	// timeouts (env-tunable) instead of inheriting go-redis version defaults;
@@ -1045,7 +1048,33 @@ func newValkeyClient() middleware.ValkeyClient {
 		log.Printf("valkey: connected, cluster-wide sliding-window rate limiter enabled")
 	}
 	pingCancel()
-	return middleware.NewRedisValkeyClient(rdb)
+	return middleware.NewRedisValkeyClient(rdb), rdb
+}
+
+// valkeyAnalyticsCache adapts the raw go-redis client to the storage service's
+// shared analytics-cache seam (GET/SET/DEL of a serialized analytics blob). All
+// ops are best-effort: a Valkey error never fails a storage request — the
+// service degrades to a direct DB read. redis.Nil (key miss) is reported as a
+// clean miss, not an error.
+type valkeyAnalyticsCache struct{ rdb *redis.Client }
+
+func (v valkeyAnalyticsCache) Get(ctx context.Context, key string) ([]byte, bool, error) {
+	b, err := v.rdb.Get(ctx, key).Bytes()
+	if err == redis.Nil {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	return b, true, nil
+}
+
+func (v valkeyAnalyticsCache) Set(ctx context.Context, key string, val []byte, ttl time.Duration) {
+	_ = v.rdb.Set(ctx, key, val, ttl).Err()
+}
+
+func (v valkeyAnalyticsCache) Del(ctx context.Context, key string) {
+	_ = v.rdb.Del(ctx, key).Err()
 }
 
 // valkeyCacheStatSource adapts the rate-limiter Valkey client into the
@@ -1174,7 +1203,7 @@ func main() {
 	// limiters all route through the same backend. It is nil when VALKEY_URL is
 	// unset, in which case RateLimitWithValkey enforces per-node in-memory
 	// (fail-closed) rather than disabling the limit.
-	valkeyClient := newValkeyClient()
+	valkeyClient, valkeyRaw := newValkeyClient()
 	globalLimiter, _ := middleware.RateLimitWithValkey(valkeyClient, "global", globalRateMax, globalRateWindow)
 	r.Use(globalLimiter)
 
@@ -1769,6 +1798,13 @@ func main() {
 
 	// M11 Services (initialized early — used by M2 services)
 	storageAccountingSvc := service.NewStorageAccounting(dbPool)
+	// Back the storage analytics cache with Valkey when available so the cache
+	// is shared across app nodes (.42/.44) — an invalidation on one node is seen
+	// by the other, eliminating the in-process cache's cross-node staleness.
+	if valkeyRaw != nil {
+		storageAccountingSvc = storageAccountingSvc.WithSharedCache(valkeyAnalyticsCache{rdb: valkeyRaw})
+		log.Println("storage: analytics cache backed by Valkey (cross-node shared)")
+	}
 	albumRepo := repository.NewAlbumRepo(dbPool)
 	// AlbumService is wired with the asset + favorites repos so the
 	// "Favorites" utility smart album (M41/105) resolves real guest

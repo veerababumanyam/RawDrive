@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -11,6 +12,27 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// sharedAnalyticsCache is the optional cross-node backing for the storage
+// analytics cache. When wired (Valkey, via StorageAccounting.WithSharedCache in
+// main.go) it REPLACES the in-process map as the cache source of truth, so an
+// invalidation on one app node is seen by all nodes — killing the per-node
+// staleness of the in-process cache (.42 ≠ .44). nil = in-process only
+// (single node / no Valkey). All ops are best-effort: a cache error never
+// fails the caller, it just degrades to a DB read.
+type sharedAnalyticsCache interface {
+	Get(ctx context.Context, key string) ([]byte, bool, error)
+	Set(ctx context.Context, key string, val []byte, ttl time.Duration)
+	Del(ctx context.Context, key string)
+}
+
+// analyticsSharedCacheOpTimeout bounds each shared-cache round trip so a slow or
+// unreachable Valkey can never stall a storage request.
+const analyticsSharedCacheOpTimeout = 2 * time.Second
+
+func analyticsCacheKey(workspaceID uuid.UUID) string {
+	return "storage:analytics:" + workspaceID.String()
+}
+
 // ErrStorageQuotaExceeded is returned when a workspace's accepted upload would
 // push used_bytes past quota_bytes. Handlers detect this with errors.Is so
 // they can map it to a 403 with the documented JSON shape
@@ -19,10 +41,14 @@ import (
 // the frontend's upload error handler can rely on a stable contract.
 var ErrStorageQuotaExceeded = errors.New("storage quota exceeded")
 
-// analyticsCache is a simple in-memory cache with TTL for storage analytics.
+// analyticsCache is a TTL cache for storage analytics. By default it is an
+// in-process map (per-node). When a shared cross-node backing is wired (Valkey,
+// via WithSharedCache) every op routes to that backing instead, so the cache is
+// shared across app nodes and an invalidate on one node is seen by all.
 type analyticsCache struct {
 	mu      sync.RWMutex
 	entries map[uuid.UUID]*analyticsCacheEntry
+	shared  sharedAnalyticsCache // nil = in-process only
 }
 
 type analyticsCacheEntry struct {
@@ -35,6 +61,19 @@ func newAnalyticsCache() *analyticsCache {
 }
 
 func (c *analyticsCache) get(workspaceID uuid.UUID) (*StorageAnalytics, bool) {
+	if c.shared != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), analyticsSharedCacheOpTimeout)
+		defer cancel()
+		raw, ok, err := c.shared.Get(ctx, analyticsCacheKey(workspaceID))
+		if err != nil || !ok {
+			return nil, false // best-effort: a cache error degrades to a DB read
+		}
+		var a StorageAnalytics
+		if json.Unmarshal(raw, &a) != nil {
+			return nil, false
+		}
+		return &a, true
+	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	entry, ok := c.entries[workspaceID]
@@ -45,12 +84,28 @@ func (c *analyticsCache) get(workspaceID uuid.UUID) (*StorageAnalytics, bool) {
 }
 
 func (c *analyticsCache) set(workspaceID uuid.UUID, data *StorageAnalytics, ttl time.Duration) {
+	if c.shared != nil {
+		raw, err := json.Marshal(data)
+		if err != nil {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), analyticsSharedCacheOpTimeout)
+		defer cancel()
+		c.shared.Set(ctx, analyticsCacheKey(workspaceID), raw, ttl)
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.entries[workspaceID] = &analyticsCacheEntry{data: data, expiresAt: time.Now().Add(ttl)}
 }
 
 func (c *analyticsCache) invalidate(workspaceID uuid.UUID) {
+	if c.shared != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), analyticsSharedCacheOpTimeout)
+		defer cancel()
+		c.shared.Del(ctx, analyticsCacheKey(workspaceID))
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.entries, workspaceID)
@@ -65,6 +120,19 @@ type StorageAccounting struct {
 // NewStorageAccounting creates a new StorageAccounting service.
 func NewStorageAccounting(pool *pgxpool.Pool) *StorageAccounting {
 	return &StorageAccounting{pool: pool, cache: newAnalyticsCache()}
+}
+
+// WithSharedCache wires a cross-node (Valkey) backing for the analytics cache.
+// main.go calls this during bootstrap when VALKEY_URL is set, so both app nodes
+// share one cache and an invalidation on either node is seen by the other —
+// eliminating the in-process cache's per-node staleness. Passing nil keeps the
+// in-process cache. Returns the same pointer so the call chains.
+func (s *StorageAccounting) WithSharedCache(c sharedAnalyticsCache) *StorageAccounting {
+	if s.cache == nil {
+		s.cache = newAnalyticsCache()
+	}
+	s.cache.shared = c
+	return s
 }
 
 // WorkspaceStorage represents current storage usage for a workspace.
@@ -441,9 +509,11 @@ func (s *StorageAccounting) SetQuota(ctx context.Context, workspaceID uuid.UUID,
 	return nil
 }
 
-// InvalidateAnalytics drops the in-process cached storage analytics for a
-// workspace after quota/usage changes made outside this service's normal
-// write path, such as subscription payment settlement.
+// InvalidateAnalytics drops the cached storage analytics for a workspace after
+// quota/usage changes made outside this service's normal write path, such as
+// subscription payment settlement. When a Valkey shared cache is wired this
+// deletes the cross-node key (seen by every app node); otherwise it clears the
+// in-process entry.
 func (s *StorageAccounting) InvalidateAnalytics(workspaceID uuid.UUID) {
 	if s == nil || s.cache == nil {
 		return
