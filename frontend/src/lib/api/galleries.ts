@@ -249,6 +249,11 @@ export interface PublicStudioLanding {
   counts: {
     published_galleries: number;
   };
+  // PUB-CAP: keyset pagination cursor for the next page of published
+  // galleries. Present only when more galleries exist beyond this page; the
+  // client passes it back as ?cursor= to "load more". Omitted on the last page.
+  next_cursor?: string | null;
+  has_more?: boolean;
 }
 
 function appendQueryParam(
@@ -301,10 +306,14 @@ function fetchWithGallerySession(
 
 export async function getPublicStudioLanding(
   subdomain: string,
+  cursor?: string | null,
 ): Promise<PublicStudioLanding> {
-  const res = await fetch(
-    apiUrl(`/api/v1/public/studios/${encodeURIComponent(subdomain)}`),
+  const path = appendQueryParam(
+    `/api/v1/public/studios/${encodeURIComponent(subdomain)}`,
+    "cursor",
+    cursor,
   );
+  const res = await fetch(apiUrl(path));
   if (!res.ok) throw new Error(`Studio not found: ${res.status}`);
   return res.json();
 }

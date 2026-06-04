@@ -6,6 +6,7 @@ import {
 } from "@/lib/api/galleries";
 import { getApiBaseUrl } from "@/lib/api/base-url";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
+import { StudioGalleryGrid } from "./StudioGalleryGrid";
 
 interface Props {
   searchParams?: Promise<{ ws?: string }>;
@@ -64,44 +65,6 @@ function StudioLogo({ studio }: { studio: PublicStudioProfile }) {
   );
 }
 
-function GalleryCard({ gallery }: { gallery: PublicStudioGallery }) {
-  const cover = pickGalleryCover(gallery);
-
-  return (
-    <a
-      href={gallery.public_url}
-      className="group block overflow-hidden rounded-2xl border border-border-subtle bg-surface-elevated shadow-glass transition hover:border-border-focus focus:outline-none focus:ring-2 focus:ring-border-focus"
-    >
-      <div className="aspect-[4/3] bg-surface-sunken">
-        {cover ? (
-          <img
-            src={cover}
-            alt={`${gallery.title} cover`}
-            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-sm text-text-tertiary">
-            Preview coming soon
-          </div>
-        )}
-      </div>
-      <div className="space-y-2 p-5">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-text-primary">
-            {gallery.title}
-          </h2>
-          <span className="status-badge status-badge--success">Published</span>
-        </div>
-        {gallery.description ? (
-          <p className="line-clamp-2 text-sm text-text-secondary">
-            {gallery.description}
-          </p>
-        ) : null}
-      </div>
-    </a>
-  );
-}
-
 export default async function StudioLandingPage({ searchParams }: Props) {
   const query = searchParams ? await searchParams : {};
   const ws = typeof query.ws === "string" && query.ws ? query.ws : "";
@@ -115,6 +78,7 @@ export default async function StudioLandingPage({ searchParams }: Props) {
   }
 
   const { studio, galleries, counts } = landing;
+  const initialNextCursor = landing.next_cursor ?? null;
   const heroCover = pickGalleryCover(galleries[0]);
   const address = studioAddress(studio);
   const logoUrl = absoluteApiUrl(studio.logo_url);
@@ -235,17 +199,11 @@ export default async function StudioLandingPage({ searchParams }: Props) {
           ) : null}
         </div>
 
-        {galleries.length > 0 ? (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {galleries.map((gallery) => (
-              <GalleryCard key={gallery.id} gallery={gallery} />
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-border-subtle bg-surface-elevated p-8 text-center text-text-secondary shadow-glass">
-            No published galleries are available yet.
-          </div>
-        )}
+        <StudioGalleryGrid
+          subdomain={studio.business_subdomain}
+          initialGalleries={galleries}
+          initialNextCursor={initialNextCursor}
+        />
       </section>
     </main>
   );

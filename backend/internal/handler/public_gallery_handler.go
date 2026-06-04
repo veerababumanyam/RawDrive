@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -99,6 +100,68 @@ const publicStudioLandingCacheOpTimeout = 2 * time.Second
 // never collide with other shared caches on the same Valkey.
 func publicStudioLandingCacheKey(code string) string {
 	return "studio:landing:" + code
+}
+
+// publicStudioLandingCacheKeyForCursor is the page-aware shared-cache key
+// (PUB-CAP). The first page (empty cursor) keeps the original
+// publicStudioLandingCacheKey so PUB-CACHE's existing warmed entries and 15s-TTL
+// staleness bound continue to apply unchanged. A cursored "load more" page is
+// namespaced with its cursor so it can never collide with — or be served in
+// place of — page 1's cached entry. The cursor is an opaque, URL-safe base64
+// token, so it is safe as a Valkey key suffix.
+func publicStudioLandingCacheKeyForCursor(code, cursor string) string {
+	if cursor == "" {
+		return publicStudioLandingCacheKey(code)
+	}
+	return publicStudioLandingCacheKey(code) + ":cursor:" + cursor
+}
+
+// publicStudioLandingPageSize bounds the published-gallery list per page. It is
+// the historical first-page cap (PUB-CAP removed the hard, cursor-less LIMIT 60
+// truncation): the first page is unchanged for small studios, and a studio with
+// more than this many published galleries paginates via the keyset cursor.
+const publicStudioLandingPageSize = 60
+
+// studioGalleryCursor is the keyset position for the published-gallery list. It
+// mirrors the query's ORDER BY — effective publish time, then created_at, then
+// id as a stable, unique tiebreaker — so a "next page" request resumes strictly
+// after the last row of the previous page with no duplicates or gaps even when
+// two galleries share a timestamp.
+type studioGalleryCursor struct {
+	EffectiveAt time.Time `json:"e"`
+	CreatedAt   time.Time `json:"c"`
+	ID          uuid.UUID `json:"i"`
+}
+
+// encodeStudioGalleryCursor serializes a keyset position to an opaque, URL-safe
+// base64 token for the ?cursor= query param / next_cursor response field.
+func encodeStudioGalleryCursor(c studioGalleryCursor) string {
+	raw, err := json.Marshal(c)
+	if err != nil {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString(raw)
+}
+
+// decodeStudioGalleryCursor parses a cursor token. A malformed, empty, or
+// non-JSON value decodes as "no cursor" (ok=false) so a bad client value
+// degrades to the first page rather than erroring.
+func decodeStudioGalleryCursor(s string) (studioGalleryCursor, bool) {
+	if s == "" {
+		return studioGalleryCursor{}, false
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(s)
+	if err != nil {
+		return studioGalleryCursor{}, false
+	}
+	var c studioGalleryCursor
+	if json.Unmarshal(raw, &c) != nil {
+		return studioGalleryCursor{}, false
+	}
+	if c.ID == uuid.Nil {
+		return studioGalleryCursor{}, false
+	}
+	return c, true
 }
 
 // WithStudioLandingCache wires the optional cross-node (Valkey) backing for the
@@ -608,6 +671,13 @@ type publicStudioLandingResponse struct {
 	Studio    publicStudioProfileResponse   `json:"studio"`
 	Galleries []publicStudioGalleryResponse `json:"galleries"`
 	Counts    map[string]int                `json:"counts"`
+	// NextCursor is the opaque keyset token for the next page of published
+	// galleries (PUB-CAP). Present (non-nil) only when more galleries exist
+	// beyond this page; the client passes it back as ?cursor= for "load more".
+	// Omitted on the last page so the frontend hides the control.
+	NextCursor *string `json:"next_cursor,omitempty"`
+	// HasMore mirrors NextCursor != nil for a cheap client-side check.
+	HasMore bool `json:"has_more"`
 }
 
 func publicStudioBusinessCodeFromSubdomain(subdomain string) string {
@@ -652,13 +722,26 @@ func (h *PublicGalleryHandler) GetStudioLanding(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// PUB-CAP: keyset ("load more") pagination over the published-gallery list.
+	// The raw ?cursor= token is the opaque keyset position of the last gallery on
+	// the previous page; a missing/garbled value decodes to "first page". The
+	// normalized cursor string is what keys the cache so each page is cached
+	// independently (cursorRaw is normalized to "" for page 1 so it shares the
+	// original key).
+	cursor, hasCursor := decodeStudioGalleryCursor(r.URL.Query().Get("cursor"))
+	cursorKey := ""
+	if hasCursor {
+		cursorKey = encodeStudioGalleryCursor(cursor)
+	}
+
 	// PUB-CACHE: serve the assembled landing from the short-TTL shared cache when
 	// present, collapsing the workspace query + tier lookup + gallery-list query
 	// to one DB round-trip per TTL across app nodes. Checked BEFORE the pool guard
 	// so a warmed entry serves even on a node that would otherwise need the DB. A
 	// cache miss/error falls through to the DB assembly below (best-effort: Valkey
-	// never fails the read).
-	if resp, ok := h.studioLandingFromCache(r.Context(), code); ok {
+	// never fails the read). PUB-CAP: the key is page-aware so a cursored page can
+	// never collide with page 1's entry.
+	if resp, ok := h.studioLandingFromCache(r.Context(), code, cursorKey); ok {
 		respondJSONWithETag(w, r, resp, "public, max-age=0, s-maxage=60, must-revalidate")
 		return
 	}
@@ -739,7 +822,7 @@ func (h *PublicGalleryHandler) GetStudioLanding(w http.ResponseWriter, r *http.R
 		logoURL = &url
 	}
 
-	galleries, err := h.listPublishedStudioGalleries(r.Context(), workspaceID, subdomain)
+	galleries, nextCursor, err := h.listPublishedStudioGalleries(r.Context(), workspaceID, subdomain, cursor, hasCursor, publicStudioLandingPageSize)
 	if err != nil {
 		http.Error(w, `{"error":"failed to load studio galleries"}`, http.StatusInternalServerError)
 		return
@@ -770,15 +853,21 @@ func (h *PublicGalleryHandler) GetStudioLanding(w http.ResponseWriter, r *http.R
 		},
 		Galleries: galleries,
 		Counts: map[string]int{
+			// PUB-CAP: this is the count on THIS page (the response is paginated),
+			// not the studio total — kept as-is for first-page backward compat;
+			// the frontend renders "Published galleries" from the page list.
 			"published_galleries": len(galleries),
 		},
+		NextCursor: nextCursor,
+		HasMore:    nextCursor != nil,
 	}
 
 	// PUB-CACHE: store the freshly-assembled landing in the short-TTL shared cache
 	// so the next anonymous view (on any app node) is served without re-querying.
 	// Only PUBLIC, non-PII fields are in `resp` (the same data served here), so
-	// caching it leaks nothing the response itself doesn't already expose.
-	h.studioLandingToCache(r.Context(), code, resp)
+	// caching it leaks nothing the response itself doesn't already expose. PUB-CAP:
+	// keyed per-cursor so each page is cached independently.
+	h.studioLandingToCache(r.Context(), code, cursorKey, resp)
 
 	// PERF-HDR: this public studio-profile metadata read is served with
 	// conditional-request support — a content-hash ETag lets a repeat GET that
@@ -793,14 +882,14 @@ func (h *PublicGalleryHandler) GetStudioLanding(w http.ResponseWriter, r *http.R
 // code when present and decodable. A miss/error/absent backing is a clean miss
 // so the caller assembles from the DB. Best-effort: a Valkey error never fails
 // the read.
-func (h *PublicGalleryHandler) studioLandingFromCache(ctx context.Context, code string) (publicStudioLandingResponse, bool) {
+func (h *PublicGalleryHandler) studioLandingFromCache(ctx context.Context, code, cursor string) (publicStudioLandingResponse, bool) {
 	var resp publicStudioLandingResponse
 	if h.studioLandingCache == nil {
 		return resp, false
 	}
 	opCtx, cancel := context.WithTimeout(ctx, publicStudioLandingCacheOpTimeout)
 	defer cancel()
-	raw, ok, err := h.studioLandingCache.Get(opCtx, publicStudioLandingCacheKey(code))
+	raw, ok, err := h.studioLandingCache.Get(opCtx, publicStudioLandingCacheKeyForCursor(code, cursor))
 	if err != nil || !ok {
 		return resp, false
 	}
@@ -813,7 +902,7 @@ func (h *PublicGalleryHandler) studioLandingFromCache(ctx context.Context, code 
 // studioLandingToCache stores an assembled public studio landing under the short
 // TTL. Best-effort: a marshal or backend error is swallowed (the response was
 // already served from the DB assembly).
-func (h *PublicGalleryHandler) studioLandingToCache(ctx context.Context, code string, resp publicStudioLandingResponse) {
+func (h *PublicGalleryHandler) studioLandingToCache(ctx context.Context, code, cursor string, resp publicStudioLandingResponse) {
 	if h.studioLandingCache == nil {
 		return
 	}
@@ -823,12 +912,43 @@ func (h *PublicGalleryHandler) studioLandingToCache(ctx context.Context, code st
 	}
 	opCtx, cancel := context.WithTimeout(ctx, publicStudioLandingCacheOpTimeout)
 	defer cancel()
-	h.studioLandingCache.Set(opCtx, publicStudioLandingCacheKey(code), raw, publicStudioLandingCacheTTL)
+	h.studioLandingCache.Set(opCtx, publicStudioLandingCacheKeyForCursor(code, cursor), raw, publicStudioLandingCacheTTL)
 }
 
-func (h *PublicGalleryHandler) listPublishedStudioGalleries(ctx context.Context, workspaceID uuid.UUID, subdomain string) ([]publicStudioGalleryResponse, error) {
+// listPublishedStudioGalleries returns ONE page of a studio's published gallery
+// cards plus the keyset cursor for the next page (PUB-CAP). Ordering is
+// effective-publish-time DESC, then created_at DESC, then id DESC — a stable,
+// unique key so pages never overlap or skip a row even when two galleries share
+// a timestamp. When `hasCursor` is true the query resumes strictly after the
+// keyset position in `cursor`. It fetches limit+1 rows to detect a next page:
+// if the sentinel row comes back, the page is trimmed to `limit` and the cursor
+// of the last returned row is returned (non-nil); otherwise nextCursor is nil
+// (last page). The hard, cursor-less LIMIT 60 truncation it replaced silently
+// hid galleries 61+.
+func (h *PublicGalleryHandler) listPublishedStudioGalleries(ctx context.Context, workspaceID uuid.UUID, subdomain string, cursor studioGalleryCursor, hasCursor bool, limit int) ([]publicStudioGalleryResponse, *string, error) {
 	if h.pool == nil {
-		return nil, fmt.Errorf("missing db pool")
+		return nil, nil, fmt.Errorf("missing db pool")
+	}
+	if limit <= 0 {
+		limit = publicStudioLandingPageSize
+	}
+
+	// $1 workspace, $2 limit+1 (sentinel-fetch to detect a next page). The keyset
+	// predicate (when paginating) compares the row tuple lexicographically to the
+	// cursor under the same DESC ordering: a row is "after" the cursor iff
+	//   (effective, created, id) < (cursor.effective, cursor.created, cursor.id).
+	// Postgres ROW(...) tuple comparison evaluates exactly this lexicographic
+	// order, so it matches ORDER BY ... DESC with no per-column OR expansion.
+	args := []any{workspaceID, limit + 1}
+	keysetClause := ""
+	if hasCursor {
+		keysetClause = `
+		  AND (
+			COALESCE(g.published_at, g.created_at),
+			g.created_at,
+			g.id
+		  ) < ($3, $4, $5)`
+		args = append(args, cursor.EffectiveAt, cursor.CreatedAt, cursor.ID)
 	}
 
 	rows, err := h.pool.Query(ctx, `
@@ -861,17 +981,25 @@ func (h *PublicGalleryHandler) listPublishedStudioGalleries(ctx context.Context,
 		  AND g.is_published = true
 		  AND (g.status IS NULL OR g.status <> 'archived')
 		  AND g.archived_at IS NULL
-		  AND (g.expires_at IS NULL OR g.expires_at > now())`+publicStudioSafeGalleryPredicate+`
-		ORDER BY COALESCE(g.published_at, g.created_at) DESC, g.created_at DESC
-		LIMIT 60`,
-		workspaceID,
+		  AND (g.expires_at IS NULL OR g.expires_at > now())`+publicStudioSafeGalleryPredicate+keysetClause+`
+		ORDER BY COALESCE(g.published_at, g.created_at) DESC, g.created_at DESC, g.id DESC
+		LIMIT $2`,
+		args...,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("public studio list galleries: %w", err)
+		return nil, nil, fmt.Errorf("public studio list galleries: %w", err)
 	}
 	defer rows.Close()
 
 	out := []publicStudioGalleryResponse{}
+	// keyset positions captured alongside each row so we can mint the next cursor
+	// from the last RETURNED (post-trim) gallery using its true effective time.
+	type keyset struct {
+		eff     time.Time
+		created time.Time
+		id      uuid.UUID
+	}
+	keys := []keyset{}
 	for rows.Next() {
 		var (
 			id          uuid.UUID
@@ -889,19 +1017,40 @@ func (h *PublicGalleryHandler) listPublishedStudioGalleries(ctx context.Context,
 			&gallery.DownloadEnabled,
 			&coverThumbs,
 		); err != nil {
-			return nil, fmt.Errorf("public studio list galleries scan: %w", err)
+			return nil, nil, fmt.Errorf("public studio list galleries scan: %w", err)
 		}
 		gallery.ID = id.String()
 		if coverThumbs != nil {
 			gallery.CoverThumbnails = *coverThumbs
 		}
 		gallery.PublicURL = publicStudioSubdomainURL(subdomain) + "/" + gallery.Slug
+
+		// Effective publish time mirrors COALESCE(published_at, created_at) in the
+		// ORDER BY so the minted cursor lands exactly on the row's keyset position.
+		eff := gallery.CreatedAt
+		if gallery.PublishedAt != nil {
+			eff = *gallery.PublishedAt
+		}
 		out = append(out, gallery)
+		keys = append(keys, keyset{eff: eff, created: gallery.CreatedAt, id: id})
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("public studio list galleries rows: %w", err)
+		return nil, nil, fmt.Errorf("public studio list galleries rows: %w", err)
 	}
-	return out, nil
+
+	// A full sentinel-bearing page means more galleries exist: trim the extra row
+	// and mint the next cursor from the last RETURNED gallery.
+	var nextCursor *string
+	if len(out) > limit {
+		out = out[:limit]
+		keys = keys[:limit]
+		last := keys[len(keys)-1]
+		tok := encodeStudioGalleryCursor(studioGalleryCursor{EffectiveAt: last.eff, CreatedAt: last.created, ID: last.id})
+		if tok != "" {
+			nextCursor = &tok
+		}
+	}
+	return out, nextCursor, nil
 }
 
 // GetBySlug handles GET /api/v1/public/galleries/{slug}

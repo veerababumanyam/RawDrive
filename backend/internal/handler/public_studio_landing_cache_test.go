@@ -152,9 +152,9 @@ func TestStudioLandingCache_RoundTrip_PublicShapeOnly(t *testing.T) {
 		Galleries: []publicStudioGalleryResponse{},
 		Counts:    map[string]int{"published_galleries": 0},
 	}
-	h.studioLandingToCache(context.Background(), code, resp)
+	h.studioLandingToCache(context.Background(), code, "", resp)
 
-	got, ok := h.studioLandingFromCache(context.Background(), code)
+	got, ok := h.studioLandingFromCache(context.Background(), code, "")
 	if !ok {
 		t.Fatal("round-trip: stored landing must be retrievable")
 	}
