@@ -412,6 +412,7 @@ export default async function PublicGalleryPage({
       <PublicGalleryEnhancements
         slug={slug}
         faceIdEnabled={Boolean(gallery.faceid_enabled)}
+        encrypted={Boolean(gallery.cover_asset?.is_encrypted)}
       />
 
       {/* Reachable entry point for the offline manage/remove surface

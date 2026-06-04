@@ -3,42 +3,61 @@
 /**
  * FaceIDGate — GAL-FR-107 / 108 / 109
  *
- * Entry gate for FaceID gallery browsing. Workflow:
- *   1. Show consent modal explaining biometric handling (GAL-FR-107).
- *   2. On consent, open the device camera via getUserMedia and let the user
- *      capture a self-portrait.
- *   3. Extract a face embedding entirely client-side (face-api.js, loaded
- *      lazily only when the user enters FaceID mode) so the raw image never
- *      leaves the device.
- *   4. POST the embedding to /api/v1/public/galleries/{slug}/face-match —
- *      backend returns asset IDs that are strictly scoped to this gallery
- *      (GAL-FR-108, enforced in SQL).
- *   5. Always show "Browse all photos" as a fallback action so a zero-match
- *      outcome doesn't trap the visitor (GAL-FR-109).
+ * Guest "Find Me" entry gate. Workflow (unencrypted galleries):
+ *   1. Consent modal explaining biometric handling (GAL-FR-107).
+ *   2. On consent, open the device camera and capture a self-portrait.
+ *   3. POST the captured image to /api/v1/public/galleries/{slug}/photo-search.
+ *      The server runs the SAME insightface buffalo_l model that indexed the
+ *      gallery and returns the gallery-scoped asset IDs the guest appears in
+ *      (GAL-FR-108 — cross-gallery leakage is impossible at the SQL layer).
+ *   4. Always offer "Browse all photos" (GAL-FR-109) so a zero-match outcome
+ *      never traps the visitor.
  *
- * Privacy stance: we never upload the selfie, we only upload the 512-float
- * descriptor. The camera stream is stopped as soon as the snapshot is taken.
- * The consent text explicitly states this contract.
+ * Why the server, not the browser: an earlier version computed a face
+ * "embedding" client-side (face-api.js, or a 512-bin pixel histogram when the
+ * library was absent) and posted the vector to /face-match. Those vectors are
+ * not in the same space as the server's buffalo_l index — wrong dimensions, or
+ * not a face embedding at all — so matches were wrong (the histogram returned
+ * colour-similar photos as "your photos") or failed outright. The accurate path
+ * sends the image and lets the server embed it with the very model that built
+ * the index.
  *
- * Fallback behavior: if face-api.js fails to load (no network, blocked CDN),
- * or the user denies camera access, we still allow "Browse all" — the
- * fallback is the normal grid view, not an error screen.
+ * Encrypted galleries: an end-to-end-encrypted gallery has no server-side face
+ * index — the server only ever sees ciphertext and cannot detect faces — so
+ * face search cannot work there yet. The gate shows an honest "not available"
+ * state instead of a pseudo-match. (This lifts when the client-side buffalo_l
+ * indexing slice ships and the gallery has a real index.)
+ *
+ * Privacy stance: the selfie is sent to the server only to find matches in this
+ * one gallery and is not stored. The camera stream stops as soon as the snapshot
+ * is taken. The consent text states this contract truthfully.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { postFaceMatch } from "@/lib/api/galleries";
+import { searchPublicFaceInGallery } from "@/lib/api/ai";
 
 interface Props {
   slug: string;
+  /**
+   * The gallery is end-to-end encrypted. The server holds only ciphertext and
+   * has no face index for it, so server-side face search is unavailable — the
+   * gate shows an honest state instead of a misleading pseudo-match.
+   */
+  encrypted?: boolean;
   /** Called with matched asset IDs when face match succeeds. */
   onMatched: (assetIds: string[]) => void;
   /** Called when the user clicks "Browse all photos" (GAL-FR-109). */
   onFallback: () => void;
 }
 
-type Step = "consent" | "camera" | "matching" | "error";
+type Step = "consent" | "camera" | "matching" | "error" | "unavailable";
 
-export function FaceIDGate({ slug, onMatched, onFallback }: Props) {
+export function FaceIDGate({
+  slug,
+  encrypted = false,
+  onMatched,
+  onFallback,
+}: Props) {
   const [step, setStep] = useState<Step>("consent");
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -73,21 +92,18 @@ export function FaceIDGate({ slug, onMatched, onFallback }: Props) {
   };
 
   const captureAndMatch = async () => {
-    if (!videoRef.current) return;
+    const video = videoRef.current;
+    if (!video) return;
     setStep("matching");
     try {
-      // Client-side face embedding extraction.
-      //
-      // We attempt to load face-api.js lazily. When the library is present
-      // (studios that bundle it explicitly for production), we use it. When
-      // the library is missing, we fall back to a deterministic pseudo-
-      // embedding based on a downsampled pixel histogram — enough to plumb
-      // the request path and exercise the backend cosine similarity without
-      // shipping a 3 MB ML model to every free-tier visitor.
-      const embedding = await extractEmbeddingFromVideo(videoRef.current);
+      // Capture the current camera frame as a JPEG and send the IMAGE to the
+      // server. The server runs the same buffalo_l model that indexed the
+      // gallery, so the embedding is in the correct space — unlike the old
+      // client-side extraction this replaces.
+      const blob = await captureFrameBlob(video);
       stopStream();
 
-      const result = await postFaceMatch(slug, embedding, true);
+      const result = await searchPublicFaceInGallery(slug, blob);
       onMatched(result.asset_ids);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Face match failed");
@@ -96,23 +112,26 @@ export function FaceIDGate({ slug, onMatched, onFallback }: Props) {
     }
   };
 
+  // Encrypted galleries can never reach the camera/match flow — render the
+  // honest "unavailable" state regardless of internal step.
+  const view: Step = encrypted ? "unavailable" : step;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface-scrim-strong/80 glass-blur-medium p-4">
       <div className="w-full max-w-lg rounded-3xl bg-surface-raised border border-border-subtle p-6 shadow-2xl">
-        {step === "consent" && (
+        {view === "consent" && (
           <>
             <h2 className="text-xl font-semibold text-text-primary">
               Find yourself in these photos
             </h2>
             <p className="mt-2 text-sm text-text-secondary">
-              We can show you only the photos you appear in. To do this,
-              we&rsquo;ll take a selfie on your device, compute a mathematical
-              fingerprint locally, and send that fingerprint (not the photo) to
-              match against faces in this gallery.
+              We can show you just the photos you appear in. We&rsquo;ll take a
+              selfie with your camera and send it to our server to match your
+              face against the people in this gallery.
             </p>
             <ul className="mt-4 space-y-2 text-sm text-text-secondary">
-              <li>• Your photo never leaves your device.</li>
-              <li>• We only use the fingerprint for this one gallery.</li>
+              <li>• Your selfie is used only to find your photos in this gallery.</li>
+              <li>• We don&rsquo;t store your selfie after matching.</li>
               <li>• You can skip this and browse all photos instead.</li>
             </ul>
             <div className="mt-6 flex gap-3">
@@ -134,13 +153,14 @@ export function FaceIDGate({ slug, onMatched, onFallback }: Props) {
           </>
         )}
 
-        {step === "camera" && (
+        {view === "camera" && (
           <>
             <h2 className="text-lg font-semibold text-text-primary">
               Take a selfie
             </h2>
             <p className="mt-1 text-sm text-text-secondary">
-              Look at the camera. Your photo stays on your device.
+              Look at the camera, then capture. We&rsquo;ll use this selfie only
+              to find your photos.
             </p>
             <div className="mt-4 overflow-hidden rounded-2xl bg-surface-scrim-strong aspect-[4/3]">
               <video
@@ -172,7 +192,7 @@ export function FaceIDGate({ slug, onMatched, onFallback }: Props) {
           </>
         )}
 
-        {step === "matching" && (
+        {view === "matching" && (
           <div className="flex flex-col items-center py-8">
             <div className="h-10 w-10 animate-spin rounded-full border-2 border-accent-primary border-t-transparent" />
             <p className="mt-4 text-sm text-text-secondary">
@@ -181,7 +201,7 @@ export function FaceIDGate({ slug, onMatched, onFallback }: Props) {
           </div>
         )}
 
-        {step === "error" && (
+        {view === "error" && (
           <>
             <h2 className="text-lg font-semibold text-text-primary">
               We couldn&rsquo;t match your face
@@ -208,64 +228,54 @@ export function FaceIDGate({ slug, onMatched, onFallback }: Props) {
             </div>
           </>
         )}
+
+        {view === "unavailable" && (
+          <>
+            <h2 className="text-xl font-semibold text-text-primary">
+              Face search isn&rsquo;t available here yet
+            </h2>
+            <p className="mt-2 text-sm text-text-secondary">
+              This gallery is end-to-end encrypted to keep your photos private,
+              so we can&rsquo;t match faces on our server. You can still browse
+              all the photos in this gallery.
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={onFallback}
+                className="flex-1 rounded-xl bg-accent-primary px-4 py-2.5 text-sm font-medium text-text-inverse hover:opacity-90"
+              >
+                Browse all photos
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
 }
 
 /**
- * extractEmbeddingFromVideo — pluggable face embedding extraction.
- *
- * Strategy:
- *   1. If window.faceapi (lazy-loaded by the studio bundle) is present,
- *      use its FaceLandmark68Net + FaceRecognitionNet pipeline to produce
- *      a real 512-float descriptor.
- *   2. Otherwise, fall back to a deterministic pseudo-embedding computed
- *      from a downsampled pixel histogram. This is NOT a real face match
- *      but it exercises the full request path so the integration is
- *      testable without shipping a 3 MB model. Studios in production wire
- *      face-api.js via a script tag or bundler import.
+ * captureFrameBlob — grab the current camera frame as a JPEG Blob to send to
+ * the server's /photo-search endpoint (which embeds it with buffalo_l). This
+ * replaces the old client-side embedding extraction, whose vectors were not in
+ * the server index's embedding space.
  */
-async function extractEmbeddingFromVideo(
-  video: HTMLVideoElement,
-): Promise<number[]> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fa = (window as any).faceapi;
-  if (fa && typeof fa.computeFaceDescriptor === "function") {
-    try {
-      // Studios wiring face-api.js must call fa.loadFaceRecognitionModel()
-      // during app bootstrap. If the model isn't loaded this throws and we
-      // fall through to the histogram fallback below.
-      const descriptor = await fa.computeFaceDescriptor(video);
-      return Array.from(descriptor as Float32Array);
-    } catch {
-      /* fall through to histogram */
-    }
-  }
-
-  // Histogram fallback — deterministic, low signal, but end-to-end testable.
+async function captureFrameBlob(video: HTMLVideoElement): Promise<Blob> {
   const canvas = document.createElement("canvas");
-  canvas.width = 64;
-  canvas.height = 64;
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("canvas 2d unavailable");
+  if (!ctx) throw new Error("Could not capture the photo. Please try again.");
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-  // 512-bin descriptor to match typical face-api.js dimensionality.
-  const bins = new Float32Array(512);
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
-    const idx = ((r >> 3) + (g >> 2) * 4 + (b >> 3) * 8) % 512;
-    bins[idx] += 1;
-  }
-  // L2 normalise so cosine distance is well-defined.
-  let norm = 0;
-  for (let i = 0; i < bins.length; i++) norm += bins[i] * bins[i];
-  norm = Math.sqrt(norm) || 1;
-  const out = new Array(512);
-  for (let i = 0; i < bins.length; i++) out[i] = bins[i] / norm;
-  return out;
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) =>
+        blob
+          ? resolve(blob)
+          : reject(new Error("Could not capture the photo. Please try again.")),
+      "image/jpeg",
+      0.9,
+    );
+  });
 }

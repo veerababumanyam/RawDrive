@@ -32,6 +32,12 @@ interface Props {
   slug: string;
   /** Face ID is only offered when the gallery has faceid_enabled=true. */
   faceIdEnabled?: boolean;
+  /**
+   * Gallery is end-to-end encrypted — the server has no face index, so the
+   * FaceID gate shows an honest "not available yet" state instead of a
+   * misleading match. See FaceIDGate.
+   */
+  encrypted?: boolean;
 }
 
 // GAL-FR-102 (RegistrationPrompt) removed 2026-05-18: the "Keep these
@@ -42,6 +48,7 @@ interface Props {
 export function PublicGalleryEnhancements({
   slug,
   faceIdEnabled = false,
+  encrypted = false,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -147,6 +154,7 @@ export function PublicGalleryEnhancements({
       {faceIdOpen && (
         <FaceIDGate
           slug={slug}
+          encrypted={encrypted}
           onMatched={onFaceMatched}
           onFallback={onFaceFallback}
         />
