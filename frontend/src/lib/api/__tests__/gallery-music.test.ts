@@ -75,6 +75,11 @@ describe("gallery music API", () => {
       "Bearer fresh-token",
     );
     expect(init.body).toBeInstanceOf(FormData);
+    // Library uploads must be tagged purpose=music so the backend stores them
+    // in the dedicated per-workspace {ws}/music/ storage sub-folder.
+    const form = init.body as FormData;
+    expect(form.get("purpose")).toBe("music");
+    expect(form.get("file")).toBe(file);
     expect(result).toEqual({ id: "asset-music-1" });
   });
 
@@ -159,6 +164,7 @@ describe("gallery music API", () => {
       "Bearer fresh-token",
     );
     expect(uploadInit.body).toBeInstanceOf(FormData);
+    expect((uploadInit.body as FormData).get("purpose")).toBe("music");
 
     const [, updateInit] = fetchMock.mock.calls[1];
     expect(updateInit.body).toContain('"music_asset_id":"asset-music-1"');

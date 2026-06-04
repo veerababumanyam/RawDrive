@@ -1128,6 +1128,15 @@ paths:
                 gallery_id:
                   type: string
                   format: uuid
+                purpose:
+                  type: string
+                  enum: [music]
+                  description: |
+                    Optional. When set to `music` the upload is stored in a
+                    dedicated per-workspace `{workspace_id}/music/` storage
+                    sub-folder (isolated from photo assets) and MUST be an
+                    `audio/*` file (otherwise 400). Any other/absent value uses
+                    the default `{workspace_id}/` layout.
       responses:
         '201':
           description: Asset created

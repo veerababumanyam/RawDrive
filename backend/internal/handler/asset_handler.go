@@ -68,6 +68,14 @@ func (h *AssetHandler) WithTermsGate(g TermsGate) *AssetHandler {
 	return h
 }
 
+// assetUploadPurposeMusic is the single recognised value of the optional
+// `purpose` multipart field on POST /api/v1/assets. It is matched by strict
+// equality and is the only value passed through to the upload service, which
+// nests music uploads under a dedicated per-workspace {ws}/music/ sub-folder.
+// Any other/absent value is ignored so client input can never reach the
+// storage key path.
+const assetUploadPurposeMusic = "music"
+
 // assetListMaxLimit caps the page size a client can request. Matches the
 // OpenAPI contract (parameters.limit.maximum) so a client cannot ask for an
 // unbounded page and defeat the keyset windowing.
@@ -258,6 +266,22 @@ func (h *AssetHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Music-library uploads opt into a dedicated per-workspace storage
+	// sub-folder ({ws}/music/{id}/...). Only the literal "music" is recognised
+	// — any other/absent purpose value falls through as "" so it can never be
+	// interpolated into the storage key (path-injection / tenant-isolation
+	// guard; the key prefix is selected by equality in the upload service).
+	var uploadPurpose string
+	if r.FormValue("purpose") == assetUploadPurposeMusic {
+		uploadPurpose = assetUploadPurposeMusic
+		// Defense-in-depth: a music-folder upload MUST be audio. Reject anything
+		// else before it can land in the music sub-folder.
+		if !strings.HasPrefix(header.Header.Get("Content-Type"), "audio/") {
+			http.Error(w, `{"error":"MUSIC_MUST_BE_AUDIO","message":"music uploads must be an audio file"}`, http.StatusBadRequest)
+			return
+		}
+	}
+
 	result, err := h.uploadSvc.Upload(r.Context(), service.UploadInput{
 		WorkspaceID: workspaceID,
 		Filename:    header.Filename,
@@ -265,6 +289,7 @@ func (h *AssetHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		SizeBytes:   header.Size,
 		UploadedBy:  userID,
 		Body:        file,
+		Purpose:     uploadPurpose,
 	})
 	if err != nil {
 		// 2026-05-20: surface plan-quota rejections as 403 with the documented

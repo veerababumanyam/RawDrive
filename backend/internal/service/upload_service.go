@@ -53,6 +53,45 @@ type UploadInput struct {
 	SizeBytes   int64
 	UploadedBy  uuid.UUID
 	Body        io.Reader
+	// Purpose optionally segregates an upload into a dedicated per-workspace
+	// storage sub-folder. The empty string (the default for every existing
+	// caller) preserves the original key layout byte-for-byte. The value is
+	// NEVER concatenated into the storage key directly — only the recognised
+	// literal "music" selects the music sub-folder (see buildStorageKey). Any
+	// other value is treated as "no purpose" so it can never alter the key
+	// path (tenant-isolation / path-injection guard).
+	Purpose string
+}
+
+// musicPurpose is the single recognised Purpose value. It is a hardcoded
+// literal selected by strict equality — user-supplied Purpose strings are never
+// interpolated into the storage key, so an attacker cannot inject "../" or a
+// foreign workspace prefix via this field.
+const musicPurpose = "music"
+
+// buildStorageKey computes the object-storage key for an upload. For the music
+// purpose it nests the asset under a literal per-workspace "music" sub-folder:
+//
+//	{workspaceID}/music/{assetID}/original{ext}
+//
+// For every other (or absent) purpose it returns the original layout unchanged:
+//
+//	{workspaceID}/{assetID}/original{ext}
+//
+// The "music" segment is a constant chosen by equality on purpose — the raw
+// purpose value is never placed into the key — so the key path can never be
+// influenced by client input beyond opting into the one allowlisted sub-folder.
+func buildStorageKey(workspaceID, assetID uuid.UUID, filename, purpose string) string {
+	keyPrefix := workspaceID.String()
+	if purpose == musicPurpose {
+		keyPrefix = workspaceID.String() + "/" + musicPurpose
+	}
+	return fmt.Sprintf("%s/%s/%s%s",
+		keyPrefix,
+		assetID.String(),
+		"original",
+		path.Ext(filename),
+	)
 }
 
 // UploadResult contains the result of a successful upload.
@@ -102,12 +141,7 @@ func (s *UploadService) Upload(ctx context.Context, input UploadInput) (*UploadR
 	}
 
 	assetID := uuid.New()
-	storageKey := fmt.Sprintf("%s/%s/%s%s",
-		input.WorkspaceID.String(),
-		assetID.String(),
-		"original",
-		path.Ext(input.Filename),
-	)
+	storageKey := buildStorageKey(input.WorkspaceID, assetID, input.Filename, input.Purpose)
 
 	// Hash the content while uploading
 	hasher := sha256.New()

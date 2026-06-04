@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
@@ -64,4 +65,51 @@ func TestUploadService_SHA256Hash(t *testing.T) {
 	// Hash verification: SHA-256 of "hello world" should be consistent
 	data := []byte("hello world")
 	require.Equal(t, 11, len(data))
+}
+
+// TestBuildStorageKey_MusicPurpose verifies that a music-purpose upload is
+// stored under a per-workspace `/music/` sub-folder while everything else keeps
+// the original, prefix-free layout. This is the isolation contract for the
+// photographer music library: music tracks live in {ws}/music/{id}/... so they
+// are visibly segregated from the photo assets at {ws}/{id}/...
+func TestBuildStorageKey_MusicPurpose(t *testing.T) {
+	wsID := uuid.New()
+	assetID := uuid.New()
+
+	t.Run("music purpose nests under /music/ sub-folder", func(t *testing.T) {
+		key := buildStorageKey(wsID, assetID, "sangeet.mp3", "music")
+		want := fmt.Sprintf("%s/music/%s/original.mp3", wsID.String(), assetID.String())
+		assert.Equal(t, want, key)
+		assert.Contains(t, key, "/music/")
+	})
+
+	t.Run("empty purpose keeps the exact original layout (regression guard)", func(t *testing.T) {
+		key := buildStorageKey(wsID, assetID, "wedding_001.jpg", "")
+		// Byte-for-byte the pre-change format: {ws}/{id}/original{ext}
+		want := fmt.Sprintf("%s/%s/original.jpg", wsID.String(), assetID.String())
+		assert.Equal(t, want, key)
+		assert.NotContains(t, key, "/music/")
+	})
+
+	t.Run("non-music purpose values can NEVER alter the key path", func(t *testing.T) {
+		baseline := buildStorageKey(wsID, assetID, "x.jpg", "")
+		// Path-injection / tenant-isolation guard: only the literal "music" is
+		// recognised. Anything else — including traversal payloads — is treated
+		// as no purpose and must yield the identical, unprefixed key.
+		for _, evil := range []string{
+			"../evil",
+			"music/../../other-workspace",
+			"Music",  // case-sensitive: not the literal "music"
+			"music ", // trailing space: not the literal
+			" music", // leading space
+			"photos", // arbitrary other purpose
+			"../" + wsID.String(),
+		} {
+			got := buildStorageKey(wsID, assetID, "x.jpg", evil)
+			assert.Equal(t, baseline, got,
+				"purpose %q must not influence the storage key", evil)
+			assert.NotContains(t, got, "/music/")
+			assert.NotContains(t, got, "..")
+		}
+	})
 }

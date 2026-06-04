@@ -376,6 +376,10 @@ export async function uploadMusicTrack(
 ): Promise<{ id: string }> {
   const form = new FormData();
   form.append("file", file);
+  // Tag the upload as a music-library track so the backend stores it in the
+  // dedicated per-workspace {ws}/music/ storage sub-folder (isolated from photo
+  // assets). Only the literal "music" is recognised server-side.
+  form.append("purpose", "music");
   const res = await authFetch(`/api/v1/assets`, {
     method: "POST",
     body: form,
