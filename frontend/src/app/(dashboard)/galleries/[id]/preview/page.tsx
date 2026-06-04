@@ -143,13 +143,20 @@ export default function GalleryPreviewPage({
           sort_order: number;
           asset?: Asset | null;
         }> = albumId
-          ? (await listAlbumAssets(token, albumId)).map((row, idx) => ({
+          ? // Q-2b: embed each asset in one bulk query so the album path skips
+            // the per-asset getAsset() fan-out, mirroring the gallery path
+            // below (PERF-23). row.asset is undefined only against an older
+            // server that doesn't honor include_assets — then the loop below
+            // falls back to a per-asset fetch.
+            (
+              await listAlbumAssets(token, albumId, { includeAssets: true })
+            ).map((row, idx) => ({
               asset_id: row.asset_id,
               sort_order: row.position ?? idx,
+              asset: row.asset,
             }))
           : // PERF-23: embed each asset in one bulk query so the gallery path
-            // skips the per-asset getAsset() fan-out. The album path has no
-            // include_assets seam yet, so it keeps the per-asset fallback below.
+            // skips the per-asset getAsset() fan-out.
             (await listGalleryAssets(token, id, { includeAssets: true })).map(
               (row) => ({
                 asset_id: row.asset_id,

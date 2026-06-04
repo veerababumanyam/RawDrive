@@ -42,6 +42,12 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 	var albumHandler *AlbumHandler
 	if deps.AlbumService != nil {
 		albumHandler = NewAlbumHandler(deps.AlbumService)
+		if deps.Pool != nil {
+			// Q-2b: wire the pool so ?include_assets=true on the album asset
+			// endpoint bulk-hydrates via poolAssetBatchSource (one query),
+			// mirroring the gallery list seam.
+			albumHandler.WithPool(deps.Pool)
+		}
 	}
 	var storageAnalyticsHandler *StorageAnalyticsHandler
 	if deps.StorageAccountingSvc != nil {

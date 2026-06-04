@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
@@ -15,11 +17,85 @@ import (
 // AlbumHandler handles album HTTP requests.
 type AlbumHandler struct {
 	albumSvc *service.AlbumService
+
+	// assetBatch is the bulk asset-read seam for ?include_assets=true (Q-2b),
+	// mirroring GalleryHandler. Optional: when nil, enrichAlbumAssets falls back
+	// to the pool, and when neither is wired it degrades to nil-embedded rows.
+	// Tests inject a counting fake via WithAssetBatchSource — the same seam the
+	// gallery (PERF-23) and public (F-029) list paths use.
+	assetBatch publicAssetBatchSource
+	pool       *pgxpool.Pool
 }
 
 // NewAlbumHandler creates a new AlbumHandler.
 func NewAlbumHandler(svc *service.AlbumService) *AlbumHandler {
 	return &AlbumHandler{albumSvc: svc}
+}
+
+// WithPool injects DB access so ?include_assets=true can bulk-hydrate album
+// assets via the pool-backed poolAssetBatchSource. Chainable.
+func (h *AlbumHandler) WithPool(pool *pgxpool.Pool) *AlbumHandler {
+	h.pool = pool
+	return h
+}
+
+// WithAssetBatchSource overrides the bulk asset lookup used by
+// ?include_assets=true. Production wires the pool-backed poolAssetBatchSource
+// (via WithPool); tests inject an in-memory counting fake. Mirrors the gallery
+// handler's seam so both list paths share one N+1-free contract. Chainable.
+func (h *AlbumHandler) WithAssetBatchSource(src publicAssetBatchSource) *AlbumHandler {
+	h.assetBatch = src
+	return h
+}
+
+// albumAssetWithAsset is an album-asset membership row with its asset record
+// embedded inline, returned when ?include_assets=true so the owner gallery
+// preview hydrates a whole album from one response instead of looping getAsset()
+// per asset (Q-2b). The embedded AlbumAsset keeps the same JSON shape the
+// un-enriched path returns, plus an "asset" field (null when the asset is
+// unavailable).
+type albumAssetWithAsset struct {
+	repository.AlbumAsset
+	Asset *repository.Asset `json:"asset"`
+}
+
+// embedAlbumAssets attaches each asset to its membership row, preserving the
+// album's position order (it iterates the ordered membership slice and looks
+// each asset up by id). Assets absent from `assets` embed as nil.
+func embedAlbumAssets(members []repository.AlbumAsset, assets []*repository.Asset) []albumAssetWithAsset {
+	byID := make(map[uuid.UUID]*repository.Asset, len(assets))
+	for _, a := range assets {
+		byID[a.ID] = a
+	}
+	out := make([]albumAssetWithAsset, 0, len(members))
+	for _, m := range members {
+		out = append(out, albumAssetWithAsset{AlbumAsset: m, Asset: byID[m.AssetID]})
+	}
+	return out
+}
+
+// enrichAlbumAssets hydrates membership rows with their assets in a single bulk
+// query (Q-2b). It prefers the injected batch source, falls back to the request
+// pool, and degrades to nil-embedded rows when neither is wired (the client then
+// falls back to its own hydration).
+func (h *AlbumHandler) enrichAlbumAssets(ctx context.Context, members []repository.AlbumAsset) ([]albumAssetWithAsset, error) {
+	batch := h.assetBatch
+	if batch == nil && h.pool != nil {
+		batch = poolAssetBatchSource{pool: h.pool}
+	}
+	if batch == nil {
+		return embedAlbumAssets(members, nil), nil
+	}
+
+	ids := make([]uuid.UUID, 0, len(members))
+	for _, m := range members {
+		ids = append(ids, m.AssetID)
+	}
+	assets, err := batch.GetByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	return embedAlbumAssets(members, assets), nil
 }
 
 func (h *AlbumHandler) requireGalleryInWorkspace(w http.ResponseWriter, r *http.Request, galleryID uuid.UUID) (uuid.UUID, bool) {
@@ -251,6 +327,22 @@ func (h *AlbumHandler) ListAssets(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+
+	// Q-2b: ?include_assets=true hydrates the whole album page server-side with
+	// one bulk asset query and embeds each asset on its membership row, so the
+	// owner gallery preview's album branch doesn't loop getAsset() per asset (an
+	// N+1 that scaled with album size). Mirrors the gallery list seam (PERF-23).
+	// The default response shape is unchanged for callers that don't opt in.
+	if r.URL.Query().Get("include_assets") == "true" {
+		enriched, eErr := h.enrichAlbumAssets(r.Context(), assets)
+		if eErr != nil {
+			http.Error(w, `{"error":"list failed"}`, http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{"data": enriched})
+		return
+	}
+
 	json.NewEncoder(w).Encode(map[string]interface{}{"data": assets})
 }
 

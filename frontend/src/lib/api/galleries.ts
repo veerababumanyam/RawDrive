@@ -542,6 +542,10 @@ export interface AlbumAsset {
   asset_id: string;
   position: number;
   added_at: string;
+  // Present only when the row was fetched with ?include_assets=true (Q-2b):
+  // the server embeds the asset so the client skips its per-asset getAsset()
+  // loop. null means the asset is unavailable (e.g. soft-deleted).
+  asset?: Asset | null;
 }
 
 export async function listGalleries(
@@ -823,8 +827,13 @@ export async function deleteGalleryAlbum(
 export async function listAlbumAssets(
   _token: string,
   albumId: string,
+  opts?: { includeAssets?: boolean },
 ): Promise<AlbumAsset[]> {
-  const res = await authFetch(`/api/v1/albums/${albumId}/assets`);
+  // Q-2b: ?include_assets=true asks the server to embed each asset in one bulk
+  // query so the caller can skip its per-asset getAsset() hydration loop,
+  // mirroring listGalleryAssets (PERF-23).
+  const qs = opts?.includeAssets ? "?include_assets=true" : "";
+  const res = await authFetch(`/api/v1/albums/${albumId}/assets${qs}`);
   if (!res.ok) throw new Error(`Failed to list album assets: ${res.status}`);
   const body = await res.json();
   if (Array.isArray(body)) return body;
