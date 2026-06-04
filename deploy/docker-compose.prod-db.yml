@@ -6,7 +6,17 @@ name: rawdrive-db
 
 services:
   postgres:
-    image: pgvector/pgvector:pg17
+    # Locally built from deploy/postgres/Dockerfile = pgvector/pgvector:pg17 +
+    # pinned pgBackRest. The binary MUST live in this container because
+    # archive_command (postgresql.conf) shells out to `pgbackrest archive-push`
+    # from the postgres backend's process space. INERT until the PITR cutover:
+    # archiving stays off (postgresql.conf ships it commented) and the image
+    # behaves identically to stock pgvector until then. Build/recreate on .46:
+    #   docker compose -f deploy/docker-compose.prod-db.yml build postgres
+    #   docker compose -f deploy/docker-compose.prod-db.yml up -d postgres
+    build:
+      context: ./postgres
+    image: rawdrive-postgres:local
     container_name: deploy-postgres-1
     restart: unless-stopped
     command:
@@ -20,11 +30,24 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD}
+      # pgBackRest reads PGBACKREST_<OPTION> from the env so the committed
+      # deploy/pgbackrest/pgbackrest.conf carries NO secrets. Sourced from
+      # /opt/rawdrive/app/.env on .46. Empty/unset = archiving inert; nothing
+      # breaks until the PITR cutover sets them (docs/runbooks/pitr-restore.md).
+      PGBACKREST_REPO1_S3_KEY: ${PGBACKREST_REPO1_S3_KEY:-}
+      PGBACKREST_REPO1_S3_KEY_SECRET: ${PGBACKREST_REPO1_S3_KEY_SECRET:-}
+      PGBACKREST_REPO1_CIPHER_PASS: ${PGBACKREST_REPO1_CIPHER_PASS:-}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
       - ./postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      # pgBackRest config (read-only; secrets come from the env above, not here).
+      - ./pgbackrest/pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+      # Async WAL spool — must survive container recreation so queued segments
+      # aren't lost across a restart mid-flush.
+      - pgbackrest_spool:/var/spool/pgbackrest
+      - pgbackrest_log:/var/log/pgbackrest
     ports:
       # Bind to the DB node's own host IP, NOT 0.0.0.0. Docker publishes
       # ports via its own iptables chain (DOCKER), which is evaluated
@@ -123,4 +146,9 @@ volumes:
   valkey_data:
     driver: local
   nats_data:
+    driver: local
+  # pgBackRest async-archive spool + logs (used only after the PITR cutover).
+  pgbackrest_spool:
+    driver: local
+  pgbackrest_log:
     driver: local

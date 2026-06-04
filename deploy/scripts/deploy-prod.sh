@@ -57,8 +57,40 @@ DEPLOY_BRANCH="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || 
 COMPOSE_FILE="docker-compose.prod-app.yml"
 DEPLOY_DIR="/opt/rawdrive/app/deploy"
 HEALTH_URL="http://127.0.0.1:8080/health/deep"
+READY_URL="http://127.0.0.1:8080/health/ready"
 HEALTH_RETRIES=30
 HEALTH_INTERVAL=5
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ONE COMMAND, FULL PIPELINE. `npm run deploy:prod` runs the entire hardened
+# pipeline BY DEFAULT — no flags to remember:
+#   pre-flight SSH + DB-node health → push → (pending-aware) pre-migration backup
+#   → rolling zero-downtime deploy with a per-node readiness gate → full
+#   all-servers-healthy verification (deep + ready + same-revision + DB-node +
+#   replica lag + backup freshness) → smoke test.
+#
+# The defaults below turn every SAFE, gracefully-degrading phase ON. Each can be
+# individually overridden from the environment / deploy/.env if ever needed, and
+# `--fast` skips the pre-migration backup for a quick code-only redeploy. The
+# only capability that stays OPT-IN is pulling images from a registry
+# (DEPLOY_FROM_REGISTRY=1) — it needs a one-time `docker login ghcr.io` on the
+# nodes, so it can't be a safe default. See deploy/.env.example + cicd.md.
+# ─────────────────────────────────────────────────────────────────────────────
+DB_NODE_IP="${DB_NODE_IP:-187.127.142.46}"
+DEPLOY_FROM_REGISTRY="${DEPLOY_FROM_REGISTRY:-0}"        # opt-in (needs ghcr login)
+DEPLOY_IMAGE_REGISTRY="${DEPLOY_IMAGE_REGISTRY:-ghcr.io}"
+DEPLOY_IMAGE_OWNER="${DEPLOY_IMAGE_OWNER:-manyamprasad}"
+# Default tag = the exact commit being deployed (matches the build-images CI
+# workflow which tags each image with the full commit SHA).
+DEPLOY_IMAGE_TAG="${DEPLOY_IMAGE_TAG:-$DEPLOY_REVISION}"
+DEPLOY_PRE_MIGRATION_BACKUP="${DEPLOY_PRE_MIGRATION_BACKUP:-1}"  # ON; skipped when no migrations pending
+DEPLOY_MIGRATE_STRICT="${DEPLOY_MIGRATE_STRICT:-1}"             # ON; readiness-gate each node + final verdict
+DEPLOY_VERIFY_DB_NODE="${DEPLOY_VERIFY_DB_NODE:-1}"            # ON; degrades to warnings if .46 unreachable
+DEPLOY_SMOKE_URL="${DEPLOY_SMOKE_URL:-https://api.rawdrive.in/health/ready}"  # informative
+DEPLOY_REPLICA_LAG_MAX_BYTES="${DEPLOY_REPLICA_LAG_MAX_BYTES:-134217728}"  # 128 MiB
+# SSH command targeting the DB node (.46). Same key + pinned known_hosts as the
+# app nodes (deploy/known_hosts pins all three).
+SSH_DB="ssh -i $SSH_KEY -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS -o ConnectTimeout=10"
 
 SKIP_PUSH=false
 NO_CACHE=false
@@ -68,6 +100,18 @@ for arg in "$@"; do
     --skip-push) SKIP_PUSH=true ;;
     --no-cache) NO_CACHE=true ;;
     --pull) PULL=true ;;
+    # Quick code-only redeploy: skip the pre-migration backup. (Migrations still
+    # apply via compose; only the backup step is skipped. Use when you KNOW the
+    # change has no schema migration and want the fastest path.)
+    --fast) DEPLOY_PRE_MIGRATION_BACKUP=0 ;;
+    # Escape hatch: revert to the old minimal flow (no backup, no strict gate,
+    # no DB-node verification, no smoke) for emergency/manual deploys.
+    --minimal)
+      DEPLOY_PRE_MIGRATION_BACKUP=0
+      DEPLOY_MIGRATE_STRICT=0
+      DEPLOY_VERIFY_DB_NODE=0
+      DEPLOY_SMOKE_URL=""
+      ;;
     *) echo "Unknown flag: $arg" >&2; exit 1 ;;
   esac
 done
@@ -201,16 +245,180 @@ docker_build_args() {
   fi
 }
 
+# prepare_images makes the prod images available on a node, either by building
+# them there (default, current behavior) or — when DEPLOY_FROM_REGISTRY=1 — by
+# pulling prebuilt, byte-identical images from the registry by commit SHA and
+# retagging them to the local names the compose file expects. Registry mode
+# halves prod build CPU and guarantees both nodes run the same image.
+prepare_images() {
+  local ip="$1"
+  local label="$2"
+
+  if [ "$DEPLOY_FROM_REGISTRY" != "1" ]; then
+    local build_args
+    build_args="$(docker_build_args)"
+    log "Building images on $label..."
+    $SSH "root@$ip" \
+      "cd $DEPLOY_DIR && docker compose -f $COMPOSE_FILE build $build_args"
+    return 0
+  fi
+
+  if [ -z "$DEPLOY_IMAGE_OWNER" ]; then
+    log "ERROR: DEPLOY_FROM_REGISTRY=1 but DEPLOY_IMAGE_OWNER is empty"
+    exit 1
+  fi
+  local base="$DEPLOY_IMAGE_REGISTRY/$DEPLOY_IMAGE_OWNER"
+  log "Pulling prebuilt images on $label ($base/*:$DEPLOY_IMAGE_TAG)..."
+  # backend image also backs the migrate + worker services (same image:).
+  local svc
+  for svc in backend frontend face-svc; do
+    local remote="$base/rawdrive-$svc:$DEPLOY_IMAGE_TAG"
+    if ! $SSH "root@$ip" "docker pull $remote"; then
+      log "ERROR: failed to pull $remote on $label."
+      log "  Ensure the build-images CI workflow pushed this commit's images and"
+      log "  that the node is logged in: docker login $DEPLOY_IMAGE_REGISTRY"
+      exit 1
+    fi
+    # Retag to the local name the compose file references so 'up -d' uses the
+    # pulled image instead of building (the image now exists, so compose skips
+    # its build: stage).
+    $SSH "root@$ip" "docker tag $remote rawdrive-$svc:local"
+  done
+}
+
+# wait_ready polls /health/ready (DB + cache reachable AND migrations at head).
+# Returns 0 when ready, 1 otherwise. Informative: callers decide fail vs warn.
+wait_ready() {
+  local ip="$1"
+  local label="$2"
+  local attempt=0
+  while [ $attempt -lt $HEALTH_RETRIES ]; do
+    if $SSH "root@$ip" "curl -fsS $READY_URL" > /dev/null 2>&1; then
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep $HEALTH_INTERVAL
+  done
+  return 1
+}
+
+# pre_migration_backup takes a recoverable DB snapshot on the .46 primary BEFORE
+# any migration runs, so a bad migration can be rolled back. Prefers a fast
+# pgBackRest incremental backup when the PITR stanza is active; otherwise falls
+# back to the logical pg_dump (backup-db.sh). FAIL-CLOSED: if it can't back up,
+# the deploy aborts rather than migrating unprotected.
+pre_migration_backup() {
+  [ "$DEPLOY_PRE_MIGRATION_BACKUP" = "1" ] || return 0
+  log "=== Pre-migration backup on DB node ($DB_NODE_IP) ==="
+  if ! $SSH_DB "root@$DB_NODE_IP" 'echo ok' >/dev/null 2>&1; then
+    log "ERROR: cannot SSH to DB node $DB_NODE_IP for pre-migration backup"
+    exit 1
+  fi
+  if $SSH_DB "root@$DB_NODE_IP" 'docker exec deploy-postgres-1 pgbackrest --stanza=rawdrive info' >/dev/null 2>&1; then
+    log "pgBackRest stanza active → taking an incremental backup..."
+    if ! $SSH_DB "root@$DB_NODE_IP" 'docker exec deploy-postgres-1 pgbackrest --stanza=rawdrive --type=incr backup'; then
+      log "ERROR: pgBackRest pre-migration backup failed — aborting deploy"
+      exit 1
+    fi
+  else
+    log "pgBackRest not active → taking a logical pg_dump (backup-db.sh)..."
+    if ! $SSH_DB "root@$DB_NODE_IP" 'set -a; . /opt/rawdrive/app/.env; set +a; /opt/rawdrive/backup-db.sh'; then
+      log "ERROR: logical pre-migration backup failed — aborting deploy"
+      exit 1
+    fi
+  fi
+  log "Pre-migration backup complete."
+}
+
+# maybe_pre_migration_backup takes a pre-migration backup ONLY when this deploy
+# actually has pending migrations — so code-only deploys stay fast (the common
+# case) while schema-changing deploys are protected. The pending count is read
+# from the NEW image's `migrate status` (read-only); on ANY uncertainty it backs
+# up (fail-closed). Node 1's images must already be prepared before this runs.
+maybe_pre_migration_backup() {
+  local ip="$1"
+  [ "$DEPLOY_PRE_MIGRATION_BACKUP" = "1" ] || { log "Pre-migration backup: disabled (--fast/--minimal)"; return 0; }
+
+  # Ensure the pooler is up so `migrate status` can reach the DB.
+  $SSH "root@$ip" "cd $DEPLOY_DIR && docker compose -f $COMPOSE_FILE up -d pgbouncer" >/dev/null 2>&1 || true
+
+  local pending="unknown" out
+  if out="$($SSH "root@$ip" "cd $DEPLOY_DIR && docker compose -f $COMPOSE_FILE run --rm --no-deps --entrypoint /usr/local/bin/migrate migrate status" 2>/dev/null)"; then
+    pending="$(printf '%s\n' "$out" | grep -c '^PENDING ' || true)"
+  fi
+
+  if [ "$pending" = "0" ]; then
+    log "No pending migrations → skipping pre-migration backup (fast path)."
+    return 0
+  fi
+  if [ "$pending" = "unknown" ]; then
+    log "Pending-migration check inconclusive → backing up anyway (fail-closed)."
+  else
+    log "$pending pending migration(s) detected → taking pre-migration backup."
+  fi
+  pre_migration_backup
+}
+
+# verify_db_node checks the .46 DB node's own services, the .44 standby's
+# replication lag, and backup freshness. Warnings by default; fails the final
+# verdict only via the strict path in the caller.
+verify_db_node() {
+  [ "$DEPLOY_VERIFY_DB_NODE" = "1" ] || return 0
+  local ok=true
+  log "=== DB node verification ($DB_NODE_IP) ==="
+  if ! $SSH_DB "root@$DB_NODE_IP" 'echo ok' >/dev/null 2>&1; then
+    log "  WARNING: cannot SSH to DB node $DB_NODE_IP — skipping DB checks"
+    return 0
+  fi
+  # Postgres primary.
+  if $SSH_DB "root@$DB_NODE_IP" 'docker exec deploy-postgres-1 pg_isready -U rawdrive -d rawdrive' >/dev/null 2>&1; then
+    log "  postgres primary: READY"
+  else
+    log "  postgres primary: NOT READY"; ok=false
+  fi
+  # Valkey primary.
+  if $SSH_DB "root@$DB_NODE_IP" 'docker exec deploy-valkey-1 sh -c "valkey-cli -a \$VALKEY_PASSWORD ping" 2>/dev/null | grep -q PONG' >/dev/null 2>&1; then
+    log "  valkey primary: PONG"
+  else
+    log "  valkey primary: unverified (check manually)"
+  fi
+  # NATS (DB-node member).
+  if $SSH_DB "root@$DB_NODE_IP" 'curl -fsS http://127.0.0.1:8222/healthz' >/dev/null 2>&1; then
+    log "  nats (db node): healthy"
+  else
+    log "  nats (db node): unverified"
+  fi
+  # Standby replication lag (bytes between primary LSN and replica replay).
+  local lag
+  lag="$($SSH_DB "root@$DB_NODE_IP" "docker exec deploy-postgres-1 psql -U rawdrive -d rawdrive -tAc \"SELECT COALESCE(MAX(pg_wal_lsn_diff(sent_lsn, replay_lsn)),0)::bigint FROM pg_stat_replication\"" 2>/dev/null | tr -d '[:space:]')"
+  if [ -n "$lag" ] && printf '%s' "$lag" | grep -qE '^[0-9]+$'; then
+    if [ "$lag" -le "$DEPLOY_REPLICA_LAG_MAX_BYTES" ]; then
+      log "  standby replication lag: ${lag} bytes (<= ${DEPLOY_REPLICA_LAG_MAX_BYTES})"
+    else
+      log "  standby replication lag: ${lag} bytes — EXCEEDS ${DEPLOY_REPLICA_LAG_MAX_BYTES}"; ok=false
+    fi
+  else
+    log "  standby replication lag: no streaming standby connected (or unverified)"
+  fi
+  # Backup freshness — newest local logical dump younger than 26h.
+  if $SSH_DB "root@$DB_NODE_IP" 'find /opt/rawdrive/backups -name "rawdrive_*.dump.gpg" -mmin -1560 2>/dev/null | grep -q .' >/dev/null 2>&1; then
+    log "  backup freshness: a dump < 26h old exists"
+  else
+    log "  backup freshness: no recent logical dump found (check backup cron / pgBackRest info)"
+  fi
+  [ "$ok" = true ] || FINAL_DB_NODE_OK=false
+}
+
 deploy_node() {
   local ip="$1"
   local label="$2"
-  local build_args
-  build_args="$(docker_build_args)"
   log "=== Deploying $label ($ip) ==="
 
-  log "Building images on $ip..."
-  $SSH "root@$ip" \
-    "cd $DEPLOY_DIR && docker compose -f $COMPOSE_FILE build $build_args"
+  # Images may have been prepared already (Node 1, for the pending-migration
+  # check). Pass "skip_prepare" to avoid building/pulling twice.
+  if [ "${3:-}" != "skip_prepare" ]; then
+    prepare_images "$ip" "$label"
+  fi
 
   log "Starting services on $ip..."
   $SSH "root@$ip" \
@@ -236,6 +444,22 @@ deploy_node() {
     $SSH "root@$ip" \
       "cd $DEPLOY_DIR && docker compose -f $COMPOSE_FILE logs --tail 50 backend"
     exit 2
+  fi
+
+  # Readiness gate: /health/ready is 200 only when DB + cache are reachable AND
+  # migrations are at the head this image embeds. The one-shot migrate service
+  # ran during `up -d`, so a not-ready here is a real schema/dependency problem,
+  # not a startup race. Strict mode (DEPLOY_MIGRATE_STRICT=1) fails the deploy;
+  # otherwise it warns so default behavior is unchanged.
+  if wait_ready "$ip" "$label"; then
+    log "$label ready (migrations at head)."
+  elif [ "$DEPLOY_MIGRATE_STRICT" = "1" ]; then
+    log "ERROR: $label not ready (migrations behind / dependency down), DEPLOY_MIGRATE_STRICT=1"
+    $SSH "root@$ip" "curl -fsS $READY_URL" 2>&1 | head -c 800 || true
+    $SSH "root@$ip" "cd $DEPLOY_DIR && docker compose -f $COMPOSE_FILE logs --tail 50 backend" || true
+    exit 2
+  else
+    log "WARNING: $label /health/ready not 200 (proceeding; set DEPLOY_MIGRATE_STRICT=1 to gate)"
   fi
 
   # Force-recreate nginx so it picks up bind-mounted config changes.
@@ -268,20 +492,30 @@ deploy_node() {
 
 # --- Pre-flight ---
 guard_supported_shell
+FINAL_DB_NODE_OK=true
 log "=== RawDrive Rolling Deploy ==="
 log "App Node 1: $APP1_IP"
 log "App Node 2: $APP2_IP"
-if [ "$NO_CACHE" = true ]; then
-  log "Docker build cache: disabled (--no-cache)"
+log "Revision: ${DEPLOY_REVISION:0:12} ($DEPLOY_BRANCH)"
+if [ "$DEPLOY_FROM_REGISTRY" = "1" ]; then
+  log "Image source: registry $DEPLOY_IMAGE_REGISTRY/$DEPLOY_IMAGE_OWNER/*:${DEPLOY_IMAGE_TAG:0:12}"
 else
-  log "Docker build cache: enabled"
+  if [ "$NO_CACHE" = true ]; then
+    log "Image source: build on each node (cache disabled, --no-cache)"
+  else
+    log "Image source: build on each node (cache enabled)"
+  fi
+  [ "$PULL" = true ] && log "Docker base-image pull: enabled (--pull)"
 fi
-if [ "$PULL" = true ]; then
-  log "Docker base-image pull: enabled (--pull)"
-fi
+[ "$DEPLOY_PRE_MIGRATION_BACKUP" = "1" ] && log "Pre-migration backup: ENABLED (fail-closed)"
+[ "$DEPLOY_MIGRATE_STRICT" = "1" ] && log "Migration head gate: STRICT"
+[ "$DEPLOY_VERIFY_DB_NODE" = "1" ] && log "DB node verification: ENABLED ($DB_NODE_IP)"
 
 check_ssh "$APP1_IP"
 check_ssh "$APP2_IP"
+
+# Preflight look at the DB node before we change anything (informative).
+verify_db_node
 
 # --- Push code ---
 if [ "$SKIP_PUSH" = false ]; then
@@ -291,8 +525,15 @@ else
   log "Skipping code push (--skip-push)"
 fi
 
-# --- Rolling deploy: Node 1 first ---
-deploy_node "$APP1_IP" "Node 1"
+# --- Pre-migration backup (pending-aware) ---
+# Prepare Node 1's images first so we can ask the NEW migrate binary whether this
+# deploy has pending migrations; if so, take a recoverable snapshot BEFORE Node
+# 1's `up -d` applies them. Code-only deploys skip the backup (fast path).
+prepare_images "$APP1_IP" "Node 1"
+maybe_pre_migration_backup "$APP1_IP"
+
+# --- Rolling deploy: Node 1 first (images already prepared above) ---
+deploy_node "$APP1_IP" "Node 1" skip_prepare
 
 # --- Verify Node 1 is serving before touching Node 2 ---
 log "Verifying Node 1 frontend..."
@@ -304,12 +545,54 @@ deploy_node "$APP2_IP" "Node 2"
 
 # --- Final verification ---
 log "=== Final Verification ==="
+FINAL_OK=true
 for ip in "$APP1_IP" "$APP2_IP"; do
   if $SSH "root@$ip" "curl -fsS $HEALTH_URL" > /dev/null 2>&1; then
-    log "  $ip: HEALTHY"
+    log "  $ip /health/deep:  HEALTHY"
   else
-    log "  $ip: UNHEALTHY (check manually)"
+    log "  $ip /health/deep:  UNHEALTHY (check manually)"; FINAL_OK=false
+  fi
+  if $SSH "root@$ip" "curl -fsS $READY_URL" > /dev/null 2>&1; then
+    log "  $ip /health/ready: READY"
+  else
+    log "  $ip /health/ready: NOT READY (migrations behind / dependency down)"
+    [ "$DEPLOY_MIGRATE_STRICT" = "1" ] && FINAL_OK=false
   fi
 done
 
-log "=== Deploy complete ==="
+# Both app nodes must end on the SAME deployed revision (catches a half-rolled
+# deploy where one node updated and the other did not).
+rev1="$($SSH "root@$APP1_IP" "grep '^commit=' /opt/rawdrive/app/.rawdrive-deploy-revision 2>/dev/null | cut -d= -f2" 2>/dev/null | tr -d '[:space:]' || true)"
+rev2="$($SSH "root@$APP2_IP" "grep '^commit=' /opt/rawdrive/app/.rawdrive-deploy-revision 2>/dev/null | cut -d= -f2" 2>/dev/null | tr -d '[:space:]' || true)"
+if [ -n "$rev1" ] && [ "$rev1" = "$rev2" ]; then
+  log "  both nodes at revision: ${rev1:0:12}"
+else
+  log "  WARNING: node revisions differ (n1=${rev1:0:12} n2=${rev2:0:12})"
+  FINAL_OK=false
+fi
+
+# Re-verify the DB node post-deploy (replica may have been catching up).
+FINAL_DB_NODE_OK=true
+verify_db_node
+[ "$FINAL_DB_NODE_OK" = true ] || { log "  DB node verification reported problems"; FINAL_OK=false; }
+
+# End-to-end smoke test through the public edge. Informational only — external
+# reachability from the deploy host can vary (DNS/network), so a failure here
+# warns but never fails the deploy verdict.
+if [ -n "$DEPLOY_SMOKE_URL" ]; then
+  log "Smoke test: GET $DEPLOY_SMOKE_URL"
+  if curl -fsS --max-time 15 "$DEPLOY_SMOKE_URL" >/dev/null 2>&1; then
+    log "  smoke: OK"
+  else
+    log "  smoke: FAILED (informational — external reachability can vary)"
+  fi
+fi
+
+if [ "$FINAL_OK" = true ]; then
+  log "=== Deploy complete ==="
+else
+  # Default behavior is preserved (exit 0 with warnings); strict mode turns a
+  # degraded final verdict into a non-zero exit so CI/operators must look.
+  log "=== Deploy completed WITH WARNINGS — review the log above ==="
+  [ "$DEPLOY_MIGRATE_STRICT" = "1" ] && exit 3
+fi

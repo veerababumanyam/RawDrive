@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# ⚠️ SUPERSEDED by Patroni automatic failover once the cutover is complete
+#    (deploy/scripts/patroni-*.sh, docs/runbooks/patroni-failover.md). On a
+#    Patroni-managed node, manual promotion causes SPLIT BRAIN — use
+#    `patronictl switchover`/`failover` instead. This script is kept ONLY as the
+#    rollback path for the manual model, and remains valid until the cutover.
+#
 # Emergency: promote the .44 postgres replica to primary.
 # Run on .44 after primary .46 is confirmed dead.
 # Does NOT update pgbouncer — see docs/runbooks/postgres-failover.md

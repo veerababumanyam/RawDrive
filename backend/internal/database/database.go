@@ -6,6 +6,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -51,15 +52,9 @@ func (m *Migrator) Up() error {
 		_, _ = conn.Exec(ctx, `SELECT pg_advisory_unlock($1)`, migrationAdvisoryLockKey)
 	}()
 
-	// Create migrations tracking table
-	_, err = conn.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS schema_migrations (
-			version VARCHAR(255) PRIMARY KEY,
-			applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		)
-	`)
-	if err != nil {
-		return fmt.Errorf("creating schema_migrations table: %w", err)
+	// Create migrations tracking table (+ idempotent checksum column).
+	if err := ensureMigrationsTable(ctx, conn); err != nil {
+		return err
 	}
 
 	files, err := getMigrationFiles("up")
@@ -67,37 +62,58 @@ func (m *Migrator) Up() error {
 		return err
 	}
 
+	// One round-trip to learn what is already applied (and its recorded
+	// checksum) instead of a per-file EXISTS probe.
+	applied, err := loadAppliedMigrations(ctx, conn)
+	if err != nil {
+		return err
+	}
+
+	strict := os.Getenv(envStrictChecksum) == "1"
+	var baselined int
+
 	for _, file := range files {
 		version := extractVersion(file)
 
-		// Check if already applied
-		var exists bool
-		err := conn.QueryRow(ctx,
-			`SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)`,
-			version).Scan(&exists)
-		if err != nil {
-			return fmt.Errorf("checking migration %s: %w", version, err)
-		}
-		if exists {
-			continue
-		}
-
-		sql, err := migrationFS.ReadFile("migrations/" + file)
+		sqlBytes, err := migrationFS.ReadFile("migrations/" + file)
 		if err != nil {
 			return fmt.Errorf("reading migration %s: %w", file, err)
 		}
+		sum := checksumHex(sqlBytes)
 
-		_, err = conn.Exec(ctx, string(sql))
-		if err != nil {
-			return fmt.Errorf("applying migration %s: %w", file, err)
+		if recordedSum, ok := applied[version]; ok {
+			// Already applied — guard against post-apply edits (schema drift).
+			switch {
+			case recordedSum == "":
+				// Legacy row recorded before the checksum column existed.
+				// Baseline it so future edits are detectable; never fail here.
+				if _, err := conn.Exec(ctx,
+					`UPDATE schema_migrations SET checksum = $1 WHERE version = $2 AND checksum IS NULL`,
+					sum, version); err != nil {
+					return fmt.Errorf("baselining checksum for %s: %w", version, err)
+				}
+				baselined++
+			case recordedSum != sum:
+				msg := fmt.Sprintf("migration %s was edited after it was applied "+
+					"(recorded sha256 %s != current %s)", version, short(recordedSum), short(sum))
+				if strict {
+					return fmt.Errorf("checksum drift: %s [%s=1]", msg, envStrictChecksum)
+				}
+				fmt.Fprintf(os.Stderr, "WARNING: checksum drift: %s (continuing; set %s=1 to fail)\n",
+					msg, envStrictChecksum)
+			}
+			continue
 		}
 
-		_, err = conn.Exec(ctx,
-			`INSERT INTO schema_migrations (version) VALUES ($1)
-			 ON CONFLICT (version) DO NOTHING`, version)
-		if err != nil {
-			return fmt.Errorf("recording migration %s: %w", version, err)
+		// Pending — apply DDL and bookkeeping atomically unless the file
+		// manages its own transaction or opts out via -- migrate:no-transaction.
+		if err := applyMigration(ctx, conn, version, string(sqlBytes), sum, shouldWrapInTx(sqlBytes)); err != nil {
+			return err
 		}
+	}
+
+	if baselined > 0 {
+		fmt.Fprintf(os.Stderr, "migrate: baselined %d legacy migration checksum(s)\n", baselined)
 	}
 
 	return nil

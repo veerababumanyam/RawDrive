@@ -1,5 +1,11 @@
 # Postgres Primary Failover Runbook
 
+> ⚠️ **SUPERSEDED by `patroni-failover.md` once the Patroni automatic-failover
+> cutover is complete.** This MANUAL procedure remains authoritative *only* until
+> that cutover (and is the rollback target if Patroni is rolled back). On a
+> Patroni-managed cluster, manual promotion causes split-brain — use
+> `patronictl switchover` / automatic failover instead.
+
 **When to use:** Postgres primary on `.46` is confirmed dead (disk failure, prolonged network partition, unrecoverable crash).
 
 **Pre-conditions:**

@@ -1,0 +1,86 @@
+# Build-once → GHCR. Builds the three prod images (backend, frontend, face-svc)
+# ONCE on every push to main and pushes them to the GitHub Container Registry,
+# tagged with the commit SHA (+ a short tag + :main). The production deploy can
+# then PULL these byte-identical images instead of rebuilding on each VPS:
+#
+#   DEPLOY_FROM_REGISTRY=1 npm run deploy:prod
+#
+# deploy/scripts/deploy-prod.sh resolves the image tag from the deployed commit
+# SHA (DEPLOY_IMAGE_TAG default = git HEAD), so the images this workflow pushes
+# for a commit are exactly what a deploy of that commit pulls. With
+# DEPLOY_FROM_REGISTRY unset the deploy still builds on each node (default), so
+# this workflow is additive and inert until an operator opts in.
+#
+# Activation on the VPS (one-time, per node): authenticate to GHCR with a token
+# that has read:packages —  `echo $TOKEN | docker login ghcr.io -u <user> --password-stdin`.
+name: build-images
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+# Avoid wasted builds: a newer push to main supersedes an in-flight build.
+concurrency:
+  group: build-images-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend
+            context: backend
+            dockerfile: backend/Dockerfile
+            build_args: ""
+          - name: frontend
+            context: frontend
+            dockerfile: frontend/Dockerfile
+            # NEXT_PUBLIC_* are read at BUILD time by `next build` and baked into
+            # the client bundle. This MUST match deploy/docker-compose.prod-app.yml
+            # or the published bundle would call localhost:8080 and fail in prod.
+            build_args: |
+              NEXT_PUBLIC_API_URL=https://api.rawdrive.in
+          - name: face-svc
+            context: services/face-svc
+            dockerfile: services/face-svc/Dockerfile
+            build_args: ""
+    steps:
+      - uses: actions/checkout@v6.0.3
+
+      - name: Resolve registry coordinates
+        id: vars
+        run: |
+          echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+          echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "short=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3.7.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3.3.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.name }}
+        uses: docker/build-push-action@v6.9.0
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          build-args: ${{ matrix.build_args }}
+          tags: |
+            ghcr.io/${{ steps.vars.outputs.owner }}/rawdrive-${{ matrix.name }}:${{ steps.vars.outputs.sha }}
+            ghcr.io/${{ steps.vars.outputs.owner }}/rawdrive-${{ matrix.name }}:sha-${{ steps.vars.outputs.short }}
+            ghcr.io/${{ steps.vars.outputs.owner }}/rawdrive-${{ matrix.name }}:main
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}

@@ -79,7 +79,7 @@ server {
         return 301 https://rawdrive.in$request_uri;
     }
 
-    # Next.js static assets — long cache
+    # Next.js static assets — long cache + edge cache (immutable content-hashed)
     location /_next/static/ {
         proxy_pass http://frontend_upstream;
         proxy_http_version 1.1;
@@ -88,6 +88,15 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         add_header Cache-Control "public, max-age=31536000, immutable";
+        # Edge-cache immutable build assets so cold/cross-client hits don't
+        # re-proxy to Next.js. proxy_cache_lock collapses a thundering herd on a
+        # cache miss into one upstream fetch; use_stale serves the last good copy
+        # if the frontend is mid-deploy. (keys_zone defined in nginx.conf)
+        proxy_cache next_static;
+        proxy_cache_valid 200 7d;
+        proxy_cache_lock on;
+        proxy_cache_use_stale error timeout updating http_502 http_503 http_504;
+        add_header X-Cache-Status $upstream_cache_status;
         proxy_next_upstream error timeout http_502 http_503 http_504;
     }
 
@@ -248,13 +257,18 @@ server {
         proxy_next_upstream error timeout http_502 http_503 http_504;
     }
 
-    # Next.js static assets — long cache
+    # Next.js static assets — long cache + edge cache (immutable content-hashed)
     location /_next/static/ {
         proxy_pass http://frontend_upstream;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
         add_header Cache-Control "public, max-age=31536000, immutable";
+        proxy_cache next_static;
+        proxy_cache_valid 200 7d;
+        proxy_cache_lock on;
+        proxy_cache_use_stale error timeout updating http_502 http_503 http_504;
+        add_header X-Cache-Status $upstream_cache_status;
     }
 
     # Everything else → Next.js. App-layer (middleware) reads Host /

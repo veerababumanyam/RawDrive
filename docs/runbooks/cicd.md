@@ -83,6 +83,39 @@ GitHub. It then hands off to the existing rolling engine
 See [`rolling-deploy.md`](./rolling-deploy.md) and
 [`production-deployment.md`](./production-deployment.md) for the deploy internals.
 
+#### One command, full pipeline (default)
+
+`npm run deploy:prod` runs the **entire hardened pipeline by default** — no flags
+to remember:
+
+```
+guard (on main · clean · == origin/main)
+  → SSH pre-flight (all 3 nodes) → DB-node health
+  → push code
+  → pending-aware pre-migration backup   (skipped when no migrations are pending)
+  → rolling deploy Node .42 → readiness-gate → Node .44 → readiness-gate
+  → final verification: /health/deep + /health/ready on both nodes,
+    same-revision check, DB-node (postgres/valkey/nats) + standby replication lag
+    + backup freshness, public smoke test
+```
+
+Everything above is **on by default**. Overrides (rarely needed):
+
+| Invocation / var | Effect |
+|------------------|--------|
+| `npm run deploy:prod -- --fast` | Skip the pre-migration backup (quick **code-only** redeploy). |
+| `npm run deploy:prod -- --minimal` | Old minimal flow: no backup, no readiness gate, no DB-node verify, no smoke. |
+| `DEPLOY_FROM_REGISTRY=1 npm run deploy:prod` | Pull prebuilt images from GHCR by commit SHA (`build-images` workflow) instead of rebuilding on each VPS. Nodes must `docker login ghcr.io` first. **Opt-in** — the only phase not on by default. |
+| `deploy/.env` `DEPLOY_*` | Per-phase opt-out overrides (documented in `deploy/.env.example`). |
+
+The backend `migrate` runner is now transactional per-migration with sha256
+drift detection — see `RAWDRIVE_MIGRATE_STRICT_CHECKSUM` in `deploy/.env.example`.
+Incremental backups / PITR (pgBackRest) and automatic DB failover (Patroni) are
+the two **infrastructure cutovers** that stay separate (one-time, maintenance
+window) — see [`pitr-restore.md`](./pitr-restore.md) and
+[`patroni-failover.md`](./patroni-failover.md). Once PITR is activated the
+default pre-migration backup automatically uses fast pgBackRest increments.
+
 ---
 
 ## What enforces "clean" automatically

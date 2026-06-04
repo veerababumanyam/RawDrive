@@ -1,13 +1,22 @@
 #!/usr/bin/env bash
 #
-# deploy-from-main — the safe entry point for production deploys.
+# deploy-from-main — THE single production deploy command.
 #
-#   npm run deploy:prod            # normal rolling deploy of GitHub main
-#   npm run deploy:prod -- --pull  # pass flags through to deploy-prod.sh
+#   npm run deploy:prod              # full hardened pipeline (everything, by default)
+#   npm run deploy:prod -- --fast    # skip the pre-migration backup (code-only redeploy)
+#   npm run deploy:prod -- --pull    # also refresh Docker base images
+#   npm run deploy:prod -- --minimal # old minimal flow (no backup/gate/verify)
 #
-# This wrapper guarantees you deploy EXACTLY what is on GitHub `main` — never a
-# dirty or un-pushed local tree — then hands off to the existing rolling deploy
-# engine (deploy/scripts/deploy-prod.sh), which it does not modify.
+# This one command runs the entire pipeline with no flags to remember:
+#   guard (on main · clean · == origin/main) → SSH pre-flight (all 3 nodes) →
+#   DB-node health → push → pending-aware pre-migration backup → rolling
+#   zero-downtime deploy with a per-node readiness gate → full all-servers-healthy
+#   verification (deep + ready + same-revision + DB-node + replica lag + backup
+#   freshness) → smoke test.
+#
+# It guarantees you deploy EXACTLY what is on GitHub `main` — never a dirty or
+# un-pushed local tree — then hands off to the rolling deploy engine
+# (deploy/scripts/deploy-prod.sh), which it does not modify.
 #
 # Guards (all must pass, else it refuses):
 #   1. You are on the `main` branch.

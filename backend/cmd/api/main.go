@@ -3348,7 +3348,21 @@ func main() {
 	// nil-safe: when VALKEY_URL is unset the client is nil and the probe
 	// reports "disabled" without failing the overall status.
 	deepHealth := handler.NewHealthHandler(dbPool, storageProvider, valkeyClient)
+	// Wire the event broker into the deep probe when the real NATS publisher is
+	// active (the in-process stub does not satisfy NATSPinger, so it reports
+	// "disabled"). No new wiring var needed — the selected publisher already
+	// carries Ping when it is a *events.NATSPublisher.
+	if np, ok := eventPublisher.(handler.NATSPinger); ok {
+		deepHealth = deepHealth.WithNATS(np)
+	}
 	r.Get("/health/deep", deepHealth.Deep)
+
+	// Readiness gate: 200 only when the DB + cache are reachable AND the
+	// database is at the migration head this binary embeds. Used by the deploy
+	// pipeline (post-migrate gate) and any load balancer that supports a
+	// readiness probe, so a node never serves traffic against a not-yet-migrated
+	// schema. NATS/storage degrade gracefully and are NOT readiness gates.
+	r.Get("/health/ready", deepHealth.Ready)
 
 	// PERF-RUM: Prometheus /metrics scrape (pgx pool + Core Web Vitals). The
 	// returned histogram is shared with the public RUM ingest handler below so

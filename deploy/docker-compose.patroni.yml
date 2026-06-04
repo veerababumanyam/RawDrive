@@ -1,0 +1,258 @@
+# =============================================================================
+# RawDrive — Patroni automatic-failover OVERLAY compose (deploy/docker-compose.patroni.yml)
+# =============================================================================
+#
+# ⚠️  PLANNED CUTOVER — INERT UNTIL DELIBERATELY ACTIVATED  ⚠️  ⚠️  DO NOT AUTO-START  ⚠️
+#
+# This overlay brings up the Patroni automatic-failover subsystem (etcd + Patroni
+# + HAProxy) that REPLACES the manual Postgres failover
+# (deploy/scripts/promote-postgres-replica.sh + a hand-edited
+# deploy/pgbouncer/databases.ini flip). It is a SEPARATE compose project
+# (`name: rawdrive-patroni`) so it NEVER co-mingles with, and is NEVER started by,
+# the normal rolling deploy (deploy/scripts/deploy-prod.sh, which only touches
+# docker-compose.prod-app.yml / docker-compose.prod-db.yml).
+#
+# It is applied ONLY during the maintenance-window cutover, step by step, by
+# deploy/scripts/patroni-bootstrap.sh. Converting the live standalone primary on
+# .46 to Patroni control is NOT hot-swappable — Patroni seizes the Postgres
+# lifecycle and rewrites postgresql.conf/pg_hba.conf — so this MUST run inside a
+# maintenance window. Until cutover, the manual model in
+# docs/runbooks/postgres-failover.md remains in force.
+#
+# -----------------------------------------------------------------------------
+# Per-node service placement (via Compose PROFILES)
+# -----------------------------------------------------------------------------
+#   etcd      → ALL THREE hosts (.42, .44, .46). The DCS must survive losing the
+#               DB node, so a member runs on each app node too (see etcd config).
+#               Enable with profile `etcd`.
+#   patroni   → the DB-capable nodes .46 (today's primary) and .44 (today's
+#               standby). Enable with profile `patroni`.
+#   haproxy   → the app nodes .42 and .44 (co-located with pgbouncer; it routes
+#               the leader for the local pool). Enable with profile `haproxy`.
+#
+# So per host you bring up:
+#   .46 (DB node):   --profile etcd --profile patroni
+#   .44 (app+DB):    --profile etcd --profile patroni --profile haproxy
+#   .42 (app node):  --profile etcd --profile haproxy
+#
+# Every service is gated behind a profile, so a bare
+# `docker compose -f docker-compose.patroni.yml up` with NO --profile starts
+# NOTHING — a deliberate guard against accidental activation.
+#
+# -----------------------------------------------------------------------------
+# Secrets & per-node identity
+# -----------------------------------------------------------------------------
+# ALL secrets and IPs come from /opt/rawdrive/app/.env (compose's env_file +
+# parse-time ${...} interpolation) — NEVER hardcoded. The new vars
+# (PATRONI_NAME, PATRONI_NODE_IP, ETCD_*, POSTGRES_*) are documented in the
+# integration notes for .env.example. Config templates are rendered at container
+# start with `envsubst` so only the named ${VARS} are substituted and the rest of
+# the YAML/cfg is untouched (same pattern nginx uses in prod-app.yml).
+# =============================================================================
+
+name: rawdrive-patroni
+
+services:
+
+  # ===========================================================================
+  # etcd — one member per host (profile: etcd). The DCS for Patroni.
+  # ===========================================================================
+  etcd:
+    # Pinned (NEVER :latest) — a floating etcd could change DCS/Raft semantics
+    # under a live failover cluster between deploys, the same supply-chain risk
+    # the pgbouncer image comment in docker-compose.prod-app.yml calls out.
+    image: quay.io/coreos/etcd:v3.5.17
+    container_name: deploy-etcd-1
+    restart: unless-stopped
+    profiles:
+      - etcd
+    env_file:
+      - path: /opt/rawdrive/app/.env
+        required: false
+    volumes:
+      - etcd_data:/var/lib/etcd
+      - ./etcd/etcd.conf.yml.template:/etc/etcd/etcd.conf.yml.template:ro
+    # Render the per-host config from the template (only the named vars), then
+    # exec etcd against it. Pattern mirrors nginx's envsubst command in
+    # prod-app.yml.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >
+        apk add --no-cache gettext >/dev/null 2>&1 || true;
+        envsubst
+        '$$ETCD_NAME $$ETCD_NODE_IP $$ETCD_NODE_42_IP $$ETCD_NODE_44_IP $$ETCD_NODE_46_IP $$ETCD_INITIAL_CLUSTER_TOKEN'
+        < /etc/etcd/etcd.conf.yml.template > /etc/etcd/etcd.conf.yml &&
+        exec etcd --config-file /etc/etcd/etcd.conf.yml
+    ports:
+      # Scope client (2379) + peer (2380) to THIS host's IP — never 0.0.0.0 —
+      # exactly like the postgres/valkey/nats publishes in prod-db.yml. Other
+      # cluster members + Patroni reach these cross-host via the public IP; UFW
+      # additionally restricts both ports to the three cluster hosts.
+      - "${ETCD_NODE_IP}:2379:2379"
+      - "${ETCD_NODE_IP}:2380:2380"
+    # F-116-style cap: etcd's DCS workload is tiny; bound it so a runaway can't
+    # pressure the shared host, with a reservation for steady Raft I/O.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+        reservations:
+          memory: 128M
+    healthcheck:
+      # etcdctl talks to the local client URL; ETCDCTL_API=3 selects the v3 API.
+      test: ["CMD-SHELL", "ETCDCTL_API=3 etcdctl --endpoints=http://127.0.0.1:2379 endpoint health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  # ===========================================================================
+  # patroni — wraps Postgres (profile: patroni). Runs on .46 + .44.
+  # ===========================================================================
+  patroni:
+    # Built from deploy/patroni/Dockerfile (pgvector pg17 + pgbackrest + Patroni).
+    # We FROM rawdrive-postgres:local (the PITR image); the build context is the
+    # repo root so it can see deploy/postgres if the fallback FROM is used.
+    build:
+      context: ..
+      dockerfile: deploy/patroni/Dockerfile
+    image: rawdrive-patroni:local
+    container_name: deploy-patroni-1
+    restart: unless-stopped
+    profiles:
+      - patroni
+    env_file:
+      - path: /opt/rawdrive/app/.env
+        required: false
+    volumes:
+      # SAME named volume name as the standalone primary so Patroni ADOPTS the
+      # existing data directory at cutover instead of initdb-ing a fresh one.
+      # ⚠️ During cutover the bootstrap script confirms this maps to the real
+      # primary PGDATA on .46 (see patroni-bootstrap.sh pre-flight). Getting this
+      # wrong would re-init over live data — the most dangerous step.
+      - postgres_data:/var/lib/postgresql/data
+      - ./patroni/patroni.yml.template:/etc/patroni/patroni.yml.template:ro
+      # pgBackRest config from the parallel PITR subsystem — Patroni uses it for
+      # the pgbackrest create_replica_method + archive_command.
+      - ./pgbackrest/pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+    # Render patroni.yml from the template (only named vars), then exec patroni
+    # as the postgres user. Overrides the image entrypoint entirely.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >
+        envsubst
+        '$$PATRONI_SCOPE $$PATRONI_NAME $$PATRONI_NODE_IP $$ETCD_NODE_42_IP $$ETCD_NODE_44_IP $$ETCD_NODE_46_IP $$POSTGRES_USER $$POSTGRES_PASSWORD $$POSTGRES_REPLICATION_PASSWORD'
+        < /etc/patroni/patroni.yml.template > /etc/patroni/patroni.yml &&
+        chown postgres:postgres /etc/patroni/patroni.yml &&
+        exec su postgres -c 'patroni /etc/patroni/patroni.yml'
+    ports:
+      # Postgres (5432) + Patroni REST API (8008), scoped to this host's IP —
+      # never 0.0.0.0. HAProxy on the app nodes health-checks :8008 and routes to
+      # :5432 cross-host; patronictl talks to :8008. UFW restricts both to the
+      # cluster hosts; pg_hba is defense-in-depth on 5432.
+      - "${PATRONI_NODE_IP}:5432:5432"
+      - "${PATRONI_NODE_IP}:8008:8008"
+    # F-116: Postgres is the heaviest, most failure-sensitive service. Cap matches
+    # the standalone postgres-replica's 2 vCPU / 2G in prod-app.yml so tuning
+    # (shared_buffers=2GB) stays comfortably under the limit and a heavy query
+    # can't OOM the node and break replication / trigger a needless failover.
+    deploy:
+      resources:
+        limits:
+          cpus: "2.00"
+          memory: 2G
+        reservations:
+          memory: 512M
+    healthcheck:
+      # Patroni REST /health → 200 when this node's Postgres is running and the
+      # node is a healthy cluster member (leader OR standby). Liveness for the
+      # whole supervisor, not just the process.
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8008/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s   # adopting/rebuilding a data dir can take a moment
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  # ===========================================================================
+  # haproxy — leader router (profile: haproxy). Runs on .42 + .44.
+  # ===========================================================================
+  haproxy:
+    # Pinned (NEVER :latest) like every other prod image.
+    image: haproxy:3.0.6-alpine
+    container_name: deploy-haproxy-1
+    restart: unless-stopped
+    profiles:
+      - haproxy
+    env_file:
+      - path: /opt/rawdrive/app/.env
+        required: false
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg.template:ro
+    # Render the cfg (only the ETCD_NODE_*_IP member IPs) then exec haproxy.
+    # Same envsubst-then-exec pattern as nginx/etcd above.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >
+        apk add --no-cache gettext >/dev/null 2>&1 || true;
+        envsubst
+        '$$ETCD_NODE_44_IP $$ETCD_NODE_46_IP'
+        < /usr/local/etc/haproxy/haproxy.cfg.template > /usr/local/etc/haproxy/haproxy.cfg &&
+        exec haproxy -f /usr/local/etc/haproxy/haproxy.cfg -db
+    ports:
+      # LOOPBACK ONLY — HAProxy's sole client is the local pgbouncer on the same
+      # app node, so it must NOT be reachable off-host. This is intentionally
+      # stricter than the host-IP scoping used for cross-host services: pgbouncer
+      # talks to 127.0.0.1:5432 (writes) / :5433 (reads); :7000 is the local
+      # stats dashboard.
+      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:5433:5433"
+      - "127.0.0.1:7000:7000"
+    # F-116: HAProxy is a thin TCP proxy — tiny footprint, bounded so a connection
+    # storm can't pressure the shared app host (matches the pgbouncer cap).
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 128M
+        reservations:
+          memory: 32M
+    healthcheck:
+      # The stats endpoint answers once HAProxy is up and the config parsed.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:7000/ >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+volumes:
+  etcd_data:
+    driver: local
+  # IMPORTANT: this MUST resolve to the SAME underlying volume as the standalone
+  # primary's `postgres_data` (declared external/aliased at cutover) so Patroni
+  # adopts the live data directory rather than creating an empty one. The
+  # bootstrap script verifies the binding before any irreversible step. Declared
+  # `external: true` so compose NEVER auto-creates a fresh empty volume here and
+  # silently shadow the real data dir — it must already exist (the prod primary's
+  # volume), or the bootstrap fails loudly.
+  postgres_data:
+    external: true
+    name: rawdrive-db_postgres_data

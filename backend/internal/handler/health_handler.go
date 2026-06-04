@@ -26,11 +26,13 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/rawdrive/backend/internal/database"
 	"github.com/rawdrive/backend/internal/storage"
 )
 
@@ -40,11 +42,19 @@ type ValkeyPinger interface {
 	Ping(ctx context.Context) error
 }
 
+// NATSPinger is the narrow interface the health check needs from the event
+// broker. *events.NATSPublisher satisfies it; nil means the probe is skipped
+// (the in-process stub broker reports "disabled").
+type NATSPinger interface {
+	Ping(ctx context.Context) error
+}
+
 // HealthHandler runs deep dependency probes.
 type HealthHandler struct {
 	pool   *pgxpool.Pool
 	store  storage.Provider
 	valkey ValkeyPinger
+	nats   NATSPinger
 }
 
 // NewHealthHandler constructs a HealthHandler. store and valkey may be nil.
@@ -52,10 +62,19 @@ func NewHealthHandler(pool *pgxpool.Pool, store storage.Provider, valkey ValkeyP
 	return &HealthHandler{pool: pool, store: store, valkey: valkey}
 }
 
+// WithNATS attaches an optional NATS pinger so /health/deep also reports event
+// broker reachability. Returns the handler for chaining. A nil pinger leaves
+// the broker probe disabled.
+func (h *HealthHandler) WithNATS(n NATSPinger) *HealthHandler {
+	h.nats = n
+	return h
+}
+
 // ComponentHealth is the per-component status payload.
 type ComponentHealth struct {
 	Status    string `json:"status"`
 	LatencyMs int64  `json:"latency_ms"`
+	Detail    string `json:"detail,omitempty"`
 	Error     string `json:"error,omitempty"`
 }
 
@@ -145,9 +164,133 @@ func (h *HealthHandler) Deep(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// NATS probe — optional only when no broker is configured (the in-process
+	// stub reports "disabled"). A configured-but-unreachable broker is a real
+	// dependency failure for the events/jobs plane.
+	if h.nats == nil {
+		resp.Components["nats"] = ComponentHealth{Status: "disabled"}
+	} else {
+		start := time.Now()
+		if err := h.nats.Ping(ctx); err != nil {
+			resp.Components["nats"] = ComponentHealth{
+				Status:    "unhealthy",
+				LatencyMs: time.Since(start).Milliseconds(),
+				Error:     err.Error(),
+			}
+			overall = "unhealthy"
+		} else {
+			resp.Components["nats"] = ComponentHealth{
+				Status:    "healthy",
+				LatencyMs: time.Since(start).Milliseconds(),
+			}
+		}
+	}
+
+	// Migrations — informational in /health/deep (the strict gate is
+	// /health/ready). Reports whether the database has applied every migration
+	// this binary embeds.
+	resp.Components["migrations"] = h.migrationComponent(ctx)
+
 	resp.Status = overall
 	status := http.StatusOK
 	if overall != "healthy" {
+		status = http.StatusServiceUnavailable
+	}
+	respondJSON(w, status, resp)
+}
+
+// migrationComponent reports the database's migration head vs. what this binary
+// embeds. status: "ready" (at head), "behind" (pending migrations), "unknown"
+// (couldn't determine), or "disabled" (no pool).
+func (h *HealthHandler) migrationComponent(ctx context.Context) ComponentHealth {
+	if h.pool == nil {
+		return ComponentHealth{Status: "disabled"}
+	}
+	start := time.Now()
+	atHead, have, want, err := database.MigrationsAtHead(ctx, h.pool)
+	latency := time.Since(start).Milliseconds()
+	switch {
+	case err != nil:
+		return ComponentHealth{Status: "unknown", LatencyMs: latency, Error: err.Error()}
+	case !atHead:
+		return ComponentHealth{
+			Status:    "behind",
+			LatencyMs: latency,
+			Detail:    fmt.Sprintf("applied %d/%d", have, want),
+		}
+	default:
+		return ComponentHealth{
+			Status:    "ready",
+			LatencyMs: latency,
+			Detail:    fmt.Sprintf("applied %d/%d", have, want),
+		}
+	}
+}
+
+// Ready handles GET /health/ready — a STRICT readiness gate for the deploy
+// pipeline and load balancer. Unlike /health/deep (which reports every
+// dependency's reachability), Ready returns 200 only when this node can
+// correctly SERVE requests:
+//
+//   - the database is reachable, AND
+//   - the cache (if configured) is reachable, AND
+//   - the database is at the migration head this binary embeds.
+//
+// A node whose binary embeds migrations the database has not applied is NOT
+// ready: it would query columns/tables that do not yet exist. NATS and object
+// storage are intentionally NOT readiness gates — the API degrades gracefully
+// when they blip (events queue, face endpoints 503), so the node should keep
+// serving reads/writes. Those are verified at the infrastructure layer by the
+// deploy pipeline instead.
+func (h *HealthHandler) Ready(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	resp := DeepHealthResponse{
+		Components: make(map[string]ComponentHealth),
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+	}
+	ready := true
+
+	// Database — mandatory.
+	if h.pool == nil {
+		resp.Components["database"] = ComponentHealth{Status: "unhealthy", Error: "pool not configured"}
+		ready = false
+	} else {
+		start := time.Now()
+		if err := h.pool.Ping(ctx); err != nil {
+			resp.Components["database"] = ComponentHealth{Status: "unhealthy", LatencyMs: time.Since(start).Milliseconds(), Error: err.Error()}
+			ready = false
+		} else {
+			resp.Components["database"] = ComponentHealth{Status: "healthy", LatencyMs: time.Since(start).Milliseconds()}
+		}
+	}
+
+	// Cache — a readiness gate only when configured (rate limiting / sessions).
+	if h.valkey == nil {
+		resp.Components["valkey"] = ComponentHealth{Status: "disabled"}
+	} else {
+		start := time.Now()
+		if err := h.valkey.Ping(ctx); err != nil {
+			resp.Components["valkey"] = ComponentHealth{Status: "unhealthy", LatencyMs: time.Since(start).Milliseconds(), Error: err.Error()}
+			ready = false
+		} else {
+			resp.Components["valkey"] = ComponentHealth{Status: "healthy", LatencyMs: time.Since(start).Milliseconds()}
+		}
+	}
+
+	// Migrations at head — the gate that prevents a fresh binary from serving
+	// against a not-yet-migrated database.
+	mig := h.migrationComponent(ctx)
+	resp.Components["migrations"] = mig
+	if mig.Status != "ready" && mig.Status != "disabled" {
+		ready = false
+	}
+
+	resp.Status = "ready"
+	status := http.StatusOK
+	if !ready {
+		resp.Status = "not_ready"
 		status = http.StatusServiceUnavailable
 	}
 	respondJSON(w, status, resp)

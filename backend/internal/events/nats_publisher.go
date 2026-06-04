@@ -175,3 +175,19 @@ func (p *NATSPublisher) Close() {
 	}
 	p.conn.Close()
 }
+
+// Ping reports whether the NATS connection is currently established. It backs
+// the /health/deep "nats" component (handler.NATSPinger). The check is cheap
+// and local — it inspects the client's connection state rather than issuing a
+// round-trip — so it is safe to call on every health poll. Safe on a nil
+// receiver. The ctx is accepted to satisfy the pinger interface; the state
+// check itself does not block.
+func (p *NATSPublisher) Ping(_ context.Context) error {
+	if p == nil || p.conn == nil {
+		return errors.New("nats: not connected")
+	}
+	if !p.conn.IsConnected() {
+		return fmt.Errorf("nats: not connected (status %s)", p.conn.Status())
+	}
+	return nil
+}
