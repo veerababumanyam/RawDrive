@@ -38,6 +38,11 @@ PEERS="187.127.142.42 187.127.142.44 187.127.142.46"
 DATA_PORTS="5432,6379,4222,6222,8222,9000,9001,1025,8025"
 # App origin ports — only the peer nginx backup-upstream + docker-internal use them.
 APP_PORTS="8080,3000"
+# Public web ports. When CF_IPS_FILE exists (written by cf-origin-lock.sh) these
+# are restricted to Cloudflare's published ranges so the origin can't be hit
+# directly, bypassing Cloudflare's WAF/DDoS; otherwise they stay fully public.
+WEB_PORTS="80,443"
+CF_IPS_FILE="/opt/rawdrive/cloudflare-ips.txt"
 
 # Wait for Docker to have created DOCKER-USER and wired the FORWARD jump
 # (After=docker.service usually suffices, but tolerate a startup race).
@@ -49,7 +54,8 @@ done
 iptables -C FORWARD -j DOCKER-USER 2>/dev/null || iptables -I FORWARD -j DOCKER-USER
 
 apply() {
-  local ipt="$1"
+  local ipt="$1" fam_re
+  [ "$ipt" = "iptables" ] && fam_re='\.' || fam_re=':'   # v4 CIDRs contain '.', v6 contain ':'
   "$ipt" -F DOCKER-USER 2>/dev/null || true
   "$ipt" -A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
   if [ "$ipt" = "iptables" ]; then
@@ -59,6 +65,17 @@ apply() {
   fi
   "$ipt" -A DOCKER-USER -p tcp -m multiport --dports "$DATA_PORTS" -j DROP
   "$ipt" -A DOCKER-USER -p tcp -m multiport --dports "$APP_PORTS" -j DROP
+  # CF origin lock (optional): when the Cloudflare IP list is present, allow 80/443
+  # ONLY from Cloudflare ranges and drop the rest. Peers/loopback/docker already
+  # RETURNed above, so internal health checks + cert tooling are unaffected.
+  if [ -s "$CF_IPS_FILE" ]; then
+    while IFS= read -r cidr; do
+      case "$cidr" in ''|\#*) continue ;; esac
+      printf '%s' "$cidr" | grep -q "$fam_re" || continue
+      "$ipt" -A DOCKER-USER -p tcp -m multiport --dports "$WEB_PORTS" -s "$cidr" -j RETURN
+    done < "$CF_IPS_FILE"
+    "$ipt" -A DOCKER-USER -p tcp -m multiport --dports "$WEB_PORTS" -j DROP
+  fi
   "$ipt" -A DOCKER-USER -j RETURN
 }
 
@@ -67,4 +84,8 @@ apply iptables
 # a no-op when Docker isn't managing ip6tables).
 apply ip6tables 2>/dev/null || true
 
-echo "rawdrive-docker-fw applied: data ports [$DATA_PORTS] + app ports [$APP_PORTS] restricted to peer mesh ($PEERS)."
+if [ -s "$CF_IPS_FILE" ]; then
+  echo "rawdrive-docker-fw applied: data [$DATA_PORTS] + app [$APP_PORTS] peer-only; web [$WEB_PORTS] Cloudflare-only (origin locked)."
+else
+  echo "rawdrive-docker-fw applied: data [$DATA_PORTS] + app [$APP_PORTS] restricted to peer mesh ($PEERS); web [$WEB_PORTS] public."
+fi
