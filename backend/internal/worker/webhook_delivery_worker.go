@@ -140,6 +140,7 @@ func (w *WebhookDeliveryWorker) claimBatch(ctx context.Context, limit int) ([]We
 		      WHERE d2.status IN ('pending', 'failed')
 		        AND d2.attempt < $1
 		        AND w2.is_active = true
+		        AND (d2.next_attempt_at IS NULL OR d2.next_attempt_at <= now())
 		        AND (d2.claimed_at IS NULL OR d2.claimed_at < now() - make_interval(secs => $2))
 		      ORDER BY d2.created_at ASC
 		      LIMIT $3
@@ -241,24 +242,55 @@ func (w *WebhookDeliveryWorker) recordSuccess(ctx context.Context, d WebhookDeli
 }
 
 // recordFailure increments the attempt counter and marks the row as
-// either "failed" (will be retried) or "dead" (max attempts reached).
+// either "failed" (retried on an exponential schedule) or "dead" (max attempts).
+// On a retryable failure it stamps next_attempt_at = now() + webhookBackoff(attempt)
+// and clears claimed_at, so the retry is gated by the exponential backoff schedule
+// rather than the flat crash lease. A "dead" row gets next_attempt_at = NULL — it
+// is never retried (attempt has reached maxAttempts), so the claim predicate
+// excludes it regardless.
 func (w *WebhookDeliveryWorker) recordFailure(ctx context.Context, d WebhookDelivery, errMsg string, status int) {
 	nextAttempt := d.Attempt + 1
 	newStatus := "failed"
+	var nextAttemptAt interface{} // stays NULL when dead
 	if nextAttempt >= w.maxAttempts {
 		newStatus = "dead"
+	} else {
+		nextAttemptAt = time.Now().Add(webhookBackoff(d.Attempt))
 	}
 	_, err := w.pool.Exec(ctx,
 		`UPDATE webhook_deliveries
 		 SET status = $2,
 		     attempt = $3,
 		     response_status = NULLIF($4, 0),
-		     error_message = $5
+		     error_message = $5,
+		     next_attempt_at = $6,
+		     claimed_at = NULL
 		 WHERE id = $1`,
-		d.ID, newStatus, nextAttempt, status, errMsg)
+		d.ID, newStatus, nextAttempt, status, errMsg, nextAttemptAt)
 	if err != nil {
 		log.Printf("webhook worker: record failure %s: %v", d.ID, err)
 	}
+}
+
+// webhookBackoff returns the delay before the next retry given the number of
+// delivery attempts already made: exponential (1m, 2m, 4m, 8m, ...) capped at 1h.
+// attempts is clamped to >= 1, and the shift is guarded so a large attempt count
+// can never overflow — it saturates at the cap.
+func webhookBackoff(attempts int) time.Duration {
+	const base = time.Minute
+	const maxBackoff = time.Hour
+	n := attempts - 1
+	if n < 0 {
+		n = 0
+	}
+	if n >= 12 { // 2^12 minutes already exceeds the cap; also guards the shift
+		return maxBackoff
+	}
+	d := base << uint(n)
+	if d <= 0 || d > maxBackoff {
+		return maxBackoff
+	}
+	return d
 }
 
 // Verify the package contract: this worker is a worker.Worker.
