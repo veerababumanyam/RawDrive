@@ -1,0 +1,20 @@
+[Unit]
+Description=RawDrive Docker port hardening (restrict published data-plane ports to the peer mesh)
+Documentation=file:/opt/rawdrive/rawdrive-docker-fw.sh
+# Run after Docker has created the DOCKER-USER chain + FORWARD jump, and re-run
+# whenever Docker restarts (a daemon restart flushes DOCKER-USER back to empty).
+After=docker.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/rawdrive/rawdrive-docker-fw.sh
+# On stop (incl. docker stop): drop our managed rules. Containers are down then,
+# so the ports aren't listening anyway.
+ExecStop=-/sbin/iptables -F DOCKER-USER
+ExecStop=-/sbin/ip6tables -F DOCKER-USER
+
+[Install]
+WantedBy=multi-user.target docker.service
