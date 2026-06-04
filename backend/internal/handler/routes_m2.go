@@ -421,6 +421,12 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 	if deps.FaceClient != nil {
 		publicHandler = publicHandler.WithFaceClient(deps.FaceClient)
 	}
+	// PUB-CACHE: back the public studio-profile landing read with the shared
+	// (Valkey) cache when available so anonymous studio-profile views collapse to
+	// one DB round-trip per short TTL across app nodes.
+	if deps.StudioLandingCache != nil {
+		publicHandler = publicHandler.WithStudioLandingCache(deps.StudioLandingCache)
+	}
 	proofingHandler := NewProofingHandler(deps.ProofingService).
 		WithGalleryService(deps.GalleryService).
 		WithGalleryAccessService(deps.GalleryAccessSvc).
@@ -662,4 +668,10 @@ type M2Dependencies struct {
 	// M21 dependencies (nil-safe)
 	FaceSvc *ai.FaceService
 	JobRepo *ai.JobRepo
+
+	// PUB-CACHE: optional cross-node (Valkey) backing for the public
+	// studio-profile landing read. nil-safe — when absent (single node / no
+	// Valkey) GetStudioLanding always hits the DB. Wired from main.go with the
+	// same valkeyAnalyticsCache adapter CACHE-4/CACHE-5 use.
+	StudioLandingCache publicStudioLandingCache
 }

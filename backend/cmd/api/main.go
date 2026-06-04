@@ -1926,6 +1926,16 @@ func main() {
 		WithAssetRepo(assetRepo).
 		WithAssetDeleteService(assetSvc).
 		WithAlbumService(albumSvc)
+	// PUB-CACHE: back the public gallery-metadata cache (GetBySlug /
+	// GetByBusinessSubdomainAndSlug) with Valkey when available so the
+	// highest-volume anonymous read — public-gallery slug resolution — collapses
+	// to one DB read per short TTL, shared across app nodes (.42/.44). Only
+	// PUBLISHED + OPEN (non-password, public/unlisted) galleries are ever cached;
+	// session-bound and draft galleries never enter the shared cache.
+	if valkeyRaw != nil {
+		gallerySvc = gallerySvc.WithSharedCache(valkeyAnalyticsCache{rdb: valkeyRaw})
+		log.Println("gallery: public metadata cache backed by Valkey (cross-node shared, PUB-CACHE)")
+	}
 	shareLinkSvc := service.NewShareLinkService(shareLinkRepo)
 	proofingSvc := service.NewProofingService(proofingRepo, galleryRepo).
 		WithNotifications(repository.NewNotificationRepo(dbPool)) // GAL-FR-134
@@ -2151,6 +2161,12 @@ func main() {
 			// JobRepo is stateless (same pattern as FaceRepo).
 			FaceSvc: nil,
 			JobRepo: ai.NewJobRepo(dbPool),
+		}
+		// PUB-CACHE: wire the shared (Valkey) backing for the public
+		// studio-profile landing read when available. Only PUBLIC, non-PII
+		// profile fields + PUBLISHED open galleries are cached.
+		if valkeyRaw != nil {
+			m2Deps.StudioLandingCache = valkeyAnalyticsCache{rdb: valkeyRaw}
 		}
 		galleryHandler := handler.RegisterM2Routes(api, m2Deps)
 		photographerProfileHandler.RegisterProtectedRoutes(api)

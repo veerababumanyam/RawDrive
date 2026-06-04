@@ -2,9 +2,12 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -28,6 +31,47 @@ type galleryAssetDeleteService interface {
 	SoftDeleteManyForWorkspace(ctx context.Context, ids []uuid.UUID, workspaceID uuid.UUID) (int64, error)
 }
 
+// gallerySlugResolver is the narrow DB-backed slug-resolve seam the public
+// metadata cache wraps. *repository.GalleryRepo satisfies it; tests substitute a
+// counting fake so they can prove repeated views of one open public slug
+// collapse to a single DB read (PUB-CACHE).
+type gallerySlugResolver interface {
+	GetBySlug(ctx context.Context, slug string) (*repository.Gallery, error)
+	GetBySlugScopedByBusinessCode(ctx context.Context, businessCode, slug string) (*repository.Gallery, error)
+}
+
+// galleryWriter is the narrow DB write seam Update routes through.
+// *repository.GalleryRepo satisfies it; tests substitute a no-op writer so the
+// cache-invalidation-after-write contract can be exercised without a DB.
+type galleryWriter interface {
+	Update(ctx context.Context, g *repository.Gallery) error
+}
+
+// sharedGalleryCache is the optional cross-node (Valkey) backing for the public
+// gallery-metadata cache. When wired (via WithSharedCache in main.go) it is the
+// cache source of truth so all app nodes (.42/.44) agree and an invalidation on
+// one node is seen by the others; nil = in-process map only (single node / no
+// Valkey). All ops are best-effort: a cache error never fails the caller — it
+// degrades to a DB read. Mirrors the CACHE-5 sharedPolicyCache / CACHE-4
+// sharedAnalyticsCache seam (same Get/Set/Del-over-JSON-bytes shape, same
+// best-effort contract).
+type sharedGalleryCache interface {
+	Get(ctx context.Context, key string) ([]byte, bool, error)
+	Set(ctx context.Context, key string, val []byte, ttl time.Duration)
+	Del(ctx context.Context, key string)
+}
+
+// publicGalleryCacheTTL is the short TTL for cached PUBLISHED + OPEN public
+// gallery metadata. It is the staleness bound: even without an explicit
+// invalidation, a cached entry self-heals within this window. Kept short (well
+// inside the PUB-CACHE 10–30s spec) so a publish / settings edit is reflected
+// promptly while still collapsing the high-volume anonymous read burst.
+const publicGalleryCacheTTL = 15 * time.Second
+
+// galleryCacheSharedOpTimeout bounds each shared-cache round trip so a slow or
+// unreachable Valkey can never stall a public gallery read.
+const galleryCacheSharedOpTimeout = 2 * time.Second
+
 // GalleryService handles gallery business logic.
 type GalleryService struct {
 	galleryRepo      *repository.GalleryRepo
@@ -36,11 +80,69 @@ type GalleryService struct {
 	assetRepo        galleryAssetSource
 	assetDeleteSvc   galleryAssetDeleteService
 	albumSvc         *AlbumService
+
+	// slugResolver is the DB-backed slug-resolve seam the public metadata cache
+	// reads through on a miss. Defaults to the concrete galleryRepo; a test can
+	// inject a counting fake via newGalleryServiceForCacheTest.
+	slugResolver gallerySlugResolver
+
+	// writer is the DB write seam Update routes through. Defaults to the concrete
+	// galleryRepo; a test injects a no-op writer to exercise invalidation.
+	writer galleryWriter
+
+	// Public gallery-metadata cache (PUB-CACHE). Only PUBLISHED + OPEN
+	// (token-free, non-password, public/unlisted) galleries are ever cached —
+	// session-bound (password / share / private / invite-only) and unpublished
+	// galleries are NEVER cached, so a per-viewer or draft body can never be
+	// served to the wrong anonymous client (PERF-HDR confidentiality contract).
+	cacheMu     sync.RWMutex
+	publicCache map[string]cachedGallery // in-process fallback when shared == nil
+	sharedCache sharedGalleryCache       // optional cross-node (Valkey) backing
+}
+
+// cachedGallery is one in-process cached public gallery plus its absolute
+// expiry. The gallery is held as a JSON snapshot (not a live *Gallery pointer)
+// so every cacheGet returns a FRESH, independent copy. This is a confidentiality
+// requirement, not just hygiene: the public handler mutates the returned
+// gallery's Settings map in place (cover thumbnails, has_password, and — for a
+// session-bound view — a per-viewer asset_access_token). Sharing one pointer
+// across requests would let one viewer's mutations (including that per-viewer
+// token) bleed into the entry served to the next anonymous viewer. Serializing
+// here makes the in-process path match the shared-Valkey path, which already
+// deserializes a fresh object per read.
+type cachedGallery struct {
+	snapshot  []byte
+	expiresAt time.Time
 }
 
 // NewGalleryService creates a new GalleryService.
 func NewGalleryService(gr *repository.GalleryRepo, gar *repository.GalleryAssetRepo, cs *GalleryCoverService) *GalleryService {
-	return &GalleryService{galleryRepo: gr, galleryAssetRepo: gar, coverSvc: cs}
+	s := &GalleryService{
+		galleryRepo:      gr,
+		galleryAssetRepo: gar,
+		coverSvc:         cs,
+		publicCache:      make(map[string]cachedGallery),
+	}
+	// Default the cache's read-through + write seams to the concrete repo. A nil
+	// repo (unit-test construction) leaves it usable: the cache simply never warms.
+	if gr != nil {
+		s.slugResolver = gr
+		s.writer = gr
+	}
+	return s
+}
+
+// WithSharedCache wires a cross-node (Valkey) backing for the public
+// gallery-metadata cache. main.go calls this during bootstrap when Valkey is
+// available so both app nodes share one cache and an invalidation on either node
+// is seen by the other. Passing nil keeps the in-process cache. Returns the same
+// pointer so the call chains. Mirrors WorkspacePolicyService.WithSharedCache
+// (CACHE-5) and StorageAccounting.WithSharedCache (CACHE-4).
+func (s *GalleryService) WithSharedCache(c sharedGalleryCache) *GalleryService {
+	if c != nil {
+		s.sharedCache = c
+	}
+	return s
 }
 
 // WithAssetRepo attaches the asset repo for timeline queries.
@@ -97,7 +199,13 @@ func (s *GalleryService) SetFaceDetectionEnabled(ctx context.Context, galleryID 
 	if g == nil {
 		return fmt.Errorf("gallery not found")
 	}
-	return s.galleryRepo.UpdateField(ctx, galleryID, "face_detection_enabled", enabled)
+	if err := s.galleryRepo.UpdateField(ctx, galleryID, "face_detection_enabled", enabled); err != nil {
+		return err
+	}
+	// face_detection_enabled feeds the public viewer's Photo Search affordance —
+	// invalidate so the toggle is reflected on the next public view.
+	s.invalidatePublicGallery(ctx, g.Slug)
+	return nil
 }
 
 // Create creates a new gallery.
@@ -176,7 +284,20 @@ func (s *GalleryService) GetByID(ctx context.Context, id uuid.UUID) (*repository
 // (migration 121) doesn't go through here — it calls
 // GetByBusinessSubdomainAndSlug directly with explicit workspace scope.
 func (s *GalleryService) GetBySlug(ctx context.Context, slug string) (*repository.Gallery, error) {
-	return s.galleryRepo.GetBySlug(ctx, slug)
+	key := publicGalleryCacheKey(slug)
+	if g, ok := s.cacheGet(ctx, key); ok {
+		return g, nil
+	}
+	g, err := s.resolver().GetBySlug(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
+	// Only PUBLISHED + OPEN (token-free, non-password, public/unlisted)
+	// galleries are cacheable — never a session-bound or draft body.
+	if isCacheablePublicGallery(g) {
+		s.cacheSet(ctx, key, g)
+	}
+	return g, nil
 }
 
 // GetByBusinessSubdomainAndSlug resolves a gallery via the new per-business
@@ -203,7 +324,172 @@ func (s *GalleryService) GetByBusinessSubdomainAndSlug(ctx context.Context, subd
 	if !isLowerAlnumExact(code, 8) {
 		return nil, nil
 	}
-	return s.galleryRepo.GetBySlugScopedByBusinessCode(ctx, code, slug)
+	// Cache key is scoped to BOTH the business code and the slug so a request
+	// pairing a valid slug with the WRONG business code can never be served a
+	// cached row from another scope — a wrong code misses the cache and falls to
+	// the scoped DB query (which returns nil for a cross-scope mismatch).
+	key := publicGalleryBusinessCacheKey(code, slug)
+	if g, ok := s.cacheGet(ctx, key); ok {
+		return g, nil
+	}
+	g, err := s.resolver().GetBySlugScopedByBusinessCode(ctx, code, slug)
+	if err != nil {
+		return nil, err
+	}
+	if isCacheablePublicGallery(g) {
+		s.cacheSet(ctx, key, g)
+	}
+	return g, nil
+}
+
+// resolver returns the DB-backed slug-resolve seam. Defaults to the concrete
+// galleryRepo; a test injects a counting fake. Returns nil only on a degraded
+// (no-repo) construction, which callers below guard against.
+func (s *GalleryService) resolver() gallerySlugResolver {
+	if s.slugResolver != nil {
+		return s.slugResolver
+	}
+	return s.galleryRepo
+}
+
+// publicGalleryCacheKey is the shared-backing key for the legacy apex
+// `/g/<slug>` lookup. Namespaced so it can never collide with other shared
+// caches on the same Valkey (CACHE-4/CACHE-5 convention).
+func publicGalleryCacheKey(slug string) string {
+	return "gallery:pubmeta:slug:" + slug
+}
+
+// publicGalleryBusinessCacheKey is the shared-backing key for the per-business
+// subdomain lookup, scoped to the business code so cross-scope reuse is
+// impossible.
+func publicGalleryBusinessCacheKey(code, slug string) string {
+	return "gallery:pubmeta:biz:" + code + ":" + slug
+}
+
+// isCacheablePublicGallery reports whether a gallery may enter the shared public
+// metadata cache. ONLY published, non-expired, non-password, public/unlisted
+// galleries qualify. Password-protected, private/invite-only, unpublished, and
+// expired galleries are session-bound or draft and must NEVER be shared-cached
+// (PERF-HDR confidentiality contract: their bodies carry per-viewer secrets or
+// are not meant for anonymous delivery).
+func isCacheablePublicGallery(g *repository.Gallery) bool {
+	if g == nil || !g.IsPublished {
+		return false
+	}
+	if g.PasswordHash != nil && *g.PasswordHash != "" {
+		return false
+	}
+	if g.ExpiresAt != nil && g.ExpiresAt.Before(time.Now().UTC()) {
+		return false
+	}
+	mode := strings.ToLower(strings.TrimSpace(g.AccessMode))
+	// Empty mode is the legacy "public" default; only explicit public/unlisted
+	// (or empty) are open. Anything else (private, invite-only) is gated.
+	switch mode {
+	case "", "public", "unlisted":
+		return true
+	default:
+		return false
+	}
+}
+
+// cacheGet returns a cached public gallery if present and live. When a shared
+// (Valkey) backing is wired it consults that so every node reads the same value;
+// otherwise it reads the in-process map. A shared-cache miss/error is a clean
+// miss so the caller degrades to a DB read — a Valkey outage never fails a read.
+func (s *GalleryService) cacheGet(ctx context.Context, key string) (*repository.Gallery, bool) {
+	if s.sharedCache != nil {
+		opCtx, cancel := context.WithTimeout(ctx, galleryCacheSharedOpTimeout)
+		defer cancel()
+		raw, ok, err := s.sharedCache.Get(opCtx, key)
+		if err != nil || !ok {
+			return nil, false
+		}
+		var g repository.Gallery
+		if json.Unmarshal(raw, &g) != nil {
+			return nil, false
+		}
+		return &g, true
+	}
+
+	s.cacheMu.RLock()
+	entry, ok := s.publicCache[key]
+	s.cacheMu.RUnlock()
+	if !ok || !time.Now().Before(entry.expiresAt) {
+		return nil, false
+	}
+	var g repository.Gallery
+	if json.Unmarshal(entry.snapshot, &g) != nil {
+		return nil, false
+	}
+	return &g, true
+}
+
+// cacheSet stores a cacheable public gallery under the short TTL. When a shared
+// (Valkey) backing is wired the write goes there so the entry is visible to
+// every app node; otherwise it lands in the in-process map.
+func (s *GalleryService) cacheSet(ctx context.Context, key string, g *repository.Gallery) {
+	if g == nil {
+		return
+	}
+	raw, err := json.Marshal(g)
+	if err != nil {
+		return
+	}
+	if s.sharedCache != nil {
+		opCtx, cancel := context.WithTimeout(ctx, galleryCacheSharedOpTimeout)
+		defer cancel()
+		s.sharedCache.Set(opCtx, key, raw, publicGalleryCacheTTL)
+		return
+	}
+	s.cacheMu.Lock()
+	defer s.cacheMu.Unlock()
+	s.publicCache[key] = cachedGallery{snapshot: raw, expiresAt: time.Now().Add(publicGalleryCacheTTL)}
+}
+
+// invalidatePublicGallery drops the cached metadata for a gallery's apex-slug
+// key so the next public view re-reads the DB and serves the new metadata. It is
+// called by every mutate path (Update / publish / delete / settings change) so a
+// photographer edit is reflected promptly instead of waiting out the TTL.
+//
+// Keying note: a gallery's slug is globally unique (8-char UUID suffix) and its
+// workspace — and therefore its business_unique_code — is immutable, so the
+// apex-slug key uniquely identifies the gallery. The per-business subdomain key
+// (publicGalleryBusinessCacheKey) is NOT invalidated here because that requires
+// the business code, which the mutate paths key by gallery ID and would need an
+// extra workspace query to derive; instead it self-heals within the short
+// publicGalleryCacheTTL (well inside the PUB-CACHE 10–30s staleness bound). The
+// apex `/g/<slug>` path — the dominant public surface — is invalidated exactly.
+func (s *GalleryService) invalidatePublicGallery(ctx context.Context, slug string) {
+	if slug == "" {
+		return
+	}
+	key := publicGalleryCacheKey(slug)
+	if s.sharedCache != nil {
+		opCtx, cancel := context.WithTimeout(ctx, galleryCacheSharedOpTimeout)
+		defer cancel()
+		s.sharedCache.Del(opCtx, key)
+		return
+	}
+	s.cacheMu.Lock()
+	defer s.cacheMu.Unlock()
+	delete(s.publicCache, key)
+}
+
+// invalidatePublicGalleryByID resolves the gallery's slug (best-effort) and
+// drops its cached apex-slug metadata. Used by the ID-keyed mutate paths
+// (publish/transition/delete/field updates) that don't already hold the full
+// gallery row. A lookup failure is swallowed: the worst case is the entry
+// self-healing on its short TTL rather than instantly.
+func (s *GalleryService) invalidatePublicGalleryByID(ctx context.Context, galleryID uuid.UUID) {
+	if s.galleryRepo == nil {
+		return
+	}
+	g, err := s.galleryRepo.GetByID(ctx, galleryID)
+	if err != nil || g == nil {
+		return
+	}
+	s.invalidatePublicGallery(ctx, g.Slug)
 }
 
 func isLowerAlnumExact(s string, n int) bool {
@@ -224,9 +510,21 @@ func (s *GalleryService) List(ctx context.Context, f repository.GalleryFilter) (
 	return s.galleryRepo.List(ctx, f)
 }
 
-// Update updates a gallery.
+// Update updates a gallery. It invalidates the cached public metadata for the
+// gallery's slug so a settings / title / publish-state / access-mode change is
+// reflected on the next public view instead of waiting out the TTL (PUB-CACHE).
 func (s *GalleryService) Update(ctx context.Context, g *repository.Gallery) error {
-	return s.galleryRepo.Update(ctx, g)
+	w := galleryWriter(s.galleryRepo)
+	if s.writer != nil {
+		w = s.writer
+	}
+	if err := w.Update(ctx, g); err != nil {
+		return err
+	}
+	if g != nil {
+		s.invalidatePublicGallery(ctx, g.Slug)
+	}
+	return nil
 }
 
 // SetGalleryMusic attaches (or clears) the slideshow background music track for
@@ -240,12 +538,22 @@ func (s *GalleryService) Update(ctx context.Context, g *repository.Gallery) erro
 // to ride the positional Update column set.
 func (s *GalleryService) SetGalleryMusic(ctx context.Context, galleryID, workspaceID uuid.UUID, musicAssetID *uuid.UUID) error {
 	if musicAssetID == nil {
-		return s.galleryRepo.UpdateField(ctx, galleryID, "music_asset_id", nil)
+		if err := s.galleryRepo.UpdateField(ctx, galleryID, "music_asset_id", nil); err != nil {
+			return err
+		}
+		s.invalidatePublicGalleryByID(ctx, galleryID)
+		return nil
 	}
 	if err := s.ValidateGalleryMusic(ctx, workspaceID, musicAssetID); err != nil {
 		return err
 	}
-	return s.galleryRepo.UpdateField(ctx, galleryID, "music_asset_id", *musicAssetID)
+	if err := s.galleryRepo.UpdateField(ctx, galleryID, "music_asset_id", *musicAssetID); err != nil {
+		return err
+	}
+	// The public viewer reads music_asset_id to enable the slideshow soundtrack —
+	// invalidate so the change is reflected on the next public view.
+	s.invalidatePublicGalleryByID(ctx, galleryID)
+	return nil
 }
 
 // ValidateGalleryMusic verifies that a requested music asset belongs to the
@@ -274,6 +582,9 @@ func (s *GalleryService) ValidateGalleryMusic(ctx context.Context, workspaceID u
 
 // SoftDelete deletes a gallery (soft).
 func (s *GalleryService) SoftDelete(ctx context.Context, id uuid.UUID) error {
+	// Resolve the slug for cache invalidation BEFORE the soft-delete, since the
+	// delete makes GetByID return nil afterwards (deleted_at IS NULL filter).
+	s.invalidatePublicGalleryByID(ctx, id)
 	return s.galleryRepo.SoftDelete(ctx, id)
 }
 
@@ -290,6 +601,10 @@ func (s *GalleryService) SoftDeleteForWorkspace(ctx context.Context, id, workspa
 		}
 		deletableAssetIDs = ids
 	}
+
+	// Invalidate cached public metadata BEFORE the soft-delete (GetByID returns
+	// nil for a deleted gallery), so the public surface stops serving it promptly.
+	s.invalidatePublicGalleryByID(ctx, id)
 
 	if err := s.galleryRepo.SoftDelete(ctx, id); err != nil {
 		return err
@@ -420,7 +735,13 @@ func (s *GalleryService) TransitionGalleryState(ctx context.Context, galleryID u
 		return fmt.Errorf("invalid gallery transition from %s to %s", currentState, targetState)
 	}
 
-	return s.galleryRepo.UpdateStatus(ctx, galleryID, string(targetState))
+	if err := s.galleryRepo.UpdateStatus(ctx, galleryID, string(targetState)); err != nil {
+		return err
+	}
+	// A lifecycle change (publish/archive/restore) flips the gallery's public
+	// visibility — drop its cached metadata so the change is seen immediately.
+	s.invalidatePublicGallery(ctx, gallery.Slug)
+	return nil
 }
 
 // Publish transitions a gallery from draft to shared.

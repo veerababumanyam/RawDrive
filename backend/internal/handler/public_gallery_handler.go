@@ -59,6 +59,57 @@ type PublicGalleryHandler struct {
 	// can override it via WithShareSessionSource to assert expired/wrong-PIN/
 	// exhausted links yield no session.
 	shareSession shareSessionSource
+
+	// studioLandingCache is the optional cross-node (Valkey) backing for the
+	// PUBLIC studio-profile landing read (PUB-CACHE). When wired (via
+	// WithStudioLandingCache in main.go) it collapses the high-volume anonymous
+	// studio-profile read — a workspace-by-business_unique_code query + tier
+	// lookup + published-gallery list — to one DB round-trip per short TTL,
+	// shared across app nodes. nil = always hit the DB (single node / no Valkey).
+	// Best-effort: a cache error never fails the read, it degrades to the DB
+	// path. Only PUBLIC, non-PII profile fields + PUBLISHED open galleries are
+	// cached (the same data already served anonymously); the authed
+	// WorkspaceProfileHandler.GetProfile path — which serves bank/PAN/UPI PII —
+	// is a different handler and is NEVER cached here. Mirrors the CACHE-4/CACHE-5
+	// shared-cache seam (Get/Set over JSON bytes, best-effort).
+	studioLandingCache publicStudioLandingCache
+}
+
+// publicStudioLandingCache is the shared-cache seam for the public studio-profile
+// landing read. Get/Set over JSON bytes mirror the CACHE-4/CACHE-5 seams; a Del
+// is not needed here — the short TTL is the staleness bound (see GetStudioLanding).
+type publicStudioLandingCache interface {
+	Get(ctx context.Context, key string) ([]byte, bool, error)
+	Set(ctx context.Context, key string, val []byte, ttl time.Duration)
+}
+
+// publicStudioLandingCacheTTL is the short TTL for a cached public studio-profile
+// landing. It is the staleness bound: a profile edit or a gallery
+// publish/unpublish is reflected within this window without an explicit
+// cross-handler invalidation (studio-profile edits are rare and the
+// published-gallery list is bounded). Kept inside the PUB-CACHE 10–30s spec.
+const publicStudioLandingCacheTTL = 15 * time.Second
+
+// publicStudioLandingCacheOpTimeout bounds each shared-cache round trip so a slow
+// or unreachable Valkey can never stall the public studio-profile read.
+const publicStudioLandingCacheOpTimeout = 2 * time.Second
+
+// publicStudioLandingCacheKey is the shared-backing key for a studio's public
+// landing, keyed on the immutable business_unique_code and namespaced so it can
+// never collide with other shared caches on the same Valkey.
+func publicStudioLandingCacheKey(code string) string {
+	return "studio:landing:" + code
+}
+
+// WithStudioLandingCache wires the optional cross-node (Valkey) backing for the
+// public studio-profile landing read. main.go calls this during bootstrap when
+// Valkey is available. Passing nil keeps the always-hit-DB behaviour. Returns the
+// receiver so the call chains. Mirrors WorkspacePolicyService.WithSharedCache.
+func (h *PublicGalleryHandler) WithStudioLandingCache(c publicStudioLandingCache) *PublicGalleryHandler {
+	if c != nil {
+		h.studioLandingCache = c
+	}
+	return h
 }
 
 type publicGalleryResolver interface {
@@ -600,6 +651,18 @@ func (h *PublicGalleryHandler) GetStudioLanding(w http.ResponseWriter, r *http.R
 		http.Error(w, `{"error":"invalid studio subdomain"}`, http.StatusBadRequest)
 		return
 	}
+
+	// PUB-CACHE: serve the assembled landing from the short-TTL shared cache when
+	// present, collapsing the workspace query + tier lookup + gallery-list query
+	// to one DB round-trip per TTL across app nodes. Checked BEFORE the pool guard
+	// so a warmed entry serves even on a node that would otherwise need the DB. A
+	// cache miss/error falls through to the DB assembly below (best-effort: Valkey
+	// never fails the read).
+	if resp, ok := h.studioLandingFromCache(r.Context(), code); ok {
+		respondJSONWithETag(w, r, resp, "public, max-age=0, s-maxage=60, must-revalidate")
+		return
+	}
+
 	if h.pool == nil {
 		http.Error(w, `{"error":"studio landing unavailable"}`, http.StatusServiceUnavailable)
 		return
@@ -682,13 +745,7 @@ func (h *PublicGalleryHandler) GetStudioLanding(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// PERF-HDR: this public studio-profile metadata read is served with
-	// conditional-request support — a content-hash ETag lets a repeat GET that
-	// echoes it in If-None-Match short-circuit to 304 (no re-serialize, no body
-	// transfer). The short s-maxage lets a shared/edge cache hold a
-	// revalidatable copy; must-revalidate forces a conditional re-check once
-	// stale so a profile/gallery-list edit is picked up promptly.
-	respondJSONWithETag(w, r, publicStudioLandingResponse{
+	resp := publicStudioLandingResponse{
 		Studio: publicStudioProfileResponse{
 			ID:                    workspaceID.String(),
 			Name:                  name,
@@ -715,7 +772,58 @@ func (h *PublicGalleryHandler) GetStudioLanding(w http.ResponseWriter, r *http.R
 		Counts: map[string]int{
 			"published_galleries": len(galleries),
 		},
-	}, "public, max-age=0, s-maxage=60, must-revalidate")
+	}
+
+	// PUB-CACHE: store the freshly-assembled landing in the short-TTL shared cache
+	// so the next anonymous view (on any app node) is served without re-querying.
+	// Only PUBLIC, non-PII fields are in `resp` (the same data served here), so
+	// caching it leaks nothing the response itself doesn't already expose.
+	h.studioLandingToCache(r.Context(), code, resp)
+
+	// PERF-HDR: this public studio-profile metadata read is served with
+	// conditional-request support — a content-hash ETag lets a repeat GET that
+	// echoes it in If-None-Match short-circuit to 304 (no re-serialize, no body
+	// transfer). The short s-maxage lets a shared/edge cache hold a
+	// revalidatable copy; must-revalidate forces a conditional re-check once
+	// stale so a profile/gallery-list edit is picked up promptly.
+	respondJSONWithETag(w, r, resp, "public, max-age=0, s-maxage=60, must-revalidate")
+}
+
+// studioLandingFromCache returns a cached public studio landing for a business
+// code when present and decodable. A miss/error/absent backing is a clean miss
+// so the caller assembles from the DB. Best-effort: a Valkey error never fails
+// the read.
+func (h *PublicGalleryHandler) studioLandingFromCache(ctx context.Context, code string) (publicStudioLandingResponse, bool) {
+	var resp publicStudioLandingResponse
+	if h.studioLandingCache == nil {
+		return resp, false
+	}
+	opCtx, cancel := context.WithTimeout(ctx, publicStudioLandingCacheOpTimeout)
+	defer cancel()
+	raw, ok, err := h.studioLandingCache.Get(opCtx, publicStudioLandingCacheKey(code))
+	if err != nil || !ok {
+		return resp, false
+	}
+	if json.Unmarshal(raw, &resp) != nil {
+		return publicStudioLandingResponse{}, false
+	}
+	return resp, true
+}
+
+// studioLandingToCache stores an assembled public studio landing under the short
+// TTL. Best-effort: a marshal or backend error is swallowed (the response was
+// already served from the DB assembly).
+func (h *PublicGalleryHandler) studioLandingToCache(ctx context.Context, code string, resp publicStudioLandingResponse) {
+	if h.studioLandingCache == nil {
+		return
+	}
+	raw, err := json.Marshal(resp)
+	if err != nil {
+		return
+	}
+	opCtx, cancel := context.WithTimeout(ctx, publicStudioLandingCacheOpTimeout)
+	defer cancel()
+	h.studioLandingCache.Set(opCtx, publicStudioLandingCacheKey(code), raw, publicStudioLandingCacheTTL)
 }
 
 func (h *PublicGalleryHandler) listPublishedStudioGalleries(ctx context.Context, workspaceID uuid.UUID, subdomain string) ([]publicStudioGalleryResponse, error) {
