@@ -2502,16 +2502,23 @@ export default function GalleryDetailPage({
           >
             Preview
           </Link>
-          {/* GAL-FR-118: view-as-client — public/client route is available only after publishing. */}
-          {gallery.is_published && gallery.slug && (
-            <a
-              href={`/g/${gallery.slug}?mode=client`}
+          {/* GAL-FR-118 / GAL-CORE-009 / PHO-GAL-009: view-as-client renders the
+              exact client experience for the OWNER. It opens the authenticated,
+              owner-scoped /galleries/[id]/preview route (in a new tab) — NOT the
+              anonymous public /g/[slug] route, which has no gallery session and so
+              returns the locked "private gallery" shell for a private gallery (the
+              access_mode default — migration 041). Real clients still reach the
+              live gallery via their ?share=<token> link, which mints a session.
+              Mirrors the cover page + share center (route-contracts.test.ts). */}
+          {gallery.is_published && (
+            <Link
+              href={`/galleries/${gallery.id}/preview`}
               target="_blank"
               rel="noopener noreferrer"
               className="btn-tertiary px-4 py-2.5 text-sm"
             >
               View as client
-            </a>
+            </Link>
           )}
           <span className="status-badge status-badge--accent">
             Created {new Date(gallery.created_at).toLocaleDateString("en-IN")}

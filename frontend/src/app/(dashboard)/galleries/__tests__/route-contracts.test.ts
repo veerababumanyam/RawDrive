@@ -137,10 +137,23 @@ describe("gallery route contracts", () => {
       "utf8",
     );
 
+    const detailSource = fs.readFileSync(
+      path.join(dashboardRoot, "galleries/[id]/page.tsx"),
+      "utf8",
+    );
+
     expect(coverSource).toContain("href={`/galleries/${galleryId}/preview`}");
     expect(shareSource).toContain("href={`/galleries/${gallery.id}/preview`}");
     expect(coverSource).not.toContain("href={`/g/${gallery.slug}`}");
     expect(shareSource).not.toContain(
+      "href={`/g/${gallery.slug}?mode=client`}",
+    );
+    // The gallery-detail "View as client" action is an owner-preview surface too:
+    // it must route to the authenticated preview route, never the anonymous public
+    // /g/[slug] URL (which renders the locked shell for a private gallery — the
+    // access_mode default). See gallery-detail-perf-a11y.test.ts for placement.
+    expect(detailSource).toContain("href={`/galleries/${gallery.id}/preview`}");
+    expect(detailSource).not.toContain(
       "href={`/g/${gallery.slug}?mode=client`}",
     );
   });

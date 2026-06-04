@@ -326,19 +326,30 @@ describe("gallery detail page — perf & a11y contracts", () => {
     );
   });
 
-  it("shows the public View-as-client link only after the gallery is published", () => {
+  it("routes the published View-as-client action to the owner-scoped preview route, never the anonymous public URL", () => {
+    // GAL-CORE-009 / PHO-GAL-009: "View as client" must render the exact client
+    // experience for the OWNER. The public /g/[slug] route is anonymous, so for a
+    // private gallery (the access_mode default — migration 041) it returns the
+    // locked "This gallery is private" shell. Owner preview therefore goes through
+    // the authenticated /galleries/[id]/preview route, matching the cover page and
+    // share center (see route-contracts.test.ts). It stays publish-gated.
     const source = readDetailPage();
     const viewAsClientIndex = source.indexOf("View as client");
     const viewAsClientBlock = source.slice(
-      Math.max(0, viewAsClientIndex - 300),
+      Math.max(0, viewAsClientIndex - 400),
       viewAsClientIndex + 120,
     );
 
     expect(viewAsClientIndex).toBeGreaterThan(-1);
-    expect(viewAsClientBlock).toContain(
-      "{gallery.is_published && gallery.slug && (",
-    );
     expect(source).toContain("View as client");
+    // Still only shown after publishing.
+    expect(viewAsClientBlock).toContain("{gallery.is_published && (");
+    // Owner-scoped preview route, not the anonymous public gallery URL.
+    expect(viewAsClientBlock).toContain(
+      "href={`/galleries/${gallery.id}/preview`}",
+    );
+    expect(viewAsClientBlock).not.toContain("mode=client");
+    // Never regress to the un-publish-gated form.
     expect(viewAsClientBlock).not.toContain("{gallery.slug && (");
   });
 
