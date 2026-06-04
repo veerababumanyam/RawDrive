@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import {
   Cloud,
   FileText,
   Lock,
-  MoreVertical,
   Plus,
   Sparkles,
   UserPlus,
   Wallet,
+  XMark,
 } from "@/components/icons";
+import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { getStoredAccessToken } from "@/lib/auth";
 import { authFetch } from "@/lib/api/authFetch";
 import { listGalleries, type Gallery } from "@/lib/api/galleries";
@@ -25,6 +26,7 @@ import { MEDIA_KEY_UNAVAILABLE_MESSAGE } from "@/lib/media-encryption/media-key-
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { readGalleryCoverAssetId } from "@/lib/gallery-design-config";
 import { cn } from "@/lib/utils";
+import { RecentGalleryMenu } from "./recent-gallery-menu";
 
 type GalleryCard = {
   id: string;
@@ -144,13 +146,57 @@ function DashboardGalleryCover({
   return null;
 }
 
+// ── Welcome-banner dismissal (BUG-3, UAT 2026-06-04) ─────────────────────────
+// Persist the dismissal in localStorage, scoped per browser. We expose it via
+// useSyncExternalStore so the read is React-Compiler-safe (no impure read during
+// render) and SSR-safe: the server snapshot is always `false`, so the server and
+// first client render agree (banner visible), then the client syncs to the
+// stored value. This mirrors the repo's blessed client-state pattern (see
+// gallery-expiry-banner.tsx).
+const WELCOME_DISMISS_KEY = "rawdrive:dashboard:welcome-dismissed";
+const welcomeDismissListeners = new Set<() => void>();
+
+function subscribeWelcomeDismissed(callback: () => void) {
+  if (typeof window === "undefined") return () => {};
+  welcomeDismissListeners.add(callback);
+  window.addEventListener("storage", callback);
+  return () => {
+    welcomeDismissListeners.delete(callback);
+    window.removeEventListener("storage", callback);
+  };
+}
+
+function getWelcomeDismissedSnapshot() {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(WELCOME_DISMISS_KEY) === "1";
+}
+
+function dismissWelcomeBanner() {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(WELCOME_DISMISS_KEY, "1");
+  // The native "storage" event only fires in OTHER tabs, so notify this tab's
+  // own subscribers explicitly.
+  welcomeDismissListeners.forEach((listener) => listener());
+}
+
 export default function DashboardPage() {
+  const welcomeDismissed = useSyncExternalStore(
+    subscribeWelcomeDismissed,
+    getWelcomeDismissedSnapshot,
+    () => false,
+  );
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [token] = useState(() => getStoredAccessToken());
   const [coverAssets, setCoverAssets] = useState<Record<string, Asset>>({});
+
+  // BUG-2: drop a gallery from the Recent list after the overflow menu deletes
+  // it, so the card disappears without a full refetch.
+  const handleGalleryDeleted = (id: string) => {
+    setGalleries((prev) => prev.filter((g) => g.id !== id));
+  };
 
   useEffect(() => {
     listGalleries(token)
@@ -285,8 +331,12 @@ export default function DashboardPage() {
         icon: Cloud,
       },
       {
+        // BUG-6: this card is not yet wired to a CRM contacts-count source
+        // (deferred). Show an honest zero baseline instead of an em-dash that
+        // reads as a loading/error state. Replace with a live count when the
+        // contacts metric is wired.
         label: "Active Clients",
-        value: "—",
+        value: "0",
         meta: "CRM",
         toneClass: "text-accent-primary",
         href: "/crm/contacts",
@@ -301,8 +351,11 @@ export default function DashboardPage() {
         icon: Cloud,
       },
       {
+        // BUG-7: not yet wired to a billing/revenue source (deferred). Show an
+        // honest ₹0 baseline rather than an em-dash that reads as loading/error.
+        // Replace with the real month-to-date figure when billing is wired.
         label: "Revenue This Month",
-        value: "—",
+        value: "₹0",
         meta: "Billing",
         toneClass: "text-accent-tertiary",
         href: "/billing",
@@ -319,28 +372,33 @@ export default function DashboardPage() {
           {error}
         </div>
       )}
-      <section className="glass-card relative overflow-hidden p-8">
-        <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-accent-muted blur-[100px]" />
-        <div className="relative z-10 flex items-start justify-between gap-6">
-          <div>
-            <h1 className="font-headline text-3xl font-bold tracking-tight text-text-primary">
-              Welcome back, {greetingName(user)}!
-            </h1>
-            <p className="mt-2 max-w-2xl text-text-secondary">
-              {galleries.length === 0
-                ? "Create your first gallery to start delivering work to clients."
-                : `You have ${galleries.length} ${galleries.length === 1 ? "gallery" : "galleries"} in your studio. Let's make some magic.`}
-            </p>
+      {!welcomeDismissed && (
+        <section className="glass-card relative overflow-hidden p-8">
+          <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-accent-muted blur-[100px]" />
+          <div className="relative z-10 flex items-start justify-between gap-6">
+            <div>
+              <h1 className="font-headline text-3xl font-bold tracking-tight text-text-primary">
+                Welcome back, {greetingName(user)}!
+              </h1>
+              <p className="mt-2 max-w-2xl text-text-secondary">
+                {galleries.length === 0
+                  ? "Create your first gallery to start delivering work to clients."
+                  : `You have ${galleries.length} ${galleries.length === 1 ? "gallery" : "galleries"} in your studio. Let's make some magic.`}
+              </p>
+            </div>
+            {/* BUG-3: the ⋮ here did nothing. Make it an honest, persisted
+                dismiss using GlassIconButton + an X affordance. */}
+            <GlassIconButton
+              type="button"
+              variant="ghost"
+              label="Dismiss welcome banner"
+              onClick={dismissWelcomeBanner}
+            >
+              <XMark />
+            </GlassIconButton>
           </div>
-          <button
-            type="button"
-            className="rounded-full p-2 text-text-tertiary transition-colors hover:bg-surface-container-high hover:text-text-primary"
-            aria-label="Dismiss welcome banner"
-          >
-            <MoreVertical className="h-5 w-5" />
-          </button>
-        </div>
-      </section>
+        </section>
+      )}
 
       <section className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => {
@@ -433,47 +491,48 @@ export default function DashboardPage() {
                   card.gallery.cover_asset_id,
                 );
                 return (
-                  <Link
-                    key={card.id}
-                    href={
-                      card.id.startsWith("/")
-                        ? card.id
-                        : `/galleries/${card.id}`
-                    }
-                    className="surface-panel group overflow-hidden rounded-2xl transition-transform duration-300 hover:scale-[1.02]"
-                  >
-                    <div className="relative h-48 overflow-hidden bg-surface-container-high">
-                      <DashboardGalleryCover
-                        gallery={card.gallery}
-                        coverAsset={
-                          card.gallery.cover_asset ??
-                          (coverAssetId ? coverAssets[coverAssetId] : undefined)
-                        }
-                        token={token}
-                      />
-                      <div
-                        className="absolute inset-0"
-                        style={{
-                          background:
-                            "linear-gradient(to top, var(--surface-scrim), transparent)",
-                        }}
-                        aria-hidden="true"
-                      />
-                      <div className="absolute bottom-4 left-4">
-                        <span
-                          className={cn(
-                            "rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em]",
-                            card.chipClass,
-                          )}
-                        >
-                          {card.status}
-                        </span>
+                  <div key={card.id} className="relative">
+                    <Link
+                      href={
+                        card.id.startsWith("/")
+                          ? card.id
+                          : `/galleries/${card.id}`
+                      }
+                      className="surface-panel group block overflow-hidden rounded-2xl transition-transform duration-300 hover:scale-[1.02]"
+                    >
+                      <div className="relative h-48 overflow-hidden bg-surface-container-high">
+                        <DashboardGalleryCover
+                          gallery={card.gallery}
+                          coverAsset={
+                            card.gallery.cover_asset ??
+                            (coverAssetId
+                              ? coverAssets[coverAssetId]
+                              : undefined)
+                          }
+                          token={token}
+                        />
+                        <div
+                          className="absolute inset-0"
+                          style={{
+                            background:
+                              "linear-gradient(to top, var(--surface-scrim), transparent)",
+                          }}
+                          aria-hidden="true"
+                        />
+                        <div className="absolute bottom-4 left-4">
+                          <span
+                            className={cn(
+                              "rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em]",
+                              card.chipClass,
+                            )}
+                          >
+                            {card.status}
+                          </span>
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="p-5">
-                      <div className="mb-3 flex items-start justify-between gap-4">
-                        <div>
+                      <div className="p-5">
+                        <div className="mb-3 pr-12">
                           <h3 className="font-headline text-lg font-bold text-text-primary">
                             {card.title}
                           </h3>
@@ -481,19 +540,30 @@ export default function DashboardPage() {
                             {card.meta}
                           </p>
                         </div>
-                        <MoreVertical className="h-4 w-4 text-text-tertiary transition-colors group-hover:text-text-primary" />
-                      </div>
 
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-container-high text-[10px] font-bold text-text-primary">
-                          {initials(card.client)}
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-container-high text-[10px] font-bold text-text-primary">
+                            {initials(card.client)}
+                          </div>
+                          <span className="text-xs text-text-secondary">
+                            {card.client}
+                          </span>
                         </div>
-                        <span className="text-xs text-text-secondary">
-                          {card.client}
-                        </span>
                       </div>
-                    </div>
-                  </Link>
+                    </Link>
+
+                    {/* BUG-2: real overflow menu, rendered as a sibling of the
+                        card <Link> so we never nest <button>s inside an <a>. */}
+                    {!card.id.startsWith("/") && (
+                      <div className="absolute right-3 top-3 z-10">
+                        <RecentGalleryMenu
+                          gallery={card.gallery}
+                          token={token}
+                          onDeleted={handleGalleryDeleted}
+                        />
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
