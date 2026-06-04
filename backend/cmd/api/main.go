@@ -455,6 +455,34 @@ func thumbnailAssetID(key string) (uuid.UUID, bool) {
 	return id, true
 }
 
+// encryptedDisplayDerivativeRe matches the ONE derivative key shape that lives
+// under derivatives/ rather than thumbnails/: the client-side-E2EE full-size
+// display image. encryptedDerivativeStorageKey routes only the display_webp
+// variant there, as .enc ciphertext (every other E2EE variant stays under
+// thumbnails/<id>/<variant>.webp, already covered by thumbnailKeyAssetIDRe).
+//
+// Public/share viewers fetch it with a short-lived ?at= asset-access token in a
+// header-less <img> byte load, so — exactly like a thumbnail key — it must
+// resolve to its asset and reach authorizeThumbnailByte instead of the
+// workspace-JWT branch (which a logged-out viewer always fails → 401). The .enc
+// cache guard on the byte path keeps the ciphertext private (never public-cached).
+var encryptedDisplayDerivativeRe = regexp.MustCompile(`^derivatives/([0-9a-fA-F-]{36})/display_webp\.webp\.enc$`)
+
+// encryptedDisplayDerivativeAssetID returns the asset UUID the encrypted
+// full-size display derivative belongs to, or uuid.Nil + false when the key is
+// not that shape.
+func encryptedDisplayDerivativeAssetID(key string) (uuid.UUID, bool) {
+	m := encryptedDisplayDerivativeRe.FindStringSubmatch(key)
+	if len(m) != 2 {
+		return uuid.Nil, false
+	}
+	id, err := uuid.Parse(m[1])
+	if err != nil {
+		return uuid.Nil, false
+	}
+	return id, true
+}
+
 // thumbnailGalleryProtection is the per-gallery protection snapshot the byte
 // path needs to decide whether a thumbnail may be served. One row per gallery
 // that contains the asset.
@@ -3119,6 +3147,18 @@ func main() {
 		if assetID, isThumb := thumbnailAssetID(key); isThumb {
 			isPublicThumbnail = authorizeThumbnailByte(r.Context(), dbPool, galleryAccessSvc, r, assetID)
 		}
+		// The E2EE full-size display image is the one derivative served under
+		// derivatives/<id>/display_webp.webp.enc rather than thumbnails/. Public/
+		// share viewers fetch it with a ?at= asset token (header-less <img>), so
+		// it takes the SAME gallery-membership authorization as thumbnail keys —
+		// without this, the byte path fell to the workspace-JWT branch and 401'd
+		// for every logged-out viewer. The .enc cache guard below keeps the
+		// authorized ciphertext private (never public-cached).
+		if !isPublicThumbnail {
+			if assetID, ok := encryptedDisplayDerivativeAssetID(key); ok {
+				isPublicThumbnail = authorizeThumbnailByte(r.Context(), dbPool, galleryAccessSvc, r, assetID)
+			}
+		}
 
 		if !isPublicThumbnail {
 			// Verify JWT — accept Bearer header or the HttpOnly
@@ -3185,7 +3225,12 @@ func main() {
 		// Everything else — workspace-authed originals/derivatives, session- or
 		// asset-token-gated bytes, and encrypted (.enc) E2EE content — MUST stay
 		// private so encrypted/authed bytes never become public-cacheable.
-		if isPublicThumbnail {
+		//
+		// E2EE invariant: encrypted display derivatives now flow through the
+		// gallery-authorized branch (isPublicThumbnail) too, so the public,
+		// immutable directive is additionally gated to EXCLUDE .enc ciphertext —
+		// authorized for the ?at=/session holder, but never shared/CDN-cacheable.
+		if isPublicThumbnail && !strings.HasSuffix(key, ".enc") {
 			w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
 		} else {
 			w.Header().Set("Cache-Control", "private, max-age=3600")
