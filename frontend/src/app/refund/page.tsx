@@ -3,6 +3,13 @@ import { createPageMetadata } from "@/lib/seo";
 
 export const metadata: Metadata = createPageMetadata("refund");
 
+// Single source for the policy date so the header line and the in-body
+// "Last updated" reference never drift apart. Bump these when the policy text
+// actually changes — do not derive from the render time, which would falsely
+// imply the policy was revised on every page view.
+const LAST_UPDATED = "April 2026";
+const EFFECTIVE_DATE = "April 2026";
+
 const sections = [
   {
     title: "1. Overview",
@@ -42,7 +49,7 @@ const sections = [
   {
     title: "8. Contact Information",
     content:
-      "For refund inquiries, contact our support team at support@rawdrive.in. For escalations, contact our Customer Success team at contactus@rawdrive.in. Last updated: April 2026.",
+      `For refund inquiries, contact our support team at support@rawdrive.in. For escalations, contact our Customer Success team at contactus@rawdrive.in. Last updated: ${LAST_UPDATED}.`,
   },
 ];
 
@@ -52,7 +59,7 @@ export default function RefundPage() {
       <div className="mx-auto max-w-3xl">
         <h1 className="text-3xl font-bold text-text-primary">Refund Policy</h1>
         <p className="mt-2 text-sm text-text-tertiary">
-          Last updated: April 2026 | Effective: April 2026
+          Last updated: {LAST_UPDATED} | Effective: {EFFECTIVE_DATE}
         </p>
         <div className="mt-10 space-y-8">
           {sections.map((section) => (

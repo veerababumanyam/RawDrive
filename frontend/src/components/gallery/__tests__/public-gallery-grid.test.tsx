@@ -6,7 +6,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { PublicGalleryGrid } from "../public-gallery-grid";
+import { PublicGalleryGrid, getPrefetchRootMargin } from "../public-gallery-grid";
 import type { PublicAsset } from "@/lib/api/galleries";
 
 // Module-level mock of the favorites API. Each test can vi.mocked() the
@@ -605,5 +605,48 @@ describe("PublicGalleryGrid", () => {
         }),
       ).toBeInTheDocument();
     });
+  });
+});
+
+describe("getPrefetchRootMargin", () => {
+  const original = Object.getOwnPropertyDescriptor(navigator, "connection");
+
+  function setConnection(
+    value: { effectiveType?: string; saveData?: boolean } | undefined,
+  ) {
+    Object.defineProperty(navigator, "connection", {
+      value,
+      configurable: true,
+    });
+  }
+
+  afterEach(() => {
+    if (original) {
+      Object.defineProperty(navigator, "connection", original);
+    } else {
+      // jsdom exposes no navigator.connection by default — clear the stub.
+      setConnection(undefined);
+    }
+  });
+
+  it("keeps the aggressive 800px lookahead on fast / unknown connections", () => {
+    setConnection(undefined);
+    expect(getPrefetchRootMargin()).toBe("800px 0px");
+    setConnection({ effectiveType: "4g" });
+    expect(getPrefetchRootMargin()).toBe("800px 0px");
+  });
+
+  it("shrinks the lookahead on slow mobile connections", () => {
+    setConnection({ effectiveType: "3g" });
+    expect(getPrefetchRootMargin()).toBe("400px 0px");
+    setConnection({ effectiveType: "2g" });
+    expect(getPrefetchRootMargin()).toBe("200px 0px");
+    setConnection({ effectiveType: "slow-2g" });
+    expect(getPrefetchRootMargin()).toBe("200px 0px");
+  });
+
+  it("respects the Save-Data preference regardless of effectiveType", () => {
+    setConnection({ effectiveType: "4g", saveData: true });
+    expect(getPrefetchRootMargin()).toBe("200px 0px");
   });
 });

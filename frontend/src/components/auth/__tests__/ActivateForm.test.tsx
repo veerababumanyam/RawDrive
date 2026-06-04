@@ -62,7 +62,11 @@ describe("ActivateForm", () => {
         body: JSON.stringify({ email: "photo@rawdrive.test" }),
       }),
     );
-    expect(getByRole("status").textContent).toContain("Use the newest code");
+    const resendStatus = getByRole("status").textContent ?? "";
+    expect(resendStatus).toContain("Please enter the most recent one");
+    // Enumeration-safe posture: the resend confirmation must stay conditional
+    // and must not assert that the account exists or is unverified.
+    expect(resendStatus).toMatch(/^If your account/);
     expect(getByLabelText(/activation code/i)).toHaveValue("");
     expect(
       getByRole("button", { name: /send new code in 30s/i }),

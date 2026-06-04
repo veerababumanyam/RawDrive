@@ -93,6 +93,15 @@ describe("Pricing Page", () => {
     expect(screen.getByText("Is my data stored in India?")).toBeInTheDocument();
   });
 
+  it("reveals FAQ answers without a fixed-height clip", () => {
+    // Regression guard for the max-h-40 cap that clipped longer answers. The
+    // accordion now uses a content-height-driven grid-rows reveal, so no
+    // fixed max-h-* utility should remain on the answer container.
+    const { container } = render(<PricingContent />);
+    expect(container.querySelector(".max-h-40")).toBeNull();
+    expect(container.querySelector(".max-h-0")).toBeNull();
+  });
+
   it("renders coupon code input", () => {
     render(<PricingContent />);
     expect(

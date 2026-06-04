@@ -96,7 +96,7 @@ export function ActivateForm() {
       setResendCooldown(RESEND_COOLDOWN_SECONDS);
       setNotice(
         payload.message ||
-          "If this account is still unverified, we sent a fresh code. Use the newest code.",
+          "If your account still needs verification, we've sent a new code. Please enter the most recent one.",
       );
     } catch {
       setError("Network error. Please confirm the API server is running.");

@@ -25,6 +25,7 @@ export default function RentalsMarketplacePage() {
         "Insurance ready",
       ]}
       answer="RawDrive camera rentals are best for studios that need production-ready cameras, lenses, lights, audio, and support kits from verified regional partners."
+      cardsNote="Example kits; availability varies by city."
       cards={[
         {
           name: "Cinema Prime Kit",

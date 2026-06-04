@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Check, ChevronDown, HardDrive, Video, Tag } from "lucide-react";
-import { pricingPlans, storageBoosters, streamingPacks } from "@/lib/tokens";
-import { useStreamingPackages, formatINR } from "@/lib/streaming-packages";
+import { Check, ChevronDown, Tag } from "lucide-react";
+import { pricingPlans } from "@/lib/tokens";
 
 const faqItems = [
   {
@@ -133,22 +132,6 @@ export function PricingContent() {
             </span>
           </div>
         </div>
-
-        {/* Pricing hero image — hidden */}
-        {false && (
-          <div className="relative">
-            <div className="absolute inset-x-8 top-10 h-48 rounded-full bg-accent-muted blur-[120px]" />
-            <div className="glass-card relative overflow-hidden p-3">
-              <div className="overflow-hidden rounded-[1.5rem] bg-surface-container-high">
-                <img
-                  src="/stitch/pricing.png"
-                  alt="RawDrive pricing plans preview for photography studios"
-                  className="h-auto w-full object-cover"
-                />
-              </div>
-            </div>
-          </div>
-        )}
       </section>
 
       <section className="px-4 pb-16 lg:px-8">
@@ -216,173 +199,6 @@ export function PricingContent() {
         </div>
       </section>
 
-      {/* Feature Comparison Table — hidden */}
-      {false && (
-        <section className="bg-surface-sunken px-4 py-16 lg:px-8">
-          <div className="mx-auto max-w-7xl">
-            <h2 className="mb-8 text-center text-2xl font-bold text-text-primary">
-              Feature Comparison
-            </h2>
-            <div className="overflow-x-auto rounded-xl border border-border bg-surface-elevated shadow-glass">
-              <table className="w-full table-auto text-left text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="sticky left-0 bg-surface-elevated px-4 py-3 text-text-primary font-semibold">
-                      Feature
-                    </th>
-                    {pricingPlans.map((p) => (
-                      <th
-                        key={p.id}
-                        className="px-4 py-3 text-center text-text-primary font-semibold"
-                      >
-                        {p.name}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    {
-                      label: "Storage",
-                      values: ["1GB", "50GB", "250GB", "2TB", "Unlimited"],
-                    },
-                    {
-                      label: "Galleries",
-                      values: ["3", "10", "50", "200", "Unlimited"],
-                    },
-                    {
-                      label: "Client Profiles",
-                      values: ["5", "20", "100", "500", "Unlimited"],
-                    },
-                    {
-                      label: "AI Culling",
-                      values: [false, false, true, true, true],
-                    },
-                    {
-                      label: "Client Proofing",
-                      values: [false, true, true, true, true],
-                    },
-                    {
-                      label: "CRM & Bookings",
-                      values: [false, "Basic", "Full", "Full", "Full"],
-                    },
-                    {
-                      label: "Live Streaming",
-                      values: [false, false, "5/mo", "20/mo", "Unlimited"],
-                    },
-                    {
-                      label: "Marketplace",
-                      values: [false, false, true, "Premium", "Premium"],
-                    },
-                    {
-                      label: "API Access",
-                      values: [false, false, false, true, true],
-                    },
-                    {
-                      label: "White Label",
-                      values: [false, false, false, false, true],
-                    },
-                  ].map((row) => (
-                    <tr
-                      key={row.label}
-                      className="border-b border-border-subtle"
-                    >
-                      <td className="sticky left-0 bg-surface-elevated px-4 py-3 font-medium text-text-primary">
-                        {row.label}
-                      </td>
-                      {row.values.map((val, i) => (
-                        <td
-                          key={i}
-                          className="px-4 py-3 text-center text-text-secondary"
-                        >
-                          {val === true ? (
-                            <Check className="mx-auto h-4 w-4 text-accent" />
-                          ) : val === false ? (
-                            <span className="text-text-tertiary">—</span>
-                          ) : (
-                            val
-                          )}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Storage Boosters — hidden */}
-      {false && (
-        <section className="px-4 py-16 lg:px-8">
-          <div className="mx-auto max-w-5xl">
-            <h2 className="mb-8 text-center text-2xl font-bold text-text-primary">
-              <HardDrive
-                className="mr-2 inline-block h-6 w-6 text-accent"
-                aria-hidden="true"
-              />
-              Storage Boosters
-            </h2>
-            <div className="grid gap-6 sm:grid-cols-3">
-              {storageBoosters.map((b) => (
-                <div
-                  key={b.name}
-                  className="rounded-xl border border-border bg-surface-elevated p-6 text-center shadow-glass"
-                >
-                  <h3 className="text-lg font-semibold text-text-primary">
-                    {b.name}
-                  </h3>
-                  <p className="mt-2 text-2xl font-bold text-text-primary">
-                    Rs. {b.price.toLocaleString("en-IN")}
-                  </p>
-                  <p className="text-sm text-text-tertiary">
-                    {b.storage} extra storage
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Streaming Packs — hidden */}
-      {false && (
-        <section className="bg-surface-sunken px-4 py-16 lg:px-8">
-          <div className="mx-auto max-w-5xl">
-            <h2 className="mb-8 text-center text-2xl font-bold text-text-primary">
-              <Video
-                className="mr-2 inline-block h-6 w-6 text-accent"
-                aria-hidden="true"
-              />
-              Streaming Session Packs
-            </h2>
-            <LiveStreamingPackagesGrid />
-            {/* Build-time fallback list, hidden when the API populates above. */}
-            <noscript>
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {streamingPacks.map((p) => (
-                  <div
-                    key={p.name}
-                    className="rounded-xl border border-border bg-surface-elevated p-6 text-center shadow-glass"
-                  >
-                    <h3 className="text-lg font-semibold text-text-primary">
-                      {p.name}
-                    </h3>
-                    <p className="mt-2 text-2xl font-bold text-text-primary">
-                      Rs. {p.price.toLocaleString("en-IN")}
-                    </p>
-                    <p className="text-sm text-text-tertiary">
-                      {p.sessions} streaming minutes
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </noscript>
-          </div>
-        </section>
-      )}
-
       {/* Coupon Code */}
       <section className="px-4 py-16 lg:px-8">
         <div className="mx-auto max-w-md text-center">
@@ -446,70 +262,23 @@ export function PricingContent() {
                   />
                 </button>
                 <div
-                  className={`overflow-hidden transition-all ${
-                    openFaq === i ? "max-h-40 pb-4" : "max-h-0"
-                  }`}
-                  style={{ transitionDuration: "var(--duration-normal)" }}
+                  className="grid"
+                  style={{
+                    gridTemplateRows: openFaq === i ? "1fr" : "0fr",
+                    transition: "grid-template-rows var(--duration-normal)",
+                  }}
                 >
-                  <p className="px-4 text-sm text-text-secondary">{item.a}</p>
+                  <div className="min-h-0 overflow-hidden">
+                    <p className="px-4 pb-4 text-sm text-text-secondary">
+                      {item.a}
+                    </p>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         </div>
       </section>
-    </div>
-  );
-}
-
-// LiveStreamingPackagesGrid renders the live, API-sourced streaming
-// packages catalogue. Falls back to the build-time tokens.ts list inside
-// <noscript> for non-JS clients (handled in the parent).
-function LiveStreamingPackagesGrid() {
-  const { packages, loading, error } = useStreamingPackages();
-
-  if (loading) {
-    return (
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {[0, 1, 2].map((i) => (
-          <div
-            key={i}
-            className="h-32 animate-pulse rounded-xl border border-border bg-surface-elevated/40"
-            aria-hidden="true"
-          />
-        ))}
-      </div>
-    );
-  }
-
-  if (error || packages.length === 0) {
-    return (
-      <p className="text-center text-sm text-text-tertiary">
-        Live pricing temporarily unavailable. Please refresh.
-      </p>
-    );
-  }
-
-  return (
-    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-      {packages.map((p) => (
-        <div
-          key={p.id}
-          className="rounded-xl border border-border bg-surface-elevated p-6 text-center shadow-glass"
-        >
-          <h3 className="text-lg font-semibold text-text-primary">{p.name}</h3>
-          <p className="mt-2 text-2xl font-bold text-text-primary">
-            Rs. {formatINR(p.price_paise)}
-          </p>
-          <p className="text-sm text-text-tertiary">
-            {p.minutes} streaming minutes
-          </p>
-          <p className="mt-1 text-xs text-text-tertiary">
-            up to {p.max_concurrent_viewers} viewers · {p.replay_ttl_days}d
-            replay
-          </p>
-        </div>
-      ))}
     </div>
   );
 }

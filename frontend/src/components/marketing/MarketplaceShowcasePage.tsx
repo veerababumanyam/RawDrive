@@ -31,6 +31,8 @@ type MarketplaceShowcasePageProps = {
   filters: string[];
   answer: string;
   cards: MarketplaceCard[];
+  /** Optional caption shown above the cards, e.g. to flag sample/example data. */
+  cardsNote?: string;
   /** Route path of this page, e.g. "/marketplaces/freelancer" — used for BreadcrumbList JSON-LD. */
   path: string;
   /** Short label for this page in the breadcrumb trail (defaults to the eyebrow). */
@@ -48,6 +50,7 @@ export async function MarketplaceShowcasePage({
   filters,
   answer,
   cards,
+  cardsNote,
   path,
   breadcrumbName,
 }: MarketplaceShowcasePageProps) {
@@ -132,6 +135,9 @@ export async function MarketplaceShowcasePage({
       </section>
 
       <section className="mx-auto max-w-7xl px-4 pb-20 lg:px-8">
+        {cardsNote ? (
+          <p className="mb-6 text-sm text-text-tertiary">{cardsNote}</p>
+        ) : null}
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           {cards.map((card) => (
             <article key={card.name} className="surface-panel overflow-hidden">

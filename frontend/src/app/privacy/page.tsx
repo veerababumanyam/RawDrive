@@ -3,6 +3,13 @@ import { createPageMetadata } from "@/lib/seo";
 
 export const metadata: Metadata = createPageMetadata("privacy");
 
+// Single source for the policy date so the header line and the in-body
+// "Last updated" reference never drift apart. Bump these when the policy text
+// actually changes — do not derive from the render time, which would falsely
+// imply the policy was revised on every page view.
+const LAST_UPDATED = "April 2026";
+const EFFECTIVE_DATE = "April 2026";
+
 const sections = [
   {
     title: "1. Introduction",
@@ -62,7 +69,7 @@ const sections = [
   {
     title: "12. Changes to This Policy",
     content:
-      "We may update this Privacy Policy from time to time. We will notify you of material changes via email or through a prominent notice on our platform. Continued use of our services after changes constitutes acceptance of the updated policy. Last updated: April 2026.",
+      `We may update this Privacy Policy from time to time. We will notify you of material changes via email or through a prominent notice on our platform. Continued use of our services after changes constitutes acceptance of the updated policy. Last updated: ${LAST_UPDATED}.`,
   },
 ];
 
@@ -72,7 +79,7 @@ export default function PrivacyPage() {
       <div className="mx-auto max-w-3xl">
         <h1 className="text-3xl font-bold text-text-primary">Privacy Policy</h1>
         <p className="mt-2 text-sm text-text-tertiary">
-          Last updated: April 2026 | Effective: April 2026
+          Last updated: {LAST_UPDATED} | Effective: {EFFECTIVE_DATE}
         </p>
         <div className="mt-10 space-y-8">
           {sections.map((section) => (

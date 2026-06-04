@@ -126,6 +126,34 @@ const INITIAL_GRID_RENDER_COUNT = 60;
 const GRID_RENDER_BATCH = 60;
 const FULLSCREEN_CHROME_IDLE_MS = 2200;
 
+/**
+ * getPrefetchRootMargin returns how far ahead of the viewport the
+ * IntersectionObserver sentinel pre-mounts the next batch of grid tiles. The
+ * 800px desktop default is deliberately aggressive for smooth scrolling, but on
+ * slow or data-saver mobile connections that eagerly mounts (and lazy-loads)
+ * tiles the guest may never reach. Shrink the lookahead when the Network
+ * Information API reports a constrained connection; fall back to the
+ * fast-network default when the API is unavailable (Safari/Firefox).
+ */
+export function getPrefetchRootMargin(): string {
+  if (typeof navigator !== "undefined") {
+    const connection = (
+      navigator as Navigator & {
+        connection?: { effectiveType?: string; saveData?: boolean };
+      }
+    ).connection;
+    if (connection?.saveData) return "200px 0px";
+    switch (connection?.effectiveType) {
+      case "slow-2g":
+      case "2g":
+        return "200px 0px";
+      case "3g":
+        return "400px 0px";
+    }
+  }
+  return "800px 0px";
+}
+
 type PublicDownloadFormat = "webp" | "thumbnail" | "original";
 
 function downloadFormatsForQuality(
@@ -1182,7 +1210,7 @@ export function PublicGalleryGrid({
           );
         }
       },
-      { rootMargin: "800px 0px" },
+      { rootMargin: getPrefetchRootMargin() },
     );
     observer.observe(node);
     return () => observer.disconnect();
