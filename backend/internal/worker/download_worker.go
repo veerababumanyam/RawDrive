@@ -30,13 +30,36 @@ package worker
 import (
 	"context"
 	"log"
+	"runtime"
+	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/rawdrive/backend/internal/repository"
 )
+
+// downloadConcurrency bounds how many claimed ZIP jobs a single node builds in
+// parallel (PERF-WRK). ZIP builds are I/O- and CPU-bound (B2 gets + compression)
+// and independent per job, so a claimed batch is processed in parallel rather
+// than one-at-a-time, which collapses the per-tick drain on a burst of bulk
+// downloads. Capped at the node's CPU count, clamped to [2,4] — lower than the
+// thumbnail cap because each ZIP build streams many assets and holds more
+// memory/file handles. ClaimPendingJobs already guarantees no job is claimed by
+// two workers, so this only parallelizes WITHIN one node's claimed batch.
+func downloadConcurrency() int {
+	n := runtime.NumCPU()
+	if n < 2 {
+		return 2
+	}
+	if n > 4 {
+		return 4
+	}
+	return n
+}
 
 // DownloadJobProcessor is the narrow interface the worker needs from
 // the service layer to actually build a ZIP for a job. The production
@@ -45,15 +68,33 @@ type DownloadJobProcessor interface {
 	ProcessJob(ctx context.Context, job *repository.DownloadJob, onProgress func(int)) (downloadURL string, fileSizeBytes int64, err error)
 }
 
+// downloadJobRepo is the narrow persistence surface the worker uses. Declaring
+// it as an interface (satisfied by the production *repository.DownloadRepo)
+// lets the pure-logic concurrency test drive processClaimed with an in-memory
+// fake instead of a live Postgres — the atomic-claim correctness path
+// (ClaimPendingJobs / FOR UPDATE SKIP LOCKED) is still covered by the
+// DB-backed download_claim_test.go.
+type downloadJobRepo interface {
+	ClaimPendingJobs(ctx context.Context, limit int, leaseSeconds float64) ([]repository.DownloadJob, error)
+	UpdateJobStatus(ctx context.Context, id uuid.UUID, status string, progress int, downloadURL string, fileSizeBytes int64) error
+	MarkJobFailed(ctx context.Context, id uuid.UUID, errMsg string) error
+}
+
 // DownloadWorker processes pending download_jobs rows.
 type DownloadWorker struct {
 	pool         *pgxpool.Pool
-	repo         *repository.DownloadRepo
+	repo         downloadJobRepo
 	processor    DownloadJobProcessor
 	pollInterval time.Duration
 	maxRetries   int
-	attempts     map[uuid.UUID]int // in-memory retry counter
-	stopCh       chan struct{}
+	// attemptsMu guards attempts: a claimed batch is now processed with
+	// bounded intra-batch concurrency (PERF-WRK), so multiple processOne
+	// goroutines may touch this map at once. Each goroutine only ever reads/
+	// writes its own job's key, but the Go map itself is not concurrency-safe,
+	// so the lock is required for correctness under -race.
+	attemptsMu sync.Mutex
+	attempts   map[uuid.UUID]int // in-memory retry counter
+	stopCh     chan struct{}
 }
 
 // NewDownloadWorker constructs a worker with sensible defaults.
@@ -118,18 +159,41 @@ func (w *DownloadWorker) Stop() {
 // worker) is re-claimed.
 const downloadClaimLease = 30 * time.Minute
 
-// drain atomically claims a batch of pending jobs and processes them one by one.
-// Errors are logged but do not stop the worker — the next tick will retry any
-// job that's still pending (a transient failure resets the row to 'pending').
+// drain atomically claims a batch of pending jobs and processes them with
+// bounded intra-batch concurrency. Errors are logged but do not stop the worker
+// — the next tick will retry any job that's still pending (a transient failure
+// resets the row to 'pending').
 func (w *DownloadWorker) drain(ctx context.Context) {
 	jobs, err := w.repo.ClaimPendingJobs(ctx, 5, downloadClaimLease.Seconds())
 	if err != nil {
 		log.Printf("download worker: claim pending: %v", err)
 		return
 	}
-	for i := range jobs {
-		w.processOne(ctx, &jobs[i])
+	w.processClaimed(ctx, jobs)
+}
+
+// processClaimed builds an already-claimed batch of ZIP jobs in parallel up to
+// downloadConcurrency() workers (PERF-WRK). Each claimed job is independent, so
+// processing them concurrently collapses the per-tick drain time on a burst of
+// bulk downloads instead of building one ZIP at a time. Correctness is
+// unchanged: ClaimPendingJobs already atomically claimed these rows, so no job
+// is built by two workers; here we only spread one node's claimed batch across
+// its cores. The Wait() barrier guarantees no goroutine outlives the tick.
+func (w *DownloadWorker) processClaimed(ctx context.Context, jobs []repository.DownloadJob) {
+	if len(jobs) == 0 {
+		return
 	}
+
+	var g errgroup.Group
+	g.SetLimit(downloadConcurrency())
+	for i := range jobs {
+		job := jobs[i] // capture per-iteration copy for the goroutine
+		g.Go(func() error {
+			w.processOne(ctx, &job)
+			return nil // per-job failures are recorded, never abort the batch
+		})
+	}
+	_ = g.Wait()
 }
 
 // processOne runs a single job through the processor and updates the
@@ -149,11 +213,11 @@ func (w *DownloadWorker) processOne(ctx context.Context, job *repository.Downloa
 
 	url, size, err := w.processor.ProcessJob(ctx, job, onProgress)
 	if err != nil {
-		w.attempts[job.ID]++
-		log.Printf("download worker: process %s attempt %d: %v", job.ID, w.attempts[job.ID], err)
-		if w.attempts[job.ID] >= w.maxRetries {
+		attempt := w.bumpAttempt(job.ID)
+		log.Printf("download worker: process %s attempt %d: %v", job.ID, attempt, err)
+		if attempt >= w.maxRetries {
 			_ = w.repo.MarkJobFailed(ctx, job.ID, err.Error())
-			delete(w.attempts, job.ID)
+			w.clearAttempt(job.ID)
 			return
 		}
 		// Put the job back into pending so the next tick retries it.
@@ -162,8 +226,27 @@ func (w *DownloadWorker) processOne(ctx context.Context, job *repository.Downloa
 	}
 
 	// Success — clear attempts + mark complete.
-	delete(w.attempts, job.ID)
+	w.clearAttempt(job.ID)
 	if err := w.repo.UpdateJobStatus(ctx, job.ID, "completed", 100, url, size); err != nil {
 		log.Printf("download worker: mark complete %s: %v", job.ID, err)
 	}
+}
+
+// bumpAttempt increments and returns the retry counter for a job under the
+// attempts lock, so concurrent processClaimed goroutines can't corrupt the map.
+func (w *DownloadWorker) bumpAttempt(id uuid.UUID) int {
+	w.attemptsMu.Lock()
+	defer w.attemptsMu.Unlock()
+	if w.attempts == nil {
+		w.attempts = make(map[uuid.UUID]int)
+	}
+	w.attempts[id]++
+	return w.attempts[id]
+}
+
+// clearAttempt removes a job's retry counter under the attempts lock.
+func (w *DownloadWorker) clearAttempt(id uuid.UUID) {
+	w.attemptsMu.Lock()
+	defer w.attemptsMu.Unlock()
+	delete(w.attempts, id)
 }

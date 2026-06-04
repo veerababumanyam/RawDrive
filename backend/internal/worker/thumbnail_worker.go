@@ -7,9 +7,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/google/uuid"
 
@@ -17,6 +20,27 @@ import (
 	"github.com/rawdrive/backend/internal/service"
 	"github.com/rawdrive/backend/internal/storage"
 )
+
+// derivativeConcurrency bounds how many assets in a single claimed batch are
+// encoded in parallel on ONE node. Derivative generation is CPU-bound (cwebp
+// encodes of every variant) with a B2 download in front, so the batch is
+// embarrassingly parallel — but unbounded parallelism would let one node spawn
+// a goroutine (and a full in-memory image buffer) per claimed asset and thrash
+// CPU/memory. We cap at the node's CPU count, clamped to [2,8], so a multi-core
+// node drains a 2000-photo burst far faster than the old serial loop without
+// oversubscribing. The atomic claim (ClaimRetryable / ListByStatus) already
+// guarantees no asset is claimed by two workers, so this only parallelizes
+// WITHIN an already-claimed batch — correctness across nodes is unchanged.
+func derivativeConcurrency() int {
+	n := runtime.NumCPU()
+	if n < 2 {
+		return 2
+	}
+	if n > 8 {
+		return 8
+	}
+	return n
+}
 
 // FaceEnqueuer is the narrow surface the ThumbnailWorker needs from the
 // FaceService to schedule per-asset detection after derivatives complete.
@@ -277,14 +301,42 @@ func (w *ThumbnailWorker) processNextBatch(ctx context.Context) {
 		return
 	}
 
-	for i := range assets {
-		asset := assets[i]
-		if err := w.processOne(ctx, &asset); err != nil {
-			log.Printf("thumbnail worker: process %s failed: %v", asset.ID, err)
-			w.recordFailure(ctx, &asset, err)
-			continue
-		}
+	w.processClaimed(ctx, assets)
+}
+
+// processClaimed encodes an already-claimed batch with bounded intra-batch
+// concurrency (PERF-WRK). Each claimed asset is independent and CPU-bound, so
+// the batch is processed in parallel up to derivativeConcurrency() workers
+// rather than one-at-a-time, which collapses the per-tick drain time on large
+// bursts (e.g. a 2000-photo wedding upload). Correctness is unchanged: the
+// caller already atomically claimed these rows, so no asset is processed by
+// two workers; here we only spread one node's claimed batch across its cores.
+//
+// errgroup.SetLimit bounds the live goroutine count, so memory (one full image
+// buffer per in-flight encode) stays bounded too. processOne / recordFailure
+// errors are handled per-asset exactly as before — a failed asset is recorded
+// and does not abort its siblings — so we never return an error from the group
+// and the whole batch always drains. The Wait() barrier guarantees no goroutine
+// outlives the tick (no leak): every spawned encode completes before the next
+// tick's claim.
+func (w *ThumbnailWorker) processClaimed(ctx context.Context, assets []repository.Asset) {
+	if len(assets) == 0 {
+		return
 	}
+
+	var g errgroup.Group
+	g.SetLimit(derivativeConcurrency())
+	for i := range assets {
+		asset := assets[i] // capture per-iteration copy for the goroutine
+		g.Go(func() error {
+			if err := w.processOne(ctx, &asset); err != nil {
+				log.Printf("thumbnail worker: process %s failed: %v", asset.ID, err)
+				w.recordFailure(ctx, &asset, err)
+			}
+			return nil // per-asset failures are recorded, never abort the batch
+		})
+	}
+	_ = g.Wait()
 }
 
 // recordFailure dispatches a processOne error to the right persistence path.
