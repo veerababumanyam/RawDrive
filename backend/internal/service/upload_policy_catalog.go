@@ -4,8 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"sync"
 	"time"
+
+	"github.com/rawdrive/backend/internal/cache"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -21,23 +22,18 @@ import (
 // UploadPolicyCatalog reads the upload_policy_versions table and caches
 // validity decisions. Thread-safe.
 type UploadPolicyCatalog struct {
-	db       *sql.DB
-	mu       sync.RWMutex
-	cache    map[string]policyCacheEntry
-	cacheTTL time.Duration
-}
-
-type policyCacheEntry struct {
-	valid     bool
-	expiresAt time.Time
+	db *sql.DB
+	// cache is the shared in-proc TTL cache (see internal/cache). It replaces a
+	// bespoke map[string]policyCacheEntry + RWMutex; semantics are identical —
+	// keyed by policy_version, 5-minute default TTL, read-through in IsValid.
+	cache *cache.Cache[bool]
 }
 
 // NewUploadPolicyCatalog constructs the catalog with a 5-minute cache TTL.
 func NewUploadPolicyCatalog(db *sql.DB) *UploadPolicyCatalog {
 	return &UploadPolicyCatalog{
-		db:       db,
-		cache:    make(map[string]policyCacheEntry),
-		cacheTTL: 5 * time.Minute,
+		db:    db,
+		cache: cache.New[bool]("upload.policy", 5*time.Minute),
 	}
 }
 
@@ -50,14 +46,9 @@ func (c *UploadPolicyCatalog) IsValid(ctx context.Context, policyVersion string)
 	}
 
 	// Cache fast path
-	c.mu.RLock()
-	if entry, ok := c.cache[policyVersion]; ok {
-		if time.Now().Before(entry.expiresAt) {
-			c.mu.RUnlock()
-			return entry.valid, nil
-		}
+	if valid, ok := c.cache.Get(policyVersion); ok {
+		return valid, nil
 	}
-	c.mu.RUnlock()
 
 	// Cache miss or expired — hit the DB
 	if c.db == nil {
@@ -88,21 +79,14 @@ func (c *UploadPolicyCatalog) IsValid(ctx context.Context, policyVersion string)
 }
 
 func (c *UploadPolicyCatalog) cacheResult(policyVersion string, valid bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.cache[policyVersion] = policyCacheEntry{
-		valid:     valid,
-		expiresAt: time.Now().Add(c.cacheTTL),
-	}
+	c.cache.Set(policyVersion, valid)
 }
 
 // Invalidate drops a cached entry. Called when an admin revokes or adds a
 // policy version so the change is visible immediately across the cluster
 // (combined with a future NATS revocation event).
 func (c *UploadPolicyCatalog) Invalidate(policyVersion string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	delete(c.cache, policyVersion)
+	c.cache.Delete(policyVersion)
 }
 
 // ListActive returns all policy versions that have not been revoked and

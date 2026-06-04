@@ -3,8 +3,9 @@ package rbac
 import (
 	"context"
 	"errors"
-	"sync"
 	"time"
+
+	"github.com/rawdrive/backend/internal/cache"
 )
 
 var (
@@ -112,61 +113,32 @@ type Engine interface {
 	AssignRole(ctx context.Context, assignerID, targetUserID, workspaceID string, role Role) error
 }
 
-type cacheEntry struct {
-	role      Role
-	expiresAt time.Time
-}
-
 type engine struct {
-	store    PermissionStore
-	audit    AuditLogger
-	cacheTTL time.Duration
-	mu       sync.RWMutex
-	cache    map[string]*cacheEntry // "userID:workspaceID" -> cacheEntry
+	store PermissionStore
+	audit AuditLogger
+	// cache is the shared in-proc TTL cache (see internal/cache). It replaces a
+	// bespoke map[string]*cacheEntry + RWMutex; semantics are identical — keyed
+	// by "userID:workspaceID", 5-minute default TTL, read-through in getRole.
+	cache *cache.Cache[Role]
 }
 
 func NewEngine(store PermissionStore, audit AuditLogger) Engine {
-	return &engine{
-		store:    store,
-		audit:    audit,
-		cacheTTL: 5 * time.Minute,
-		cache:    make(map[string]*cacheEntry),
-	}
+	return NewEngineWithCacheTTL(store, audit, 5*time.Minute)
 }
 
 func NewEngineWithCacheTTL(store PermissionStore, audit AuditLogger, ttl time.Duration) Engine {
 	return &engine{
-		store:    store,
-		audit:    audit,
-		cacheTTL: ttl,
-		cache:    make(map[string]*cacheEntry),
+		store: store,
+		audit: audit,
+		cache: cache.New[Role]("rbac.role", ttl),
 	}
 }
 
 func (e *engine) getRole(ctx context.Context, userID, workspaceID string) (Role, error) {
 	key := userID + ":" + workspaceID
-
-	e.mu.RLock()
-	if entry, ok := e.cache[key]; ok && time.Now().Before(entry.expiresAt) {
-		role := entry.role
-		e.mu.RUnlock()
-		return role, nil
-	}
-	e.mu.RUnlock()
-
-	role, err := e.store.GetRole(ctx, userID, workspaceID)
-	if err != nil {
-		return "", err
-	}
-
-	e.mu.Lock()
-	e.cache[key] = &cacheEntry{
-		role:      role,
-		expiresAt: time.Now().Add(e.cacheTTL),
-	}
-	e.mu.Unlock()
-
-	return role, nil
+	return e.cache.GetOrLoad(ctx, key, func(ctx context.Context) (Role, error) {
+		return e.store.GetRole(ctx, userID, workspaceID)
+	})
 }
 
 // invalidate drops the cached role for a single (userID, workspaceID) key so the
@@ -176,9 +148,7 @@ func (e *engine) getRole(ctx context.Context, userID, workspaceID string) (Role,
 // cacheTTL.
 func (e *engine) invalidate(userID, workspaceID string) {
 	key := userID + ":" + workspaceID
-	e.mu.Lock()
-	delete(e.cache, key)
-	e.mu.Unlock()
+	e.cache.Delete(key)
 }
 
 func (e *engine) Evaluate(ctx context.Context, userID, workspaceID, resource, action string) (bool, error) {
