@@ -229,8 +229,14 @@ describe("useDecryptedAssetUrl", () => {
 
   it("fetches clear WebP thumbnail keys with dashboard auth on encrypted assets", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(new Blob(["webp-bytes"], { type: "image/webp" }), {
+      // Realm-agnostic byte body — do NOT wrap a Blob here. undici's Response
+      // extracts a Blob body via Blob.prototype.stream(), which throws
+      // "object.stream is not a function" in CI's vitest+jsdom+undici realm
+      // (the Blob the test constructs has no undici-compatible stream()). The
+      // other mocks in this file pass a byte body for the same reason.
+      new Response(new TextEncoder().encode("webp-bytes"), {
         status: 200,
+        headers: { "content-type": "image/webp" },
       }),
     );
     vi.stubGlobal("fetch", fetchMock);
