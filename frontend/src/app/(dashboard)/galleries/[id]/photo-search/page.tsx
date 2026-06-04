@@ -35,6 +35,7 @@ import { Camera, RefreshCw, Search, ChevronLeft } from "lucide-react";
 import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
 import { searchFaceInGallery, type FaceSearchResponse } from "@/lib/api/ai";
 import { getAsset, type Asset } from "@/lib/api/assets";
+import { listGalleryAssets } from "@/lib/api/galleries";
 import { getStoredAccessToken } from "@/lib/auth";
 import { GRID_VARIANTS } from "@/lib/media-encryption/asset-media";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
@@ -343,15 +344,33 @@ export default function PhotoSearchPage({
         return;
       }
 
-      // Fetch preview metadata for each matched asset. Per-tile
-      // failure is tolerated so one missing/deleted asset doesn't
-      // blank the grid.
-      const settled = await Promise.allSettled(
-        result.asset_ids.map((aid) => getAsset(token, aid)),
-      );
-      const ok = settled
-        .filter((r): r is PromiseFulfilledResult<Asset> => r.status === "fulfilled")
-        .map((r) => r.value);
+      // PERF-23: resolve the matched assets from ONE bulk gallery-assets fetch
+      // (?include_assets=true) instead of one getAsset() per match. The cluster
+      // is gallery-scoped, so every matched asset_id belongs to this gallery and
+      // resolves from its embedded-asset list. Order follows asset_ids (match
+      // order); missing/soft-deleted assets are simply skipped, so one absent
+      // tile never blanks the grid. The per-asset fetch stays as the fallback
+      // for an older server that doesn't embed assets.
+      const galleryAssets = await listGalleryAssets(token, id, {
+        includeAssets: true,
+      });
+      let ok: Asset[];
+      if (galleryAssets.every((entry) => entry.asset !== undefined)) {
+        const byId = new Map<string, Asset>();
+        for (const entry of galleryAssets) {
+          if (entry.asset) byId.set(entry.asset_id, entry.asset);
+        }
+        ok = result.asset_ids
+          .map((aid) => byId.get(aid))
+          .filter((a): a is Asset => Boolean(a));
+      } else {
+        const settled = await Promise.allSettled(
+          result.asset_ids.map((aid) => getAsset(token, aid)),
+        );
+        ok = settled
+          .filter((r): r is PromiseFulfilledResult<Asset> => r.status === "fulfilled")
+          .map((r) => r.value);
+      }
       setMatchedAssets(ok);
       stopCamera();
       setStage("result-found");
