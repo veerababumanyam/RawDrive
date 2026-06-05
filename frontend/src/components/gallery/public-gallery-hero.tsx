@@ -392,6 +392,8 @@ function PlaySlideshowButton({
  */
 function CoverCtaGroup({
   slug,
+  ws,
+  shareToken,
   showViewGallery = true,
   showPhotoSearch,
   accent,
@@ -399,6 +401,8 @@ function CoverCtaGroup({
   slideshowControl,
 }: {
   slug: string;
+  ws?: string | null;
+  shareToken?: string | null;
   showViewGallery?: boolean;
   showPhotoSearch: boolean;
   accent?: string;
@@ -409,6 +413,17 @@ function CoverCtaGroup({
   // Studio accent (when the tier permits it) recolours the glass border to
   // keep brand continuity, exactly as the legacy View Gallery pill did.
   const accentStyle = accent ? { borderColor: accent } : undefined;
+  // Preserve the share-link access scope (#175) on the "Find me" navigation —
+  // the standalone photo-search page forwards it so the POST self-authorizes
+  // via tryBindShareSession even when the gallery_session cookie is absent
+  // (no-PIN share arrival). Without this the link strips ?share= and 403s.
+  const photoSearchHref = (() => {
+    const params = new URLSearchParams();
+    if (ws) params.set("ws", ws);
+    if (shareToken) params.set("share", shareToken);
+    const qs = params.toString();
+    return qs ? `/g/${slug}/photo-search?${qs}` : `/g/${slug}/photo-search`;
+  })();
   return (
     <div
       className={`flex flex-wrap items-center gap-3${className ? ` ${className}` : ""}`}
@@ -421,7 +436,7 @@ function CoverCtaGroup({
       )}
       {showPhotoSearch && (
         <a
-          href={`/g/${slug}/photo-search`}
+          href={photoSearchHref}
           aria-label="Find your photos with your camera"
           className={COVER_CTA_CLASS}
           style={accentStyle}
@@ -856,6 +871,8 @@ export function PublicGalleryHero({
             )}
             <CoverCtaGroup
               slug={photoSearchSlug}
+              ws={ws}
+              shareToken={shareToken}
               showPhotoSearch={findMeEnabled}
               accent={accent || undefined}
               className="absolute bottom-6 right-6 justify-end"
@@ -977,6 +994,8 @@ export function PublicGalleryHero({
             >
               <CoverCtaGroup
                 slug={photoSearchSlug}
+                ws={ws}
+                shareToken={shareToken}
                 showPhotoSearch={findMeEnabled}
                 accent={accent || undefined}
                 slideshowControl={
@@ -1041,6 +1060,8 @@ export function PublicGalleryHero({
             rather than a redundant scroll-to-grid button. */}
         <CoverCtaGroup
           slug={photoSearchSlug}
+          ws={ws}
+          shareToken={shareToken}
           showViewGallery={false}
           showPhotoSearch={findMeEnabled}
           accent={accentColor || undefined}
@@ -1093,6 +1114,8 @@ export function PublicGalleryHero({
         )}
         <CoverCtaGroup
           slug={photoSearchSlug}
+          ws={ws}
+          shareToken={shareToken}
           showPhotoSearch={findMeEnabled}
           accent={accentColor || undefined}
           className="mt-8 justify-center"

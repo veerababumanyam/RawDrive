@@ -9,9 +9,19 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ChevronLeft, UserRound } from "lucide-react";
-import { listPublicPeople, type PublicPersonSummary } from "@/lib/api/ai";
+import {
+  listPublicPeople,
+  withPublicScope,
+  type PublicPersonSummary,
+} from "@/lib/api/ai";
 import { DecryptedThumb } from "@/components/gallery/decrypted-thumb";
+
+// Per-visitor, share-scoped page — never statically prerendered (so the
+// useSearchParams() read of the #175 share scope needs no Suspense boundary),
+// matching the parent /g/[slug] route.
+export const dynamic = "force-dynamic";
 
 export default function PublicPeoplePage({
   params,
@@ -19,12 +29,17 @@ export default function PublicPeoplePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
+  // Share-link access scope (#175): forwarded to the gated People GET and
+  // preserved across navigation so a no-PIN share visitor isn't 403'd.
+  const searchParams = useSearchParams();
+  const shareToken = searchParams?.get("share") ?? null;
+  const ws = searchParams?.get("ws") ?? null;
   const [people, setPeople] = useState<PublicPersonSummary[] | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
-    listPublicPeople(slug)
+    listPublicPeople(slug, { shareToken, ws })
       .then((next) => {
         if (!cancelled) setPeople(next);
       })
@@ -37,12 +52,12 @@ export default function PublicPeoplePage({
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, shareToken, ws]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
       <Link
-        href={`/g/${slug}`}
+        href={withPublicScope(`/g/${slug}`, { shareToken, ws })}
         className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary"
       >
         <ChevronLeft className="h-4 w-4" />
@@ -65,7 +80,7 @@ export default function PublicPeoplePage({
             the "feature not enabled for this gallery" case gracefully
             if the studio has face recognition turned off. */}
         <Link
-          href={`/g/${slug}/photo-search`}
+          href={withPublicScope(`/g/${slug}/photo-search`, { shareToken, ws })}
           className="inline-flex items-center gap-2 rounded-full border border-border-default bg-surface-container px-4 py-2 text-sm text-text-primary hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
         >
           Find me with my camera
@@ -106,7 +121,13 @@ export default function PublicPeoplePage({
           aria-label="Identified people"
         >
           {people.map((p) => (
-            <PublicPersonTile key={p.id} slug={slug} person={p} />
+            <PublicPersonTile
+              key={p.id}
+              slug={slug}
+              person={p}
+              shareToken={shareToken}
+              ws={ws}
+            />
           ))}
         </div>
       )}
@@ -117,9 +138,13 @@ export default function PublicPeoplePage({
 function PublicPersonTile({
   slug,
   person,
+  shareToken,
+  ws,
 }: {
   slug: string;
   person: PublicPersonSummary;
+  shareToken?: string | null;
+  ws?: string | null;
 }) {
   // The cover renders through the client-side decryption path (DecryptedThumb)
   // so it shows a real thumbnail on E2EE galleries — the raw /storage bytes are
@@ -129,7 +154,10 @@ function PublicPersonTile({
 
   return (
     <Link
-      href={`/g/${slug}/people/${person.id}`}
+      href={withPublicScope(`/g/${slug}/people/${person.id}`, {
+        shareToken,
+        ws,
+      })}
       className="group block focus:outline-none"
       aria-label={`${displayName}, ${person.asset_count} ${person.asset_count === 1 ? "photo" : "photos"}`}
       role="listitem"

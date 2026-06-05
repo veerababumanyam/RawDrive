@@ -7,14 +7,20 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import {
   listPublicPeople,
   listPublicPersonPhotos,
+  withPublicScope,
   type PublicPersonSummary,
 } from "@/lib/api/ai";
 import type { PublicAsset } from "@/lib/api/galleries";
 import { DecryptedThumb } from "@/components/gallery/decrypted-thumb";
+
+// Per-visitor, share-scoped page — never statically prerendered (so the
+// useSearchParams() read of the #175 share scope needs no Suspense boundary).
+export const dynamic = "force-dynamic";
 
 export default function PublicPersonPhotosPage({
   params,
@@ -22,6 +28,11 @@ export default function PublicPersonPhotosPage({
   params: Promise<{ slug: string; personId: string }>;
 }) {
   const { slug, personId } = use(params);
+  // Share-link access scope (#175): forwarded to both gated People GETs and
+  // preserved on the back link so a no-PIN share visitor isn't 403'd.
+  const searchParams = useSearchParams();
+  const shareToken = searchParams?.get("share") ?? null;
+  const ws = searchParams?.get("ws") ?? null;
   const [person, setPerson] = useState<PublicPersonSummary | null>(null);
   const [assetIds, setAssetIds] = useState<string[] | null>(null);
   // Decryptable asset records (parallel to assetIds) used to render decrypted
@@ -41,8 +52,8 @@ export default function PublicPersonPhotosPage({
         //     People page load.
         // (b) the person's asset_ids in this gallery.
         const [list, photos] = await Promise.all([
-          listPublicPeople(slug),
-          listPublicPersonPhotos(slug, personId),
+          listPublicPeople(slug, { shareToken, ws }),
+          listPublicPersonPhotos(slug, personId, { shareToken, ws }),
         ]);
         if (cancelled) return;
         setPerson(list.find((p) => p.id === personId) ?? null);
@@ -58,14 +69,14 @@ export default function PublicPersonPhotosPage({
     return () => {
       cancelled = true;
     };
-  }, [slug, personId]);
+  }, [slug, personId, shareToken, ws]);
 
   const displayName = person?.name?.trim() || "Unnamed person";
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
       <Link
-        href={`/g/${slug}/people`}
+        href={withPublicScope(`/g/${slug}/people`, { shareToken, ws })}
         className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary"
       >
         <ChevronLeft className="h-4 w-4" />

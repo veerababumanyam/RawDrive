@@ -208,6 +208,42 @@ describe("Public face/people API client (gallery-session credential)", () => {
     expect(init.credentials).toBe("include");
   });
 
+  // REGRESSION (#175): the People surface is gated by the same gateGalleryAccess
+  // as photo-search. A no-PIN share visitor has no gallery_session cookie, so the
+  // share token (+ws) must be forwarded or the People GETs 403.
+  it("listPublicPeople forwards the share token + ws scope (#175)", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) });
+
+    await listPublicPeople("wedding-abcd1234", {
+      shareToken: "share-tok-123",
+      ws: "studio-test-9e8a5927",
+    });
+
+    const calledUrl = String(mockFetch.mock.calls[0][0]);
+    expect(calledUrl).not.toMatch(/^https?:\/\//);
+    const q = new URL(calledUrl, "https://x.test").searchParams;
+    expect(q.get("share")).toBe("share-tok-123");
+    expect(q.get("ws")).toBe("studio-test-9e8a5927");
+  });
+
+  it("listPublicPersonPhotos forwards the share token + ws scope (#175)", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ asset_ids: [], count: 0 }),
+    });
+
+    await listPublicPersonPhotos("wedding-abcd1234", "person-1", {
+      shareToken: "share-tok-123",
+      ws: "studio-test-9e8a5927",
+    });
+
+    const calledUrl = String(mockFetch.mock.calls[0][0]);
+    expect(calledUrl).not.toMatch(/^https?:\/\//);
+    const q = new URL(calledUrl, "https://x.test").searchParams;
+    expect(q.get("share")).toBe("share-tok-123");
+    expect(q.get("ws")).toBe("studio-test-9e8a5927");
+  });
+
   it("searchPublicFaceInGallery POSTs same-origin relative + sends credentials + multipart body", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -224,6 +260,38 @@ describe("Public face/people API client (gallery-session credential)", () => {
     expect(init.method).toBe("POST");
     expect(init.credentials).toBe("include");
     expect(init.body).toBeInstanceOf(FormData);
+  });
+
+  // REGRESSION (#175): a visitor who arrived via a no-PIN share link has no
+  // gallery_session cookie on the standalone Find Me route. The share token
+  // (and ws) must be forwarded on the relative URL so tryBindShareSession
+  // authorizes the POST — otherwise gateGalleryAccess returns 403
+  // "gallery access requires a valid share link or invite".
+  it("searchPublicFaceInGallery forwards the share token + ws scope (#175)", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ found: false, faces_detected: 0, asset_ids: [], count: 0 }),
+    });
+
+    const blob = new Blob([new Uint8Array([1, 2, 3])], { type: "image/jpeg" });
+    await searchPublicFaceInGallery("wedding-abcd1234", blob, {
+      shareToken: "share-tok-123",
+      ws: "studio-test-9e8a5927",
+    });
+
+    const [url, init] = mockFetch.mock.calls[0];
+    const calledUrl = String(url);
+    // Still same-origin relative so the cookie path is preserved for password
+    // galleries (which have no share token).
+    expect(calledUrl).not.toMatch(/^https?:\/\//);
+    expect(
+      calledUrl.startsWith(`${RELATIVE_PREFIX}wedding-abcd1234/photo-search`),
+    ).toBe(true);
+    // ...but now also carries the share scope.
+    const q = new URL(calledUrl, "https://x.test").searchParams;
+    expect(q.get("share")).toBe("share-tok-123");
+    expect(q.get("ws")).toBe("studio-test-9e8a5927");
+    expect(init.credentials).toBe("include");
   });
 });
 

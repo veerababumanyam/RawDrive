@@ -16,13 +16,20 @@
 
 import { use, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Camera, ChevronLeft, RefreshCw, Search } from "lucide-react";
 import {
   searchPublicFaceInGallery,
+  withPublicScope,
   type PublicFaceSearchResponse,
 } from "@/lib/api/ai";
 import { DecryptedThumb } from "@/components/gallery/decrypted-thumb";
+
+// Per-visitor, share-scoped, camera-driven page — never statically prerendered.
+// Required so the useSearchParams() read of the share scope (#175) does not
+// trigger Next's "wrap in a Suspense boundary" prerender error, matching the
+// parent /g/[slug] route's segment config.
+export const dynamic = "force-dynamic";
 
 type Stage =
   | "idle"
@@ -102,6 +109,13 @@ export default function PublicPhotoSearchPage({
 }) {
   const { slug } = use(params);
   const router = useRouter();
+  // Share-link access scope (#175). This standalone route is reached from the
+  // gallery's "Find me" link; preserving `?share=`/`?ws=` lets the photo-search
+  // POST self-authorize via tryBindShareSession when the gallery_session cookie
+  // was never minted (no-PIN share arrival).
+  const searchParams = useSearchParams();
+  const shareToken = searchParams?.get("share") ?? null;
+  const ws = searchParams?.get("ws") ?? null;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -271,7 +285,10 @@ export default function PublicPhotoSearchPage({
     setSearchResult(null);
 
     try {
-      const result = await searchPublicFaceInGallery(slug, blob);
+      const result = await searchPublicFaceInGallery(slug, blob, {
+        shareToken,
+        ws,
+      });
       setSearchResult(result);
       if (!result.found) {
         stopCamera();
@@ -309,7 +326,7 @@ export default function PublicPhotoSearchPage({
       setErrorDetail(msg);
       setStage("preview");
     }
-  }, [slug, stopCamera]);
+  }, [slug, shareToken, ws, stopCamera]);
 
   const handleRetry = useCallback(() => {
     setSearchResult(null);
@@ -374,7 +391,7 @@ export default function PublicPhotoSearchPage({
               {featureDisabled.detail}
             </p>
             <Link
-              href={`/g/${slug}/people`}
+              href={withPublicScope(`/g/${slug}/people`, { shareToken, ws })}
               className="inline-flex items-center gap-2 rounded-full border border-border-default bg-surface-container px-4 py-2 text-sm text-text-primary hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
             >
               Browse people in this gallery
@@ -490,7 +507,7 @@ export default function PublicPhotoSearchPage({
               Try again
             </button>
             <Link
-              href={`/g/${slug}/people`}
+              href={withPublicScope(`/g/${slug}/people`, { shareToken, ws })}
               className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-text-inverse hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
             >
               Browse all people
@@ -531,7 +548,10 @@ export default function PublicPhotoSearchPage({
                   type="button"
                   onClick={() =>
                     router.push(
-                      `/g/${slug}/people/${searchResult.cluster_label}`,
+                      withPublicScope(
+                        `/g/${slug}/people/${searchResult.cluster_label}`,
+                        { shareToken, ws },
+                      ),
                     )
                   }
                   className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-text-inverse hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"

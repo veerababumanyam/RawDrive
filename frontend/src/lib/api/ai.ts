@@ -266,10 +266,17 @@ export interface PublicPersonPhotos {
 // "gallery access requires a valid share link or invite" (issue #135). The
 // X-Gallery-Session header path is unusable here because the cross-origin
 // CORS Allow-Headers list omits it. These functions are browser-only.
-export async function listPublicPeople(slug: string): Promise<PublicPersonSummary[]> {
-  const res = await fetch(`/api/v1/public/galleries/${slug}/people`, {
-    credentials: "include",
-  });
+export async function listPublicPeople(
+  slug: string,
+  scope?: PublicGalleryScope,
+): Promise<PublicPersonSummary[]> {
+  // Relative + credentials for the cookie path; `?share=`/`?ws=` forwarded so a
+  // no-PIN share visitor self-authorizes via tryBindShareSession (#175) — the
+  // People GET is gated by gateGalleryAccess exactly like photo-search.
+  const res = await fetch(
+    withPublicScope(`/api/v1/public/galleries/${slug}/people`, scope),
+    { credentials: "include" },
+  );
   if (!res.ok) throw new Error(`List public people failed: ${res.status}`);
   const body = (await res.json()) as PublicPersonSummary[];
   return Array.isArray(body) ? body : [];
@@ -278,11 +285,16 @@ export async function listPublicPeople(slug: string): Promise<PublicPersonSummar
 export async function listPublicPersonPhotos(
   slug: string,
   personId: string,
+  scope?: PublicGalleryScope,
 ): Promise<PublicPersonPhotos> {
   // Same-origin + credentials so the gallery_session cookie reaches the gate
-  // (see listPublicPeople above; issue #135).
+  // (see listPublicPeople above; issue #135). `?share=`/`?ws=` forwarded so a
+  // no-PIN share arrival is authorized when the cookie is absent (#175).
   const res = await fetch(
-    `/api/v1/public/galleries/${slug}/people/${personId}/photos`,
+    withPublicScope(
+      `/api/v1/public/galleries/${slug}/people/${personId}/photos`,
+      scope,
+    ),
     { credentials: "include" },
   );
   if (!res.ok) throw new Error(`List public person photos failed: ${res.status}`);
@@ -314,9 +326,36 @@ export interface PublicFaceSearchResponse {
   count: number;
 }
 
+// Access scope for a public gated-gallery request. A visitor who arrived via a
+// share link carries the grant in the URL (`?share=`, plus `?ws=` on a studio
+// subdomain). Forwarding it makes the request self-authorize through the
+// backend's tryBindShareSession — independent of the host-only gallery_session
+// cookie, which is NOT minted on no-PIN share arrivals to the standalone Find
+// Me / People routes (issue #175). The cookie path (credentials:"include")
+// still covers password-gated galleries, which have no share token.
+export interface PublicGalleryScope {
+  shareToken?: string | null;
+  ws?: string | null;
+}
+
+// Append the public access scope (share token + workspace subdomain) to a
+// same-origin relative API path OR a nav href. Kept relative so the
+// gallery_session cookie continues to travel via the /api/v1 rewrite when
+// present. Exported so the public Find Me / People route links preserve the
+// scope across navigation (#175) instead of stripping it.
+export function withPublicScope(path: string, scope?: PublicGalleryScope): string {
+  if (!scope) return path;
+  const params = new URLSearchParams();
+  if (scope.ws) params.set("ws", scope.ws);
+  if (scope.shareToken) params.set("share", scope.shareToken);
+  const qs = params.toString();
+  return qs ? `${path}?${qs}` : path;
+}
+
 export async function searchPublicFaceInGallery(
   slug: string,
   imageBlob: Blob,
+  scope?: PublicGalleryScope,
 ): Promise<PublicFaceSearchResponse> {
   const form = new FormData();
   // Field name must match the backend handler — see
@@ -327,8 +366,10 @@ export async function searchPublicFaceInGallery(
   // above (issue #135). The selfie itself is not gallery-encrypted; only the
   // gallery session cookie is needed for access. The 10MB multipart body is
   // streamed through the same /api/v1 rewrite the rest of this surface uses.
+  // The `?share=`/`?ws=` scope (when the visitor arrived via a share link)
+  // self-authorizes via tryBindShareSession when the cookie is absent (#175).
   const res = await fetch(
-    `/api/v1/public/galleries/${slug}/photo-search`,
+    withPublicScope(`/api/v1/public/galleries/${slug}/photo-search`, scope),
     {
       method: "POST",
       credentials: "include",

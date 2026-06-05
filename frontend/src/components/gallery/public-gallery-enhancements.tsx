@@ -56,6 +56,11 @@ export function PublicGalleryEnhancements({
   const faceIdParam = searchParams?.get("faceid") ?? "";
   const modeParam = searchParams?.get("mode") ?? "";
   const fromParam = searchParams?.get("from") ?? "";
+  // Share-link access scope (#175): forwarded to the FaceID gate so the
+  // photo-search POST self-authorizes on a no-PIN share arrival even when the
+  // gallery_session cookie is absent.
+  const shareParam = searchParams?.get("share") ?? "";
+  const wsParam = searchParams?.get("ws") ?? "";
   const [branding, setBranding] = useState<GalleryBranding | null>(null);
   const [faceIdDismissed, setFaceIdDismissed] = useState(false);
   const [facePinnedAssetIds, setFacePinnedAssetIds] = useState<string[] | null>(
@@ -155,6 +160,8 @@ export function PublicGalleryEnhancements({
         <FaceIDGate
           slug={slug}
           encrypted={encrypted}
+          shareToken={shareParam || null}
+          ws={wsParam || null}
           onMatched={onFaceMatched}
           onFallback={onFaceFallback}
         />

@@ -44,6 +44,14 @@ interface Props {
    * gate shows an honest state instead of a misleading pseudo-match.
    */
   encrypted?: boolean;
+  /**
+   * Share-link access scope the visitor arrived with (`?share=`, plus `?ws=` on
+   * a studio subdomain). Forwarded on the photo-search POST so a no-PIN share
+   * arrival self-authorizes via tryBindShareSession instead of depending on the
+   * host-only gallery_session cookie, which is absent on this path (issue #175).
+   */
+  shareToken?: string | null;
+  ws?: string | null;
   /** Called with matched asset IDs when face match succeeds. */
   onMatched: (assetIds: string[]) => void;
   /** Called when the user clicks "Browse all photos" (GAL-FR-109). */
@@ -55,6 +63,8 @@ type Step = "consent" | "camera" | "matching" | "error" | "unavailable";
 export function FaceIDGate({
   slug,
   encrypted = false,
+  shareToken,
+  ws,
   onMatched,
   onFallback,
 }: Props) {
@@ -103,7 +113,10 @@ export function FaceIDGate({
       const blob = await captureFrameBlob(video);
       stopStream();
 
-      const result = await searchPublicFaceInGallery(slug, blob);
+      const result = await searchPublicFaceInGallery(slug, blob, {
+        shareToken,
+        ws,
+      });
       onMatched(result.asset_ids);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Face match failed");
