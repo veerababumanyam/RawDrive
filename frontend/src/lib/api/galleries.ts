@@ -313,8 +313,31 @@ export async function getPublicStudioLanding(
     "cursor",
     cursor,
   );
-  const res = await fetch(apiUrl(path));
-  if (!res.ok) throw new Error(`Studio not found: ${res.status}`);
+  let res: Response;
+  try {
+    // This runs server-side during SSR, which has no inherent fetch timeout.
+    // Bound it so an unreachable/slow backend fails fast instead of hanging the
+    // render into an upstream 504.
+    res = await fetch(apiUrl(path), { signal: AbortSignal.timeout(8000) });
+  } catch (err) {
+    // Transport failure (SSR API base misconfigured, backend down, or timeout).
+    // Tag it `infra` so callers do NOT mistake it for a genuine 404 — masking
+    // an unreachable API as "not found" silently hid a prod outage.
+    throw Object.assign(
+      new Error(
+        `Studio landing fetch failed: ${err instanceof Error ? err.message : String(err)}`,
+      ),
+      { infra: true },
+    );
+  }
+  if (res.status === 404) {
+    throw Object.assign(new Error("Studio not found"), { notFound: true });
+  }
+  if (!res.ok) {
+    throw Object.assign(new Error(`Studio landing error: ${res.status}`), {
+      infra: true,
+    });
+  }
   return res.json();
 }
 

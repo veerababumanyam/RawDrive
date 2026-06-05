@@ -188,4 +188,42 @@ describe("/studio public subdomain landing page", () => {
       ).not.toBeInTheDocument();
     });
   });
+
+  // A genuine "studio not found" (the backend returned 404) must render the
+  // not-found page.
+  it("renders not-found when the studio genuinely does not exist (404)", async () => {
+    mocks.getPublicStudioLanding.mockRejectedValueOnce(
+      Object.assign(new Error("Studio not found"), { notFound: true }),
+    );
+
+    await expect(
+      StudioLandingPage({
+        searchParams: Promise.resolve({ ws: "missing-a1b2c3d4" }),
+      }),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(mocks.notFound).toHaveBeenCalled();
+  });
+
+  // REGRESSION (issue #171): when SSR cannot reach the backend (transport
+  // failure / 5xx / timeout — tagged `infra`), the page must SURFACE the real
+  // error, NOT mask it as a 404. Masking infra failure as a 404 silently hid a
+  // production outage where the frontend container's SSR API base was missing.
+  it("surfaces an SSR backend failure instead of masking it as a 404", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const infraErr = Object.assign(
+      new Error("Studio landing fetch failed: fetch failed"),
+      { infra: true },
+    );
+    mocks.getPublicStudioLanding.mockRejectedValueOnce(infraErr);
+
+    await expect(
+      StudioLandingPage({
+        searchParams: Promise.resolve({ ws: "studio-test-9e8a5927" }),
+      }),
+    ).rejects.toBe(infraErr);
+    // The defining assertion: an unreachable backend is NOT a 404.
+    expect(mocks.notFound).not.toHaveBeenCalled();
+    expect(errSpy).toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
 });

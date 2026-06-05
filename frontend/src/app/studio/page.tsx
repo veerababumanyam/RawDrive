@@ -73,8 +73,14 @@ export default async function StudioLandingPage({ searchParams }: Props) {
   let landing;
   try {
     landing = await getPublicStudioLanding(ws);
-  } catch {
-    notFound();
+  } catch (err) {
+    // A genuine "studio not found" (404) renders the not-found page. Any other
+    // failure (backend unreachable, 5xx, timeout) must SURFACE rather than be
+    // masked as a 404 — that masking silently hid a production outage where SSR
+    // could not reach the API. Log it and rethrow so it is a visible error.
+    if ((err as { notFound?: boolean } | null)?.notFound) notFound();
+    console.error(`[studio] landing SSR failed for ws=${ws}:`, err);
+    throw err;
   }
 
   const { studio, galleries, counts } = landing;

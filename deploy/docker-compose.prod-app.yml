@@ -134,6 +134,21 @@ services:
     image: rawdrive-frontend:local
     container_name: deploy-frontend-1
     restart: unless-stopped
+    # SSR/runtime API base. NEXT_PUBLIC_API_URL above is BUILD-time (client
+    # bundle); these are RUNTIME and are what Next.js server components read
+    # via resolveApiBaseUrl() (frontend/src/lib/api/base-url.ts). Without them
+    # SSR fetches fall through to http://localhost:8080 — the frontend
+    # container's own loopback, which has no backend — so every server-rendered
+    # public page (studio landing, /g/<gallery> share, /g/.../photo) throws and
+    # renders notFound() (404) even though api.rawdrive.in serves 200. Declared
+    # here (not only in the hand-maintained /opt/rawdrive/app/.env) so a missing
+    # or mistyped env line cannot reintroduce the outage — `environment:`
+    # overrides env_file. https://api.rawdrive.in is used (not http://backend:8080)
+    # because getApiBaseUrl() also builds browser-facing <img src>/links, which
+    # must be a host the browser can resolve.
+    environment:
+      INTERNAL_API_BASE_URL: https://api.rawdrive.in
+      NEXT_PUBLIC_API_URL: https://api.rawdrive.in
     env_file:
       - path: /opt/rawdrive/app/.env
         required: false
