@@ -62,6 +62,10 @@ const nextConfig: NextConfig = {
     // LCP on the landing hero (~180 KB AVIF vs ~800 KB source JPEG) while
     // keeping compatibility with every browser we target.
     formats: ["image/avif", "image/webp"],
+    // Next.js 16 only allows q=75 unless configured. The landing hero
+    // intentionally requests q=94 for its full-bleed LCP image, so keep both
+    // values allowlisted.
+    qualities: [75, 94],
   },
   async headers() {
     return [
