@@ -49,8 +49,8 @@ ssh root@<NEW_IP> 'chmod 600 /root/.config/rclone/rclone.conf'
 ### 4. Pull the latest encrypted backup
 
 ```bash
-LATEST=$(ssh root@<NEW_IP> 'rclone lsf b2:RawDriveAdmin/daily/ --include "*.dump.gpg" | sort | tail -1')
-ssh root@<NEW_IP> "rclone cat b2:RawDriveAdmin/daily/$LATEST > /tmp/restore.dump.gpg"
+LATEST=$(ssh root@<NEW_IP> 'rclone lsf b2:rawdriveadminfiles/daily/ --include "*.dump.gpg" | sort | tail -1')
+ssh root@<NEW_IP> "rclone cat b2:rawdriveadminfiles/daily/$LATEST > /tmp/restore.dump.gpg"
 ```
 
 ### 5. Decrypt with the backup passphrase
