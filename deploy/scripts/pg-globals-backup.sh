@@ -26,7 +26,7 @@
 set -euo pipefail
 
 BACKUP_DIR=/opt/rawdrive/backups
-RCLONE_REMOTE="${BACKUP_RCLONE_REMOTE:-b2:rawdrive-backups}"
+RCLONE_REMOTE="${BACKUP_RCLONE_REMOTE:-b2:RawDriveAdmin}"
 RETAIN_DAYS=7  # local only — B2 lifecycle handles longer retention
 
 : "${BACKUP_GPG_PASSPHRASE:?BACKUP_GPG_PASSPHRASE not set — source /opt/rawdrive/app/.env before running}"

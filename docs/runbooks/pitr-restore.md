@@ -18,9 +18,9 @@ Do this during a low-traffic window. It requires a **Postgres restart** (`archiv
 
 ### Step 1 — Provision the dedicated backup bucket & credentials
 
-PITR backups live in a **separate B2 bucket** (`rawdrive-backups`) from the media bucket (`rawfolder`), so a media-bucket compromise can't reach the backups, and under a separate repo path (`/pgbackrest`).
+PITR backups live in a **separate B2 bucket** (`RawDriveAdmin`) from the media bucket (`RawDriveClients`), so a media-bucket compromise can't reach the backups, and under a separate repo path (`/pgbackrest`).
 
-In the B2 console create (or reuse) the `rawdrive-backups` bucket and an application key scoped to it, then add these to **`/opt/rawdrive/app/.env` on `.46` only** (see §(c) of `.env.example` additions):
+In the B2 console create (or reuse) the `RawDriveAdmin` bucket and an application key scoped to it, then add these to **`/opt/rawdrive/app/.env` on `.46` only** (see §(c) of `.env.example` additions):
 
 ```
 PGBACKREST_REPO1_S3_KEY=<B2 S3 keyID for the backup bucket>
