@@ -35,6 +35,10 @@ import { buildPublicGalleryJsonLd, serializeJsonLd } from "@/lib/seo";
 import { OfflineCacher } from "@/components/offline/offline-cacher";
 import { OfflineStorageLauncher } from "@/components/offline/offline-storage-launcher";
 import { PublicGalleryOfflineGate } from "@/components/gallery/public-gallery-offline-gate";
+import {
+  resolveEffectiveSessionToken,
+  shouldInstallMintedSession,
+} from "./session-token";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -110,11 +114,17 @@ export default async function PublicGalleryPage({
       shareToken,
     );
     gallery = result.gallery;
-    if (!sessionToken && result.gallerySessionToken) {
+    // Prefer the freshly-minted, this-gallery-scoped token over a possibly
+    // stale `gallery_session` cookie, and surface a differing mint to the
+    // bridge so the stale cookie is corrected client-side too. See
+    // ./session-token.ts for why (issue #182).
+    if (shouldInstallMintedSession(sessionToken, result.gallerySessionToken)) {
       freshlyMintedSessionToken = result.gallerySessionToken;
     }
-    effectiveSessionToken =
-      sessionToken ?? result.gallerySessionToken ?? undefined;
+    effectiveSessionToken = resolveEffectiveSessionToken(
+      sessionToken,
+      result.gallerySessionToken,
+    );
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
     if (msg.includes("410") || msg.includes("expired")) {
