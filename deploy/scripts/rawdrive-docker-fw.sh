@@ -35,7 +35,17 @@ set -euo pipefail
 # The peer mesh = all three production nodes (superset of what each needs).
 PEERS="187.127.142.42 187.127.142.44 187.127.142.46"
 # Internal data-plane ports — never reachable from outside the peer mesh.
-DATA_PORTS="5432,6379,4222,6222,8222,9000,9001,1025,8025"
+#   5432 postgres / HAProxy-write ·  6379 valkey ·  4222/6222/8222 NATS
+#   9000/9001 minio ·  1025/8025 mailpit (both retired — kept as deny-by-default)
+#   2379/2380 etcd client/peer ·  8008 Patroni REST API
+# The etcd (2379/2380) and Patroni REST (8008) ports bind to each node's PUBLIC
+# IP (docker-compose.patroni.yml scopes them to ${ETCD_NODE_IP}/${PATRONI_NODE_IP},
+# not 0.0.0.0, but that is still the internet-facing interface), so they MUST be
+# dropped here for non-peers — an open Patroni REST can be used to force a
+# failover/restart. Peer-mesh traffic RETURNs above this rule, so intra-cluster
+# etcd consensus + Patroni health checks are unaffected. HAProxy (5432/5433/7000)
+# binds loopback-only and needs no entry.
+DATA_PORTS="5432,6379,4222,6222,8222,9000,9001,1025,8025,2379,2380,8008"
 # App origin ports — only the peer nginx backup-upstream + docker-internal use them.
 APP_PORTS="8080,3000"
 # Public web ports. When CF_IPS_FILE exists (written by cf-origin-lock.sh) these
