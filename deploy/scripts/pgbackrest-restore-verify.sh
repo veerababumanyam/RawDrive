@@ -32,7 +32,7 @@
 #
 # RECOMMENDED CRONTAB (root on .46):
 #   # Weekly restore drill, Monday 04:00 IST (well clear of the 02:00/02:30 backups):
-#   0 4 * * 1  /opt/rawdrive/app/deploy/scripts/pgbackrest-restore-verify.sh >> /opt/rawdrive/backups/pgbackrest-restore-verify.log 2>&1
+#   0 4 * * 1  /opt/rawdrive/app/deploy/scripts/pgbackrest-restore-verify.sh >> /var/log/pgbackrest-restore-verify.log 2>&1
 #
 # Exits non-zero on ANY failure so cron mails root.
 
@@ -45,12 +45,11 @@ PG_IMAGE=rawdrive-postgres:local
 VERIFY_CONTAINER="pgbackrest-verify-$$"
 VERIFY_PORT=55432            # deliberately NOT 5432 — no clash with the live primary
 RESTORE_DIR="$(mktemp -d /tmp/pgbackrest-verify.XXXXXX)"
-BACKUP_DIR=/opt/rawdrive/backups
-LOG="$BACKUP_DIR/pgbackrest-restore-verify.log"
 
+# Logs to stdout only (cron captures). No local backup/log dir — backup
+# artifacts are strictly in B2; the restore drill is a transient /tmp operation.
 log() {
-    mkdir -p "$BACKUP_DIR"
-    echo "[$(date -u +%FT%TZ)] $*" | tee -a "$LOG"
+    echo "[$(date -u +%FT%TZ)] $*"
 }
 
 fail() {

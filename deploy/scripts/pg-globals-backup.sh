@@ -25,49 +25,44 @@
 
 set -euo pipefail
 
-BACKUP_DIR=/opt/rawdrive/backups
+# Auto-source prod env for manual runs (see backup-db.sh rationale).
+if [ -z "${BACKUP_GPG_PASSPHRASE:-}" ] && [ -f /opt/rawdrive/app/.env ]; then
+    set -a; . /opt/rawdrive/app/.env; set +a
+fi
+
 RCLONE_REMOTE="${BACKUP_RCLONE_REMOTE:-b2:rawdriveadminfiles}"
-RETAIN_DAYS=7  # local only — B2 lifecycle handles longer retention
+PG_CONTAINER="${PG_CONTAINER:-deploy-postgres-1}"
 
 : "${BACKUP_GPG_PASSPHRASE:?BACKUP_GPG_PASSPHRASE not set — source /opt/rawdrive/app/.env before running}"
 
-mkdir -p "$BACKUP_DIR"
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
-DUMP="$BACKUP_DIR/rawdrive_globals_${STAMP}.sql.gpg"
-LOG="$BACKUP_DIR/pg-globals-backup.log"
+REMOTE_NAME="rawdrive_globals_${STAMP}.sql.gpg"
+REMOTE_PATH="$RCLONE_REMOTE/globals/$REMOTE_NAME"
 
-log() {
-    echo "[$(date -u +%FT%TZ)] $*" | tee -a "$LOG"
-}
+log() { echo "[$(date -u +%FT%TZ)] $*"; }
 
-log "starting pg_dumpall --globals-only → gpg → $DUMP"
+log "starting B2-only stream: pg_dumpall --globals-only | gpg | rclone rcat → $REMOTE_PATH"
 # --globals-only: roles, grants, tablespaces, ALTER ROLE settings — no per-DB
-# schema/data. Piped straight into gpg so the plaintext SQL never hits disk.
-docker exec deploy-postgres-1 \
+# schema/data. Streamed straight to B2 so the plaintext SQL never hits disk.
+docker exec "$PG_CONTAINER" \
     pg_dumpall \
     -U "${POSTGRES_USER:-rawdrive}" \
     --globals-only \
     | gpg --batch --yes --passphrase "$BACKUP_GPG_PASSPHRASE" \
           --symmetric --cipher-algo AES256 --s2k-digest-algo SHA512 \
           --s2k-count 65011712 \
-          --output "$DUMP"
+    | rclone rcat "$REMOTE_PATH"
 
-SIZE=$(stat -c %s "$DUMP")
+log "verifying remote object on B2"
+SIZE=$(rclone size --json "$REMOTE_PATH" 2>/dev/null | sed -n 's/.*"bytes":\([0-9]*\).*/\1/p')
+if [ -z "${SIZE:-}" ]; then
+    log "FATAL: remote globals object not found after upload: $REMOTE_PATH"
+    exit 2
+fi
 if [ "$SIZE" -lt 256 ]; then
-    log "FATAL: globals dump too small ($SIZE bytes) — refusing to upload"
+    log "FATAL: remote globals dump too small ($SIZE bytes) — deleting and failing"
+    rclone delete "$REMOTE_PATH" || true
     exit 1
 fi
-log "encrypted globals dump size: $SIZE bytes"
 
-log "uploading to B2: $RCLONE_REMOTE/globals/"
-rclone copy "$DUMP" "$RCLONE_REMOTE/globals/" --progress
-
-log "verifying remote copy exists"
-REMOTE_NAME=$(basename "$DUMP")
-rclone lsf "$RCLONE_REMOTE/globals/" | grep -q "^${REMOTE_NAME}$" \
-    || { log "FATAL: remote verification failed"; exit 2; }
-
-log "cleaning local globals dumps older than $RETAIN_DAYS days"
-find "$BACKUP_DIR" -name 'rawdrive_globals_*.sql.gpg' -mtime +$RETAIN_DAYS -delete
-
-log "globals backup complete: $REMOTE_NAME"
+log "globals backup complete: $REMOTE_NAME ($SIZE bytes, B2-only)"

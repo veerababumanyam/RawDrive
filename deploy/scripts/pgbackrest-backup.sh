@@ -8,28 +8,34 @@
 # belt-and-suspenders secondary (see docs/runbooks/pitr-restore.md §(f)).
 #
 # BACKUP TYPES (pgBackRest semantics):
-#   full → copies the entire cluster. Slowest/largest; the anchor every diff &
-#          incr depends on. We schedule this WEEKLY (Sunday).
-#   diff → differential: copies everything changed since the last FULL. Fast
-#          restore (full + one diff). We schedule this on Mon–Sat.
+#   full → copies the entire cluster. Slowest/largest; the anchor every incr
+#          depends on. We schedule this WEEKLY (Sunday) as the chain anchor.
 #   incr → incremental: copies everything changed since the last backup of ANY
-#          type. Smallest/fastest; restore replays full + diff + every incr
-#          since. We schedule this HOURLY for a tight RPO between dailies.
+#          type (changed blocks only — small/fast). This is the DAILY backup
+#          (operator directive: "daily incremental backups in the admin B2
+#          bucket"). Restore replays full + every incr since.
+#   diff → differential: changed-since-last-FULL. Not used in the default
+#          schedule, but still selectable via --type=diff for an ad-hoc base.
 # Continuous WAL archiving (archive-async, see pgbackrest.conf) is what actually
 # bounds RPO to ~archive_timeout (≈60s); these scheduled backups bound how much
 # WAL must be REPLAYED at restore time (i.e. restore speed), not data loss.
 #
-# AUTO SCHEDULE (no --type given): full on Sunday, diff on every other day. Wire
-# the hourly incr explicitly via --type=incr in its own cron line.
+# STRICTLY B2-ONLY: the repository (repo1) is the admin B2 bucket
+# (rawdriveadminfiles, repo1-path=/pgbackrest) — there is NO local repo. This
+# driver writes NOTHING to the server disk except transient WAL spool
+# (/var/spool/pgbackrest) and pgBackRest's own operational log
+# (/var/log/pgbackrest, a volume); all backup artifacts live in B2.
+#
+# AUTO SCHEDULE (no --type given): full on Sunday, DAILY INCREMENTAL Mon–Sat.
 #
 # RECOMMENDED CRONTAB (root on .46, all times Asia/Kolkata per the container TZ):
-#   # daily full/diff selector at 02:30 (offset from the 02:00 pg_dump so the
-#   # two backup layers don't contend for I/O at the same instant):
-#   30 2 * * *  /opt/rawdrive/app/deploy/scripts/pgbackrest-backup.sh           >> /opt/rawdrive/backups/pgbackrest-cron.log 2>&1
-#   # hourly incremental at :15 past every hour EXCEPT 02:00 (the daily run owns it):
-#   15 0-1,3-23 * * *  /opt/rawdrive/app/deploy/scripts/pgbackrest-backup.sh --type=incr >> /opt/rawdrive/backups/pgbackrest-cron.log 2>&1
-# cron mails root on any non-zero exit (set MAILTO=ops@rawdrive.in at the top of
-# the crontab) so a failed backup is never silent.
+#   MAILTO=ops@rawdrive.in   # so a failed backup is never silent
+#   # daily backup at 02:30 (offset from the 02:00 logical pg_dump so the two
+#   # layers don't contend for I/O): full on Sunday, incremental Mon–Sat.
+#   30 2 * * *  /opt/rawdrive/app/deploy/scripts/pgbackrest-backup.sh
+# (For an even tighter restore-replay window you MAY add hourly incrementals
+#  with `--type=incr`, but continuous WAL already bounds RPO; the daily
+#  incremental is the operator-requested cadence.)
 #
 # Activation: only run after the one-time pgbackrest-init.sh has succeeded.
 
@@ -37,12 +43,12 @@ set -euo pipefail
 
 CONTAINER=deploy-postgres-1
 STANZA=rawdrive
-BACKUP_DIR=/opt/rawdrive/backups
-LOG="$BACKUP_DIR/pgbackrest-backup.log"
 
+# Logs go to stdout only (cron captures them); we keep NO local backup/log dir on
+# the server — backup artifacts are strictly in B2, and pgBackRest's own detailed
+# log lives in the /var/log/pgbackrest volume inside the container.
 log() {
-    mkdir -p "$BACKUP_DIR"
-    echo "[$(date -u +%FT%TZ)] $*" | tee -a "$LOG"
+    echo "[$(date -u +%FT%TZ)] $*"
 }
 
 fail() {
@@ -61,11 +67,11 @@ for arg in "$@"; do
 done
 
 if [ -z "$TYPE" ]; then
-    # Auto: full on Sunday (date +%u → 7), diff Mon–Sat.
+    # Auto: full on Sunday (date +%u → 7), DAILY INCREMENTAL Mon–Sat.
     if [ "$(date +%u)" -eq 7 ]; then
         TYPE=full
     else
-        TYPE=diff
+        TYPE=incr
     fi
     log "no --type given; auto-selected '$TYPE' for $(date -u +%A)"
 fi
@@ -88,7 +94,7 @@ docker exec "$CONTAINER" pgbackrest --stanza="$STANZA" --type="$TYPE" backup \
 log "verifying repository state via pgbackrest info"
 INFO_OUT="$(docker exec "$CONTAINER" pgbackrest --stanza="$STANZA" info 2>&1)" \
     || fail "pgbackrest info failed after backup — repository may be unreadable"
-echo "$INFO_OUT" | tee -a "$LOG"
+echo "$INFO_OUT"
 
 # Sanity: the freshly-written backup type should appear in the info output.
 echo "$INFO_OUT" | grep -q "$TYPE backup" \
