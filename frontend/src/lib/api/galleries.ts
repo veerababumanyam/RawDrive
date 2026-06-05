@@ -288,7 +288,20 @@ function gallerySessionHeaders(
   return sessionToken ? { "X-Gallery-Session": sessionToken } : undefined;
 }
 
-function fetchWithGallerySession(
+// publicGalleryRetryBackoffMs is the tiny delay before the single retry of a
+// transient (5xx / network) public-gallery fetch. Kept short so SSR latency is
+// barely affected; long enough to clear a momentary DB blip or rolling-restart
+// window on the backend (issue #179).
+const publicGalleryRetryBackoffMs = 150;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// fetchPublicGalleryOnce performs a single gallery-session-scoped fetch with no
+// retry. The retry policy lives in fetchWithGallerySession so it wraps every
+// public fetcher that shares this helper.
+function fetchPublicGalleryOnce(
   url: string,
   sessionToken?: string | null,
   init?: RequestInit,
@@ -302,6 +315,34 @@ function fetchWithGallerySession(
       ...headers,
     },
   });
+}
+
+// fetchWithGallerySession fetches a public-gallery endpoint and retries ONCE on a
+// transient failure — a 5xx response (the backend now answers 503 on a transient
+// share-link/DB blip, issue #179) or a thrown network error — after a short
+// backoff. It deliberately does NOT retry on a 4xx (401/403/404/410 are genuine,
+// permanent answers: missing session, denied, not-found, expired) so those fail
+// fast and the caller renders the correct terminal state. Combined with the
+// backend's 503-on-transient, a momentary blip self-heals instead of surfacing
+// as a hard SSR 500.
+async function fetchWithGallerySession(
+  url: string,
+  sessionToken?: string | null,
+  init?: RequestInit,
+): Promise<Response> {
+  try {
+    const res = await fetchPublicGalleryOnce(url, sessionToken, init);
+    // Only a server-side (5xx) failure is retryable. 4xx is a genuine,
+    // permanent answer — return it unchanged so the caller fails fast.
+    if (res.status < 500) return res;
+    await delay(publicGalleryRetryBackoffMs);
+    return await fetchPublicGalleryOnce(url, sessionToken, init);
+  } catch {
+    // Network error / fetch threw — retry once after a backoff. If the retry
+    // also throws, let it propagate to the caller's existing error handling.
+    await delay(publicGalleryRetryBackoffMs);
+    return await fetchPublicGalleryOnce(url, sessionToken, init);
+  }
 }
 
 export async function getPublicStudioLanding(

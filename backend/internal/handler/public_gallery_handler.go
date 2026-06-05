@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -376,30 +377,46 @@ func (h *PublicGalleryHandler) hasValidGallerySession(r *http.Request, gallery *
 // ShareLinkService.ValidateAccess (expiry + PIN + max_access_count) and, on
 // success, atomically commits the access via TrackAccess, mints a durable
 // share-scoped gallery session, and writes it as the gallery_session cookie so
-// subsequent asset/album/byte requests carry it. Returns true only when a valid
-// share session was established. An expired / wrong-PIN / exhausted link yields
-// false (and never mints a session), so it cannot unlock the gallery.
+// subsequent asset/album/byte requests carry it.
+//
+// It returns two booleans:
+//   - granted: true ONLY when a valid share session was established. An
+//     expired / wrong-PIN / exhausted / not-found link yields false (and never
+//     mints a session), so it cannot unlock the gallery.
+//   - transient: true when the share lookup failed for a TRANSIENT/infra reason
+//     (a DB error surfaced as service.ErrShareLinkUnavailable from
+//     GalleryIDForToken / ValidateAccess, or a non-genuine TrackAccess /
+//     IssueShareSession failure). A transient failure NEVER grants access
+//     (granted stays false) — it only tells the caller to answer with a
+//     retryable 503 instead of a permanent 403/401, so a momentary blip
+//     self-heals rather than 500ing the SSR page (issue #179). granted and
+//     transient are never both true.
 //
 // The optional ?share_pin / ?pin query param (or X-Share-PIN header) supplies
 // the PIN credential without a separate verify round-trip; the dedicated
 // POST /share/{token}/verify endpoint remains for clients that prefer it.
-func (h *PublicGalleryHandler) tryBindShareSession(w http.ResponseWriter, r *http.Request, gallery *repository.Gallery) bool {
+func (h *PublicGalleryHandler) tryBindShareSession(w http.ResponseWriter, r *http.Request, gallery *repository.Gallery) (granted bool, transient bool) {
 	if h.shareSession == nil || h.accessSvc == nil || gallery == nil {
-		return false
+		return false, false
 	}
 	token := r.URL.Query().Get("share")
 	if token == "" {
 		token = r.Header.Get("X-Share-Token")
 	}
 	if token == "" {
-		return false
+		return false, false
 	}
 
 	// Bind the share token to THIS gallery — a share token for gallery A must
 	// never unlock gallery B even if the slug is swapped in the URL (S4-G2).
 	boundGallery, err := h.shareSession.GalleryIDForToken(r.Context(), token)
-	if err != nil || boundGallery != gallery.ID {
-		return false
+	if err != nil {
+		// A transient DB/infra failure must DENY but be retryable; a genuine
+		// not-found stays a permanent denial.
+		return false, errors.Is(err, service.ErrShareLinkUnavailable)
+	}
+	if boundGallery != gallery.ID {
+		return false, false
 	}
 
 	credential := r.URL.Query().Get("share_pin")
@@ -413,17 +430,27 @@ func (h *PublicGalleryHandler) tryBindShareSession(w http.ResponseWriter, r *htt
 	// Authoritative gate: expiry, PIN/email credential, and max_access_count
 	// pre-flight all live in ValidateAccess.
 	ok, err := h.shareSession.ValidateAccess(r.Context(), token, credential)
-	if err != nil || !ok {
-		return false
+	if err != nil {
+		// Transient infra error → retryable deny; a genuine denial reason
+		// (revoked/expired/limit/PIN-mismatch/email) → permanent deny.
+		return false, errors.Is(err, service.ErrShareLinkUnavailable)
+	}
+	if !ok {
+		return false, false
 	}
 	// Commit the access atomically (enforces max_access_count under concurrency).
 	if _, err := h.shareSession.TrackAccess(r.Context(), token); err != nil {
-		return false
+		// ErrAccessLimitExceeded is a genuine denial (the link was exhausted
+		// by a concurrent access between the pre-flight and the commit) — deny
+		// permanently. Any other TrackAccess error is a transient DB failure.
+		return false, !errors.Is(err, service.ErrAccessLimitExceeded)
 	}
 
 	sessionToken, err := h.accessSvc.IssueShareSession(gallery.ID, token)
 	if err != nil {
-		return false
+		// Session signing failed — infra, not a denial decision. Deny but
+		// retryable.
+		return false, true
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     "gallery_session",
@@ -437,7 +464,7 @@ func (h *PublicGalleryHandler) tryBindShareSession(w http.ResponseWriter, r *htt
 	// Surface the freshly-minted token to non-browser callers via a response
 	// header so they can attach X-Gallery-Session on follow-up requests.
 	w.Header().Set("X-Gallery-Session", sessionToken)
-	return true
+	return true, false
 }
 
 // gateGalleryAccess is the single authorization gate for every public gallery
@@ -478,12 +505,28 @@ func (h *PublicGalleryHandler) gateGalleryAccess(w http.ResponseWriter, r *http.
 	}
 
 	// First-touch share link: validate + bind a durable share session.
-	hasShareSession := h.tryBindShareSession(w, r, gallery)
+	hasShareSession, shareTransient := h.tryBindShareSession(w, r, gallery)
 	// Existing session (password- or share-scoped) presented on the request.
 	hasSession := hasShareSession || h.hasValidGallerySession(r, gallery)
 
 	passwordProtected := gallery.PasswordHash != nil && *gallery.PasswordHash != ""
 	mode := strings.ToLower(strings.TrimSpace(gallery.AccessMode))
+	gated := mode == "private" || mode == "invite-only" || passwordProtected
+
+	// A TRANSIENT share-lookup failure (DB blip surfaced as
+	// service.ErrShareLinkUnavailable) must DENY — never grant — but, on a GATED
+	// gallery where the share link was the access path, answer with a RETRYABLE
+	// 503 instead of a permanent 403/401 so the SSR page can retry instead of
+	// hard-500ing (issue #179). It only fires when the request is not already
+	// independently authorized. On an OPEN public/unlisted gallery the share
+	// link is irrelevant to access, so a blip never blocks anonymous delivery.
+	if shareTransient && gated && !hasSession {
+		respondJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
+			"error":     "gallery temporarily unavailable",
+			"retryable": true,
+		})
+		return false
+	}
 
 	// S4-G3: private / invite-only galleries are NEVER served without a
 	// verified session, regardless of password state.
@@ -1112,13 +1155,30 @@ func (h *PublicGalleryHandler) GetBySlug(w http.ResponseWriter, r *http.Request)
 	// the asset/album/byte paths then require. Best-effort — an invalid/expired
 	// share link simply doesn't establish a session and the gating below kicks
 	// in. tryBindShareSession only mints on success.
-	hasSession := h.tryBindShareSession(w, r, gallery) || h.hasValidGallerySession(r, gallery)
+	hasShareSession, shareTransient := h.tryBindShareSession(w, r, gallery)
+	hasSession := hasShareSession || h.hasValidGallerySession(r, gallery)
+
+	mode := strings.ToLower(strings.TrimSpace(gallery.AccessMode))
+	// A TRANSIENT share-lookup blip (DB error surfaced as
+	// service.ErrShareLinkUnavailable) on an access-gated (private/invite-only)
+	// gallery would otherwise be conflated into a permanent "locked" shell.
+	// Answer 503 retryable instead so the SSR fetch retries rather than
+	// rendering a wrong terminal state (issue #179). Only when the gallery is
+	// gated AND the request is not already independently authorized — an open
+	// public/unlisted gallery returns the full payload anyway, so a share blip
+	// there is harmless.
+	if shareTransient && (mode == "private" || mode == "invite-only") && !hasSession {
+		respondJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
+			"error":     "gallery temporarily unavailable",
+			"retryable": true,
+		})
+		return
+	}
 
 	// S4-G3: private / invite-only galleries return only a minimal "locked"
 	// shell to anonymous clients — never the cover thumbnails or full settings
 	// that the asset surfaces leak through. The viewer renders an invite/share
 	// prompt from this. With a valid session the full payload is returned.
-	mode := strings.ToLower(strings.TrimSpace(gallery.AccessMode))
 	if (mode == "private" || mode == "invite-only") && !hasSession {
 		respondJSON(w, http.StatusOK, map[string]interface{}{
 			"id":           gallery.ID.String(),

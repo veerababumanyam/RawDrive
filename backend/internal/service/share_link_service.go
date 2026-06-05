@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -13,9 +14,36 @@ import (
 	"github.com/rawdrive/backend/internal/repository"
 )
 
+// ErrShareLinkUnavailable is a sentinel for a TRANSIENT/infrastructure failure
+// while validating a share link (e.g. a DB error from the repository), as
+// opposed to a genuine denial (unknown token, revoked, expired, PIN mismatch,
+// access-limit reached, email not authorized). It MUST be treated fail-closed:
+// a transient failure denies access — it never grants it — but callers should
+// surface it as a RETRYABLE condition (HTTP 503) rather than a permanent
+// denial (403/404), so a momentary blip self-heals instead of looking like a
+// hard "access denied". See issue #179: a transient DB error during share-link
+// validation was being conflated into "not found" → 403 → SSR 500.
+var ErrShareLinkUnavailable = errors.New("share link temporarily unavailable")
+
+// shareLinkStore is the narrow persistence seam the ShareLinkService depends on.
+// *repository.ShareLinkRepo satisfies it in production; a test can substitute a
+// fake to exercise the transient-vs-genuine error distinction (issue #179)
+// without a live database. Defining it here (consumer side) keeps the repo free
+// of a service-owned interface.
+type shareLinkStore interface {
+	Create(ctx context.Context, sl *repository.ShareLink) error
+	GetByToken(ctx context.Context, token string) (*repository.ShareLink, error)
+	ListByGallery(ctx context.Context, galleryID uuid.UUID) ([]repository.ShareLink, error)
+	Revoke(ctx context.Context, id uuid.UUID) error
+	RevokeInWorkspace(ctx context.Context, linkID, workspaceID uuid.UUID) (int64, error)
+	IncrementViewCount(ctx context.Context, token string) error
+	IncrementAccessCount(ctx context.Context, token string) (int, error)
+	IncrementDownloadCount(ctx context.Context, token string) error
+}
+
 // ShareLinkService handles share link business logic.
 type ShareLinkService struct {
-	repo *repository.ShareLinkRepo
+	repo shareLinkStore
 }
 
 // NewShareLinkService creates a new ShareLinkService.
@@ -107,7 +135,16 @@ func (s *ShareLinkService) ListByGallery(ctx context.Context, galleryID uuid.UUI
 // ValidateAccess + TrackAccess — this is purely the gallery-binding lookup.
 func (s *ShareLinkService) GalleryIDForToken(ctx context.Context, token string) (uuid.UUID, error) {
 	sl, err := s.repo.GetByToken(ctx, token)
-	if err != nil || sl == nil {
+	if err != nil {
+		// A real DB/infra error from the repository — NOT a genuine
+		// not-found. Surface it as transient so the handler can deny with a
+		// retryable 503 instead of a permanent 403/404 (issue #179). Still
+		// fail-closed: the caller treats this as "no gallery bound".
+		return uuid.Nil, fmt.Errorf("%w: %v", ErrShareLinkUnavailable, err)
+	}
+	if sl == nil {
+		// pgx.ErrNoRows collapsed to (nil, nil) by the repo — a genuine
+		// unknown/revoked token. This stays a permanent denial.
 		return uuid.Nil, fmt.Errorf("share link not found")
 	}
 	return sl.GalleryID, nil
@@ -193,7 +230,14 @@ func shareEmailCredentialAllowed(permissions map[string]interface{}, credential 
 // ValidateAccess checks if the given credentials satisfy the share link's access mode.
 func (s *ShareLinkService) ValidateAccess(ctx context.Context, token string, credential string) (bool, error) {
 	sl, err := s.repo.GetByToken(ctx, token)
-	if err != nil || sl == nil {
+	if err != nil {
+		// Real DB/infra error — transient, not a genuine denial. Fail closed
+		// (deny) but mark it retryable so the handler can answer 503 instead
+		// of a permanent 403 (issue #179).
+		return false, fmt.Errorf("%w: %v", ErrShareLinkUnavailable, err)
+	}
+	if sl == nil {
+		// Genuine unknown/revoked token — permanent denial.
 		return false, fmt.Errorf("share link not found")
 	}
 
