@@ -2,6 +2,9 @@
 
 **Status:** Plan of record for the next production (re)deploy. Authored 2026-06-05 from a live
 audit of the running fleet. Supersedes the ad-hoc single-node-pinned topology.
+**Rev. 2026-06-05:** clarified the Cloudflare onboarding is a **nameserver delegation, not a domain
+transfer** — it proceeds while GoDaddy's 60-day transfer lock is active (domain stays at GoDaddy);
+hardened the §13 cutover with real-IP-before-rate-limit ordering and per-step verify gates.
 
 **Goals (in the user's words):** best security (hard to hack), very high performance / blazing
 fast, robust connectivity, highly available *without impacting user features*, **fast photo
@@ -43,10 +46,10 @@ horizontal scaling with minimal effort**.
    └──────────┘          │    ▼                ▼               ▼
         │ direct         │  ┌────────────────────────────────────┐   ┌──────────────────┐
         │ presigned      │  │     APP TIER (stateless, elastic)   │   │  OBJECT STORAGE   │
-        │ multipart      │  │  app-1 … app-N  (Hostinger VPS)     │   │   Backblaze B2    │
-        ▼                │  │  nginx · frontend(Next) · backend   │   │  media: rawfolder │
-   ┌─────────────┐       │  │  · face-svc   (images pulled GHCR)  │   │  backups: rawdrive│
-   │ Backblaze B2│◄──────┘  └───────────────┬────────────────────┘   │           -backups│
+        │ multipart      │  │  app-1 … app-N  (Hostinger VPS)     │   │  media:           │
+        ▼                │  │  nginx · frontend(Next) · backend   │   │  RawDriveClients  │
+   ┌─────────────┐       │  │  · face-svc   (images pulled GHCR)  │   │  backups:         │
+   │ Backblaze B2│◄──────┘  └───────────────┬────────────────────┘   │  RawDriveAdmin    │
    │  (or R2 hot │  origin → HAProxy :5000   │ (reads/writes)         └──────────────────┘
    │   path)     │                           ▼
    └─────────────┘             ┌──────────────────────────────────────────┐
@@ -75,7 +78,16 @@ horizontal scaling with minimal effort**.
 
 ## 3. Edge tier — Cloudflare (security + speed in one)
 
-**DNS / proxy (move NS to Cloudflare; keep registrar at GoDaddy):**
+**DNS / proxy — this is a *nameserver delegation*, NOT a domain transfer:**
+
+> ⚠️ **Do not transfer the domain.** The only action at GoDaddy is swapping the **nameserver**
+> fields to Cloudflare's two NS (GoDaddy → Domain Settings → Nameservers → Change → "enter my own
+> nameservers"). The domain stays **registered and owned at GoDaddy**. GoDaddy's 60-day **transfer**
+> lock (after registration / registrar transfer / contact change) blocks *registrar transfers* — it
+> does **not** block nameserver changes, so the cutover proceeds even while that lock is active.
+> Leave the transfer lock **ON** (anti-hijack). The only thing that would genuinely block this is if
+> GoDaddy refuses to *save the NS fields* themselves (rare; then wait out the ≤60-day window and use a
+> GoDaddy second-apex-A-record round-robin as a no-health-check stopgap meanwhile).
 
 | Host | Records (all 🟠 proxied unless noted) | Purpose |
 |------|----------------------------------------|---------|
@@ -196,8 +208,8 @@ Yes — Cloudflare CDN is the answer, *with* one design point because galleries 
 
 ## 8. Storage & backup — B2 (with continuous incremental DB backup)
 
-- **Media:** B2 bucket `rawfolder` (current), served via `cdn.rawdrive.in` (§7).
-- **DB backups → B2 bucket `rawdrive-backups`** (separate bucket = a media-key leak can't touch
+- **Media:** B2 bucket `RawDriveClients` (current), served via `cdn.rawdrive.in` (§7).
+- **DB backups → B2 bucket `RawDriveAdmin`** (separate bucket = a media-key leak can't touch
   backups), three layers (repo has all of it: `deploy/pgbackrest/`, `deploy/scripts/pgbackrest-*.sh`):
   | Layer | Tool | Cadence | RPO |
   |-------|------|---------|-----|
@@ -292,14 +304,19 @@ pull-and-join, never a build-and-migrate.
 
 Ordered so production is never left broken. Each step is reversible until the one after it.
 
-0. **Pre:** provision B2 `rawdrive-backups` bucket + scoped key; create Cloudflare account; (opt) buy
+0. **Pre:** provision B2 `RawDriveAdmin` bucket + scoped key; create Cloudflare account; (opt) buy
    CF Load Balancing; (opt) attach Hostinger floating IP. Take a fresh verified backup.
-1. **Cloudflare onboarding (DNS-only):** add site, import records, **grey-cloud everything**, move
-   GoDaddy NS to Cloudflare. Verify site unchanged + email intact. *(no traffic change yet)*
-2. **Origin prep (I deploy):** add `cloudflare-real-ip.conf` to nginx (safe no-op pre-cutover);
-   set CF SSL to **Full(strict)**.
+1. **Cloudflare onboarding (DNS-only):** add site (Free), import records, **grey-cloud everything**,
+   then **change the GoDaddy nameservers** to Cloudflare's two NS — a delegation, **not** a domain
+   transfer, so it works while GoDaddy's transfer lock is on (see §3). Wait for zone **Active**.
+   **Gate:** site unchanged + email (MX/SPF/DKIM/DMARC) intact. *(no traffic change yet — still grey)*
+2. **Origin prep (I deploy):** add `cloudflare-real-ip.conf` to **both** app nodes' nginx (safe no-op
+   pre-cutover, but MUST land before any proxy/rate-limit or fail2ban would ban Cloudflare IPs = ban
+   everyone); set CF SSL to **Full(strict)** + enable HTTP/3, Brotli, TLS1.3, Always-Use-HTTPS.
+   **Gate:** nginx logs show real visitor IPs via `CF-Connecting-IP`.
 3. **Flip proxy on:** orange-cloud one record → verify → the rest (apex, www, api, wildcard, cdn).
-   Add the multi-IP A-records / LB pool. Galleries + API verified through CF.
+   Add the multi-IP A-records / LB pool (health check `/health`). **Gate:** apex, `api/health`, a
+   `*.rawdrive.in` gallery, and a test email all verified through CF before continuing.
 4. **Origin lock (I deploy):** `cf-origin-lock.sh` → 80/443 only from Cloudflare. Re-verify.
 5. **CDN for galleries:** stand up `cdn.rawdrive.in` → B2; switch gallery derivative URLs to it;
    confirm edge-cache HITs + client decrypt.
@@ -328,9 +345,10 @@ Ordered so production is never left broken. Each step is reversible until the on
 
 ## 15. Prerequisites the owner must supply
 
-1. **GoDaddy DNS access** (or willingness to move NS to Cloudflare) — for the apex/wildcard fix.
+1. **GoDaddy login** to change the **nameservers** (NOT a domain transfer — domain stays at GoDaddy;
+   works even while the 60-day transfer lock is active, see §3) — for the apex/wildcard fix.
 2. **Cloudflare account** + (recommended) Load Balancing add-on.
-3. **B2 `rawdrive-backups` bucket** + scoped S3 key (for pgBackRest PITR).
+3. **B2 `RawDriveAdmin` bucket** + scoped S3 key (for pgBackRest PITR).
 4. (Optional) **Hostinger floating IP** and/or **Hostinger API token** (for assisted auto-scale).
 5. A **watched maintenance window** for the Patroni cutover (step 6) — the one step with DB-failover
    risk; everything else is no-downtime.
