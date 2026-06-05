@@ -96,7 +96,12 @@ func (r *AdminRevenueRepo) GetMetrics(ctx context.Context, from time.Time, to ti
 			COALESCE(SUM(s.amount_paisa) FILTER (WHERE s.status = 'active' AND s.tier_slug != 'free'), 0) AS ltv,
 			CASE
 				WHEN COUNT(DISTINCT s.user_id) FILTER (WHERE s.status = 'active' AND s.tier_slug != 'free') = 0 THEN 0
-				ELSE COALESCE(SUM(s.amount_paisa) FILTER (WHERE s.status = 'active' AND s.tier_slug != 'free') / NULLIF(COUNT(DISTINCT s.user_id) FILTER (WHERE s.status = 'active' AND s.tier_slug != 'free'), 0), 0)
+				-- SUM(bigint) returns numeric in Postgres, so without the ::bigint
+				-- cast this division is NUMERIC division and yields a fractional
+				-- value (e.g. 133233.33) that fails to scan into the int64 ARPU
+				-- field ("cannot convert ... to integer") → handler 500. Casting
+				-- the sum to bigint restores the intended integer (paisa) division.
+				ELSE COALESCE(SUM(s.amount_paisa) FILTER (WHERE s.status = 'active' AND s.tier_slug != 'free')::bigint / NULLIF(COUNT(DISTINCT s.user_id) FILTER (WHERE s.status = 'active' AND s.tier_slug != 'free'), 0), 0)
 			END AS arpu,
 			COALESCE(COUNT(DISTINCT s.user_id) FILTER (WHERE s.status = 'active' AND s.tier_slug != 'free'), 0) AS total_subscribers
 		FROM subscriptions s
