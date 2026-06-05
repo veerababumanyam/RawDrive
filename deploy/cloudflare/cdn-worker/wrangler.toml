@@ -1,0 +1,15 @@
+name = "rawdrive-cdn-worker"
+main = "src/cdn-worker.js"
+compatibility_date = "2024-11-06"
+
+# Plaintext (non-secret) vars. Secrets (B2_KEY_ID, B2_APP_KEY, CDN_HMAC_SECRET,
+# SSE_C_KEY_B64, SSE_C_KEY_MD5_B64) are set via `wrangler secret put` after deploy.
+[vars]
+B2_BUCKET   = "rawdriveclientfiles"
+B2_ENDPOINT = "https://s3.us-east-005.backblazeb2.com"
+B2_REGION   = "us-east-005"
+
+# Bind the worker to the CDN hostname. zone must exist in this Cloudflare account.
+routes = [
+  { pattern = "cdn.rawdrive.in/*", zone_name = "rawdrive.in" }
+]
