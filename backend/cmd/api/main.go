@@ -1900,6 +1900,33 @@ func main() {
 	}
 	log.Printf("Storage: Backblaze B2 initialized (bucket: %s, endpoint: %s, sse: %s)", storageCfg.Bucket, storageCfg.Endpoint, sseDisplay)
 
+	// Signed-CDN derivative delivery (cdn.rawdrive.in Cloudflare Worker).
+	// Resolved via the standard platform_settings(cdn.*) → env order. The flag
+	// (cdn.signed_urls / CDN_SIGNED_URLS) defaults FALSE: when off, the public
+	// gallery serializers keep emitting bare /storage keys and this is a no-op.
+	// When on, derivative (thumbnails/*, derivatives/*) URLs become short-lived
+	// HMAC-signed cdn.rawdrive.in URLs the Worker validates + SSE-C-decrypts at
+	// the edge. CDN_HMAC_SECRET MUST equal the Worker's secret. Originals/masters
+	// are never signed (see storage.CDNSigner). Activation = set the env vars on
+	// the nodes + re-sync + roll backend (a deliberate operator step).
+	cdnSigner := &storage.CDNSigner{
+		Enabled: strings.EqualFold(platformSettingValueAny(context.Background(), platformSettingsRepo, "cdn", "signed_urls", "CDN_SIGNED_URLS"), "true"),
+		BaseURL: platformSettingValueDefault(context.Background(), platformSettingsRepo, "cdn", "base_url", storage.DefaultCDNBaseURL, "CDN_BASE_URL"),
+		Secret:  platformSettingValueAny(context.Background(), platformSettingsRepo, "cdn", "hmac_secret", "CDN_HMAC_SECRET"),
+	}
+	if cdnSigner.Enabled {
+		if strings.TrimSpace(cdnSigner.Secret) == "" {
+			// Misconfiguration guard: a flag-on signer with no secret would
+			// silently fall through to /storage. Make it loud, stay off.
+			cdnSigner.Enabled = false
+			log.Println("CDN: cdn.signed_urls / CDN_SIGNED_URLS is true but cdn.hmac_secret / CDN_HMAC_SECRET is empty — signed CDN delivery DISABLED, serving via /storage.")
+		} else {
+			log.Printf("CDN: signed derivative delivery ENABLED via %s", cdnSigner.BaseURL)
+		}
+	} else {
+		log.Println("CDN: signed derivative delivery disabled (serving derivatives via /storage).")
+	}
+
 	// M2 Repositories
 	assetRepo := repository.NewAssetRepo(dbPool)
 	// 2026-05-21: asset_derivatives writer is wired into the thumbnail
@@ -2238,6 +2265,10 @@ func main() {
 			// JobRepo is stateless (same pattern as FaceRepo).
 			FaceSvc: nil,
 			JobRepo: ai.NewJobRepo(dbPool),
+			// Signed-CDN derivative delivery (CDN_SIGNED_URLS). OFF by default;
+			// when enabled the public gallery serializers emit signed
+			// cdn.rawdrive.in URLs for derivatives after the access gate.
+			CDNSigner: cdnSigner,
 		}
 		// PUB-CACHE: wire the shared (Valkey) backing for the public
 		// studio-profile landing read when available. Only PUBLIC, non-PII

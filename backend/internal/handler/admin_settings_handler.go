@@ -12,7 +12,7 @@ import (
 
 // validCategories is the allowlist of platform-settings categories. It mirrors
 // the canonical set documented in platform_settings_repo.go and AGENTS.md
-// (storage, auth, payments, ai, email, messaging). Without this gate a
+// (storage, auth, payments, ai, email, messaging, cdn). Without this gate a
 // super_admin could create setting rows under arbitrary, undefined categories,
 // polluting the platform_settings table with categories no part of the app
 // reads. Note: this is NOT an encryption gate — encryption is driven off the
@@ -24,6 +24,10 @@ var validCategories = map[string]struct{}{
 	"ai":        {},
 	"email":     {},
 	"messaging": {},
+	// cdn: signed-CDN derivative delivery (cdn.signed_urls / cdn.base_url /
+	// cdn.hmac_secret). Allowlisted so the HMAC secret can be viewed/rotated
+	// through the admin settings API like other secret-bearing categories.
+	"cdn": {},
 }
 
 // isValidCategory reports whether category is in the allowlist.

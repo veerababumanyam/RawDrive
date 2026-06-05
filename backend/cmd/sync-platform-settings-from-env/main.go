@@ -236,5 +236,13 @@ func settingsFromEnv() []envSetting {
 		{category: "storage", key: "b2_application_key", envNames: []string{"B2_APPLICATION_KEY", "B2_SECRET_ACCESS_KEY"}, isSecret: true, description: "Backblaze B2 application key / S3 secret access key"},
 		{category: "storage", key: "sse_mode", envNames: []string{"STORAGE_SSE_MODE"}, description: "Storage server-side encryption mode: AES256 or SSE-C"},
 		{category: "storage", key: "sse_customer_key_hex", envNames: []string{"STORAGE_SSE_C_KEY"}, isSecret: true, description: "SSE-C customer key as 64 hex characters"},
+
+		// Signed-CDN derivative delivery (cdn.rawdrive.in Cloudflare Worker).
+		// signed_urls is the master flag (default false — emit /storage keys);
+		// hmac_secret MUST equal the Worker's secret. Derivatives only — originals
+		// are never signed. See docs/runbooks/cdn-b2-signed-urls.md.
+		{category: "cdn", key: "signed_urls", envNames: []string{"CDN_SIGNED_URLS"}, description: "Emit signed cdn.rawdrive.in URLs for gallery derivatives (true/false, default false)"},
+		{category: "cdn", key: "base_url", envNames: []string{"CDN_BASE_URL"}, description: "Signed-CDN edge base URL (default https://cdn.rawdrive.in)"},
+		{category: "cdn", key: "hmac_secret", envNames: []string{"CDN_HMAC_SECRET"}, isSecret: true, description: "HMAC secret for signing CDN URLs — must equal the Cloudflare Worker's CDN_HMAC_SECRET"},
 	}
 }

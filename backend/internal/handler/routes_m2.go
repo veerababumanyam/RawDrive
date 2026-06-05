@@ -448,6 +448,9 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 	if deps.StudioLandingCache != nil {
 		publicHandler = publicHandler.WithStudioLandingCache(deps.StudioLandingCache)
 	}
+	if deps.CDNSigner != nil {
+		publicHandler = publicHandler.WithCDNSigner(deps.CDNSigner)
+	}
 	proofingHandler := NewProofingHandler(deps.ProofingService).
 		WithGalleryService(deps.GalleryService).
 		WithGalleryAccessService(deps.GalleryAccessSvc).
@@ -698,4 +701,10 @@ type M2Dependencies struct {
 	// Valkey) GetStudioLanding always hits the DB. Wired from main.go with the
 	// same valkeyAnalyticsCache adapter CACHE-4/CACHE-5 use.
 	StudioLandingCache publicStudioLandingCache
+
+	// CDNSigner: optional signed-CDN derivative delivery (CDN_SIGNED_URLS).
+	// nil-safe and OFF by default — when nil/disabled the public gallery
+	// serializers emit bare /storage keys exactly as before. Resolved from
+	// platform_settings(cdn.*) → env in main.go.
+	CDNSigner *storage.CDNSigner
 }

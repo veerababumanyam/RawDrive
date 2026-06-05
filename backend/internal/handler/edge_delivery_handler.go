@@ -10,7 +10,25 @@ import (
 
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
+	"github.com/rawdrive/backend/internal/storage"
 )
+
+// derivativeDeliveryURL is the single mapping from a derivative storage key to
+// the URL the client should fetch for it. When CDN delivery is enabled it
+// returns a short-lived signed cdn.rawdrive.in URL for derivative keys
+// (thumbnails/*, derivatives/*); otherwise — or for any non-derivative key, or
+// a nil signer — it returns the key UNCHANGED so the frontend serves it through
+// the JWT-gated /storage proxy exactly as before.
+//
+// Both the public gallery serializers and this edge path route their derivative
+// URLs through here so the "sign or /storage" policy (and its hard
+// derivatives-only scope guard) lives in exactly one place. Callers MUST only
+// use it after their own access/PIN/gallery-session check — a signed URL is a
+// 1-hour bearer capability. Originals/masters never carry a derivative prefix
+// and so are never signed.
+func derivativeDeliveryURL(cdn *storage.CDNSigner, key string) string {
+	return cdn.DerivativeDeliveryURL(key)
+}
 
 type EdgeDeliveryHandler struct {
 	assetRepo    *repository.AssetRepo

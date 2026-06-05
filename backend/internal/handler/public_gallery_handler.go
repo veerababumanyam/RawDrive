@@ -21,6 +21,7 @@ import (
 	"github.com/rawdrive/backend/internal/face"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
+	"github.com/rawdrive/backend/internal/storage"
 )
 
 // PublicGalleryHandler handles public gallery viewing (no auth).
@@ -82,6 +83,15 @@ type PublicGalleryHandler struct {
 	// is a different handler and is NEVER cached here. Mirrors the CACHE-4/CACHE-5
 	// shared-cache seam (Get/Set over JSON bytes, best-effort).
 	studioLandingCache publicStudioLandingCache
+
+	// cdn signs derivative storage keys into short-lived cdn.rawdrive.in URLs
+	// when CDN delivery is enabled (CDN_SIGNED_URLS). nil-safe and OFF by
+	// default: when nil/disabled every serializer emits the bare storage key
+	// unchanged and the frontend serves it via the JWT-gated /storage proxy.
+	// Only applied in the asset-list serializers below, which all run AFTER the
+	// gallery-session/PIN access gate — never on the unauthenticated shell
+	// (cover thumbnails are deliberately left unsigned).
+	cdn *storage.CDNSigner
 }
 
 // publicStudioLandingCache is the shared-cache seam for the public studio-profile
@@ -181,6 +191,34 @@ func (h *PublicGalleryHandler) WithStudioLandingCache(c publicStudioLandingCache
 		h.studioLandingCache = c
 	}
 	return h
+}
+
+// WithCDNSigner wires the signed-CDN derivative delivery seam (CDN_SIGNED_URLS).
+// Resolved from platform_settings(cdn.*) → env in main.go. nil/disabled keeps
+// the existing /storage behaviour. Returns the receiver so callers can chain.
+func (h *PublicGalleryHandler) WithCDNSigner(c *storage.CDNSigner) *PublicGalleryHandler {
+	h.cdn = c
+	return h
+}
+
+// deliverThumbnailURLs maps a stored thumbnail_urls map (variant→storage-key)
+// to the variant→delivery-URL map sent to authorized public viewers. With CDN
+// delivery enabled each derivative key becomes a short-lived signed
+// cdn.rawdrive.in URL; otherwise the bare key is passed through unchanged for
+// the /storage proxy. A new map is returned so the (possibly shared/cached)
+// source asset's map is never mutated. MUST only be called from serializers
+// that run after the gallery-session/PIN gate.
+func (h *PublicGalleryHandler) deliverThumbnailURLs(urls map[string]string) map[string]string {
+	// Fast path: no signer, or nothing to rewrite — return the original map
+	// untouched so behaviour and allocations are identical to before.
+	if h.cdn == nil || !h.cdn.Enabled || len(urls) == 0 {
+		return urls
+	}
+	out := make(map[string]string, len(urls))
+	for variant, key := range urls {
+		out[variant] = derivativeDeliveryURL(h.cdn, key)
+	}
+	return out
 }
 
 type publicGalleryResolver interface {
@@ -1367,7 +1405,11 @@ func (h *PublicGalleryHandler) resolveAssetsByID(ctx context.Context, ids []uuid
 // assetToPublicResponse projects a repository.Asset into the public-safe shape,
 // carrying the media_encryption manifest the client needs to decrypt thumbnails
 // on E2EE galleries.
-func assetToPublicResponse(a *repository.Asset, sortOrder int) publicAssetResponse {
+// assetToPublicResponse is a method so it can apply the signed-CDN derivative
+// delivery transform (deliverThumbnailURLs). Every caller is on a path already
+// behind the gallery-session/PIN gate, so signing here only ever serves an
+// authorized viewer.
+func (h *PublicGalleryHandler) assetToPublicResponse(a *repository.Asset, sortOrder int) publicAssetResponse {
 	return publicAssetResponse{
 		ID:              a.ID.String(),
 		Filename:        a.Filename,
@@ -1375,7 +1417,7 @@ func assetToPublicResponse(a *repository.Asset, sortOrder int) publicAssetRespon
 		Width:           a.Width,
 		Height:          a.Height,
 		Blurhash:        a.Blurhash,
-		ThumbnailURLs:   a.ThumbnailURLs,
+		ThumbnailURLs:   h.deliverThumbnailURLs(a.ThumbnailURLs),
 		IsEncrypted:     a.IsEncrypted,
 		MediaEncryption: a.MediaEncryption,
 		SortOrder:       sortOrder,
@@ -1397,7 +1439,7 @@ func (h *PublicGalleryHandler) buildPublicAssetResponses(ctx context.Context, id
 		if !ok {
 			continue
 		}
-		out = append(out, assetToPublicResponse(asset, i))
+		out = append(out, h.assetToPublicResponse(asset, i))
 	}
 	return out
 }
@@ -1442,7 +1484,7 @@ func (h *PublicGalleryHandler) ListAssets(w http.ResponseWriter, r *http.Request
 			Width:           asset.Width,
 			Height:          asset.Height,
 			Blurhash:        asset.Blurhash,
-			ThumbnailURLs:   asset.ThumbnailURLs,
+			ThumbnailURLs:   h.deliverThumbnailURLs(asset.ThumbnailURLs),
 			IsEncrypted:     asset.IsEncrypted,
 			MediaEncryption: asset.MediaEncryption,
 			SortOrder:       ga.SortOrder,
@@ -1578,7 +1620,7 @@ func (h *PublicGalleryHandler) ListAlbumAssets(w http.ResponseWriter, r *http.Re
 			Width:           asset.Width,
 			Height:          asset.Height,
 			Blurhash:        asset.Blurhash,
-			ThumbnailURLs:   asset.ThumbnailURLs,
+			ThumbnailURLs:   h.deliverThumbnailURLs(asset.ThumbnailURLs),
 			IsEncrypted:     asset.IsEncrypted,
 			MediaEncryption: asset.MediaEncryption,
 			SortOrder:       aa.Position,
@@ -2188,7 +2230,7 @@ func (h *PublicGalleryHandler) ListPeople(w http.ResponseWriter, r *http.Request
 			CoverAsset: c.SampleAssetID.String(),
 		}
 		if a, ok := coversByID[c.SampleAssetID]; ok {
-			rec := assetToPublicResponse(a, 0)
+			rec := h.assetToPublicResponse(a, 0)
 			resp.CoverAssetRecord = &rec
 		}
 		out = append(out, resp)
