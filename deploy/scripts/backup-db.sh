@@ -29,6 +29,7 @@ if [ -z "${BACKUP_GPG_PASSPHRASE:-}" ] && [ -f /opt/rawdrive/app/.env ]; then
 fi
 
 RCLONE_REMOTE="${BACKUP_RCLONE_REMOTE:-b2:rawdriveadminfiles}"
+PG_CONTAINER="${PG_CONTAINER:-$(docker ps --format "{{.Names}}" | grep -xE "deploy-(patroni|postgres)-1" | head -1)}"
 PG_CONTAINER="${PG_CONTAINER:-deploy-postgres-1}"
 
 : "${BACKUP_GPG_PASSPHRASE:?BACKUP_GPG_PASSPHRASE not set — source /opt/rawdrive/app/.env before running}"

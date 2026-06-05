@@ -257,7 +257,14 @@ bootstrap:
       # app-node CIDRs remain correct.
       pg_hba:
         # Container-local maintenance (Patroni runs psql locally).
-        - local   all             postgres                                peer
+        # pgBackRest (scheduled `backup`, stanza-create, check) connects over the
+        # container-local Unix socket as the `rawdrive` superuser, so it needs a
+        # passwordless local path — exactly as deploy/postgres/pg_hba.conf grants
+        # in the standalone model. Scoped to rawdrive ONLY and only over the
+        # socket (a process already inside the container), so it adds no real
+        # exposure; everyone else local still needs scram. WITHOUT this line the
+        # daily incremental pgBackRest backup fails auth under Patroni.
+        - local   all             rawdrive                                trust
         - local   all             all                                     scram-sha-256
         - host    all             all             127.0.0.1/32            scram-sha-256
         - host    all             all             ::1/128                 scram-sha-256

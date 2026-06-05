@@ -41,7 +41,10 @@
 
 set -euo pipefail
 
-CONTAINER=deploy-postgres-1
+# Resolve the live Postgres container: deploy-patroni-1 after the Patroni cutover,
+# else the standalone deploy-postgres-1.
+CONTAINER="${PG_CONTAINER:-$(docker ps --format "{{.Names}}" | grep -xE "deploy-(patroni|postgres)-1" | head -1)}"
+CONTAINER="${CONTAINER:-deploy-postgres-1}"
 STANZA=rawdrive
 
 # Logs go to stdout only (cron captures them); we keep NO local backup/log dir on
