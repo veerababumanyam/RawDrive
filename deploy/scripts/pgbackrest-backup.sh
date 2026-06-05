@@ -84,7 +84,13 @@ log "starting pgBackRest $TYPE backup of stanza=$STANZA"
 # --type drives full/diff/incr. On a fresh stanza with no prior full, pgBackRest
 # auto-promotes a diff/incr request to a full (it logs the upgrade), so the very
 # first scheduled run can't fail for "no backup exists yet".
-docker exec "$CONTAINER" pgbackrest --stanza="$STANZA" --type="$TYPE" backup \
+# MUST run as the `postgres` OS user (uid 999), NOT root. pgBackRest creates
+# lock/stop files under /tmp/pgbackrest and (in async mode) status files in the
+# spool — if a root-run command creates those as root, the postgres-invoked
+# archive_command (uid 999) then hits "Permission denied" and WAL archiving
+# silently stalls. Running every pgbackrest command as postgres keeps all of its
+# runtime state postgres-owned and consistent with archive_command.
+docker exec -u postgres "$CONTAINER" pgbackrest --stanza="$STANZA" --type="$TYPE" backup \
     || fail "pgbackrest $TYPE backup failed"
 
 # --- Verify -------------------------------------------------------------------
@@ -92,7 +98,7 @@ docker exec "$CONTAINER" pgbackrest --stanza="$STANZA" --type="$TYPE" backup \
 # the backup set, so a non-zero exit here means the repo is unreadable/corrupt
 # even though `backup` returned 0. We capture it into the log for the on-call.
 log "verifying repository state via pgbackrest info"
-INFO_OUT="$(docker exec "$CONTAINER" pgbackrest --stanza="$STANZA" info 2>&1)" \
+INFO_OUT="$(docker exec -u postgres "$CONTAINER" pgbackrest --stanza="$STANZA" info 2>&1)" \
     || fail "pgbackrest info failed after backup — repository may be unreadable"
 echo "$INFO_OUT"
 

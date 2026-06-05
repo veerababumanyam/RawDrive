@@ -57,11 +57,11 @@ docker exec "$CONTAINER" sh -c '[ -n "${PGBACKREST_REPO1_CIPHER_PASS:-}" ]' \
     || fail "PGBACKREST_REPO1_CIPHER_PASS is empty in $CONTAINER — set it in /opt/rawdrive/app/.env and recreate the container"
 
 log "creating stanza (idempotent)…"
-docker exec "$CONTAINER" pgbackrest --stanza="$STANZA" stanza-create \
+docker exec -u postgres "$CONTAINER" pgbackrest --stanza="$STANZA" stanza-create \
     || fail "stanza-create failed — check repo1-s3-* settings and B2 credentials"
 
 log "running check (forces a WAL switch and confirms it reaches B2)…"
-docker exec "$CONTAINER" pgbackrest --stanza="$STANZA" check \
+docker exec -u postgres "$CONTAINER" pgbackrest --stanza="$STANZA" check \
     || fail "check failed — is archive_mode=on and archive_command set in postgresql.conf, and was postgres RESTARTED? See docs/runbooks/pitr-restore.md §(a)"
 
 log "stanza $STANZA is created and archiving is verified."
