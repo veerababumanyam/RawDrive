@@ -118,6 +118,18 @@ done
 
 log() { echo "[$(date '+%H:%M:%S')] $*"; }
 
+# Resolve the live Postgres primary container on the DB node. After the Patroni
+# cutover it is `deploy-patroni-1`; pre-cutover it was `deploy-postgres-1`.
+# Lazy + cached so callers can use `$(pg_primary_container)` inline.
+PG_PRIMARY_CONTAINER=""
+pg_primary_container() {
+  if [ -z "$PG_PRIMARY_CONTAINER" ]; then
+    PG_PRIMARY_CONTAINER="$($SSH_DB "root@$DB_NODE_IP" 'docker ps --format "{{.Names}}" | grep -xE "deploy-(patroni|postgres)-1" | head -1' 2>/dev/null || true)"
+    PG_PRIMARY_CONTAINER="${PG_PRIMARY_CONTAINER:-deploy-postgres-1}"
+  fi
+  printf '%s' "$PG_PRIMARY_CONTAINER"
+}
+
 guard_supported_shell() {
   # On Windows, plain `bash` often resolves to WSL/System32 bash. That
   # environment cannot reliably stream Windows paths/SSH keys for this script
@@ -314,9 +326,9 @@ pre_migration_backup() {
     log "ERROR: cannot SSH to DB node $DB_NODE_IP for pre-migration backup"
     exit 1
   fi
-  if $SSH_DB "root@$DB_NODE_IP" 'docker exec -u postgres deploy-postgres-1 pgbackrest --stanza=rawdrive info' >/dev/null 2>&1; then
+  if $SSH_DB "root@$DB_NODE_IP" "docker exec -u postgres $(pg_primary_container) pgbackrest --stanza=rawdrive info" >/dev/null 2>&1; then
     log "pgBackRest stanza active → taking an incremental backup..."
-    if ! $SSH_DB "root@$DB_NODE_IP" 'docker exec -u postgres deploy-postgres-1 pgbackrest --stanza=rawdrive --type=incr backup'; then
+    if ! $SSH_DB "root@$DB_NODE_IP" "docker exec -u postgres $(pg_primary_container) pgbackrest --stanza=rawdrive --type=incr backup"; then
       log "ERROR: pgBackRest pre-migration backup failed — aborting deploy"
       exit 1
     fi
@@ -371,7 +383,7 @@ verify_db_node() {
     return 0
   fi
   # Postgres primary.
-  if $SSH_DB "root@$DB_NODE_IP" 'docker exec deploy-postgres-1 pg_isready -U rawdrive -d rawdrive' >/dev/null 2>&1; then
+  if $SSH_DB "root@$DB_NODE_IP" "docker exec $(pg_primary_container) pg_isready -U rawdrive -d rawdrive" >/dev/null 2>&1; then
     log "  postgres primary: READY"
   else
     log "  postgres primary: NOT READY"; ok=false
@@ -390,7 +402,7 @@ verify_db_node() {
   fi
   # Standby replication lag (bytes between primary LSN and replica replay).
   local lag
-  lag="$($SSH_DB "root@$DB_NODE_IP" "docker exec deploy-postgres-1 psql -U rawdrive -d rawdrive -tAc \"SELECT COALESCE(MAX(pg_wal_lsn_diff(sent_lsn, replay_lsn)),0)::bigint FROM pg_stat_replication\"" 2>/dev/null | tr -d '[:space:]')"
+  lag="$($SSH_DB "root@$DB_NODE_IP" "docker exec $(pg_primary_container) psql -U rawdrive -d rawdrive -tAc \"SELECT COALESCE(MAX(pg_wal_lsn_diff(sent_lsn, replay_lsn)),0)::bigint FROM pg_stat_replication\"" 2>/dev/null | tr -d '[:space:]')"
   if [ -n "$lag" ] && printf '%s' "$lag" | grep -qE '^[0-9]+$'; then
     if [ "$lag" -le "$DEPLOY_REPLICA_LAG_MAX_BYTES" ]; then
       log "  standby replication lag: ${lag} bytes (<= ${DEPLOY_REPLICA_LAG_MAX_BYTES})"
