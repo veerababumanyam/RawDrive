@@ -57,15 +57,15 @@ function buildColumns(
       key: "subscription_tier",
       label: "Tier",
       sortable: true,
-      // QA #69: filterOptions previously advertised Free/Standard/Pro/Enterprise
+      // QA #69: filterOptions previously advertised old tier names
       // but the subscriptions integration is not wired — every workspace
-      // returns null (rendered as "Free"). Selecting any non-Free option
+      // returns null (rendered as "Starter"). Selecting any paid option
       // returned zero rows, which read as "filter broken". Disabling the
       // filter until workspace_subscriptions has real data. Sorting still
       // works for debugging.
       filterable: false,
       className: "font-medium text-primary",
-      render: (value) => (value as string) || "Free",
+      render: (value) => (value as string) || "Starter",
     },
     {
       key: "created_at",

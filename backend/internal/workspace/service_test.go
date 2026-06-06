@@ -220,11 +220,11 @@ func TestCreateWorkspace_PlanTier(t *testing.T) {
 		Name:     "Pro Workspace",
 		StateID:  "state-uuid-008",
 		OwnerID:  "user-uuid-008",
-		PlanTier: "professional",
+		PlanTier: "pro_photographer",
 	})
 	require.NoError(t, err)
 	require.NotNil(t, ws)
-	assert.Equal(t, "professional", ws.PlanTier, "plan tier should be set to professional")
+	assert.Equal(t, "pro_photographer", ws.PlanTier, "plan tier should be set to pro_photographer")
 }
 
 func TestCreateWorkspace_PlanTierDefault(t *testing.T) {

@@ -147,11 +147,15 @@ const adminUserSelectColumns = `
 		st.name AS state_name,
 		(SELECT w.plan_tier FROM workspaces w WHERE w.owner_id = u.id LIMIT 1) AS tier_slug,
 		(SELECT CASE w.plan_tier
-		    WHEN 'starter'      THEN 'Starter'
-		    WHEN 'professional' THEN 'Professional'
-		    WHEN 'business'     THEN 'Business'
-		    WHEN 'enterprise'   THEN 'Enterprise'
-		    ELSE                     'Free'
+		    WHEN 'creator'          THEN 'Creator'
+		    WHEN 'pro_photographer' THEN 'Pro Photographer'
+		    WHEN 'studio'           THEN 'Studio'
+		    WHEN 'elite_studio'     THEN 'Elite Studio'
+		    WHEN 'starter'          THEN 'Creator'
+		    WHEN 'professional'     THEN 'Pro Photographer'
+		    WHEN 'business'         THEN 'Elite Studio'
+		    WHEN 'enterprise'       THEN 'Elite Studio'
+		    ELSE                         'Starter'
 		 END
 		 FROM workspaces w WHERE w.owner_id = u.id LIMIT 1) AS tier_name,
 		COALESCE(

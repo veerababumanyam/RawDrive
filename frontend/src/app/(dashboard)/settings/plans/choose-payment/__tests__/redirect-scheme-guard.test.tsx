@@ -15,8 +15,8 @@ const pushMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock, back: vi.fn() }),
-  // tier=starter is a valid paid plan in pricingPlans (id "starter").
-  useSearchParams: () => new URLSearchParams("tier=starter&interval=monthly"),
+  // tier=creator is a valid paid self-serve plan in pricingPlans.
+  useSearchParams: () => new URLSearchParams("tier=creator&interval=monthly"),
 }));
 
 vi.mock("@/lib/auth", () => ({

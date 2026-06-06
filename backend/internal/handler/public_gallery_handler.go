@@ -1659,7 +1659,7 @@ func (h *PublicGalleryHandler) VerifyPIN(w http.ResponseWriter, r *http.Request)
 // gallery shell — tier, platform brand defaults, and a can_customize flag
 // the frontend uses to decide whether to apply studio-level overrides.
 type brandingResponse struct {
-	TierSlug              string  `json:"tier_slug"`     // free, standard, pro, enterprise
+	TierSlug              string  `json:"tier_slug"`     // free, creator, pro_photographer, studio, elite_studio
 	CanCustomize          bool    `json:"can_customize"` // true when tier supports white-label overrides
 	BrandName             string  `json:"brand_name"`
 	LogoURL               *string `json:"logo_url,omitempty"`
@@ -1673,7 +1673,7 @@ type brandingResponse struct {
 // branding. Kept in Go (not DB) so the gating rule is visible in code review.
 func canCustomizeForTier(tier string) bool {
 	switch strings.ToLower(tier) {
-	case "pro", "enterprise", "studio":
+	case "pro", "professional", "pro_photographer", "business", "enterprise", "studio", "elite_studio":
 		return true
 	default:
 		return false
@@ -1732,7 +1732,7 @@ func (h *PublicGalleryHandler) GetBranding(w http.ResponseWriter, r *http.Reques
 		LogoURL:               logoURL,
 		LogoAssetID:           logoAssetID,
 		AccentColor:           accentColor,
-		HideFooter:            tier == "enterprise",
+		HideFooter:            tier == "enterprise" || tier == "elite_studio",
 		PublicBrandingEnabled: workspaceBranding.PublicBrandingEnabled,
 	})
 }

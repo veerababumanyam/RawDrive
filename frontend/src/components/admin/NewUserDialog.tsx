@@ -33,7 +33,7 @@ const ALLOWED_ROLES: Role[] = [
 
 // Empty string sentinel == "no plan grant"; the user picks their plan in
 // the onboarding wizard like a self-serve signup. Anything else is a tier
-// slug the backend will validate against the canonical 5-tier list.
+// slug the backend will validate against the canonical subscription tier list.
 const NO_GRANT_VALUE = "";
 
 // Formats paise to a human-readable ₹ string for the dropdown options
@@ -74,7 +74,14 @@ export default function NewUserDialog({
     listAdminPlans(token)
       .then((data) => {
         if (cancelled) return;
-        setPlans(data);
+        setPlans(
+          data.filter(
+            (plan) =>
+              plan.tier !== "pay_per_event" &&
+              plan.active &&
+              (plan.self_serve || plan.tier === "elite_studio"),
+          ),
+        );
         setPlansError(null);
       })
       .catch((err) => {

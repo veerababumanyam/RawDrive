@@ -18,13 +18,17 @@ func TestPlanDefaultQuotaBytes(t *testing.T) {
 		tier string
 		want int64
 	}{
-		{"free", 1 << 30},                 // 1 GB
-		{"starter", 30 * (1 << 30)},       // 30 GB
-		{"professional", 300 * (1 << 30)}, // 300 GB
-		{"business", 3 * (1 << 40)},       // 3 TB
-		{"enterprise", 6 * (1 << 40)},     // 6 TB
-		{"", 1 << 30},                     // unknown -> free
-		{"garbage-tier", 1 << 30},         // unknown -> free
+		{"free", 5 * (1 << 30)},               // 5 GB
+		{"standard", 5 * (1 << 30)},           // legacy alias -> free
+		{"creator", 100 * (1 << 30)},          // 100 GB
+		{"starter", 100 * (1 << 30)},          // legacy alias -> creator
+		{"pro_photographer", 300 * (1 << 30)}, // 300 GB
+		{"professional", 300 * (1 << 30)},     // legacy alias -> pro_photographer
+		{"studio", 1 * (1 << 40)},             // 1 TB
+		{"elite_studio", 6 * (1 << 40)},       // 3 TB+ / custom limit default
+		{"enterprise", 6 * (1 << 40)},         // legacy alias -> elite_studio
+		{"", 5 * (1 << 30)},                   // unknown -> free
+		{"garbage-tier", 5 * (1 << 30)},       // unknown -> free
 	}
 	for _, c := range cases {
 		got := PlanDefaultQuotaBytes(c.tier)

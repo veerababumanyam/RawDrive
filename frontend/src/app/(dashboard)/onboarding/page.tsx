@@ -57,35 +57,30 @@ const STEP_LABELS: Record<Step, string> = {
 };
 
 const FALLBACK_ONBOARDING_PLANS = fallbackPlanCatalog.filter((p) =>
-  ["free", "starter", "professional", "business", "enterprise"].includes(p.id),
+  ["free", "creator", "pro_photographer", "studio"].includes(p.id),
 );
 
 // Short highlight lines shown on each plan card (3 max).
 const PLAN_HIGHLIGHTS: Record<string, string[]> = {
   free: [
-    "1GB storage · 3 galleries",
-    "5 client profiles",
-    "30-day full-access trial",
+    "5GB storage · 1 event",
+    "Limited AI face search",
+    "Watermarked galleries",
   ],
-  starter: [
-    "30GB storage · 10 galleries",
-    "Client proofing & basic CRM",
-    "Priority email support",
+  creator: [
+    "100GB storage · 10 events",
+    "AI face search",
+    "Photo selling · 10% commission",
   ],
-  professional: [
-    "300GB storage · 50 galleries",
-    "AI culling + full CRM & bookings",
-    "Live streaming · marketplace listing",
+  pro_photographer: [
+    "300GB storage · unlimited events",
+    "WhatsApp delivery",
+    "Photo selling · 5% commission",
   ],
-  business: [
-    "3TB storage · 200 galleries",
-    "Unlimited AI culling + API access",
-    "Dedicated account manager",
-  ],
-  enterprise: [
-    "6TB storage · unlimited galleries",
-    "White-label + custom integrations",
-    "SLA + 24/7 dedicated support",
+  studio: [
+    "1TB storage · unlimited everything",
+    "Team access + custom domain",
+    "0% selling commission",
   ],
 };
 
@@ -105,9 +100,7 @@ function OnboardingPageContent() {
   const { plans } = usePlanCatalog();
   const onboardingPlans = plans.filter(
     (p) =>
-      ["free", "starter", "professional", "business", "enterprise"].includes(
-        p.id,
-      ) &&
+      ["free", "creator", "pro_photographer", "studio"].includes(p.id) &&
       p.active &&
       p.selfServe,
   );
@@ -130,7 +123,7 @@ function OnboardingPageContent() {
     if (plan && FALLBACK_ONBOARDING_PLANS.some((p) => p.id === plan)) {
       return plan;
     }
-    return "starter";
+    return "free";
   });
 
   const rzpScriptLoaded = useRef(false);
@@ -312,7 +305,7 @@ function OnboardingPageContent() {
         }
       }
 
-      // Free plan — no payment needed.
+      // Starter plan — no payment needed.
       if (selectedPlan === "free") {
         setStep("complete");
         return;

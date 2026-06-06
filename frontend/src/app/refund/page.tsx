@@ -19,7 +19,7 @@ const sections = [
   {
     title: "2. 7-Day Refund Guarantee",
     content:
-      "If you are not satisfied with your paid subscription, you may request a full refund within 7 days of your initial purchase. This applies to first-time purchases of any paid plan (Starter, Professional, Business). The refund guarantee does not apply to renewals or plan changes.",
+      "If you are not satisfied with your paid subscription, you may request a full refund within 7 days of your initial purchase. This applies to first-time purchases of any recurring paid plan (Creator, Pro Photographer, Studio). The refund guarantee does not apply to renewals or plan changes.",
   },
   {
     title: "3. Eligible Refunds",
@@ -29,7 +29,7 @@ const sections = [
   {
     title: "4. Non-Refundable Items",
     content:
-      "The following are not eligible for refunds: subscription renewals (monthly or annual), partially used streaming session packs, custom Enterprise plan fees after onboarding begins, add-ons after 7 days of purchase, and accounts terminated for Terms of Service violations.",
+      "The following are not eligible for refunds: subscription renewals (monthly or annual), partially used streaming session packs, custom Elite Studio plan fees after onboarding begins, add-ons after 7 days of purchase, and accounts terminated for Terms of Service violations.",
   },
   {
     title: "5. How to Request a Refund",
@@ -44,7 +44,7 @@ const sections = [
   {
     title: "7. Account Status After Refund",
     content:
-      "Upon refund approval, your account will be downgraded to the Free plan. Your data will be preserved but access to paid features will be restricted. If you exceed Free plan limits, you will need to manage your content within the plan's storage and gallery limits within 30 days.",
+      "Upon refund approval, your account will be downgraded to the Starter plan. Your data will be preserved but access to paid features will be restricted. If you exceed Starter limits, you will need to manage your content within the plan's storage and gallery limits within 30 days.",
   },
   {
     title: "8. Contact Information",

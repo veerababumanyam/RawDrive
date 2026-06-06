@@ -165,7 +165,16 @@ export default function AdminUsersPage() {
   useEffect(() => {
     const token = getStoredAccessToken() || "";
     listAdminPlans(token)
-      .then((plans) => setPlanOptions(plans))
+      .then((plans) =>
+        setPlanOptions(
+          plans.filter(
+            (plan) =>
+              plan.tier !== "pay_per_event" &&
+              plan.active &&
+              (plan.self_serve || plan.tier === "elite_studio"),
+          ),
+        ),
+      )
       .catch(() => setPlanOptions([]));
   }, []);
 
@@ -368,7 +377,13 @@ export default function AdminUsersPage() {
       filterOptions:
         planOptions.length > 0
           ? planOptions.map((plan) => plan.name)
-          : ["Free", "Starter", "Professional", "Business", "Enterprise"],
+          : [
+              "Starter",
+              "Creator",
+              "Pro Photographer",
+              "Studio",
+              "Elite Studio",
+            ],
       render: (value) => (
         <span className="text-sm font-medium text-primary">
           {value ? String(value) : "\u2014"}
@@ -455,11 +470,11 @@ export default function AdminUsersPage() {
                 {(planOptions.length > 0
                   ? planOptions
                   : [
-                      { tier: "free", name: "Free" },
-                      { tier: "starter", name: "Starter" },
-                      { tier: "professional", name: "Professional" },
-                      { tier: "business", name: "Business" },
-                      { tier: "enterprise", name: "Enterprise" },
+                      { tier: "free", name: "Starter" },
+                      { tier: "creator", name: "Creator" },
+                      { tier: "pro_photographer", name: "Pro Photographer" },
+                      { tier: "studio", name: "Studio" },
+                      { tier: "elite_studio", name: "Elite Studio" },
                     ]
                 ).map((plan) => (
                   <option key={plan.tier} value={plan.tier}>

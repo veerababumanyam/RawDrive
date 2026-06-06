@@ -257,10 +257,10 @@ func (s *StorageAccounting) ReserveUpload(ctx context.Context, workspaceID uuid.
 		     INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes, reserved_bytes)
 		     SELECT w.id, 0, 0,
 		            CASE COALESCE(w.plan_tier, 'free')
-		              WHEN 'starter' THEN $3::bigint
-		              WHEN 'professional' THEN $4::bigint
-		              WHEN 'business' THEN $5::bigint
-		              WHEN 'enterprise' THEN $6::bigint
+		              WHEN 'creator' THEN $3::bigint
+		              WHEN 'pro_photographer' THEN $4::bigint
+		              WHEN 'studio' THEN $5::bigint
+		              WHEN 'elite_studio' THEN $6::bigint
 		              ELSE $7::bigint
 		            END,
 		            0
@@ -277,10 +277,10 @@ func (s *StorageAccounting) ReserveUpload(ctx context.Context, workspaceID uuid.
 		      )`,
 		workspaceID,
 		originalBytes,
-		PlanDefaultQuotaBytes("starter"),
-		PlanDefaultQuotaBytes("professional"),
-		PlanDefaultQuotaBytes("business"),
-		PlanDefaultQuotaBytes("enterprise"),
+		PlanDefaultQuotaBytes("creator"),
+		PlanDefaultQuotaBytes("pro_photographer"),
+		PlanDefaultQuotaBytes("studio"),
+		PlanDefaultQuotaBytes("elite_studio"),
 		PlanDefaultQuotaBytes("free"),
 	)
 	if err != nil {

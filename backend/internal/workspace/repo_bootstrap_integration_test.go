@@ -61,7 +61,7 @@ func TestPgRepo_CreateWithBootstrap_CoCreatesAllThreeRows(t *testing.T) {
 		Name:     fmt.Sprintf("Bootstrap Studio %s", uuid.NewString()[:8]),
 		StateID:  fmt.Sprintf("%d", stateID),
 		OwnerID:  owner.String(),
-		PlanTier: "professional",
+		PlanTier: "pro_photographer",
 	}, 300<<30)
 	require.NoError(t, err)
 	require.NotEmpty(t, ws.ID)

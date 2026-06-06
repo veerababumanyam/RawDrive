@@ -83,6 +83,24 @@ function roleShowsUploadCredits(role: string): boolean {
   );
 }
 
+function formatPlanBadge(tier?: string): string | undefined {
+  if (!tier) return undefined;
+  const labels: Record<string, string> = {
+    free: "Starter",
+    standard: "Starter",
+    starter: "Creator",
+    creator: "Creator",
+    pro: "Pro Photographer",
+    professional: "Pro Photographer",
+    pro_photographer: "Pro Photographer",
+    business: "Elite Studio",
+    enterprise: "Elite Studio",
+    elite_studio: "Elite Studio",
+    studio: "Studio",
+  };
+  return `${labels[tier] ?? tier.replaceAll("_", " ")} Plan`;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Role → Sidebar component (completely separate nav per role)       */
 /* ------------------------------------------------------------------ */
@@ -105,12 +123,7 @@ function RoleSidebar({
 }) {
   const name = userInfo.display_name || userInfo.email || "User";
   const avatarUrl = userInfo.avatar_url;
-
-  const tierLabel = userInfo.plan_tier
-    ? userInfo.plan_tier.charAt(0).toUpperCase() +
-      userInfo.plan_tier.slice(1) +
-      " Plan"
-    : undefined;
+  const tierLabel = formatPlanBadge(userInfo.plan_tier);
 
   switch (role) {
     case "super_admin":

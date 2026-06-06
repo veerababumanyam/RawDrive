@@ -235,7 +235,7 @@ func TestGetByState_RevenueAttributedByWorkspaceState(t *testing.T) {
 		`INSERT INTO subscriptions
 		   (id, user_id, workspace_id, amount_paisa, status, tier_slug, billing_interval,
 		    started_at, created_at, updated_at)
-		 VALUES (gen_random_uuid(), $1, $2, $3, 'active', 'starter', 'monthly',
+		 VALUES (gen_random_uuid(), $1, $2, $3, 'active', 'creator', 'monthly',
 		         now() - interval '5 days', now() - interval '5 days', now())`,
 		userID, wsID, amount)
 	require.NoError(t, err)

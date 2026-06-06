@@ -79,11 +79,11 @@ func newReplayService(t *testing.T, now time.Time, repo *fakeReplayRepo) *Replay
 	return s
 }
 
-// T-S6-01 — Standard plan → 30-day retention
-func TestOnRecordingReady_Standard_30dExpiry(t *testing.T) {
+// T-S6-01 — Creator plan -> 30-day retention
+func TestOnRecordingReady_Creator_30dExpiry(t *testing.T) {
 	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
 	repo := newFakeReplayRepo()
-	repo.byUID["u"] = &ReplayStream{ID: "s1", CFUID: "u", PlanTier: "standard"}
+	repo.byUID["u"] = &ReplayStream{ID: "s1", CFUID: "u", PlanTier: "creator"}
 	s := newReplayService(t, now, repo)
 
 	if err := s.OnRecordingReady(context.Background(), "u", "vid-1", "https://rp"); err != nil {
@@ -98,11 +98,11 @@ func TestOnRecordingReady_Standard_30dExpiry(t *testing.T) {
 	}
 }
 
-// T-S6-02 — Professional → 90 days
-func TestOnRecordingReady_Professional_90dExpiry(t *testing.T) {
+// T-S6-02 — Pro Photographer -> 90 days
+func TestOnRecordingReady_ProPhotographer_90dExpiry(t *testing.T) {
 	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
 	repo := newFakeReplayRepo()
-	repo.byUID["u"] = &ReplayStream{ID: "s1", CFUID: "u", PlanTier: "professional"}
+	repo.byUID["u"] = &ReplayStream{ID: "s1", CFUID: "u", PlanTier: "pro_photographer"}
 	s := newReplayService(t, now, repo)
 	_ = s.OnRecordingReady(context.Background(), "u", "v", "r")
 	want := now.Add(90 * 24 * time.Hour)
@@ -111,11 +111,11 @@ func TestOnRecordingReady_Professional_90dExpiry(t *testing.T) {
 	}
 }
 
-// T-S6-03 — Enterprise → 365 days
-func TestOnRecordingReady_Enterprise_365dExpiry(t *testing.T) {
+// T-S6-03 — Elite Studio -> 365 days
+func TestOnRecordingReady_EliteStudio_365dExpiry(t *testing.T) {
 	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
 	repo := newFakeReplayRepo()
-	repo.byUID["u"] = &ReplayStream{ID: "s1", CFUID: "u", PlanTier: "enterprise"}
+	repo.byUID["u"] = &ReplayStream{ID: "s1", CFUID: "u", PlanTier: "elite_studio"}
 	s := newReplayService(t, now, repo)
 	_ = s.OnRecordingReady(context.Background(), "u", "v", "r")
 	want := now.Add(365 * 24 * time.Hour)
@@ -124,8 +124,8 @@ func TestOnRecordingReady_Enterprise_365dExpiry(t *testing.T) {
 	}
 }
 
-// T-S6-04 — Unknown plan → defaults to standard
-func TestOnRecordingReady_UnknownPlan_DefaultsStandard_Logs(t *testing.T) {
+// T-S6-04 — Unknown plan -> defaults to Starter/free retention
+func TestOnRecordingReady_UnknownPlan_DefaultsStarter_Logs(t *testing.T) {
 	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
 	repo := newFakeReplayRepo()
 	repo.byUID["u"] = &ReplayStream{ID: "s1", CFUID: "u", PlanTier: "mystery"}
@@ -133,7 +133,7 @@ func TestOnRecordingReady_UnknownPlan_DefaultsStandard_Logs(t *testing.T) {
 	_ = s.OnRecordingReady(context.Background(), "u", "v", "r")
 	want := now.Add(30 * 24 * time.Hour)
 	if !repo.readyCalls[0].expiresAt.Equal(want) {
-		t.Errorf("exp = %v, want %v (standard default)", repo.readyCalls[0].expiresAt, want)
+		t.Errorf("exp = %v, want %v (starter default)", repo.readyCalls[0].expiresAt, want)
 	}
 }
 
@@ -141,7 +141,7 @@ func TestOnRecordingReady_UnknownPlan_DefaultsStandard_Logs(t *testing.T) {
 func TestOnRecordingReady_Idempotent(t *testing.T) {
 	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
 	repo := newFakeReplayRepo()
-	repo.byUID["u"] = &ReplayStream{ID: "s1", CFUID: "u", PlanTier: "standard"}
+	repo.byUID["u"] = &ReplayStream{ID: "s1", CFUID: "u", PlanTier: "free"}
 	s := newReplayService(t, now, repo)
 
 	_ = s.OnRecordingReady(context.Background(), "u", "v", "r")

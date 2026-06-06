@@ -25,9 +25,9 @@ func NewStorageConfigHandler(svc *service.StorageConfigService) *StorageConfigHa
 // send the UUID, and so a client cannot spoof a different workspace.
 //
 // F-011 (audit 2026-04-10): the storage settings page previously hardcoded
-// the plan tier as "professional" with a TODO, which meant enterprise users
-// could never see the BYOS wizard and non-enterprise users were shown a
-// misleading "Upgrade to Enterprise" state that did not reflect their real
+// the plan tier as "professional" with a TODO, which meant enterprise-class
+// users could never see the BYOS wizard and lower tiers were shown a
+// misleading "Upgrade to Elite Studio" state that did not reflect their real
 // tier. This endpoint is the smallest surface that returns authoritative
 // plan-tier info so the frontend can drive the BYOS wizard honestly.
 func (h *StorageConfigHandler) GetCurrentPlan(w http.ResponseWriter, r *http.Request) {
@@ -44,11 +44,11 @@ func (h *StorageConfigHandler) GetCurrentPlan(w http.ResponseWriter, r *http.Req
 	}
 	planTier, err := h.configSvc.GetWorkspacePlanTier(r.Context(), wsID)
 	if err != nil {
-		// GetWorkspacePlanTier returns a best-effort "standard" on error, but
-		// also returns the error for logging — we surface standard as the
+		// GetWorkspacePlanTier returns a best-effort "free" on error, but
+		// also returns the error for logging — we surface Starter/free as the
 		// safe default and log the underlying problem server-side.
 		respondJSON(w, http.StatusOK, map[string]string{
-			"plan_tier": "standard",
+			"plan_tier": "free",
 			"source":    "fallback",
 		})
 		return
@@ -71,8 +71,8 @@ func (h *StorageConfigHandler) TestConnection(w http.ResponseWriter, r *http.Req
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to check plan tier"})
 		return
 	}
-	if planTier != "enterprise" {
-		respondJSON(w, http.StatusForbidden, map[string]string{"error": "BYOS (Bring Your Own Storage) is restricted to enterprise plan", "current_plan": planTier, "required_plan": "enterprise"})
+	if planTier != "business" && planTier != "elite_studio" && planTier != "enterprise" {
+		respondJSON(w, http.StatusForbidden, map[string]string{"error": "BYOS (Bring Your Own Storage) is restricted to Elite Studio", "current_plan": planTier, "required_plan": "elite_studio"})
 		return
 	}
 	var input struct {

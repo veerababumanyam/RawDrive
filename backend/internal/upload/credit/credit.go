@@ -127,7 +127,7 @@ var (
 const GrantAdminHardCap int64 = 100_000
 
 // GrantStatus describes the outcome of a monthly grant for one workspace.
-// Skipped tiers (enterprise) return GrantSkippedEnterprise without writing
+// Skipped tiers (elite/enterprise) return GrantSkippedEnterprise without writing
 // a ledger row; a nil LedgerEntry on the result communicates this to the
 // caller without forcing a separate error path.
 type GrantStatus string
@@ -160,7 +160,7 @@ type ReserveInput struct {
 	UploadSessionID     uuid.UUID
 	AmountCredits       int64
 	IdempotencyKey      string
-	PlanCode            string // "standard" | "professional" | "enterprise"
+	PlanCode            string // "free" | "creator" | "pro_photographer" | "studio" | "elite_studio"
 	EnterpriseUnlimited bool
 	CreatedBy           *uuid.UUID
 	ExpiresAt           *time.Time
@@ -684,7 +684,7 @@ type GrantAdminInput struct {
 // GrantMonthlyInput parameters for GrantMonthly.
 type GrantMonthlyInput struct {
 	WorkspaceID uuid.UUID
-	PlanTier    string    // "standard" | "professional" | "pro" | "enterprise"
+	PlanTier    string    // "free" | "creator" | "pro_photographer" | "studio" | "elite_studio"
 	AnchorDate  time.Time // used to build monthly:{ws}:{YYYY-MM} idempotency key
 }
 
@@ -771,7 +771,7 @@ func (s *Service) GrantAdmin(ctx context.Context, in GrantAdminInput) (*LedgerEn
 // using monthly:{workspace}:{YYYY-MM} as the idempotency key so replay within
 // the same month is a no-op. Enterprise plan tier skips without error.
 func (s *Service) GrantMonthly(ctx context.Context, in GrantMonthlyInput) (*GrantMonthlyResult, error) {
-	if normalizePlan(in.PlanTier) == "enterprise" {
+	if normalizePlan(in.PlanTier) == "elite_studio" || normalizePlan(in.PlanTier) == "enterprise" {
 		return &GrantMonthlyResult{Status: GrantSkippedEnterprise}, nil
 	}
 	amount := MonthlyGrantAmountForPlan(in.PlanTier)
@@ -828,16 +828,17 @@ func (s *Service) RefundPurchase(ctx context.Context, in RefundPurchaseInput) (*
 }
 
 // MonthlyGrantAmountForPlan maps a plan tier to its monthly upload credit
-// allowance per PRD §D2. "pro" is accepted as an alias for "professional"
-// because both strings appear in production workspace rows. Enterprise and
-// unknown tiers return 0 — the caller (GrantMonthly) interprets this as
-// "skip, do not grant".
+// allowance. Legacy "pro" / "professional" slugs are accepted as aliases for
+// migrated workspaces. Elite/enterprise and unknown tiers return 0 — the
+// caller (GrantMonthly) interprets this as "skip, do not grant".
 func MonthlyGrantAmountForPlan(plan string) int64 {
 	switch normalizePlan(plan) {
-	case "standard":
+	case "creator":
 		return 200
-	case "professional":
+	case "pro_photographer":
 		return 1000
+	case "studio":
+		return 2500
 	default:
 		return 0
 	}
@@ -845,8 +846,14 @@ func MonthlyGrantAmountForPlan(plan string) int64 {
 
 func normalizePlan(plan string) string {
 	switch plan {
+	case "standard", "starter":
+		return "creator"
 	case "pro":
-		return "professional"
+		return "pro_photographer"
+	case "professional":
+		return "pro_photographer"
+	case "business", "enterprise":
+		return "elite_studio"
 	default:
 		return plan
 	}

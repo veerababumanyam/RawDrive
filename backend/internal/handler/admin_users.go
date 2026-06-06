@@ -73,7 +73,7 @@ func (h *AdminUsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 		case service.ErrMissingPasswordOrInvite:
 			http.Error(w, `{"error":"supply either initial_password or send_invite","code":"missing_auth_path"}`, http.StatusBadRequest)
 		case service.ErrInvalidPlanTier:
-			http.Error(w, `{"error":"invalid plan tier (must be one of free|starter|professional|business|enterprise, and only for role=photographer)","code":"invalid_plan_tier"}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"invalid plan tier (must be one of free|creator|pro_photographer|studio|elite_studio, and only for role=photographer)","code":"invalid_plan_tier"}`, http.StatusBadRequest)
 		case service.ErrDuplicateEmail:
 			http.Error(w, `{"error":"email already registered","code":"duplicate_email"}`, http.StatusConflict)
 		default:

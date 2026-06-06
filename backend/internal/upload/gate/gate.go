@@ -41,9 +41,9 @@ type UploadCreditService interface {
 //
 // M41 FR-UCRT-07/08 restores those fields. Chunked upload handler now
 // reads PlanTierFromContext (middleware.PlanTierContext, wired in main.go)
-// and sets the two new fields so enterprise workspaces short-circuit to
+// and sets the two new fields so elite/enterprise workspaces short-circuit to
 // an `unlimited_passthrough` ledger entry (amount_credits=0) instead of
-// going through the balance gate. Non-enterprise tiers leave
+// going through the balance gate. Other tiers leave
 // EnterpriseUnlimited false and the balance gate continues to apply.
 type ReserveRequest struct {
 	WorkspaceID     uuid.UUID
@@ -52,13 +52,13 @@ type ReserveRequest struct {
 	IdempotencyKey  string
 	CreatedBy       *uuid.UUID
 	// PlanCode is the workspaces.plan_tier value for the tenant. The
-	// credit service treats "enterprise" specially only when
+	// credit service treats elite/enterprise workspaces specially only when
 	// EnterpriseUnlimited is also true; PlanCode itself is passed through
 	// for audit/logging.
 	PlanCode string
 	// EnterpriseUnlimited, when true, tells the credit service to post an
 	// `unlimited_passthrough` entry instead of reserving credits. Callers
-	// MUST only set this when PlanCode is "enterprise". The handler sets
+	// MUST only set this for elite/enterprise plan codes. The handler sets
 	// it based on PlanTierFromContext and nothing else; a missing plan
 	// tier defaults to false, keeping the balance gate enforced.
 	EnterpriseUnlimited bool

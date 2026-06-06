@@ -34,7 +34,7 @@ import (
 
 // validTierOrder defines the valid promotion path; a workspace can only move
 // to a different paid tier (not free).
-func validUpgradeTier(tier string) bool { return service.IsPaidPlanTier(tier) }
+func validUpgradeTier(tier string) bool { return service.IsSelfServePaidPlanTier(tier) }
 
 // RazorpayUpgradeConfig holds the credentials for the subscription upgrade flow.
 // Populated from env vars: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET.
@@ -278,7 +278,7 @@ func (h *SubscriptionUpgradeHandler) validUpgradeTier(ctx context.Context, tier 
 	if err != nil {
 		return false, err
 	}
-	return ok && plan.Paid && plan.Active, nil
+	return ok && plan.Paid && plan.Active && plan.SelfServe, nil
 }
 
 func (h *SubscriptionUpgradeHandler) planPricePaise(ctx context.Context, tier, billingInterval string) (int64, bool, error) {

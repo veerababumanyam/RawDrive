@@ -18,11 +18,10 @@ var (
 // validSelfServePlans is the whitelist of plan tiers a user may select
 // during self-serve onboarding.
 var validSelfServePlans = map[string]bool{
-	"free":         true,
-	"starter":      true,
-	"professional": true,
-	"business":     true,
-	"enterprise":   true,
+	"free":             true,
+	"creator":          true,
+	"pro_photographer": true,
+	"studio":           true,
 }
 
 // normalizePlanTier validates and normalises the plan tier string.

@@ -27,10 +27,9 @@ const GOOGLE_SIGNUP_UNAVAILABLE =
 // whitelist in backend/internal/auth/handler.go (selfServePlans).
 const selfServePlanIds = [
   "free",
-  "starter",
-  "professional",
-  "business",
-  "enterprise",
+  "creator",
+  "pro_photographer",
+  "studio",
 ] as const;
 type SelfServePlanId = (typeof selfServePlanIds)[number];
 
@@ -66,39 +65,33 @@ async function readRegisterError(response: Response): Promise<string> {
 // in a narrow form column — 3 short, benefit-led lines work better here.
 const planHighlights: Record<SelfServePlanId, readonly string[]> = {
   free: [
-    "1GB storage, 3 galleries",
-    "5 client profiles",
-    "30-day full-access trial",
+    "5GB storage, 1 event",
+    "Limited AI face search",
+    "Watermarked galleries",
   ],
-  starter: [
-    "30GB storage, 10 galleries",
-    "Client proofing & basic CRM",
-    "Priority email support",
+  creator: [
+    "100GB storage, 10 events",
+    "AI face search",
+    "Photo selling at 10% commission",
   ],
-  professional: [
-    "300GB storage, 50 galleries",
-    "AI culling & full CRM + bookings",
-    "Live streaming + marketplace listing",
+  pro_photographer: [
+    "300GB storage, unlimited events",
+    "WhatsApp delivery",
+    "Photo selling at 5% commission",
   ],
-  business: [
-    "3TB storage, 200 galleries",
-    "Unlimited AI culling",
-    "API access + dedicated manager",
-  ],
-  enterprise: [
-    "6TB storage, unlimited galleries",
-    "White-label + custom integrations",
-    "SLA guarantee + 24/7 support",
+  studio: [
+    "1TB storage, unlimited everything",
+    "Team access and custom domain",
+    "0% photo selling commission",
   ],
 };
 
 // One-line sub-headers shown under the plan name inside the featured card.
 const planTagline: Record<SelfServePlanId, string> = {
-  free: "Kick the tires, no card required",
-  starter: "For solo photographers finding their rhythm",
-  professional: "The sweet spot for growing studios",
-  business: "For teams running back-to-back weddings",
-  enterprise: "Full-scale studio with white-label control",
+  free: "Free forever for beginners",
+  creator: "For side and weekend photographers",
+  pro_photographer: "The main plan for working pros",
+  studio: "For studios with a team and brand",
 };
 
 export function RegisterForm() {
@@ -107,7 +100,7 @@ export function RegisterForm() {
   const planParam = searchParams?.get("plan")?.toLowerCase() ?? "";
 
   const initialPlan: SelfServePlanId = useMemo(() => {
-    return isSelfServePlan(planParam) ? planParam : "starter";
+    return isSelfServePlan(planParam) ? planParam : "free";
   }, [planParam]);
 
   const [plan, setPlan] = useState<SelfServePlanId>(initialPlan);

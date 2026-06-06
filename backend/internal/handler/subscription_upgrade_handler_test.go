@@ -100,16 +100,38 @@ func TestSubscriptionUpgradeRejectsSameAndLowerTiers(t *testing.T) {
 		to   string
 		want bool
 	}{
-		{name: "free to starter", from: "free", to: "starter", want: true},
-		{name: "starter to professional", from: "starter", to: "professional", want: true},
-		{name: "same tier", from: "starter", to: "starter", want: false},
-		{name: "downgrade", from: "professional", to: "starter", want: false},
-		{name: "unknown target", from: "starter", to: "unknown", want: false},
+		{name: "free to creator", from: "free", to: "creator", want: true},
+		{name: "creator to pro photographer", from: "creator", to: "pro_photographer", want: true},
+		{name: "same tier", from: "creator", to: "creator", want: false},
+		{name: "downgrade", from: "pro_photographer", to: "creator", want: false},
+		{name: "unknown target", from: "creator", to: "unknown", want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := isStrictUpgrade(tt.from, tt.to); got != tt.want {
 				t.Fatalf("isStrictUpgrade(%q, %q) = %v, want %v", tt.from, tt.to, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSubscriptionUpgradeValidTierRequiresSelfServePaidPlan(t *testing.T) {
+	tests := []struct {
+		tier string
+		want bool
+	}{
+		{tier: "creator", want: true},
+		{tier: "pro_photographer", want: true},
+		{tier: "studio", want: true},
+		{tier: "free", want: false},
+		{tier: "pay_per_event", want: false},
+		{tier: "elite_studio", want: false},
+		{tier: "unknown", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.tier, func(t *testing.T) {
+			if got := validUpgradeTier(tt.tier); got != tt.want {
+				t.Fatalf("validUpgradeTier(%q) = %v, want %v", tt.tier, got, tt.want)
 			}
 		})
 	}

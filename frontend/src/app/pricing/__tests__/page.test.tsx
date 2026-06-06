@@ -40,22 +40,22 @@ describe("Pricing Page", () => {
     expect(
       screen.getByRole("heading", {
         level: 1,
-        name: /Choose the plan that matches your studio today and scale without replatforming later\./i,
+        name: /Pricing built for real photographer workflows\./i,
       }),
     ).toBeInTheDocument();
   });
 
-  it("renders all 5 plan cards", () => {
+  it("renders the updated event and subscription tiers", () => {
     render(<PricingContent />);
-    // Plan names appear in cards and in comparison table header
-    expect(screen.getAllByText("Free").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Starter").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Professional").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Business").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Enterprise").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Starter/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Pay Per Event/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Creator").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Pro Photographer").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Studio").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Elite Studio").length).toBeGreaterThan(0);
   });
 
-  it("shows Popular badge on Professional plan", () => {
+  it("shows Popular badge on Pro Photographer plan", () => {
     render(<PricingContent />);
     expect(screen.getByText("Popular")).toBeInTheDocument();
   });
@@ -89,7 +89,7 @@ describe("Pricing Page", () => {
   it("renders FAQ section with 8 items", () => {
     render(<PricingContent />);
     expect(screen.getByText("Frequently Asked Questions")).toBeInTheDocument();
-    expect(screen.getByText("Is there a free trial?")).toBeInTheDocument();
+    expect(screen.getByText("Is Starter a trial?")).toBeInTheDocument();
     expect(screen.getByText("Is my data stored in India?")).toBeInTheDocument();
   });
 

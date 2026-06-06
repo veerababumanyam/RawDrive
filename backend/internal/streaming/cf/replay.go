@@ -19,7 +19,7 @@ type ReplayRepo interface {
 type ReplayStream struct {
 	ID              string
 	CFUID           string
-	PlanTier        string // "standard" | "professional" | "enterprise"
+	PlanTier        string // "free" | "creator" | "pro_photographer" | "studio" | "elite_studio"
 	ReplayVideoID   string
 	ReplayExpiresAt *time.Time
 	ReplayState     string
@@ -30,20 +30,29 @@ type PlanResolver interface {
 	RetentionFor(plan string) time.Duration
 }
 
-// DefaultPlanResolver returns 30d/90d/365d/standard-by-default retention.
+// DefaultPlanResolver returns 30d/90d/365d/starter-by-default retention.
 type DefaultPlanResolver struct{}
 
 var defaultRetention = map[string]time.Duration{
-	"standard":     30 * 24 * time.Hour,
-	"professional": 90 * 24 * time.Hour,
-	"enterprise":   365 * 24 * time.Hour,
+	"free":             30 * 24 * time.Hour,
+	"standard":         30 * 24 * time.Hour,
+	"starter":          30 * 24 * time.Hour,
+	"creator":          30 * 24 * time.Hour,
+	"pay_per_event":    90 * 24 * time.Hour,
+	"pro":              90 * 24 * time.Hour,
+	"professional":     90 * 24 * time.Hour,
+	"pro_photographer": 90 * 24 * time.Hour,
+	"business":         90 * 24 * time.Hour,
+	"studio":           365 * 24 * time.Hour,
+	"enterprise":       365 * 24 * time.Hour,
+	"elite_studio":     365 * 24 * time.Hour,
 }
 
 func (DefaultPlanResolver) RetentionFor(plan string) time.Duration {
 	if d, ok := defaultRetention[plan]; ok {
 		return d
 	}
-	return defaultRetention["standard"]
+	return defaultRetention["free"]
 }
 
 // ReplayService implements the webhook.ReplayReconciler contract for

@@ -6,7 +6,10 @@ import { usePlanCatalog } from "@/hooks/use-plan-catalog";
 export function PlanStrip() {
   const { plans } = usePlanCatalog();
   const paidPlans = plans
-    .filter((plan) => plan.id !== "free" && plan.active && plan.paid)
+    .filter(
+      (plan) =>
+        plan.id !== "free" && plan.active && plan.paid && plan.selfServe,
+    )
     .slice(0, 3);
 
   if (paidPlans.length === 0) return null;

@@ -47,7 +47,7 @@ const sampleUsers = {
       status: "active" as const,
       workspace_count: 2,
       state_name: "Karnataka",
-      tier_name: "Pro",
+      tier_name: "Pro Photographer",
       created_at: "2026-01-15T00:00:00Z",
     },
     {
@@ -58,7 +58,7 @@ const sampleUsers = {
       status: "suspended" as const,
       workspace_count: 1,
       state_name: "Maharashtra",
-      tier_name: "Free",
+      tier_name: "Starter",
       created_at: "2026-02-20T00:00:00Z",
     },
   ],
@@ -71,21 +71,21 @@ beforeEach(() => {
   mockListAdminPlans.mockResolvedValue([
     {
       tier: "free",
-      name: "Free",
+      name: "Starter",
       description: "",
       currency: "INR",
       monthly_price_paise: 0,
       annual_price_paise: 0,
-      quota_bytes: 1073741824,
-      gallery_limit: 3,
-      client_limit: 5,
+      quota_bytes: 5 * 2 ** 30,
+      gallery_limit: 1,
+      client_limit: 0,
       features: [],
       popular: false,
       rank: 0,
       paid: false,
       active: true,
       self_serve: true,
-      trial_days: 30,
+      trial_days: 0,
     },
   ]);
 });
@@ -114,7 +114,7 @@ describe("AdminUsersPage", () => {
     // as an <option> in the State filter dropdown (filterOptions are derived
     // from the user rows' state_name values). Scope the assertion to Alice's
     // table row so we assert the USER'S state, not the filter option. "Pro"
-    // (tier) is not a filter option ("Free"/"Starter"/… are), so it stays an
+    // (tier) is not a filter option ("Starter"/"Creator"/… are), so it stays an
     // unambiguous lookup that confirms the tier renders.
     await waitFor(() => screen.getByText("Alice Sharma"));
     const aliceRow = screen
@@ -122,7 +122,7 @@ describe("AdminUsersPage", () => {
       .closest("tr") as HTMLTableRowElement;
     expect(aliceRow).not.toBeNull();
     expect(within(aliceRow).getByText("Karnataka")).toBeTruthy();
-    expect(within(aliceRow).getByText("Pro")).toBeTruthy();
+    expect(within(aliceRow).getByText("Pro Photographer")).toBeTruthy();
   });
 
   it("renders search input", async () => {

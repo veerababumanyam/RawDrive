@@ -70,7 +70,7 @@ export const fallbackPlanCatalog: PlanCatalogPlan[] = pricingPlans.map(
       rank: index,
       paid: plan.id !== "free",
       active: true,
-      selfServe: true,
+      selfServe: "selfServe" in plan ? Boolean(plan.selfServe) : true,
       trialDays: plan.id === "free" ? Number(plan.trialDays) : 0,
     };
   },
@@ -120,7 +120,9 @@ export async function fetchPublicPlans(): Promise<PlanCatalogPlan[]> {
 }
 
 export function paidSelfServePlans(plans: PlanCatalogPlan[]): PlanCatalogPlan[] {
-  return plans.filter((plan) => plan.id !== "free" && plan.paid && plan.active);
+  return plans.filter(
+    (plan) => plan.id !== "free" && plan.paid && plan.active && plan.selfServe,
+  );
 }
 
 export function formatQuotaBytes(bytes: number): string {

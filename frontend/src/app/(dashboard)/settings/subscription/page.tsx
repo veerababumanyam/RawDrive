@@ -24,11 +24,17 @@ interface SubscriptionData {
 }
 
 const TIER_LABELS: Record<string, string> = {
-  free: "Free",
-  starter: "Starter",
-  professional: "Professional",
-  business: "Business",
-  enterprise: "Enterprise",
+  free: "Starter",
+  standard: "Starter",
+  starter: "Creator",
+  creator: "Creator",
+  professional: "Pro Photographer",
+  pro: "Pro Photographer",
+  pro_photographer: "Pro Photographer",
+  business: "Elite Studio",
+  enterprise: "Elite Studio",
+  elite_studio: "Elite Studio",
+  studio: "Studio",
 };
 
 const UPGRADE_HREF = "/settings/plans";

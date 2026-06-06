@@ -4,35 +4,36 @@ import { useState } from "react";
 import Link from "next/link";
 import { Check, ChevronDown, Tag } from "lucide-react";
 import { usePlanCatalog } from "@/hooks/use-plan-catalog";
+import type { PlanCatalogPlan } from "@/lib/plans";
 
 const faqItems = [
   {
-    q: "Is there a free trial?",
-    a: "Yes! The Free plan gives you 30 days to explore RawDrive with 1GB storage, 3 galleries, and 5 client profiles.",
+    q: "Is Starter a trial?",
+    a: "No. Starter is free forever with 5GB storage, 1 event, limited AI face search, watermarked galleries, and no photo selling.",
+  },
+  {
+    q: "How does Pay Per Event work?",
+    a: "Pay Per Event is for one delivery cycle: a 7-day upload window, 30 days of client access, and 90 days of storage retention without a monthly subscription.",
   },
   {
     q: "Can I switch plans later?",
-    a: "Absolutely. You can upgrade or downgrade at any time. Pro-rated credits apply when upgrading mid-cycle.",
+    a: "Yes. You can move from Starter or Pay Per Event to a monthly plan when your event volume grows.",
   },
   {
     q: "What payment methods do you accept?",
-    a: "We accept UPI, credit/debit cards, net banking, and wallets via Razorpay. Enterprise plans support bank transfers.",
+    a: "We accept UPI, credit/debit cards, net banking, and wallets through the configured payment provider. Elite Studio can be handled through sales-assisted billing.",
   },
   {
     q: "Is GST included in the pricing?",
-    a: "Prices shown match the checkout total for the selected billing cycle; GST is included where applicable.",
+    a: "Prices are shown in INR and are exclusive of GST. The checkout shows the final payable amount before confirmation.",
   },
   {
-    q: "Do you offer refunds?",
-    a: "Yes, we offer a 7-day refund policy on paid plans. See our refund policy for full details.",
+    q: "What is the wedding bundle?",
+    a: "The wedding bundle is Rs. 499 per wedding for multi-day events and larger galleries.",
   },
   {
-    q: "What happens when my free trial ends?",
-    a: "Your account enters read-only mode. Your data is preserved for 30 days. Upgrade to any paid plan to restore full access.",
-  },
-  {
-    q: "Can I add more storage without upgrading?",
-    a: "Yes! Storage booster packs let you add extra storage to any plan without upgrading your tier.",
+    q: "Can I extend a Pay Per Event gallery?",
+    a: "Yes. Extension packs add 30 days, 90 days, or a permanent archive for galleries that need more time.",
   },
   {
     q: "Is my data stored in India?",
@@ -46,12 +47,50 @@ function formatPrice(price: number): string {
   return `Rs. ${price.toLocaleString("en-IN")}`;
 }
 
+function monthlyEquivalent(plan: PlanCatalogPlan): number {
+  if (!plan.annualPrice) return plan.monthlyPrice;
+  return Math.round(plan.annualPrice / 12);
+}
+
+function annualNote(plan: PlanCatalogPlan): string {
+  if (!plan.annualPrice) return "";
+  return `Billed ${formatPrice(plan.annualPrice)}/year`;
+}
+
 export function PricingContent() {
   const [isAnnual, setIsAnnual] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [coupon, setCoupon] = useState("");
   const { plans } = usePlanCatalog();
-  const visiblePlans = plans.filter((plan) => plan.active && plan.selfServe);
+  const activePlans = plans
+    .filter((plan) => plan.active)
+    .sort((a, b) => a.rank - b.rank);
+  const payPerEventPlan = activePlans.find(
+    (plan) => plan.id === "pay_per_event",
+  );
+  const starterPlan = activePlans.find((plan) => plan.id === "free");
+  const subscriptionPlans = activePlans.filter(
+    (plan) =>
+      plan.paid && plan.id !== "pay_per_event" && plan.id !== "free",
+  );
+
+  const eventAddOns = [
+    {
+      price: "Rs. 49",
+      title: "Extend +30 days",
+      description: "Keep a gallery live for another month.",
+    },
+    {
+      price: "Rs. 99",
+      title: "Extend +90 days",
+      description: "A full extra quarter of client access.",
+    },
+    {
+      price: "Rs. 199",
+      title: "Archive forever",
+      description: "Download plus permanent archive of the event.",
+    },
+  ];
 
   return (
     <div className="bg-surface text-text-primary">
@@ -61,29 +100,28 @@ export function PricingContent() {
             Pricing
           </span>
           <div className="space-y-5">
-            <h1 className="font-headline text-4xl font-extrabold tracking-[-0.03em] text-text-primary md:text-6xl">
-              Choose the plan that matches your studio today and scale without
-              replatforming later.
+            <h1 className="font-headline text-4xl font-extrabold text-text-primary md:text-6xl">
+              Pricing built for real photographer workflows.
             </h1>
             <p className="max-w-2xl text-lg leading-8 text-text-secondary">
-              Transparent pricing built for Indian photography studios — from
-              solo shooters to large teams. No hidden fees, no lock-in.
+              Upload, share, let clients select, and move on. Pay per event, or
+              choose a monthly plan when you scale.
             </p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
             {[
               {
-                title: "Solo and early studios",
-                body: "Start with Free or Starter when you need branded galleries, basic proofing, and client delivery before the team grows.",
+                title: "Event-first delivery",
+                body: "Pay Per Event is built for occasional shoots and one-off delivery cycles without a recurring subscription.",
               },
               {
-                title: "Growing wedding teams",
-                body: "Professional is the best fit when AI culling, full CRM, live streaming, and marketplace visibility start saving real production time.",
+                title: "Working photographers",
+                body: "Creator and Pro Photographer add AI face search, client selection, WhatsApp delivery, branding, and photo selling.",
               },
               {
-                title: "Large and enterprise studios",
-                body: "Business and Enterprise add scale, account support, larger storage, API needs, white-label options, and BYOS for enterprise teams.",
+                title: "Studios and branches",
+                body: "Studio and Elite Studio add team access, custom domains, analytics, API access, white-label options, and premium support.",
               },
             ].map((item) => (
               <div key={item.title} className="surface-panel p-5">
@@ -130,18 +168,91 @@ export function PricingContent() {
             <span
               className={`text-sm font-medium ${isAnnual ? "text-text-primary" : "text-text-tertiary"}`}
             >
-              Annual <span className="text-accent">(Save 17%)</span>
+              Annual <span className="text-accent">(2 months free)</span>
             </span>
           </div>
         </div>
       </section>
 
+      {payPerEventPlan && (
+        <section className="px-4 pb-10 lg:px-8">
+          <div className="surface-panel mx-auto max-w-7xl p-6 lg:p-8">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-4">
+                <span className="inline-flex rounded-full border border-border bg-surface-sunken px-3 py-1 text-xs font-bold uppercase text-accent">
+                  No subscription
+                </span>
+                <div className="space-y-2">
+                  <h2 className="font-headline text-2xl font-bold text-text-primary">
+                    {payPerEventPlan.name} - Delivery Cycle
+                  </h2>
+                  <p className="max-w-2xl text-sm leading-7 text-text-secondary">
+                    The way many photographers actually work. One clean price
+                    per event, no monthly commitment.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    "7 days upload window",
+                    "30 days client access",
+                    "90 days storage retention",
+                  ].map((item) => (
+                    <span
+                      key={item}
+                      className="rounded-lg border border-border bg-surface-sunken px-3 py-2 text-xs font-medium text-text-secondary"
+                    >
+                      {item}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-sm text-text-secondary">
+                  Wedding bundle:{" "}
+                  <span className="font-semibold text-accent">
+                    Rs. 499 per wedding
+                  </span>{" "}
+                  for multi-day, larger galleries.
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-col gap-4 sm:flex-row lg:flex-col">
+                <div>
+                  <p className="text-4xl font-extrabold text-text-primary">
+                    {formatPrice(payPerEventPlan.monthlyPrice)}
+                  </p>
+                  <p className="text-sm font-medium text-text-secondary">
+                    / event
+                  </p>
+                </div>
+                <Link
+                  href="/register?plan=free"
+                  className="inline-flex items-center justify-center rounded-lg bg-accent px-5 py-3 text-sm font-semibold text-text-inverse transition-colors hover:bg-accent-hover"
+                  style={{
+                    minHeight: "var(--touch-target-min)",
+                    transitionDuration: "var(--duration-fast)",
+                  }}
+                >
+                  Create account
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       <section className="px-4 pb-16 lg:px-8">
-        <div className="mx-auto grid max-w-7xl gap-6 sm:grid-cols-2 lg:grid-cols-5">
-          {visiblePlans.map((plan) => {
-            const price = isAnnual ? plan.annualPrice : plan.monthlyPrice;
-            const period =
-              plan.id === "free" ? "/30 days" : isAnnual ? "/year" : "/month";
+        <div className="mx-auto grid max-w-7xl gap-6 sm:grid-cols-2 xl:grid-cols-4">
+          {subscriptionPlans.map((plan) => {
+            const displayedPrice = isAnnual
+              ? monthlyEquivalent(plan)
+              : plan.monthlyPrice;
+            const ctaHref = plan.selfServe
+              ? `/register?plan=${encodeURIComponent(plan.id)}&interval=${isAnnual ? "annual" : "monthly"}`
+              : "/contact";
+            const ctaLabel =
+              plan.id === "elite_studio"
+                ? "Talk to sales"
+                : plan.id === "pro_photographer"
+                  ? "Go Pro"
+                  : `Start ${plan.name}`;
 
             return (
               <div
@@ -162,10 +273,13 @@ export function PricingContent() {
                   {plan.name}
                 </h3>
                 <p className="mt-3 text-3xl font-bold text-text-primary">
-                  {formatPrice(price)}
+                  {formatPrice(displayedPrice)}
                 </p>
                 <p className="text-sm font-medium text-text-secondary">
-                  {period}
+                  / month
+                </p>
+                <p className="mt-2 min-h-4 text-xs font-semibold text-accent">
+                  {isAnnual ? annualNote(plan) : ""}
                 </p>
                 <ul className="mt-6 flex-1 space-y-3">
                   {plan.features.map((f) => (
@@ -182,7 +296,7 @@ export function PricingContent() {
                   ))}
                 </ul>
                 <Link
-                  href={`/register?plan=${encodeURIComponent(plan.id)}&interval=${isAnnual ? "annual" : "monthly"}`}
+                  href={ctaHref}
                   className={`mt-6 inline-flex items-center justify-center rounded-lg px-4 py-3 text-sm font-semibold transition-colors ${
                     plan.popular
                       ? "bg-accent text-text-inverse hover:bg-accent-hover"
@@ -193,11 +307,68 @@ export function PricingContent() {
                     transitionDuration: "var(--duration-fast)",
                   }}
                 >
-                  Get Started
+                  {ctaLabel}
                 </Link>
               </div>
             );
           })}
+        </div>
+
+        {starterPlan && (
+          <div className="surface-panel mx-auto mt-6 flex max-w-7xl flex-col gap-4 border-dashed p-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-2">
+              <h2 className="font-headline text-xl font-bold text-text-primary">
+                {starterPlan.name} - Free forever
+              </h2>
+              <p className="max-w-2xl text-sm leading-7 text-text-secondary">
+                A beginner-friendly gallery plan: 5GB, 1 event, limited AI face
+                search, watermarked galleries, and no photo selling.
+              </p>
+            </div>
+            <Link
+              href="/register?plan=free"
+              className="inline-flex items-center justify-center rounded-lg border border-border bg-surface-elevated px-4 py-3 text-sm font-semibold text-text-primary transition-colors hover:bg-accent-subtle hover:text-accent"
+              style={{
+                minHeight: "var(--touch-target-min)",
+                transitionDuration: "var(--duration-fast)",
+              }}
+            >
+              Create free account
+            </Link>
+          </div>
+        )}
+      </section>
+
+      <section className="px-4 pb-16 lg:px-8">
+        <div className="mx-auto max-w-7xl space-y-6 text-center">
+          <div className="space-y-2">
+            <h2 className="font-headline text-2xl font-bold text-text-primary">
+              Add-ons and extension packs
+            </h2>
+            <p className="mx-auto max-w-2xl text-sm leading-7 text-text-secondary">
+              For Pay Per Event galleries that need more time, keep delivery
+              moving without changing the studio plan.
+            </p>
+          </div>
+          <div className="mx-auto grid max-w-3xl gap-4 sm:grid-cols-3">
+            {eventAddOns.map((addon) => (
+              <div key={addon.title} className="surface-panel p-5">
+                <p className="text-2xl font-extrabold text-accent">
+                  {addon.price}
+                </p>
+                <h3 className="mt-2 font-semibold text-text-primary">
+                  {addon.title}
+                </h3>
+                <p className="mt-2 text-xs leading-6 text-text-secondary">
+                  {addon.description}
+                </p>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-text-tertiary">
+            All prices are in INR and exclusive of GST. Annual plans are billed
+            at 10 months for 12 months of access.
+          </p>
         </div>
       </section>
 

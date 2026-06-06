@@ -77,9 +77,9 @@ export const PUBLIC_PAGES = [
     path: "/pricing",
     title: "Pricing for Indian Photography Studios",
     description:
-      "Compare RawDrive plans for photographers in India. Start free, then scale storage, galleries, AI workflows, CRM, live streaming, and marketplace access.",
+      "Compare RawDrive plans for photographers in India: Starter, Pay Per Event, Creator, Pro Photographer, Studio, and Elite Studio.",
     summary:
-      "RawDrive pricing includes a free plan and paid studio plans for growing storage, galleries, clients, AI culling, CRM, streaming, and enterprise BYOS needs.",
+      "RawDrive pricing includes a free Starter plan, one-off Pay Per Event delivery, and paid studio plans for storage, AI face search, branding, client delivery, and selling.",
     image: {
       url: "/marketing/rawdrive-home-product-os.webp",
       width: 1600,
@@ -661,11 +661,12 @@ export function buildSiteJsonLd() {
           name: "RawDrive subscription plans",
           url: absoluteUrl("/pricing"),
           itemListElement: [
-            { "@type": "Offer", name: "Free", price: "0", priceCurrency: "INR", url: absoluteUrl("/pricing") },
-            { "@type": "Offer", name: "Starter", price: "99", priceCurrency: "INR", url: absoluteUrl("/pricing") },
-            { "@type": "Offer", name: "Professional", price: "299", priceCurrency: "INR", url: absoluteUrl("/pricing") },
-            { "@type": "Offer", name: "Business", price: "2999", priceCurrency: "INR", url: absoluteUrl("/pricing") },
-            { "@type": "Offer", name: "Enterprise", price: "5999", priceCurrency: "INR", url: absoluteUrl("/pricing") },
+            { "@type": "Offer", name: "Starter", price: "0", priceCurrency: "INR", url: absoluteUrl("/pricing") },
+            { "@type": "Offer", name: "Pay Per Event", price: "199", priceCurrency: "INR", url: absoluteUrl("/pricing") },
+            { "@type": "Offer", name: "Creator", price: "499", priceCurrency: "INR", url: absoluteUrl("/pricing") },
+            { "@type": "Offer", name: "Pro Photographer", price: "999", priceCurrency: "INR", url: absoluteUrl("/pricing") },
+            { "@type": "Offer", name: "Studio", price: "1999", priceCurrency: "INR", url: absoluteUrl("/pricing") },
+            { "@type": "Offer", name: "Elite Studio", price: "3999", priceCurrency: "INR", url: absoluteUrl("/pricing") },
           ],
         },
       },

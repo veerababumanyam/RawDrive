@@ -2450,7 +2450,7 @@ func main() {
 
 		// M41 FR-UCRT-04: upload monthly grant worker. Opt-in behind the
 		// UPLOAD_CREDIT_MONTHLY_GRANT_ENABLED flag. When enabled, the
-		// worker iterates every non-enterprise active workspace once per
+		// worker iterates every non-elite active workspace once per
 		// hour and calls credit.Service.GrantMonthly with an anchor date
 		// on the first of the calendar month. The service uses a
 		// deterministic `monthly:{ws}:{YYYY-MM}` idempotency key so

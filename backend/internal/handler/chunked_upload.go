@@ -606,7 +606,7 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 	// fail-closed default is deliberate: a transient plan-tier lookup
 	// failure must never silently upgrade a standard workspace.
 	planTier := middleware.PlanTierFromContext(r.Context())
-	enterpriseUnlimited := planTier == "enterprise"
+	enterpriseUnlimited := planTier == "business" || planTier == "enterprise" || planTier == "elite_studio"
 
 	creditReservation, credErr := h.creditGate.ReserveForSession(r.Context(), gate.ReserveRequest{
 		WorkspaceID:         workspaceID,

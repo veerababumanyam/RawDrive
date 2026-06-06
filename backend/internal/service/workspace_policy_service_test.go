@@ -54,7 +54,7 @@ func (f *fakeAuditRecorder) Entries() []repository.AuditLogCreate {
 func TestDefaultForTier_Pro_StrictClientScan(t *testing.T) {
 	svc := NewWorkspacePolicyService(nil, nil)
 
-	for _, tier := range []string{"pro", "professional", "enterprise", "studio"} {
+	for _, tier := range []string{"pro", "professional", "pro_photographer", "business", "enterprise", "studio", "elite_studio"} {
 		t.Run(tier, func(t *testing.T) {
 			got := svc.DefaultForTier(tier)
 			assert.Equal(t, PolicyModeStrictClientScan, got,

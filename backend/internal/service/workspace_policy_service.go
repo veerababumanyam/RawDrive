@@ -242,7 +242,7 @@ func (s *WorkspacePolicyService) Set(
 // about original integrity.
 func (s *WorkspacePolicyService) DefaultForTier(tier string) PolicyMode {
 	switch tier {
-	case "pro", "professional", "enterprise", "studio":
+	case "pro", "professional", "pro_photographer", "business", "enterprise", "studio", "elite_studio":
 		return PolicyModeStrictClientScan
 	case "free", "standard", "basic", "":
 		return PolicyModeStandard

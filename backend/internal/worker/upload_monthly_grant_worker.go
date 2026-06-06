@@ -19,7 +19,7 @@ type UploadMonthlyGrantService interface {
 
 // UploadMonthlyGrantWorker grants per-plan monthly upload credits (FR-UCRT-04).
 //
-// The worker iterates every non-enterprise workspace once per run and calls
+// The worker iterates every non-elite workspace once per run and calls
 // credit.Service.GrantMonthly with an anchor date set to the first of the
 // current month. GrantMonthly uses a deterministic idempotency key of the
 // form `monthly:{workspace}:{YYYY-MM}`, so multiple runs within the same
@@ -86,7 +86,7 @@ func (w *UploadMonthlyGrantWorker) Stop() {
 }
 
 // runOnce processes every eligible workspace for the current calendar month.
-// Enterprise plans are filtered at the SQL layer (they consume via
+// Elite/enterprise plans are filtered at the SQL layer (they consume via
 // unlimited_passthrough, not monthly grants). GrantMonthly's idempotency
 // guarantee is the only thing standing between 24×30 worker ticks and a
 // double-grant bug — we rely on the DB unique index, not a worker-side
@@ -102,7 +102,7 @@ func (w *UploadMonthlyGrantWorker) runOnce(ctx context.Context) {
 	rows, err := w.pool.Query(ctx, `
 		SELECT id, COALESCE(plan_tier, 'standard')
 		  FROM workspaces
-		 WHERE plan_tier IS DISTINCT FROM 'enterprise'
+		 WHERE COALESCE(plan_tier, 'standard') NOT IN ('business', 'enterprise', 'elite_studio')
 		   AND status = 'active'
 	`)
 	if err != nil {
@@ -136,7 +136,7 @@ func (w *UploadMonthlyGrantWorker) runOnce(ctx context.Context) {
 		case credit.GrantSkippedReplay:
 			replayed++
 		default:
-			// Skipped-enterprise is filtered out at the SQL layer; any
+			// Skipped elite/enterprise tiers are filtered at the SQL layer; any
 			// other skip reason (unknown plan tier) falls into this
 			// bucket and gets a per-row DEBUG in the service log.
 			skipped++

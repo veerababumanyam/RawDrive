@@ -20,7 +20,18 @@ import {
 
 // ──────────────────────── Types ────────────────────────
 
-type PlanTier = "free" | "starter" | "professional" | "enterprise" | "standard";
+type PlanTier =
+  | "free"
+  | "creator"
+  | "pro_photographer"
+  | "studio"
+  | "elite_studio"
+  | "starter"
+  | "professional"
+  | "business"
+  | "pro"
+  | "enterprise"
+  | "standard";
 
 interface StorageAnalytics {
   usage: {
@@ -52,6 +63,24 @@ function formatBytes(bytes: number): string {
   const units = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+}
+
+function planTierLabel(tier: PlanTier | null): string {
+  if (!tier) return "Loading";
+  const labels: Record<PlanTier, string> = {
+    free: "Starter",
+    standard: "Starter",
+    starter: "Creator",
+    creator: "Creator",
+    professional: "Pro Photographer",
+    pro: "Pro Photographer",
+    pro_photographer: "Pro Photographer",
+    business: "Elite Studio",
+    enterprise: "Elite Studio",
+    elite_studio: "Elite Studio",
+    studio: "Studio",
+  };
+  return labels[tier];
 }
 
 function StorageMetricCard({
@@ -90,11 +119,14 @@ function StorageMetricCard({
 
 export default function StorageSettingsPage() {
   // F-011 (audit 2026-04-10): plan tier was previously hardcoded to
-  // "professional" with a TODO, which hid the BYOS wizard from enterprise
+  // "professional" with a TODO, which hid the BYOS wizard from enterprise-class
   // users AND showed a misleading "Upgrade" prompt to everyone else. Source
   // it from the authoritative backend endpoint that reads from the DB.
   const [planTier, setPlanTier] = useState<PlanTier | null>(null);
-  const isEnterprise = planTier === "enterprise";
+  const isEnterprise =
+    planTier === "business" ||
+    planTier === "elite_studio" ||
+    planTier === "enterprise";
   const planLoaded = planTier !== null;
 
   const [analytics, setAnalytics] = useState<StorageAnalytics | null>(null);
@@ -126,9 +158,9 @@ export default function StorageSettingsPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         const tier = data?.plan_tier as PlanTier | undefined;
-        setPlanTier(tier ?? "standard");
+        setPlanTier(tier ?? "free");
       })
-      .catch(() => setPlanTier("standard"));
+      .catch(() => setPlanTier("free"));
   }, []);
 
   const usage = analytics?.usage;
@@ -158,9 +190,7 @@ export default function StorageSettingsPage() {
       : warningLevel === "warning"
         ? "settings-progress-bar settings-progress-bar--warning"
         : "settings-progress-bar";
-  const planLabel = planLoaded
-    ? `${(planTier || "standard").charAt(0).toUpperCase()}${(planTier || "standard").slice(1)}`
-    : "Loading";
+  const planLabel = planTierLabel(planTier);
   const typeBreakdown = analytics?.type_breakdown;
   const breakdownTotal =
     (typeBreakdown?.originals_bytes ?? 0) +
@@ -288,7 +318,7 @@ export default function StorageSettingsPage() {
           }
         >
           <p className="settings-panel-copy">
-            Your workspace stays on managed Backblaze B2 storage. Enterprise
+            Your workspace stays on managed Backblaze B2 storage. Elite Studio
             workspaces can add bring-your-own-storage overrides.
           </p>
         </SettingsPanel>

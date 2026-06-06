@@ -636,8 +636,8 @@ export interface CreateUserInput {
   // 2026-05-19: optional admin-granted plan comp. When set, the
   // backend writes users.pending_plan_tier (migration 113) and the
   // onboarding flow applies the tier at workspace-creation time.
-  // Valid values: free | starter | professional | business |
-  // enterprise. Only valid for role="photographer"; other roles
+  // Valid values: free | creator | pro_photographer | studio |
+  // elite_studio. Only valid for role="photographer"; other roles
   // produce 400 invalid_plan_tier.
   plan_tier?: string;
 }

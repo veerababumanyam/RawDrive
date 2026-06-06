@@ -46,13 +46,13 @@ type RegisterRequest struct {
 }
 
 // selfServePlans is the whitelist of plan IDs that may be self-registered.
-// Must stay in lockstep with frontend/src/lib/tokens.ts pricingPlans.
+// Must stay in lockstep with the active self-serve subscription rows in
+// subscription_plans and frontend/src/lib/tokens.ts pricingPlans.
 var selfServePlans = map[string]struct{}{
-	"free":         {},
-	"starter":      {},
-	"professional": {},
-	"business":     {},
-	"enterprise":   {},
+	"free":             {},
+	"creator":          {},
+	"pro_photographer": {},
+	"studio":           {},
 }
 
 // normalizePlan coerces a user-supplied plan id into a canonical self-serve

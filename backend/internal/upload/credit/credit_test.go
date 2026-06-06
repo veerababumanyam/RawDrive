@@ -250,32 +250,37 @@ func TestGrantAdmin_RejectsEmptyReason(t *testing.T) {
 	assert.ErrorIs(t, err, credit.ErrEmptyReason)
 }
 
-// T2-007: GrantMonthly skips enterprise plan tier (PRD §D2 — enterprise
+// T2-007: GrantMonthly skips elite/enterprise plan tier (PRD §D2 — enterprise
 // consumes via unlimited_passthrough, no monthly grant posted).
-func TestGrantMonthly_EnterprisePlanSkipped(t *testing.T) {
+func TestGrantMonthly_EliteStudioPlanSkipped(t *testing.T) {
 	svc := credit.NewService(nil)
 	result, err := svc.GrantMonthly(context.Background(), credit.GrantMonthlyInput{
 		WorkspaceID: uuid.New(),
-		PlanTier:    "enterprise",
+		PlanTier:    "elite_studio",
 		AnchorDate:  mustParseTime("2026-04-01T00:00:00Z"),
 	})
-	assert.NoError(t, err, "enterprise skip is not an error path")
+	assert.NoError(t, err, "elite skip is not an error path")
 	assert.Equal(t, credit.GrantSkippedEnterprise, result.Status,
-		"enterprise result must carry the Skipped status")
+		"elite result must carry the Skipped status")
 	assert.Nil(t, result.LedgerEntry, "no ledger entry for skipped enterprise grants")
 }
 
-// T2-008: GrantMonthly amount mapping per PRD §D2 — standard=200, pro=1000.
+// T2-008: GrantMonthly amount mapping follows the current subscription tiers.
 func TestGrantMonthly_PlanTierCreditMapping(t *testing.T) {
 	cases := map[string]int64{
-		"standard":     200,
-		"professional": 1000,
-		"pro":          1000,
+		"creator":          200,
+		"standard":         200,
+		"starter":          200,
+		"pro_photographer": 1000,
+		"professional":     1000,
+		"pro":              1000,
+		"studio":           2500,
 	}
 	for plan, want := range cases {
 		got := credit.MonthlyGrantAmountForPlan(plan)
 		assert.Equal(t, want, got, "plan=%s", plan)
 	}
+	assert.Equal(t, int64(0), credit.MonthlyGrantAmountForPlan("elite_studio"))
 	assert.Equal(t, int64(0), credit.MonthlyGrantAmountForPlan("enterprise"))
 	assert.Equal(t, int64(0), credit.MonthlyGrantAmountForPlan("unknown-plan"))
 }

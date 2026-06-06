@@ -405,7 +405,7 @@ func TestRegisterHandler_PlanDefault(t *testing.T) {
 // TestRegisterHandler_PlanValid walks all self-serve plan IDs and asserts
 // each one is accepted and echoed back unchanged.
 func TestRegisterHandler_PlanValid(t *testing.T) {
-	for _, plan := range []string{"free", "starter", "professional", "business"} {
+	for _, plan := range []string{"free", "creator", "pro_photographer", "studio"} {
 		t.Run(plan, func(t *testing.T) {
 			handler, _, _, _ := setupAuthRouter()
 			ts := newTestServer(handler)
@@ -451,18 +451,18 @@ func TestRegisterHandler_PlanInvalidFallback(t *testing.T) {
 	assert.Equal(t, "free", result["plan"])
 }
 
-// TestRegisterHandler_PlanEnterprise asserts that enterprise is now a valid
-// self-serve plan and can be registered like any other plan.
-func TestRegisterHandler_PlanEnterprise(t *testing.T) {
+// TestRegisterHandler_PlanEliteStudioFallback asserts that sales-led tiers are
+// not self-serve registration options.
+func TestRegisterHandler_PlanEliteStudioFallback(t *testing.T) {
 	handler, _, _, _ := setupAuthRouter()
 	ts := newTestServer(handler)
 	defer ts.Close()
 
 	resp, err := postJSON(ts.URL+"/auth/register", map[string]any{
-		"email":    "ent@example.com",
+		"email":    "elite@example.com",
 		"password": "TestPassword123!",
 		"phone":    "9000000004",
-		"plan":     "enterprise",
+		"plan":     "elite_studio",
 	})
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -470,7 +470,7 @@ func TestRegisterHandler_PlanEnterprise(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
-	assert.Equal(t, "enterprise", result["plan"])
+	assert.Equal(t, "free", result["plan"])
 }
 
 // ──────────────────────────── OAuth Google ────────────────────────────

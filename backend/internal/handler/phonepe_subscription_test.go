@@ -101,7 +101,7 @@ func TestPhonePeV2ClientUsesEncodedOAuthAndBearerToken(t *testing.T) {
 		AmountPaise:     12345,
 		RedirectURL:     "https://rawdrive.test/settings/plans/payment-callback?provider=phonepe&order_id=order",
 		WorkspaceID:     "workspace-1",
-		ToTier:          "professional",
+		ToTier:          "pro_photographer",
 	})
 	if err != nil {
 		t.Fatalf("CreateOrder: %v", err)

@@ -41,7 +41,10 @@ function PlansPageContent() {
   const upgradePlans = useMemo(
     () =>
       plans
-        .filter((plan) => plan.id !== "free" && plan.active && plan.paid)
+        .filter(
+          (plan) =>
+            plan.id !== "free" && plan.active && plan.paid && plan.selfServe,
+        )
         .map((plan) => ({
           tier: plan.id,
           name: plan.name,
@@ -318,8 +321,8 @@ function PlansPageContent() {
       <p className="text-center text-xs text-text-tertiary">
         Prices in Indian Rupees (₹), billed{" "}
         {billingInterval === "annual" ? "annually" : "monthly"}. 18% GST
-        applicable. Payments processed via Razorpay or PhonePe. Enterprise
-        pricing:{" "}
+        applicable. Payments processed via Razorpay or PhonePe. Elite Studio
+        sales:{" "}
         <a
           href="mailto:info@rawdrive.in"
           className="underline underline-offset-2 hover:text-text-secondary"

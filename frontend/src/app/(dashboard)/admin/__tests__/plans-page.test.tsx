@@ -21,17 +21,17 @@ import AdminPlansPage from "../plans/page";
 const mockListAdminPlans = vi.mocked(listAdminPlans);
 const mockUpdateAdminPlan = vi.mocked(updateAdminPlan);
 
-const starterPlan: AdminPlan = {
-  tier: "starter",
-  name: "Starter",
+const creatorPlan: AdminPlan = {
+  tier: "creator",
+  name: "Creator",
   description: "For solo photographers.",
   currency: "INR",
-  monthly_price_paise: 9900,
-  annual_price_paise: 99000,
-  quota_bytes: 30 * 2 ** 30,
+  monthly_price_paise: 49900,
+  annual_price_paise: 499000,
+  quota_bytes: 100 * 2 ** 30,
   gallery_limit: 10,
-  client_limit: 20,
-  features: ["30GB Storage", "10 Galleries"],
+  client_limit: -1,
+  features: ["100GB Storage", "10 Events / Month"],
   popular: false,
   rank: 1,
   paid: true,
@@ -42,7 +42,7 @@ const starterPlan: AdminPlan = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockListAdminPlans.mockResolvedValue([starterPlan]);
+  mockListAdminPlans.mockResolvedValue([creatorPlan]);
   mockUpdateAdminPlan.mockImplementation(async (_token, tier, input) => ({
     tier,
     ...input,
@@ -54,9 +54,9 @@ describe("AdminPlansPage", () => {
     render(<AdminPlansPage />);
 
     expect(await screen.findByRole("heading", { name: "Tier Plans" })).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Starter")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Creator")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByDisplayValue("99"), {
+    fireEvent.change(screen.getByDisplayValue("499"), {
       target: { value: "149" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Save plan" }));
@@ -64,13 +64,13 @@ describe("AdminPlansPage", () => {
     await waitFor(() => {
       expect(mockUpdateAdminPlan).toHaveBeenCalledWith(
         "test-token",
-        "starter",
+        "creator",
         expect.objectContaining({
           monthly_price_paise: 14900,
-          name: "Starter",
+          name: "Creator",
         }),
       );
     });
-    expect(await screen.findByText("Starter plan updated.")).toBeInTheDocument();
+    expect(await screen.findByText("Creator plan updated.")).toBeInTheDocument();
   });
 });

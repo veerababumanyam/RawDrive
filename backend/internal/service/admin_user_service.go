@@ -59,8 +59,8 @@ type CreateInput struct {
 	SendInvite      bool
 	ActorID         uuid.UUID
 	// PlanTier is an optional admin-granted plan comp. When set to one
-	// of the canonical tier slugs (free / starter / professional /
-	// business / enterprise) the value is persisted to
+	// of the canonical tier slugs (free / creator / pro_photographer /
+	// studio / elite_studio) the value is persisted to
 	// users.pending_plan_tier (migration 113) and applied at the
 	// user's workspace-creation time. Only meaningful for the
 	// photographer role — other roles do not own a workspace. The
@@ -75,11 +75,11 @@ type CreateInput struct {
 // (migration 070). Kept here so the service layer can validate before
 // the repo INSERT — saves a round-trip and gives a clear sentinel error.
 var validAdminGrantTiers = map[string]struct{}{
-	"free":         {},
-	"starter":      {},
-	"professional": {},
-	"business":     {},
-	"enterprise":   {},
+	"free":             {},
+	"creator":          {},
+	"pro_photographer": {},
+	"studio":           {},
+	"elite_studio":     {},
 }
 
 // ErrInvalidPlanTier — returned by Create when an unknown plan tier slug

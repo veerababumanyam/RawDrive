@@ -36,85 +36,100 @@ type PlanCatalogEntry struct {
 var planCatalog = []PlanCatalogEntry{
 	{
 		Tier:              "free",
-		Name:              "Free",
-		Description:       "Explore RawDrive with managed storage and gallery delivery.",
+		Name:              "Starter",
+		Description:       "Free forever for beginners trying galleries before a paid event.",
 		Currency:          "INR",
 		MonthlyPricePaise: 0,
 		AnnualPricePaise:  0,
-		QuotaBytes:        1 << 30,
-		GalleryLimit:      3,
-		ClientLimit:       5,
-		Features:          []string{"1GB Storage", "3 Galleries", "5 Client Profiles", "Basic Gallery Delivery", "Email Support"},
+		QuotaBytes:        5 * (1 << 30),
+		GalleryLimit:      1,
+		ClientLimit:       0,
+		Features:          []string{"5GB Storage", "1 Event", "AI Face Search (Limited)", "Watermarked Galleries", "No Photo Selling"},
 		Rank:              0,
 		Paid:              false,
 		Active:            true,
 		SelfServe:         true,
-		TrialDays:         30,
 	},
 	{
-		Tier:              "starter",
-		Name:              "Starter",
-		Description:       "For solo photographers starting client delivery.",
+		Tier:              "pay_per_event",
+		Name:              "Pay Per Event",
+		Description:       "No subscription. One clean price per delivery cycle.",
 		Currency:          "INR",
-		MonthlyPricePaise: 9900,
-		AnnualPricePaise:  99000,
-		QuotaBytes:        30 * (1 << 30),
-		GalleryLimit:      10,
-		ClientLimit:       20,
-		Features:          []string{"30GB Storage", "10 Galleries", "20 Client Profiles", "Client Proofing", "Basic CRM", "Priority Email Support"},
+		MonthlyPricePaise: 19900,
+		AnnualPricePaise:  0,
+		QuotaBytes:        0,
+		GalleryLimit:      1,
+		ClientLimit:       0,
+		Features:          []string{"7-day Upload Window", "30-day Client Access", "90-day Storage Retention", "Wedding Bundle Available", "Extend or Archive Anytime"},
 		Rank:              1,
 		Paid:              true,
 		Active:            true,
-		SelfServe:         true,
+		SelfServe:         false,
 	},
 	{
-		Tier:              "professional",
-		Name:              "Professional",
-		Description:       "For growing studios that need AI, CRM, and streaming.",
+		Tier:              "creator",
+		Name:              "Creator",
+		Description:       "Side and weekend photographers getting started.",
 		Currency:          "INR",
-		MonthlyPricePaise: 29900,
-		AnnualPricePaise:  299000,
-		QuotaBytes:        300 * (1 << 30),
-		GalleryLimit:      50,
-		ClientLimit:       100,
-		Features:          []string{"300GB Storage", "50 Galleries", "100 Client Profiles", "AI Culling", "Client Proofing", "Full CRM & Bookings", "Live Streaming (5 sessions/mo)", "Marketplace Listing", "Phone Support"},
-		Popular:           true,
+		MonthlyPricePaise: 49900,
+		AnnualPricePaise:  499000,
+		QuotaBytes:        100 * (1 << 30),
+		GalleryLimit:      10,
+		ClientLimit:       -1,
+		Features:          []string{"100GB Storage", "10 Events / Month", "AI Face Search", "Reels & Shorts Gallery", "Basic Branding", "Photo Selling (10% Commission)"},
 		Rank:              2,
 		Paid:              true,
 		Active:            true,
 		SelfServe:         true,
 	},
 	{
-		Tier:              "business",
-		Name:              "Business",
-		Description:       "For larger wedding teams running high-volume delivery.",
+		Tier:              "pro_photographer",
+		Name:              "Pro Photographer",
+		Description:       "The main money plan for working pros.",
 		Currency:          "INR",
-		MonthlyPricePaise: 299900,
-		AnnualPricePaise:  2999000,
-		QuotaBytes:        3 * (1 << 40),
-		GalleryLimit:      200,
-		ClientLimit:       500,
-		Features:          []string{"3TB Storage", "200 Galleries", "500 Client Profiles", "AI Culling (Unlimited)", "Advanced Client Proofing", "Full CRM & Bookings", "Live Streaming (20 sessions/mo)", "Premium Marketplace Listing", "Dedicated Account Manager", "API Access"},
+		MonthlyPricePaise: 99900,
+		AnnualPricePaise:  999000,
+		QuotaBytes:        300 * (1 << 30),
+		GalleryLimit:      -1,
+		ClientLimit:       -1,
+		Features:          []string{"300GB Storage", "Unlimited Events", "Fast AI Face Search", "Client Album Selection", "WhatsApp Delivery", "Branding & Watermark Control", "Photo Selling (5% Commission)"},
+		Popular:           true,
 		Rank:              3,
 		Paid:              true,
 		Active:            true,
 		SelfServe:         true,
 	},
 	{
-		Tier:              "enterprise",
-		Name:              "Enterprise",
-		Description:       "For full-scale studios that need white-label control and BYOS.",
+		Tier:              "studio",
+		Name:              "Studio",
+		Description:       "Studios with a team and a brand to protect.",
 		Currency:          "INR",
-		MonthlyPricePaise: 599900,
-		AnnualPricePaise:  5999000,
-		QuotaBytes:        6 * (1 << 40),
+		MonthlyPricePaise: 199900,
+		AnnualPricePaise:  1999000,
+		QuotaBytes:        1 * (1 << 40),
 		GalleryLimit:      -1,
 		ClientLimit:       -1,
-		Features:          []string{"6TB Storage", "Unlimited Galleries", "Unlimited Clients", "Bring Your Own Storage (BYOS)", "White-label Options", "Custom Integrations", "SLA Guarantee", "Dedicated Account Manager", "24/7 Dedicated Support"},
+		Features:          []string{"1TB Storage", "Unlimited Everything", "Priority AI Face Search", "Team Access (Editors)", "Custom Domain", "Advanced Analytics", "Photo Selling (0% Commission)"},
 		Rank:              4,
 		Paid:              true,
 		Active:            true,
 		SelfServe:         true,
+	},
+	{
+		Tier:              "elite_studio",
+		Name:              "Elite Studio",
+		Description:       "High-end and multi-branch studios with custom limits.",
+		Currency:          "INR",
+		MonthlyPricePaise: 399900,
+		AnnualPricePaise:  3999000,
+		QuotaBytes:        6 * (1 << 40),
+		GalleryLimit:      -1,
+		ClientLimit:       -1,
+		Features:          []string{"3TB+ Storage", "Multi-branch Support", "API Access", "White-label App", "Dedicated Support", "0% Selling Commission"},
+		Rank:              5,
+		Paid:              true,
+		Active:            true,
+		SelfServe:         false,
 	},
 }
 
@@ -128,6 +143,7 @@ func PlanCatalog() []PlanCatalogEntry {
 }
 
 func planByTier(tier string) (PlanCatalogEntry, bool) {
+	tier = normalizePlanTierSlug(tier)
 	for _, p := range planCatalog {
 		if p.Tier == tier {
 			return clonePlanCatalogEntry(p), true
@@ -164,6 +180,11 @@ func PlanTierRank(tier string) (int, bool) {
 func IsPaidPlanTier(tier string) bool {
 	p, ok := planByTier(tier)
 	return ok && p.Paid
+}
+
+func IsSelfServePaidPlanTier(tier string) bool {
+	p, ok := planByTier(tier)
+	return ok && p.Paid && p.Active && p.SelfServe
 }
 
 var ErrPlanNotFound = errors.New("plan not found")
@@ -381,7 +402,18 @@ func filterStaticPlanCatalog(includeInactive bool) []PlanCatalogEntry {
 }
 
 func normalizePlanTierSlug(tier string) string {
-	return strings.ToLower(strings.TrimSpace(tier))
+	switch strings.ToLower(strings.TrimSpace(tier)) {
+	case "standard":
+		return "free"
+	case "starter":
+		return "creator"
+	case "pro", "professional":
+		return "pro_photographer"
+	case "business", "enterprise":
+		return "elite_studio"
+	default:
+		return strings.ToLower(strings.TrimSpace(tier))
+	}
 }
 
 func cleanPlanFeatures(features []string) []string {

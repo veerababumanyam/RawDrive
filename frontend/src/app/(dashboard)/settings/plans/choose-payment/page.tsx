@@ -139,7 +139,12 @@ function ChoosePaymentContent() {
   const plan = useMemo(
     () =>
       plans.find(
-        (p) => p.id === tier && p.id !== "free" && p.active && p.paid,
+        (p) =>
+          p.id === tier &&
+          p.id !== "free" &&
+          p.active &&
+          p.paid &&
+          p.selfServe,
       ),
     [plans, tier],
   );
