@@ -165,6 +165,20 @@ describe("LoginForm Google OAuth callback handling", () => {
     expect(getByRole("alert").textContent).toContain("reset the Google link");
   });
 
+  it("explains how to recover when Google sign-in hits the active session limit", () => {
+    nav.params = new URLSearchParams("error=oauth_too_many_active_sessions");
+
+    const { getByRole } = render(<LoginForm />);
+
+    expect(getByRole("alert").textContent).toContain("active session limit");
+    expect(getByRole("alert").textContent).toContain(
+      "Sign out from RawDrive on another device",
+    );
+    expect(getByRole("alert").textContent).toContain(
+      "start Google sign-in again",
+    );
+  });
+
   it("renders a friendly expired-state message without refreshing", async () => {
     nav.params = new URLSearchParams(
       "error=oauth_state_expired&state=sensitive",

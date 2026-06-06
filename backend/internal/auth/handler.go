@@ -127,6 +127,8 @@ type LogoutRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+const tooManyActiveSessionsMessage = "too many active sessions - sign out from another device and try again"
+
 // ──────────────────────────── Dependencies ────────────────────────────
 
 // UserService abstracts user creation and lookup for the auth handler.
@@ -650,7 +652,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	refreshToken, err := h.jwt.GenerateRefreshTokenWithClaims(r.Context(), userID, "family-"+uuid.New().String(), wsID, role, platformRole, stateID)
 	if err != nil {
 		if errors.Is(err, ErrMaxConcurrentSessions) {
-			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "too many active sessions — sign out from another device and try again"})
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": tooManyActiveSessionsMessage})
 			return
 		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate refresh token"})
@@ -732,7 +734,7 @@ func (h *Handler) VerifyOTP(w http.ResponseWriter, r *http.Request) {
 	refreshToken, err := h.jwt.GenerateRefreshTokenWithClaims(r.Context(), userID, "family-"+uuid.New().String(), wsID, role, platformRole, stateID)
 	if err != nil {
 		if errors.Is(err, ErrMaxConcurrentSessions) {
-			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "too many active sessions — sign out from another device and try again"})
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": tooManyActiveSessionsMessage})
 			return
 		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate refresh token"})
@@ -991,7 +993,12 @@ func (h *Handler) OAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	refreshToken, err := h.jwt.GenerateRefreshTokenWithClaims(r.Context(), user.ID, "family-"+uuid.New().String(), oauthWsID, oauthRole, oauthPlatformRole, oauthStateID)
 	if err != nil {
 		if errors.Is(err, ErrMaxConcurrentSessions) {
-			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "too many active sessions — sign out from another device and try again"})
+			http.Redirect(
+				w,
+				r,
+				buildFrontendLoginRedirect(returnTo, fallbackOrigin, map[string]string{"error": string(OAuthErrTooManySessions)}),
+				http.StatusFound,
+			)
 			return
 		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate refresh token"})

@@ -795,6 +795,7 @@ const (
 	OAuthErrGoogleLinkConflict   OAuthErrorCode = "oauth_google_link_conflict"
 	OAuthErrRawDriveLinkConflict OAuthErrorCode = "oauth_rawdrive_link_conflict"
 	OAuthErrConfigUnavailable    OAuthErrorCode = "oauth_config_unavailable"
+	OAuthErrTooManySessions      OAuthErrorCode = "oauth_too_many_active_sessions"
 )
 
 type OAuthCallbackError struct {

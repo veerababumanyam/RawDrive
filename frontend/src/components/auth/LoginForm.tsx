@@ -62,6 +62,8 @@ function friendlyOAuthError(code: string | null, reason?: string | null) {
       return "This RawDrive account is already linked to a different Google account. Use password login or contact support to reset the Google link.";
     case "oauth_account_conflict":
       return "This Google sign-in conflicts with an existing RawDrive account. Use password login or contact support.";
+    case "oauth_too_many_active_sessions":
+      return "You have reached the active session limit. Sign out from RawDrive on another device, then start Google sign-in again.";
     case "oauth_refresh_failed":
       return friendlyOAuthRefreshFailure(reason ?? null);
     case "oauth_storage_blocked":
