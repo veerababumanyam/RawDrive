@@ -314,9 +314,9 @@ pre_migration_backup() {
     log "ERROR: cannot SSH to DB node $DB_NODE_IP for pre-migration backup"
     exit 1
   fi
-  if $SSH_DB "root@$DB_NODE_IP" 'docker exec deploy-postgres-1 pgbackrest --stanza=rawdrive info' >/dev/null 2>&1; then
+  if $SSH_DB "root@$DB_NODE_IP" 'docker exec -u postgres deploy-postgres-1 pgbackrest --stanza=rawdrive info' >/dev/null 2>&1; then
     log "pgBackRest stanza active → taking an incremental backup..."
-    if ! $SSH_DB "root@$DB_NODE_IP" 'docker exec deploy-postgres-1 pgbackrest --stanza=rawdrive --type=incr backup'; then
+    if ! $SSH_DB "root@$DB_NODE_IP" 'docker exec -u postgres deploy-postgres-1 pgbackrest --stanza=rawdrive --type=incr backup'; then
       log "ERROR: pgBackRest pre-migration backup failed — aborting deploy"
       exit 1
     fi

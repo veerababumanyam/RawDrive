@@ -72,3 +72,25 @@ func TestF080_DeployProdPushUsesHardenedSSH(t *testing.T) {
 		t.Error("push_code no longer pipes the tarball stream through the hardened $SSH command (F-080)")
 	}
 }
+
+// TestPreMigrationPgBackRestRunsAsPostgresOSUser guards the F-077 interaction
+// between pg_hba.conf and deploy-time backup. The postgres DB role uses peer
+// auth, so pgBackRest commands that connect as pg1-user=postgres must run as the
+// postgres OS user inside the container, not as docker exec's default root user.
+func TestPreMigrationPgBackRestRunsAsPostgresOSUser(t *testing.T) {
+	script := readDeployProdScript(t)
+
+	required := []string{
+		`docker exec -u postgres deploy-postgres-1 pgbackrest --stanza=rawdrive info`,
+		`docker exec -u postgres deploy-postgres-1 pgbackrest --stanza=rawdrive --type=incr backup`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("deploy-prod.sh must run pgBackRest through %q so peer auth maps to the postgres DB role", needle)
+		}
+	}
+
+	if strings.Contains(script, `docker exec deploy-postgres-1 pgbackrest`) {
+		t.Fatal("deploy-prod.sh still has a root-run pgBackRest command; peer auth will fail for pg1-user=postgres")
+	}
+}
