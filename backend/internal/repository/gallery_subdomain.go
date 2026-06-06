@@ -8,22 +8,13 @@ import (
 )
 
 // GetBySlugScopedByBusinessCode resolves a gallery via a JOIN through the
-// workspace's business_unique_code. This is the lookup path used by the
-// per-business subdomain feature (migration 121):
-//
-//	<business_profile_slug>-<business_unique_code>.rawdrive.in/<gallery.slug>
-//
-// The nginx wildcard server block forwards `<biz>-<code>` as the Host header;
-// the public gallery handler extracts <code> (last 8 chars), and this method
-// scopes the slug lookup to that workspace's galleries. Workspace lookup +
+// workspace's business_unique_code. This supports deprecated/internal
+// migration-121 workspace scope tokens; generated public gallery URLs use the
+// canonical apex path, https://rawdrive.in/g/<slug>. Workspace lookup +
 // gallery lookup happen in a single SQL round-trip via the JOIN, hitting
 // idx_workspaces_business_unique_code (UNIQUE) and idx_galleries_workspace_slug
 // (UNIQUE, composite). Returns nil, nil for either workspace-not-found or
 // slug-not-found-in-that-workspace — callers handle 404 the same way.
-//
-// Earlier per-gallery scheme (migration 120, galleries.subdomain_slug) was
-// removed in migration 122 — this scoped lookup is now the only subdomain
-// resolution path.
 func (r *GalleryRepo) GetBySlugScopedByBusinessCode(ctx context.Context, businessCode, slug string) (*Gallery, error) {
 	g := &Gallery{}
 	err := r.pool.QueryRow(ctx,

@@ -101,17 +101,12 @@ export interface WorkspaceShareIdentity {
 /**
  * Canonical public URL a photographer would share for a gallery.
  *
- * Shape (migration 121, the current scheme):
- *   https://<business_profile_slug>-<business_unique_code>.rawdrive.in/<gallery.slug>
+ * Shape:
+ *   https://rawdrive.in/g/<gallery.slug>
  *
- * Both halves of the subdomain come from the workspace, not the gallery.
- * One workspace = one permanent subdomain; galleries are paths under it.
- *
- * Fallback (`workspace` arg missing or missing identity fields): legacy
- * /g/{slug} on the brand domain — preserves working URLs for any caller
- * that doesn't have the workspace in hand yet (e.g. early-mount before
- * workspace profile loads), and for galleries created in workspaces that
- * pre-date the migration 121 backfill (should be zero in practice).
+ * Workspace subdomains are deprecated and must not be generated for production
+ * share links. The workspace argument remains accepted for call-site
+ * compatibility, but it no longer affects the canonical URL.
  *
  * Local dashboards must stay same-origin. A localhost gallery/share token
  * only exists in the local API, so pointing the copied link at production
@@ -122,13 +117,12 @@ export function galleryPublicUrl(
   workspace?: WorkspaceShareIdentity | null,
   originOverride?: string,
 ): string {
-  const bizSlug = workspace?.business_profile_slug || "";
-  const bizCode = workspace?.business_unique_code || "";
+  void workspace;
   const browserOrigin =
     typeof window !== "undefined" ? window.location.origin : "";
   const origin = originOverride || browserOrigin;
 
-  // Rawdrive.in is stable enough to inline — if the brand domain ever
+  // rawdrive.in is stable enough to inline — if the brand domain ever
   // changes, the design-tokens.json sync process catches it and the build
   // would fail loudly.
   const BASE_DOMAIN = "rawdrive.in";
@@ -137,15 +131,7 @@ export function galleryPublicUrl(
     return `${origin}/g/${gallery.slug}`;
   }
 
-  if (bizSlug && bizCode && gallery.slug) {
-    return `https://${bizSlug}-${bizCode}.${BASE_DOMAIN}/${gallery.slug}`;
-  }
-
-  // Legacy fallback — /g/{slug} on whichever origin the user is viewing.
-  if (origin) {
-    return `${origin}/g/${gallery.slug}`;
-  }
-  return `/g/${gallery.slug}`;
+  return `https://${BASE_DOMAIN}/g/${gallery.slug}`;
 }
 
 function isLocalShareOrigin(origin: string): boolean {
@@ -211,55 +197,6 @@ export interface GalleryBranding {
   public_branding_enabled?: boolean;
 }
 
-export interface PublicStudioProfile {
-  id: string;
-  name: string;
-  display_name: string;
-  brand_name?: string;
-  brand_accent_color?: string;
-  public_branding_enabled: boolean;
-  can_customize: boolean;
-  tier_slug: string;
-  address_line1?: string;
-  address_line2?: string;
-  city?: string;
-  postal_code?: string;
-  phone?: string;
-  email?: string;
-  website?: string;
-  logo_url?: string | null;
-  business_profile_slug: string;
-  business_unique_code: string;
-  business_subdomain: string;
-  public_url: string;
-}
-
-export interface PublicStudioGallery {
-  id: string;
-  title: string;
-  slug: string;
-  description: string;
-  gallery_type: string;
-  cover_thumbnails?: Record<string, string>;
-  created_at: string;
-  published_at?: string;
-  download_enabled: boolean;
-  public_url: string;
-}
-
-export interface PublicStudioLanding {
-  studio: PublicStudioProfile;
-  galleries: PublicStudioGallery[];
-  counts: {
-    published_galleries: number;
-  };
-  // PUB-CAP: keyset pagination cursor for the next page of published
-  // galleries. Present only when more galleries exist beyond this page; the
-  // client passes it back as ?cursor= to "load more". Omitted on the last page.
-  next_cursor?: string | null;
-  has_more?: boolean;
-}
-
 function appendQueryParam(
   path: string,
   key: string,
@@ -271,9 +208,10 @@ function appendQueryParam(
 }
 
 // withPublicGalleryScope appends public-gallery lookup scope to API URLs.
-// `ws` keeps per-business subdomain requests strictly workspace-scoped. `share`
-// is only forwarded on first-touch share landings so the backend can recover a
-// gallery from a stale copied `ws` and mint a durable gallery session.
+// `ws` is retained only for legacy/session-scoped requests; generated public
+// gallery URLs always use the apex `/g/<slug>` shape. `share` is only forwarded
+// on first-touch share landings so the backend can mint a durable gallery
+// session.
 function withPublicGalleryScope(
   path: string,
   ws?: string | null,
@@ -347,43 +285,6 @@ async function fetchWithGallerySession(
     await delay(publicGalleryRetryBackoffMs);
     return await fetchPublicGalleryOnce(url, sessionToken, init);
   }
-}
-
-export async function getPublicStudioLanding(
-  subdomain: string,
-  cursor?: string | null,
-): Promise<PublicStudioLanding> {
-  const path = appendQueryParam(
-    `/api/v1/public/studios/${encodeURIComponent(subdomain)}`,
-    "cursor",
-    cursor,
-  );
-  let res: Response;
-  try {
-    // This runs server-side during SSR, which has no inherent fetch timeout.
-    // Bound it so an unreachable/slow backend fails fast instead of hanging the
-    // render into an upstream 504.
-    res = await fetch(apiUrl(path), { signal: AbortSignal.timeout(8000) });
-  } catch (err) {
-    // Transport failure (SSR API base misconfigured, backend down, or timeout).
-    // Tag it `infra` so callers do NOT mistake it for a genuine 404 — masking
-    // an unreachable API as "not found" silently hid a prod outage.
-    throw Object.assign(
-      new Error(
-        `Studio landing fetch failed: ${err instanceof Error ? err.message : String(err)}`,
-      ),
-      { infra: true },
-    );
-  }
-  if (res.status === 404) {
-    throw Object.assign(new Error("Studio not found"), { notFound: true });
-  }
-  if (!res.ok) {
-    throw Object.assign(new Error(`Studio landing error: ${res.status}`), {
-      infra: true,
-    });
-  }
-  return res.json();
 }
 
 export async function getPublicGalleryBranding(
@@ -521,9 +422,9 @@ export async function clearGalleryMusic(
 }
 
 // Public URL that streams the gallery's background-music asset through the API.
-// Mirrors the image-bytes pattern: `?ws=` scopes the per-business subdomain
-// lookup, and `?at=` carries the short-lived, gallery-scoped asset-access token
-// for gated galleries (SEC-1: an <audio> element cannot send the
+// Mirrors the image-bytes pattern: `?ws=` preserves any legacy workspace scope,
+// and `?at=` carries the short-lived, gallery-scoped asset-access token for
+// gated galleries (SEC-1: an <audio> element cannot send the
 // X-Gallery-Session header, and the durable session must never go in a URL).
 export function publicGalleryMusicUrl(
   slug: string,
@@ -1147,22 +1048,18 @@ export async function updateGallerySettings(
 
 // ── AI Face Scan ──────────────────────────────────────────────────
 export async function triggerFaceScan(
-  token: string,
+  _token: string,
   galleryId: string,
 ): Promise<{ job_id: string }> {
-  const res = await fetch(
-    apiUrl(`/api/v1/galleries/${galleryId}/ai/scan-faces`),
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    },
-  );
+  const res = await authFetch(`/api/v1/galleries/${galleryId}/ai/scan-faces`, {
+    method: "POST",
+  });
   if (!res.ok) throw new Error(`Failed to trigger face scan: ${res.status}`);
   return res.json();
 }
 
 export async function getFaceScanStatus(
-  token: string,
+  _token: string,
   galleryId: string,
 ): Promise<{
   status: string;
@@ -1170,14 +1067,25 @@ export async function getFaceScanStatus(
   total: number;
   faces_found: number;
 }> {
-  const res = await fetch(
-    apiUrl(`/api/v1/galleries/${galleryId}/ai/scan-status`),
-    {
-      headers: { Authorization: `Bearer ${token}` },
-    },
-  );
+  const res = await authFetch(`/api/v1/galleries/${galleryId}/ai/scan-status`);
   if (!res.ok) throw new Error(`Failed to get scan status: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  return {
+    status: typeof body?.status === "string" ? body.status : "unknown",
+    processed:
+      typeof body?.processed === "number"
+        ? body.processed
+        : typeof body?.processed_items === "number"
+          ? body.processed_items
+          : 0,
+    total:
+      typeof body?.total === "number"
+        ? body.total
+        : typeof body?.total_items === "number"
+          ? body.total_items
+          : 0,
+    faces_found: typeof body?.faces_found === "number" ? body.faces_found : 0,
+  };
 }
 
 // Shape returned by GET /api/v1/public/galleries/{slug}/albums.

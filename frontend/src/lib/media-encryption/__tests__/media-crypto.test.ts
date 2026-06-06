@@ -12,7 +12,9 @@ import {
 describe("media E2EE crypto", () => {
   it("encrypts and decrypts media bytes without storing plaintext in the manifest", async () => {
     const key = await generateRawMediaKey();
-    const input = new Blob([new Uint8Array([1, 2, 3, 4, 5])], { type: "image/jpeg" });
+    const input = new Blob([new Uint8Array([1, 2, 3, 4, 5])], {
+      type: "image/jpeg",
+    });
 
     const encrypted = await encryptBlob(input, {
       key,
@@ -28,8 +30,14 @@ describe("media E2EE crypto", () => {
     expect(JSON.stringify(encrypted.manifest)).not.toContain("1,2,3,4,5");
     expect(await encrypted.ciphertext.text()).not.toBe(await input.text());
 
-    const decrypted = await decryptBlob(encrypted.ciphertext, encrypted.manifest, key);
-    expect([...new Uint8Array(await decrypted.arrayBuffer())]).toEqual([1, 2, 3, 4, 5]);
+    const decrypted = await decryptBlob(
+      encrypted.ciphertext,
+      encrypted.manifest,
+      key,
+    );
+    expect([...new Uint8Array(await decrypted.arrayBuffer())]).toEqual([
+      1, 2, 3, 4, 5,
+    ]);
     expect(decrypted.type).toBe("image/jpeg");
   });
 
@@ -44,11 +52,20 @@ describe("media E2EE crypto", () => {
       objectType: "thumb_md_webp",
       contentType: "image/webp",
     });
-    const decrypted = await decryptBlob(encrypted.ciphertext, encrypted.manifest, key);
+    const decrypted = await decryptBlob(
+      encrypted.ciphertext,
+      encrypted.manifest,
+      key,
+    );
     expect(await decrypted.text()).toBe("secret");
 
-    const shared = appendGalleryKeyFragment("https://studio.rawdrive.in/g/wedding?album=a1", exported);
-    expect(shared).toBe(`https://studio.rawdrive.in/g/wedding?album=a1#rd_key=${exported}`);
+    const shared = appendGalleryKeyFragment(
+      "https://rawdrive.in/g/wedding?album=a1",
+      exported,
+    );
+    expect(shared).toBe(
+      `https://rawdrive.in/g/wedding?album=a1#rd_key=${exported}`,
+    );
     expect(new URL(shared).search).toBe("?album=a1");
     expect(readGalleryKeyFromHash(new URL(shared).hash)).toBe(exported);
   });

@@ -56,6 +56,20 @@ describe("dashboard sidebar width cascade", () => {
     expect(dashboardLayout).not.toContain("lg:hidden");
   });
 
+  it("keeps dashboard content offset below the fixed header in Tailwind output", () => {
+    const globals = readFileSync(join(srcRoot, "app", "globals.css"), "utf8");
+    const dashboardLayout = readFileSync(
+      join(srcRoot, "app", "(dashboard)", "layout.tsx"),
+      "utf8",
+    );
+
+    expect(globals).toMatch(
+      /@utility dashboard-main\s*{[^}]*padding-top:\s*calc\(var\(--navbar-height\)\s*\+\s*var\(--space-4\)\);/s,
+    );
+    expect(dashboardLayout).toContain('className="dashboard-main ');
+    expect(dashboardLayout).not.toContain("pt-24");
+  });
+
   it("pins the collapse affordance to the sidebar seam without consuming nav space", () => {
     const globals = readFileSync(join(srcRoot, "app", "globals.css"), "utf8");
     const sidebarShell = readFileSync(

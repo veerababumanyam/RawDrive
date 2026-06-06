@@ -37,11 +37,8 @@ export interface WorkspaceProfile {
   signature_name: string;
   invoice_terms: string;
   invoice_footer: string;
-  // Per-business subdomain identity (migration 121). Backend-populated,
-  // read-only on the dashboard. Empty string when the workspace pre-dates
-  // the migration AND the backfill failed (should be zero rows in practice).
-  // Used to build the share URL:
-  //   https://<business_profile_slug>-<business_unique_code>.rawdrive.in/<gallery-slug>
+  // Deprecated internal identity fields from migration 121. Backend-populated,
+  // read-only on the dashboard, and no longer used to build public gallery URLs.
   business_profile_slug?: string;
   business_unique_code?: string;
 }
@@ -72,11 +69,14 @@ export const EMPTY_WORKSPACE_PROFILE: WorkspaceProfile = {
   invoice_footer: "",
 };
 
-export async function getWorkspaceProfile(token: string): Promise<WorkspaceProfile> {
+export async function getWorkspaceProfile(
+  token: string,
+): Promise<WorkspaceProfile> {
   const res = await fetch(`${API_BASE}/api/v1/workspaces/current/profile`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error(`Failed to load workspace profile: ${res.status}`);
+  if (!res.ok)
+    throw new Error(`Failed to load workspace profile: ${res.status}`);
   const body = await res.json();
   return { ...EMPTY_WORKSPACE_PROFILE, ...body };
 }
@@ -100,7 +100,10 @@ export async function updateWorkspaceProfile(
   return res.json();
 }
 
-export async function uploadWorkspaceLogo(token: string, file: File): Promise<Asset> {
+export async function uploadWorkspaceLogo(
+  token: string,
+  file: File,
+): Promise<Asset> {
   void token;
   const form = new FormData();
   form.append("file", file);

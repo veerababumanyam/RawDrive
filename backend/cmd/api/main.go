@@ -38,6 +38,7 @@ import (
 	"github.com/rawdrive/backend/internal/handler"
 	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/onboarding"
+	"github.com/rawdrive/backend/internal/publicurl"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/scheduler"
 	"github.com/rawdrive/backend/internal/service"
@@ -2048,11 +2049,16 @@ func main() {
 		WithNotifications(repository.NewNotificationRepo(dbPool)) // GAL-FR-134
 	galleryFavoritesSvc := service.NewGalleryFavoritesService(galleryFavoritesRepo, galleryRepo)
 	storageConfigSvc := service.NewStorageConfigService(dbPool)
+	publicBaseURL := os.Getenv("APP_PUBLIC_BASE_URL")
+	if publicBaseURL == "" {
+		publicBaseURL = os.Getenv("FRONTEND_URL")
+	}
+	publicBaseURL = publicurl.Base(publicBaseURL)
 	photographerProfileHandler := handler.NewPhotographerProfileHandler(
 		photographerProfileRepo,
 		galleryRepo,
 		storageProvider,
-	).WithPublicBaseURL(os.Getenv("FRONTEND_URL"))
+	).WithPublicBaseURL(publicBaseURL)
 
 	// M13 Services: Gallery Access, Proofing Sessions, Comments, Album Approval
 	accessLogRepo := repository.NewGalleryAccessLogRepo(dbPool)
@@ -2219,7 +2225,7 @@ func main() {
 			ShareLinkService:        shareLinkSvc,
 			GalleryShareSender:      galleryShareSender,
 			GalleryShareLogRepo:     galleryShareLogRepo,
-			PublicBaseURL:           os.Getenv("FRONTEND_URL"),
+			PublicBaseURL:           publicBaseURL,
 			ProofingService:         proofingSvc,
 			GalleryFavoritesService: galleryFavoritesSvc,
 			StorageConfigService:    storageConfigSvc,
@@ -2282,12 +2288,6 @@ func main() {
 			// when enabled the public gallery serializers emit signed
 			// cdn.rawdrive.in URLs for derivatives after the access gate.
 			CDNSigner: cdnSigner,
-		}
-		// PUB-CACHE: wire the shared (Valkey) backing for the public
-		// studio-profile landing read when available. Only PUBLIC, non-PII
-		// profile fields + PUBLISHED open galleries are cached.
-		if valkeyRaw != nil {
-			m2Deps.StudioLandingCache = valkeyAnalyticsCache{rdb: valkeyRaw}
 		}
 		galleryHandler := handler.RegisterM2Routes(api, m2Deps)
 		photographerProfileHandler.RegisterProtectedRoutes(api)
@@ -3368,21 +3368,13 @@ func main() {
 	workerRegistry.Register("asset-purge", purgeWorker)
 	expiryWorker := worker.NewGalleryExpiryWorker(dbPool)
 	workerRegistry.Register("gallery-expiry", expiryWorker)
-	billingLifecycleBaseURL := os.Getenv("APP_PUBLIC_BASE_URL")
-	if billingLifecycleBaseURL == "" {
-		billingLifecycleBaseURL = os.Getenv("FRONTEND_URL")
-	}
-	billingLifecycleWorker := worker.NewBillingLifecycleWorker(dbPool, notificationEmailSender, billingLifecycleBaseURL)
+	billingLifecycleWorker := worker.NewBillingLifecycleWorker(dbPool, notificationEmailSender, publicBaseURL)
 	workerRegistry.Register("billing-lifecycle", billingLifecycleWorker)
 	// Gallery Enhancements June 2026: branded client email automation. Self-
 	// seeding drip (ready / reminder / last-chance). Only wired when SMTP is
 	// available; falls back to the standard public base URL for gallery links.
 	if galleryAutomationSender != nil {
-		automationBaseURL := os.Getenv("APP_PUBLIC_BASE_URL")
-		if automationBaseURL == "" {
-			automationBaseURL = "https://app.rawdrive.io"
-		}
-		emailAutomationWorker := worker.NewEmailAutomationWorker(dbPool, galleryAutomationSender, automationBaseURL)
+		emailAutomationWorker := worker.NewEmailAutomationWorker(dbPool, galleryAutomationSender, publicBaseURL)
 		workerRegistry.Register("email-automation", emailAutomationWorker)
 	}
 	// M9 E26-S2: outbound webhook delivery — POSTs payloads to subscribers

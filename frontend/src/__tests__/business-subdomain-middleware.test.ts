@@ -1,45 +1,19 @@
 import { describe, expect, it } from "vitest";
-import {
-  config,
-  resolveBusinessSubdomainRewrite,
-  shouldPassThroughBusinessSubdomainPath,
-} from "@/middleware";
+import { config, isDisabledRawDriveSubdomain } from "@/middleware";
 
-describe("business subdomain middleware routing", () => {
-  it("rewrites the root business subdomain to the public studio landing page", () => {
-    const rewrite = resolveBusinessSubdomainRewrite("/", "", "kaveri-stories-a1b2c3d4");
-
-    expect(rewrite).toEqual({
-      pathname: "/studio",
-      search: "?ws=kaveri-stories-a1b2c3d4",
-    });
+describe("disabled RawDrive subdomain middleware routing", () => {
+  it("fails closed for deprecated workspace and gallery subdomains", () => {
+    expect(isDisabledRawDriveSubdomain("kaveri-stories-a1b2c3d4.rawdrive.in")).toBe(true);
+    expect(isDisabledRawDriveSubdomain("legacy-studio-bf998927.rawdrive.in")).toBe(true);
+    expect(isDisabledRawDriveSubdomain("wedding-veera.rawdrive.in")).toBe(true);
   });
 
-  it("continues routing gallery slugs under the same business subdomain", () => {
-    const rewrite = resolveBusinessSubdomainRewrite(
-      "/wedding-veera",
-      "?album=family",
-      "kaveri-stories-a1b2c3d4",
-    );
-
-    expect(rewrite).toEqual({
-      pathname: "/g/wedding-veera",
-      search: "?album=family&ws=kaveri-stories-a1b2c3d4",
-    });
-  });
-
-  it("passes public static assets through instead of treating them as gallery slugs", () => {
-    expect(shouldPassThroughBusinessSubdomainPath("/theme-init.js")).toBe(true);
-    expect(shouldPassThroughBusinessSubdomainPath("/manifest.json")).toBe(true);
-    expect(shouldPassThroughBusinessSubdomainPath("/service-worker.js")).toBe(true);
-    expect(shouldPassThroughBusinessSubdomainPath("/logo/favicon-32x32.png")).toBe(true);
-    expect(shouldPassThroughBusinessSubdomainPath("/CoBolt/CoBolt_Name_Logo.png")).toBe(true);
-  });
-
-  it("still rewrites normal business-subdomain gallery paths", () => {
-    expect(shouldPassThroughBusinessSubdomainPath("/")).toBe(false);
-    expect(shouldPassThroughBusinessSubdomainPath("/wedding-veera")).toBe(false);
-    expect(shouldPassThroughBusinessSubdomainPath("/wedding-veera/photo/asset-123")).toBe(false);
+  it("keeps apex and system subdomains out of the disabled workspace path", () => {
+    expect(isDisabledRawDriveSubdomain("rawdrive.in")).toBe(false);
+    expect(isDisabledRawDriveSubdomain("www.rawdrive.in")).toBe(false);
+    expect(isDisabledRawDriveSubdomain("api.rawdrive.in")).toBe(false);
+    expect(isDisabledRawDriveSubdomain("cdn.rawdrive.in")).toBe(false);
+    expect(isDisabledRawDriveSubdomain("localhost")).toBe(false);
   });
 
   it("keeps public static assets out of the middleware matcher entirely", () => {

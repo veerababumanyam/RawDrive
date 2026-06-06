@@ -45,7 +45,7 @@ interface Props {
   encrypted?: boolean;
   /**
    * Share-link access scope the visitor arrived with (`?share=`, plus `?ws=` on
-   * a studio subdomain). Forwarded on the photo-search POST so a no-PIN share
+   * a legacy workspace-scoped request). Forwarded on the photo-search POST so a no-PIN share
    * arrival self-authorizes via tryBindShareSession instead of depending on the
    * host-only gallery_session cookie, which is absent on this path (issue #175).
    */
@@ -141,7 +141,9 @@ export function FaceIDGate({
               face against the people in this gallery.
             </p>
             <ul className="mt-4 space-y-2 text-sm text-text-secondary">
-              <li>• Your selfie is used only to find your photos in this gallery.</li>
+              <li>
+                • Your selfie is used only to find your photos in this gallery.
+              </li>
               <li>• We don&rsquo;t store your selfie after matching.</li>
               <li>• You can skip this and browse all photos instead.</li>
             </ul>

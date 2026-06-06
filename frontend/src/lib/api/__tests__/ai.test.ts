@@ -6,8 +6,10 @@ global.fetch = mockFetch;
 
 // We need to import after setting up the mock
 import {
+  getGalleryFaceIndexStatus,
   getFaceClusters,
   getClusterFaces,
+  linkClusterContact,
   searchAssets,
   getAIConfig,
   getCredits,
@@ -22,6 +24,7 @@ import {
   listPublicPeople,
   listPublicPersonPhotos,
   searchPublicFaceInGallery,
+  unlinkClusterContact,
 } from "../ai";
 import { persistAuthTokens, clearAuthTokens } from "@/lib/auth";
 
@@ -74,6 +77,31 @@ describe("AI API Client", () => {
     );
   });
 
+  it("getGalleryFaceIndexStatus calls the gallery status endpoint", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          gallery_id: "gallery-123",
+          uploaded_photos: 4,
+          indexable_photos: 4,
+          indexed_faces: 0,
+          indexed_people: 0,
+          indexed_photos: 0,
+          status: "empty",
+        }),
+    });
+
+    const result = await getGalleryFaceIndexStatus(token, "gallery-123");
+    expect(result.uploaded_photos).toBe(4);
+    expect(result.status).toBe("empty");
+    const [calledUrl, init] = mockFetch.mock.calls[0];
+    expect(String(calledUrl)).toContain(
+      "/api/v1/ai/galleries/gallery-123/face-index-status",
+    );
+    expect(init.credentials).toBe("include");
+  });
+
   it("getClusterFaces uses the gallery-scoped review endpoint", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -105,6 +133,50 @@ describe("AI API Client", () => {
       ),
       expect.any(Object),
     );
+  });
+
+  it("linkClusterContact stores the CRM contact link with gallery provenance", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          contact: {
+            contact_id: "contact-1",
+            name: "Priya Client",
+          },
+        }),
+    });
+
+    const result = await linkClusterContact(
+      token,
+      "person-1",
+      "contact-1",
+      "gallery-123",
+    );
+    expect(result?.name).toBe("Priya Client");
+
+    const [calledUrl, init] = mockFetch.mock.calls[0];
+    expect(String(calledUrl)).toContain("/api/v1/ai/clusters/person-1/contact");
+    expect(init.method).toBe("PUT");
+    expect(init.credentials).toBe("include");
+    expect(JSON.parse(init.body)).toEqual({
+      contact_id: "contact-1",
+      gallery_id: "gallery-123",
+    });
+  });
+
+  it("unlinkClusterContact clears the CRM contact link", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 204,
+    });
+
+    await unlinkClusterContact(token, "person-1");
+
+    const [calledUrl, init] = mockFetch.mock.calls[0];
+    expect(String(calledUrl)).toContain("/api/v1/ai/clusters/person-1/contact");
+    expect(init.method).toBe("DELETE");
+    expect(init.credentials).toBe("include");
   });
 
   it("splitCluster posts selected face IDs to the source cluster", async () => {
@@ -304,14 +376,14 @@ describe("Public face/people API client (gallery-session credential)", () => {
 
     await listPublicPeople("wedding-abcd1234", {
       shareToken: "share-tok-123",
-      ws: "studio-test-9e8a5927",
+      ws: "legacy-scope-9e8a5927",
     });
 
     const calledUrl = String(mockFetch.mock.calls[0][0]);
     expect(calledUrl).not.toMatch(/^https?:\/\//);
     const q = new URL(calledUrl, "https://x.test").searchParams;
     expect(q.get("share")).toBe("share-tok-123");
-    expect(q.get("ws")).toBe("studio-test-9e8a5927");
+    expect(q.get("ws")).toBe("legacy-scope-9e8a5927");
   });
 
   it("listPublicPersonPhotos forwards the share token + ws scope (#175)", async () => {
@@ -322,14 +394,14 @@ describe("Public face/people API client (gallery-session credential)", () => {
 
     await listPublicPersonPhotos("wedding-abcd1234", "person-1", {
       shareToken: "share-tok-123",
-      ws: "studio-test-9e8a5927",
+      ws: "legacy-scope-9e8a5927",
     });
 
     const calledUrl = String(mockFetch.mock.calls[0][0]);
     expect(calledUrl).not.toMatch(/^https?:\/\//);
     const q = new URL(calledUrl, "https://x.test").searchParams;
     expect(q.get("share")).toBe("share-tok-123");
-    expect(q.get("ws")).toBe("studio-test-9e8a5927");
+    expect(q.get("ws")).toBe("legacy-scope-9e8a5927");
   });
 
   it("searchPublicFaceInGallery POSTs same-origin relative + sends credentials + multipart body", async () => {
@@ -378,7 +450,7 @@ describe("Public face/people API client (gallery-session credential)", () => {
     const blob = new Blob([new Uint8Array([1, 2, 3])], { type: "image/jpeg" });
     await searchPublicFaceInGallery("wedding-abcd1234", blob, {
       shareToken: "share-tok-123",
-      ws: "studio-test-9e8a5927",
+      ws: "legacy-scope-9e8a5927",
     });
 
     const [url, init] = mockFetch.mock.calls[0];
@@ -392,7 +464,7 @@ describe("Public face/people API client (gallery-session credential)", () => {
     // ...but now also carries the share scope.
     const q = new URL(calledUrl, "https://x.test").searchParams;
     expect(q.get("share")).toBe("share-tok-123");
-    expect(q.get("ws")).toBe("studio-test-9e8a5927");
+    expect(q.get("ws")).toBe("legacy-scope-9e8a5927");
     expect(init.credentials).toBe("include");
   });
 });

@@ -743,6 +743,93 @@ const MEDIA_MODES: Array<{
   { id: "photo-grid", label: "Photo Grid", detail: "Editorial collage" },
 ];
 
+const COVER_SCRIM_OPTIONS: Array<{
+  id: ScrimStyle;
+  label: string;
+}> = [
+  { id: "soft-gradient", label: "Soft gradient" },
+  { id: "cinematic-dark", label: "Cinematic dark" },
+  { id: "warm-vignette", label: "Warm vignette" },
+  { id: "blur-band", label: "Blur band" },
+  { id: "light-wash", label: "Light wash" },
+  { id: "none", label: "None" },
+];
+
+const COVER_TEXT_BACKDROP_OPTIONS: Array<{
+  id: TextBackdrop;
+  label: string;
+}> = [
+  { id: "glass", label: "Glass plate" },
+  { id: "dark", label: "Dark plate" },
+  { id: "light", label: "Light plate" },
+  { id: "none", label: "Text only" },
+];
+
+const COVER_TREATMENTS: Array<{
+  id: string;
+  name: string;
+  mood: string;
+  scrimStyle: ScrimStyle;
+  textBackdrop: TextBackdrop;
+  textShadow: boolean;
+  titleColor: string;
+  subtitleColor: string;
+  accentColor?: string;
+}> = [
+  {
+    id: "cinematic-glass",
+    name: "Cinematic Glass",
+    mood: "Dark gradient, frosted title plate",
+    scrimStyle: "cinematic-dark",
+    textBackdrop: "glass",
+    textShadow: true,
+    titleColor: COVER_COLORS.textMedia,
+    subtitleColor: COVER_COLORS.receptionSubtitle,
+  },
+  {
+    id: "warm-glow",
+    name: "Warm Glow",
+    mood: "Champagne tint for haldi or reception",
+    scrimStyle: "warm-vignette",
+    textBackdrop: "glass",
+    textShadow: true,
+    titleColor: COVER_COLORS.haldiTitle,
+    subtitleColor: COVER_COLORS.haldiSubtitle,
+    accentColor: COVER_COLORS.warmAccent,
+  },
+  {
+    id: "editorial-frost",
+    name: "Editorial Frost",
+    mood: "Light wash with a soft copy panel",
+    scrimStyle: "light-wash",
+    textBackdrop: "light",
+    textShadow: false,
+    titleColor: COVER_COLORS.editorialTitle,
+    subtitleColor: COVER_COLORS.editorialSubtitle,
+    accentColor: COVER_COLORS.warmAccent,
+  },
+  {
+    id: "blur-band",
+    name: "Blur Band",
+    mood: "Horizontal band blended into the photo",
+    scrimStyle: "blur-band",
+    textBackdrop: "dark",
+    textShadow: true,
+    titleColor: COVER_COLORS.textMedia,
+    subtitleColor: COVER_COLORS.textMedia,
+  },
+  {
+    id: "clean-shadow",
+    name: "Clean Shadow",
+    mood: "Photo-first with lifted text",
+    scrimStyle: "soft-gradient",
+    textBackdrop: "none",
+    textShadow: true,
+    titleColor: COVER_COLORS.textMedia,
+    subtitleColor: COVER_COLORS.textMedia,
+  },
+];
+
 const DEFAULT_SCENE_HEADERS: SceneHeaderConfig[] = [
   { id: "haldi", label: "Haldi", enabled: false, assetId: null },
   { id: "mehendi", label: "Mehendi", enabled: false, assetId: null },
@@ -1607,6 +1694,47 @@ function applyCoverPreset(
   );
 }
 
+function applyCoverTreatment(
+  config: DesignConfig,
+  treatment: (typeof COVER_TREATMENTS)[number],
+): DesignConfig {
+  const next = updateSharedCoverProfiles(config, {
+    scrimStyle: treatment.scrimStyle,
+    textBackdrop: treatment.textBackdrop,
+    textShadow: treatment.textShadow,
+    titleColor: treatment.titleColor,
+    subtitleColor: treatment.subtitleColor,
+    textColor: treatment.titleColor,
+  });
+  if (!treatment.accentColor) return next;
+  return {
+    ...next,
+    theme: {
+      ...next.theme,
+      accentColor: treatment.accentColor,
+    },
+  };
+}
+
+function coverTreatmentMatches(
+  profile: CoverDeviceProfile,
+  config: DesignConfig,
+  treatment: (typeof COVER_TREATMENTS)[number],
+): boolean {
+  return (
+    ((profile.scrimStyle as ScrimStyle) || config.cover.scrimStyle) ===
+      treatment.scrimStyle &&
+    ((profile.textBackdrop as TextBackdrop) || config.cover.textBackdrop) ===
+      treatment.textBackdrop &&
+    (profile.textShadow ?? config.cover.textShadow) === treatment.textShadow &&
+    (profile.titleColor || config.cover.titleColor) === treatment.titleColor &&
+    (profile.subtitleColor || config.cover.subtitleColor) ===
+      treatment.subtitleColor &&
+    (!treatment.accentColor ||
+      config.theme.accentColor === treatment.accentColor)
+  );
+}
+
 function prepareDesignConfigForSave(config: DesignConfig): DesignConfig {
   const desktop = profileFromConfig(config, "desktop");
   const phone = profileFromConfig(config, "phone");
@@ -2047,6 +2175,10 @@ export default function CoverDesignPage() {
         }
       }
       const kind = (handle?.dataset.handle as DragKind) || "focal";
+      if (kind === "title" || kind === "subtitle") {
+        setActiveText(kind);
+        setTab("text");
+      }
       dragKindRef.current = kind;
       setDragKind(kind);
       try {
@@ -2645,8 +2777,6 @@ export default function CoverDesignPage() {
                 setConfig={updateConfig}
                 albumTitle={gallery?.title || ""}
                 albumSubtitle={gallery?.description || ""}
-                assets={assets}
-                activeTemplate={activeTemplate}
                 previewDevice={previewDevice}
                 activeText={activeText}
                 setActiveText={setActiveText}
@@ -2902,6 +3032,26 @@ function CoverTemplateMiniPreview({ template }: { template: CoverTemplate }) {
   );
 }
 
+function CoverTreatmentPreview({
+  treatment,
+}: {
+  treatment: (typeof COVER_TREATMENTS)[number];
+}) {
+  return (
+    <span
+      className={`cover-treatment-preview cover-treatment-preview--${treatment.id}`}
+      aria-hidden
+    >
+      <span className="cover-treatment-preview__photo" />
+      <span className="cover-treatment-preview__scrim" />
+      <span className="cover-treatment-preview__copy">
+        <span className="cover-treatment-preview__title" />
+        <span className="cover-treatment-preview__subtitle" />
+      </span>
+    </span>
+  );
+}
+
 function CoverTemplateStage({
   template,
   config,
@@ -3068,6 +3218,23 @@ function PanelCover({
     activeCoverSlotIndex,
     previewDevice,
   );
+  const activeScrimStyle =
+    (activeCoverProfile.scrimStyle as ScrimStyle) || config.cover.scrimStyle;
+  const activeTextBackdrop =
+    (activeCoverProfile.textBackdrop as TextBackdrop) ||
+    config.cover.textBackdrop;
+  const activeTitleColor =
+    activeCoverProfile.titleColor ||
+    config.cover.titleColor ||
+    COVER_COLORS.textMedia;
+  const activeSubtitleColor =
+    activeCoverProfile.subtitleColor ||
+    config.cover.subtitleColor ||
+    COVER_COLORS.textMedia;
+  const activeAccentColor = config.theme.accentColor || COVER_COLORS.textMedia;
+  const activeTreatment = COVER_TREATMENTS.find((treatment) =>
+    coverTreatmentMatches(activeCoverProfile, config, treatment),
+  );
 
   return (
     <div className="cover-panel-stack">
@@ -3148,6 +3315,156 @@ function PanelCover({
               />
             );
           })}
+        </div>
+      </section>
+
+      <section
+        className="cover-section cover-treatment-section"
+        aria-labelledby="cover-treatment-title"
+      >
+        <div className="cover-section-header">
+          <div className="cover-section-heading">
+            <h3 id="cover-treatment-title" className="cover-section-title">
+              Visual treatment
+            </h3>
+            <p className="cover-section-copy">
+              Blend the title, gradient, and tint into the selected photo.
+            </p>
+          </div>
+          <Badge variant="accent" className="uppercase">
+            {activeTreatment ? activeTreatment.name : "Custom"}
+          </Badge>
+        </div>
+        <div
+          className="cover-treatment-grid"
+          role="group"
+          aria-label="Cover visual treatments"
+        >
+          {COVER_TREATMENTS.map((treatment) => {
+            const active = activeTreatment?.id === treatment.id;
+            return (
+              <SelectableTile
+                key={treatment.id}
+                onClick={() =>
+                  setConfig((c) => applyCoverTreatment(c, treatment))
+                }
+                selected={active}
+                className="cover-treatment-tile"
+                media={<CoverTreatmentPreview treatment={treatment} />}
+                title={treatment.name}
+                description={treatment.mood}
+                aria-label={`Use ${treatment.name} cover treatment`}
+              />
+            );
+          })}
+        </div>
+        <div className="cover-treatment-controls">
+          <label className="cover-field-stack">
+            <span className="form-label">Gradient overlay</span>
+            <select
+              value={activeScrimStyle}
+              onChange={(event) =>
+                setConfig((c) =>
+                  updateSharedCoverProfiles(c, {
+                    scrimStyle: event.target.value as ScrimStyle,
+                  }),
+                )
+              }
+              aria-label="Cover gradient treatment"
+              className={COVER_FIELD_CLASS}
+            >
+              {COVER_SCRIM_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="cover-field-stack">
+            <span className="form-label">Text finish</span>
+            <select
+              value={activeTextBackdrop}
+              onChange={(event) =>
+                setConfig((c) =>
+                  updateSharedCoverProfiles(c, {
+                    textBackdrop: event.target.value as TextBackdrop,
+                  }),
+                )
+              }
+              aria-label="Cover text finish"
+              className={COVER_FIELD_CLASS}
+            >
+              {COVER_TEXT_BACKDROP_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="cover-field-stack">
+            <span className="form-label">Title color</span>
+            <input
+              type="color"
+              value={activeTitleColor}
+              onChange={(event) => {
+                const color = event.target.value;
+                setConfig((c) =>
+                  updateSharedCoverProfiles(c, {
+                    titleColor: color,
+                    textColor: color,
+                  }),
+                );
+              }}
+              aria-label="Cover treatment title color"
+              className={COVER_COLOR_CLASS}
+            />
+          </label>
+          <label className="cover-field-stack">
+            <span className="form-label">Subtitle color</span>
+            <input
+              type="color"
+              value={activeSubtitleColor}
+              onChange={(event) => {
+                const color = event.target.value;
+                setConfig((c) =>
+                  updateSharedCoverProfiles(c, {
+                    subtitleColor: color,
+                  }),
+                );
+              }}
+              aria-label="Cover treatment subtitle color"
+              className={COVER_COLOR_CLASS}
+            />
+          </label>
+          <label className="cover-field-stack">
+            <span className="form-label">Accent tint</span>
+            <input
+              type="color"
+              value={activeAccentColor}
+              onChange={(event) =>
+                setConfig((c) => ({
+                  ...c,
+                  theme: { ...c.theme, accentColor: event.target.value },
+                }))
+              }
+              aria-label="Cover accent tint"
+              className={COVER_COLOR_CLASS}
+            />
+          </label>
+          <div className="cover-treatment-shadow">
+            <span className="form-label">Emboss shadow</span>
+            <ToggleSwitch
+              checked={activeCoverProfile.textShadow ?? config.cover.textShadow}
+              label="Emboss shadow"
+              checkedLabel="On"
+              uncheckedLabel="Off"
+              onCheckedChange={(checked) =>
+                setConfig((c) =>
+                  updateSharedCoverProfiles(c, { textShadow: checked }),
+                )
+              }
+            />
+          </div>
         </div>
       </section>
 
@@ -3455,8 +3772,6 @@ function PanelText({
   setConfig,
   albumTitle,
   albumSubtitle,
-  assets,
-  activeTemplate,
   previewDevice,
   activeText,
   setActiveText,
@@ -3466,8 +3781,6 @@ function PanelText({
   setConfig: React.Dispatch<React.SetStateAction<DesignConfig>>;
   albumTitle: string;
   albumSubtitle: string;
-  assets: Asset[];
-  activeTemplate: CoverTemplate;
   previewDevice: PreviewDevice;
   activeText: "title" | "subtitle";
   setActiveText: (t: "title" | "subtitle") => void;
@@ -3525,67 +3838,6 @@ function PanelText({
     Boolean(albumSubtitle) &&
     (config.cover.subtitle.trim() === "" ||
       config.cover.subtitle === albumSubtitle);
-  const missingTemplateSlots = coverTemplateSlotIndices(activeTemplate).filter(
-    (slotIndex) => !coverAssetForSlot(config, assets, slotIndex, previewDevice),
-  );
-  const phoneTitle = config.cover.mobileTitlePosition;
-  const phoneSubtitle = config.cover.mobileSubtitlePosition;
-  const phoneSafe =
-    phoneTitle.x >= 12 &&
-    phoneTitle.x <= 88 &&
-    phoneTitle.y >= 12 &&
-    phoneTitle.y <= 88 &&
-    (!config.cover.subtitleVisible ||
-      (phoneSubtitle.x >= 12 &&
-        phoneSubtitle.x <= 88 &&
-        phoneSubtitle.y >= 12 &&
-        phoneSubtitle.y <= 88));
-  const brandText =
-    config.branding.watermarkText.trim() || config.branding.monogram.trim();
-  const qualityItems = [
-    {
-      label: "Cover photo",
-      detail: assets.length > 0 ? "Ready" : "Needs a photo",
-      level: assets.length > 0 ? "good" : "danger",
-    },
-    {
-      label: "Template slots",
-      detail:
-        missingTemplateSlots.length === 0
-          ? "All required slots filled"
-          : `${missingTemplateSlots.length} slot${missingTemplateSlots.length === 1 ? "" : "s"} missing`,
-      level: missingTemplateSlots.length === 0 ? "good" : "danger",
-    },
-    {
-      label: "Phone safe zone",
-      detail: phoneSafe ? "Inside safe zone" : "Move phone text inward",
-      level: phoneSafe ? "good" : "warning",
-    },
-    {
-      label: "Readability",
-      detail: readabilityLabel,
-      level: readabilityPoints >= 2 ? "good" : "warning",
-    },
-    {
-      label: "Brand mark",
-      detail:
-        config.branding.watermarkStyle === "none" || brandText
-          ? "Ready"
-          : "Add monogram or watermark text",
-      level:
-        config.branding.watermarkStyle === "none" || brandText
-          ? "good"
-          : "warning",
-    },
-    {
-      label: "Client preview parity",
-      detail: "Editor and public cover use the same saved config",
-      level: "good",
-    },
-  ] as const;
-  const qualityWarnings = qualityItems.filter(
-    (item) => item.level !== "good",
-  ).length;
   const activeDeviceLabel = previewDevice === "phone" ? "Phone" : "Desktop";
 
   return (
@@ -3598,11 +3850,6 @@ function PanelText({
               {activeDeviceLabel} text layout is active.
             </p>
           </div>
-          <Badge variant={qualityWarnings === 0 ? "success" : "warning"}>
-            {qualityWarnings === 0
-              ? "Ready"
-              : `${qualityWarnings} checks need review`}
-          </Badge>
         </div>
         <div className="cover-layer-grid">
           <GlassButton
@@ -3693,67 +3940,6 @@ function PanelText({
               }))
             }
           />
-        </div>
-      </section>
-
-      <section className="cover-control-card">
-        <div className="cover-control-card__header">
-          <div>
-            <h3 className="form-label">Cover quality checklist</h3>
-            <p className="cover-helper-text">
-              Checks the album cover before client preview.
-            </p>
-          </div>
-          <GlassButton
-            type="button"
-            variant="surface"
-            onClick={() =>
-              setConfig((c) => ({
-                ...c,
-                cover: {
-                  ...c.cover,
-                  scrimStyle: "cinematic-dark",
-                  textBackdrop: "glass",
-                  textShadow: true,
-                  titleColor: COVER_COLORS.textMedia,
-                  subtitleColor: COVER_COLORS.textMedia,
-                  textColor: COVER_COLORS.textMedia,
-                },
-              }))
-            }
-            className="cover-inline-action"
-          >
-            Auto readability
-          </GlassButton>
-        </div>
-        <div className="cover-quality-list">
-          {qualityItems.map((item) => (
-            <div
-              key={item.label}
-              className="cover-quality-row"
-              data-state={item.level}
-            >
-              <span>
-                <span className="cover-scene-card__title">{item.label}</span>
-                <span className="cover-helper-text">{item.detail}</span>
-              </span>
-              <Badge
-                variant={
-                  item.level === "good"
-                    ? "success"
-                    : item.level === "danger"
-                      ? "danger"
-                      : "warning"
-                }
-              >
-                {item.level === "good"
-                  ? "OK"
-                  : item.level === "danger"
-                    ? "Fix"
-                    : "Review"}
-              </Badge>
-            </div>
-          ))}
         </div>
       </section>
 

@@ -78,7 +78,7 @@ func isRawDriveFirstPartyOrigin(origin string) bool {
 		return false
 	}
 	host := strings.ToLower(parsed.Hostname())
-	return host == "rawdrive.in" || strings.HasSuffix(host, ".rawdrive.in")
+	return host == "rawdrive.in" || host == "www.rawdrive.in"
 }
 
 func isLoopbackOrigin(origin string) bool {

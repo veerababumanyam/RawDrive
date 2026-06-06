@@ -10,7 +10,7 @@ vi.mock("qrcode", () => ({
 
 describe("ShareQrPopover", () => {
   it("prepares a tokenized share URL before opening the QR", async () => {
-    const shareUrl = "https://studio.rawdrive.in/event?share=SHARETOKEN";
+    const shareUrl = "https://rawdrive.in/g/event?share=SHARETOKEN";
     const getShareUrl = vi.fn().mockResolvedValue(shareUrl);
 
     render(

@@ -12,7 +12,7 @@
 // authorized requests. Doc: docs/runbooks/cdn-b2-signed-urls.md
 //
 // CORS: RawDrive galleries are client-E2EE, so the browser fetches these
-// (encrypted) derivative bytes cross-origin (rawdrive.in / *.rawdrive.in ->
+// (encrypted) derivative bytes cross-origin (rawdrive.in / www.rawdrive.in ->
 // cdn.rawdrive.in) and decrypts them client-side. A cross-origin fetch() can only
 // READ the body when the response carries Access-Control-Allow-Origin, and the
 // frontend fetches with credentials:"include" (so ACAO must be the exact origin,
@@ -32,14 +32,14 @@ const eq = (a, b) => {
 };
 
 // corsHeaders returns the per-request CORS headers when the Origin is a RawDrive
-// property (rawdrive.in or any *.rawdrive.in studio subdomain), else {} (no CORS
+// property (rawdrive.in or www.rawdrive.in), else {} (no CORS
 // — same-origin / curl / disallowed origins are unaffected). Echoes the exact
 // origin because credentialed CORS forbids "*".
 const corsHeaders = (origin) => {
   if (!origin) return {};
   let host;
   try { host = new URL(origin).hostname; } catch { return {}; }
-  if (host === "rawdrive.in" || host.endsWith(".rawdrive.in")) {
+  if (host === "rawdrive.in" || host === "www.rawdrive.in") {
     return {
       "Access-Control-Allow-Origin": origin,
       "Access-Control-Allow-Credentials": "true",

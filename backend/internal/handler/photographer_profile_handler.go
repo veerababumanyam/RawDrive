@@ -19,6 +19,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/rawdrive/backend/internal/publicurl"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 	"github.com/rawdrive/backend/internal/storage"
@@ -998,25 +999,7 @@ func (h *PhotographerProfileHandler) profileURL(r *http.Request, p *repository.P
 	if p == nil || p.URLSlug == "" {
 		return ""
 	}
-	base := h.publicBaseURL
-	if base == "" && r != nil {
-		scheme := r.Header.Get("X-Forwarded-Proto")
-		if scheme == "" {
-			scheme = "http"
-			if r.TLS != nil {
-				scheme = "https"
-			}
-		}
-		host := r.Header.Get("X-Forwarded-Host")
-		if host == "" {
-			host = r.Host
-		}
-		base = scheme + "://" + host
-	}
-	if base == "" {
-		return "/p/" + p.URLSlug
-	}
-	return strings.TrimRight(base, "/") + "/p/" + p.URLSlug
+	return publicurl.Profile(h.publicBaseURL, p.URLSlug)
 }
 
 func (h *PhotographerProfileHandler) presignOrBlank(r *http.Request, key string) string {

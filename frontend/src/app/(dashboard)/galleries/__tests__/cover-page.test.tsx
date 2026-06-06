@@ -247,6 +247,98 @@ describe("CoverDesignPage", () => {
     );
   }, 10000);
 
+  it("saves cover visual treatments and manual art-direction overrides", async () => {
+    await renderPage();
+
+    const treatmentHeading = await screen.findByRole("heading", {
+      name: "Visual treatment",
+    });
+    const treatmentSection = treatmentHeading.closest("section");
+    expect(treatmentSection).not.toBeNull();
+
+    fireEvent.click(
+      within(treatmentSection as HTMLElement).getByRole("button", {
+        name: /use warm glow cover treatment/i,
+      }),
+    );
+
+    fireEvent.change(
+      within(treatmentSection as HTMLElement).getByLabelText(
+        "Cover gradient treatment",
+      ),
+      { target: { value: "blur-band" } },
+    );
+    fireEvent.change(
+      within(treatmentSection as HTMLElement).getByLabelText(
+        "Cover text finish",
+      ),
+      { target: { value: "dark" } },
+    );
+    fireEvent.change(
+      within(treatmentSection as HTMLElement).getByLabelText(
+        "Cover treatment title color",
+      ),
+      { target: { value: "#fef3c7" } },
+    );
+    fireEvent.change(
+      within(treatmentSection as HTMLElement).getByLabelText(
+        "Cover treatment subtitle color",
+      ),
+      { target: { value: "#38bdf8" } },
+    );
+    fireEvent.change(
+      within(treatmentSection as HTMLElement).getByLabelText(
+        "Cover accent tint",
+      ),
+      { target: { value: "#0ea5e9" } },
+    );
+    fireEvent.click(
+      within(treatmentSection as HTMLElement).getByRole("switch", {
+        name: /emboss shadow/i,
+      }),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /save cover and design/i }),
+    );
+
+    await waitFor(() => {
+      expect(updateGalleryDesign).toHaveBeenCalled();
+    });
+
+    const savedConfig = vi.mocked(updateGalleryDesign).mock
+      .calls[0]?.[2] as Record<string, unknown>;
+    expect(savedConfig).toMatchObject({
+      theme: {
+        accentColor: "#0ea5e9",
+      },
+      cover: {
+        scrimStyle: "blur-band",
+        textBackdrop: "dark",
+        textShadow: false,
+        titleColor: "#fef3c7",
+        subtitleColor: "#38bdf8",
+        textColor: "#fef3c7",
+        deviceProfiles: {
+          desktop: expect.objectContaining({
+            scrimStyle: "blur-band",
+            textBackdrop: "dark",
+            textShadow: false,
+            titleColor: "#fef3c7",
+            subtitleColor: "#38bdf8",
+          }),
+          phone: expect.objectContaining({
+            scrimStyle: "blur-band",
+            textBackdrop: "dark",
+            textShadow: false,
+            titleColor: "#fef3c7",
+            subtitleColor: "#38bdf8",
+          }),
+        },
+      },
+    });
+  });
+
   it("always shows drag/drop and browse upload in the Cover photo picker", async () => {
     await renderPage();
 
@@ -426,7 +518,7 @@ describe("CoverDesignPage", () => {
     });
   }, 15_000);
 
-  it("shows layer controls, quality checklist, undo, and expanded Indian presets", async () => {
+  it("shows layer controls, undo, and expanded Indian presets", async () => {
     await renderPage();
 
     expect(
@@ -440,7 +532,9 @@ describe("CoverDesignPage", () => {
       target: { value: "text" },
     });
 
-    expect(screen.getByText("Cover quality checklist")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Cover quality checklist"),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("switch", { name: /show title layer/i }),
     ).toBeInTheDocument();
@@ -490,6 +584,45 @@ describe("CoverDesignPage", () => {
         subtitle: "Wedding highlights",
       },
     });
+  });
+
+  it("opens text controls when selecting title or subtitle in the preview", async () => {
+    await renderPage();
+
+    const editorSection = await screen.findByLabelText("Editor section");
+    expect((editorSection as HTMLSelectElement).value).toBe("cover");
+
+    const stage = screen.getByLabelText(/Cover preview/i);
+    const titleOverlay = within(stage).getByRole("heading", {
+      name: "Asha & Ravi",
+    });
+
+    fireEvent.pointerDown(titleOverlay, {
+      pointerId: 1,
+      clientX: 500,
+      clientY: 400,
+    });
+
+    await waitFor(() => {
+      expect((editorSection as HTMLSelectElement).value).toBe("text");
+    });
+    expect(screen.getByPlaceholderText("Your gallery title")).toBeVisible();
+
+    const subtitleOverlay = within(stage).getByText("Wedding highlights");
+    fireEvent.pointerDown(subtitleOverlay, {
+      pointerId: 2,
+      clientX: 520,
+      clientY: 460,
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByLabelText(
+          "Desktop subtitle position 50% horizontal, 82% vertical",
+        ),
+      ).toHaveAttribute("data-state", "active");
+    });
+    expect(screen.getByPlaceholderText("Optional subtitle")).toBeVisible();
   });
 
   it("saves multi-photo template slots and per-slot focal points", async () => {

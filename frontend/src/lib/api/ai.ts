@@ -26,6 +26,25 @@ export interface ClusterSummary {
   // PR-3: backend ai.ClusterSummary returns this — exposed here so the
   // People tab can crop the sample asset to the face region.
   sample_bounding_box?: SampleBoundingBox;
+  linked_contact?: FaceIdentityContactSummary;
+}
+
+export interface FaceIdentityContactSummary {
+  contact_id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  linked_at?: string;
+}
+
+export interface FaceIndexStatus {
+  gallery_id: string;
+  uploaded_photos: number;
+  indexable_photos: number;
+  indexed_faces: number;
+  indexed_people: number;
+  indexed_photos: number;
+  status: "empty" | "ready" | "unavailable";
 }
 
 export interface FaceReviewRow {
@@ -155,6 +174,53 @@ export async function getFaceClusters(
   return [];
 }
 
+export async function getGalleryFaceIndexStatus(
+  _token: string,
+  galleryId: string,
+): Promise<FaceIndexStatus> {
+  const res = await authFetch(
+    `/api/v1/ai/galleries/${galleryId}/face-index-status`,
+  );
+  if (!res.ok) throw new Error(`Face index status failed: ${res.status}`);
+  return res.json();
+}
+
+export async function getClusterContact(
+  _token: string,
+  clusterId: string,
+): Promise<FaceIdentityContactSummary | null> {
+  const res = await authFetch(`/api/v1/ai/clusters/${clusterId}/contact`);
+  if (!res.ok) throw new Error(`Get cluster contact failed: ${res.status}`);
+  const body = await res.json();
+  return body?.contact ?? null;
+}
+
+export async function linkClusterContact(
+  _token: string,
+  clusterId: string,
+  contactId: string,
+  galleryId?: string,
+): Promise<FaceIdentityContactSummary | null> {
+  const res = await authFetch(`/api/v1/ai/clusters/${clusterId}/contact`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contact_id: contactId, gallery_id: galleryId }),
+  });
+  if (!res.ok) throw new Error(`Link cluster contact failed: ${res.status}`);
+  const body = await res.json();
+  return body?.contact ?? null;
+}
+
+export async function unlinkClusterContact(
+  _token: string,
+  clusterId: string,
+): Promise<void> {
+  const res = await authFetch(`/api/v1/ai/clusters/${clusterId}/contact`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`Unlink cluster contact failed: ${res.status}`);
+}
+
 export async function renameCluster(
   _token: string,
   clusterId: string,
@@ -273,6 +339,9 @@ export async function getClusterFaces(
 export interface FaceSearchResponse {
   found: boolean;
   faces_detected: number;
+  index_status?: "ready" | "empty" | "unavailable";
+  indexed_faces?: number;
+  indexed_people?: number;
   cluster_label?: string;
   cluster_name?: string;
   similarity?: number;

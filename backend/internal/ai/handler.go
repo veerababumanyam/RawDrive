@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -103,6 +104,31 @@ func (h *Handler) ListClusters(w http.ResponseWriter, r *http.Request) {
 		clusters = []*ClusterSummary{}
 	}
 	respondJSON(w, http.StatusOK, clusters)
+}
+
+// GetGalleryFaceIndexStatus handles
+// GET /api/v1/ai/galleries/{galleryId}/face-index-status.
+func (h *Handler) GetGalleryFaceIndexStatus(w http.ResponseWriter, r *http.Request) {
+	wsID := getWorkspaceID(r)
+	if wsID == uuid.Nil {
+		respondError(w, http.StatusBadRequest, "workspace_id required")
+		return
+	}
+	galleryID, err := uuid.Parse(chi.URLParam(r, "galleryId"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid gallery id")
+		return
+	}
+	status, err := h.faceSvc.GetFaceIndexStatus(r.Context(), wsID, galleryID)
+	if err != nil {
+		if errors.Is(err, ErrGalleryNotFound) {
+			respondError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, status)
 }
 
 // UpdateCluster handles PATCH /api/v1/ai/clusters/{id}.
@@ -231,6 +257,92 @@ func (h *Handler) GetClusterFaces(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GetClusterContact handles GET /api/v1/ai/clusters/{id}/contact.
+func (h *Handler) GetClusterContact(w http.ResponseWriter, r *http.Request) {
+	wsID := getWorkspaceID(r)
+	if wsID == uuid.Nil {
+		respondError(w, http.StatusBadRequest, "workspace_id required")
+		return
+	}
+	clusterID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid cluster id")
+		return
+	}
+	contact, err := h.faceSvc.GetClusterContact(r.Context(), wsID, clusterID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]any{"contact": contact})
+}
+
+// LinkClusterContact handles PUT /api/v1/ai/clusters/{id}/contact.
+func (h *Handler) LinkClusterContact(w http.ResponseWriter, r *http.Request) {
+	wsID := getWorkspaceID(r)
+	if wsID == uuid.Nil {
+		respondError(w, http.StatusBadRequest, "workspace_id required")
+		return
+	}
+	clusterID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid cluster id")
+		return
+	}
+	var body struct {
+		ContactID string `json:"contact_id"`
+		GalleryID string `json:"gallery_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	contactID, err := uuid.Parse(body.ContactID)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid contact_id")
+		return
+	}
+	var galleryID *uuid.UUID
+	if body.GalleryID != "" {
+		parsed, err := uuid.Parse(body.GalleryID)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, "invalid gallery_id")
+			return
+		}
+		galleryID = &parsed
+	}
+	contact, err := h.faceSvc.LinkClusterContact(r.Context(), wsID, clusterID, contactID, galleryID)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrClusterNotFound), errors.Is(err, ErrContactNotFound), errors.Is(err, ErrGalleryNotFound):
+			respondError(w, http.StatusNotFound, err.Error())
+		default:
+			respondError(w, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]any{"contact": contact})
+}
+
+// UnlinkClusterContact handles DELETE /api/v1/ai/clusters/{id}/contact.
+func (h *Handler) UnlinkClusterContact(w http.ResponseWriter, r *http.Request) {
+	wsID := getWorkspaceID(r)
+	if wsID == uuid.Nil {
+		respondError(w, http.StatusBadRequest, "workspace_id required")
+		return
+	}
+	clusterID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid cluster id")
+		return
+	}
+	if err := h.faceSvc.UnlinkClusterContact(r.Context(), wsID, clusterID); err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // GetClusterAssets handles GET /api/v1/ai/clusters/{id}/assets (M3 E8-S3).
 // Returns distinct asset IDs in a face cluster. When the optional
 // `gallery_id` query param is supplied the result is filtered to that
@@ -341,6 +453,11 @@ func (h *Handler) FaceSearch(w http.ResponseWriter, r *http.Request) {
 		"faces_detected": result.FacesDetected,
 		"asset_ids":      []string{},
 		"count":          0,
+	}
+	if result.IndexStatus != "" {
+		resp["index_status"] = result.IndexStatus
+		resp["indexed_faces"] = result.IndexedFaces
+		resp["indexed_people"] = result.IndexedPeople
 	}
 	if result.Found && result.ClusterLabel != nil {
 		ids := make([]string, len(result.AssetIDs))

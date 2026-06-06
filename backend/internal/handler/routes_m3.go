@@ -15,10 +15,14 @@ func RegisterM3Routes(r chi.Router, deps M3Dependencies) {
 	h := deps.AIHandler
 	r.Route("/api/v1/ai", func(r chi.Router) {
 		r.Post("/face-detect", h.TriggerFaceDetect)
+		r.Get("/galleries/{galleryId}/face-index-status", h.GetGalleryFaceIndexStatus)
 		r.Get("/clusters", h.ListClusters)
 		r.Post("/clusters/merge", h.MergeClusters)
 		r.Patch("/clusters/{id}", h.UpdateCluster)
 		r.Post("/clusters/{id}/split", h.SplitCluster)
+		r.Get("/clusters/{id}/contact", h.GetClusterContact)
+		r.Put("/clusters/{id}/contact", h.LinkClusterContact)
+		r.Delete("/clusters/{id}/contact", h.UnlinkClusterContact)
 		// M3 E8-S3: face filter + smart album from cluster
 		r.Get("/clusters/{id}/faces", h.GetClusterFaces)
 		r.Get("/clusters/{id}/assets", h.GetClusterAssets)

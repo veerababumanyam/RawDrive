@@ -291,7 +291,8 @@ func (r *FaceRepo) ListClusters(ctx context.Context, workspaceID uuid.UUID, gall
 	}
 	query += ` WHERE fc.workspace_id = $1
 		   AND fc.cluster_label IS NOT NULL
-		)
+		),
+		clustered AS (
 		SELECT resolved_label,
 		       (ARRAY_AGG(cluster_name ORDER BY (cluster_label = resolved_label) DESC, confidence DESC, id ASC))[1] AS cluster_name,
 		       COUNT(*) AS face_count,
@@ -300,7 +301,24 @@ func (r *FaceRepo) ListClusters(ctx context.Context, workspaceID uuid.UUID, gall
 		       (ARRAY_AGG(bounding_box ORDER BY confidence DESC, id ASC))[1] AS sample_bounding_box
 		FROM scoped_faces
 		GROUP BY resolved_label
-		ORDER BY face_count DESC`
+		)
+		SELECT clustered.resolved_label,
+		       clustered.cluster_name,
+		       clustered.face_count,
+		       clustered.asset_count,
+		       clustered.sample_asset_id,
+		       clustered.sample_bounding_box,
+		       COALESCE(fic.contact_id, '00000000-0000-0000-0000-000000000000'::uuid) AS contact_id,
+		       COALESCE(contact.name, '') AS contact_name,
+		       contact.email,
+		       contact.phone,
+		       fic.updated_at
+		FROM clustered
+		LEFT JOIN face_identity_contacts fic
+		  ON fic.workspace_id = $1 AND fic.cluster_label = clustered.resolved_label
+		LEFT JOIN contacts contact
+		  ON contact.id = fic.contact_id AND contact.workspace_id = $1
+		ORDER BY clustered.face_count DESC`
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -312,7 +330,15 @@ func (r *FaceRepo) ListClusters(ctx context.Context, workspaceID uuid.UUID, gall
 	for rows.Next() {
 		var cs ClusterSummary
 		var bboxBytes []byte
-		if err := rows.Scan(&cs.ClusterLabel, &cs.ClusterName, &cs.FaceCount, &cs.AssetCount, &cs.SampleAssetID, &bboxBytes); err != nil {
+		var contactID uuid.UUID
+		var contactName string
+		var contactEmail *string
+		var contactPhone *string
+		var linkedAt *time.Time
+		if err := rows.Scan(
+			&cs.ClusterLabel, &cs.ClusterName, &cs.FaceCount, &cs.AssetCount, &cs.SampleAssetID, &bboxBytes,
+			&contactID, &contactName, &contactEmail, &contactPhone, &linkedAt,
+		); err != nil {
 			return nil, fmt.Errorf("face repo: scan cluster: %w", err)
 		}
 		// JSONB stored as BoundingBox struct by StoreFaces (json.Marshal of
@@ -323,9 +349,192 @@ func (r *FaceRepo) ListClusters(ctx context.Context, workspaceID uuid.UUID, gall
 		if len(bboxBytes) > 0 {
 			_ = json.Unmarshal(bboxBytes, &cs.SampleBBox)
 		}
+		if contactID != uuid.Nil {
+			cs.LinkedContact = &FaceIdentityContactSummary{
+				ContactID: contactID,
+				Name:      contactName,
+				Email:     contactEmail,
+				Phone:     contactPhone,
+				LinkedAt:  linkedAt,
+			}
+		}
 		clusters = append(clusters, &cs)
 	}
 	return clusters, rows.Err()
+}
+
+// GetFaceIndexStatus summarizes upload/index state for a gallery owned by the
+// caller's workspace.
+func (r *FaceRepo) GetFaceIndexStatus(ctx context.Context, workspaceID, galleryID uuid.UUID) (*FaceIndexStatus, error) {
+	var galleryExists bool
+	if err := r.pool.QueryRow(ctx,
+		`SELECT EXISTS (
+			SELECT 1 FROM galleries
+			WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+		)`,
+		galleryID, workspaceID,
+	).Scan(&galleryExists); err != nil {
+		return nil, fmt.Errorf("face repo: check gallery status ownership: %w", err)
+	}
+	if !galleryExists {
+		return nil, ErrGalleryNotFound
+	}
+
+	status := &FaceIndexStatus{GalleryID: galleryID}
+	if err := r.pool.QueryRow(ctx, `
+		WITH gallery_photos AS (
+			SELECT a.id, a.status, a.thumbnail_urls
+			FROM gallery_assets ga
+			JOIN assets a ON a.id = ga.asset_id AND a.deleted_at IS NULL
+			WHERE ga.gallery_id = $1
+			  AND a.workspace_id = $2
+			  AND lower(a.content_type) LIKE 'image/%'
+		)
+		SELECT
+		  COUNT(*)::int AS uploaded_photos,
+		  COUNT(*) FILTER (
+		    WHERE status = 'ready' AND thumbnail_urls IS NOT NULL AND thumbnail_urls <> '{}'::jsonb
+		  )::int AS indexable_photos,
+		  COUNT(fc.id)::int AS indexed_faces,
+		  COUNT(DISTINCT fc.asset_id)::int AS indexed_photos
+		FROM gallery_photos gp
+		LEFT JOIN face_clusters fc ON fc.asset_id = gp.id AND fc.workspace_id = $2
+	`, galleryID, workspaceID).Scan(
+		&status.UploadedPhotos,
+		&status.IndexablePhotos,
+		&status.IndexedFaces,
+		&status.IndexedPhotos,
+	); err != nil {
+		return nil, fmt.Errorf("face repo: face index status: %w", err)
+	}
+
+	clusters, err := r.ListClusters(ctx, workspaceID, &galleryID)
+	if err != nil {
+		return nil, err
+	}
+	status.IndexedPeople = len(clusters)
+	switch {
+	case status.UploadedPhotos == 0:
+		status.Status = "empty"
+	case status.IndexedFaces == 0 || status.IndexedPeople == 0:
+		status.Status = "empty"
+	default:
+		status.Status = "ready"
+	}
+	return status, nil
+}
+
+// GetClusterContact returns the CRM contact linked to a canonical face identity.
+func (r *FaceRepo) GetClusterContact(ctx context.Context, workspaceID, clusterLabel uuid.UUID) (*FaceIdentityContactSummary, error) {
+	canonical, err := r.ResolveClusterLabel(ctx, workspaceID, clusterLabel)
+	if err != nil {
+		return nil, err
+	}
+	return r.getClusterContact(ctx, workspaceID, canonical)
+}
+
+func (r *FaceRepo) getClusterContact(ctx context.Context, workspaceID, canonicalLabel uuid.UUID) (*FaceIdentityContactSummary, error) {
+	var out FaceIdentityContactSummary
+	err := r.pool.QueryRow(ctx,
+		`SELECT c.id, c.name, c.email, c.phone, fic.updated_at
+		 FROM face_identity_contacts fic
+		 JOIN contacts c ON c.id = fic.contact_id AND c.workspace_id = fic.workspace_id
+		 WHERE fic.workspace_id = $1 AND fic.cluster_label = $2`,
+		workspaceID, canonicalLabel,
+	).Scan(&out.ContactID, &out.Name, &out.Email, &out.Phone, &out.LinkedAt)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("face repo: get cluster contact: %w", err)
+	}
+	return &out, nil
+}
+
+// LinkClusterContact links a canonical face identity to an existing workspace
+// contact. galleryID is provenance only and may be nil.
+func (r *FaceRepo) LinkClusterContact(ctx context.Context, workspaceID, clusterLabel, contactID uuid.UUID, galleryID *uuid.UUID) (*FaceIdentityContactSummary, error) {
+	canonical, err := r.ResolveClusterLabel(ctx, workspaceID, clusterLabel)
+	if err != nil {
+		return nil, err
+	}
+
+	var clusterExists bool
+	if err := r.pool.QueryRow(ctx,
+		`SELECT EXISTS (
+			SELECT 1 FROM face_clusters
+			WHERE workspace_id = $1 AND cluster_label = $2
+		)`,
+		workspaceID, canonical,
+	).Scan(&clusterExists); err != nil {
+		return nil, fmt.Errorf("face repo: check cluster contact link cluster: %w", err)
+	}
+	if !clusterExists {
+		return nil, ErrClusterNotFound
+	}
+
+	var contactExists bool
+	if err := r.pool.QueryRow(ctx,
+		`SELECT EXISTS (
+			SELECT 1 FROM contacts
+			WHERE id = $1 AND workspace_id = $2
+		)`,
+		contactID, workspaceID,
+	).Scan(&contactExists); err != nil {
+		return nil, fmt.Errorf("face repo: check cluster contact link contact: %w", err)
+	}
+	if !contactExists {
+		return nil, ErrContactNotFound
+	}
+
+	if galleryID != nil {
+		var galleryExists bool
+		if err := r.pool.QueryRow(ctx,
+			`SELECT EXISTS (
+				SELECT 1 FROM galleries
+				WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+			)`,
+			*galleryID, workspaceID,
+		).Scan(&galleryExists); err != nil {
+			return nil, fmt.Errorf("face repo: check cluster contact link gallery: %w", err)
+		}
+		if !galleryExists {
+			return nil, ErrGalleryNotFound
+		}
+	}
+
+	var galleryArg any
+	if galleryID != nil {
+		galleryArg = *galleryID
+	}
+	if _, err := r.pool.Exec(ctx,
+		`INSERT INTO face_identity_contacts (workspace_id, cluster_label, contact_id, gallery_id, updated_at)
+		 VALUES ($1, $2, $3, $4, now())
+		 ON CONFLICT (workspace_id, cluster_label)
+		 DO UPDATE SET contact_id = EXCLUDED.contact_id,
+		               gallery_id = EXCLUDED.gallery_id,
+		               updated_at = now()`,
+		workspaceID, canonical, contactID, galleryArg,
+	); err != nil {
+		return nil, fmt.Errorf("face repo: link cluster contact: %w", err)
+	}
+	return r.getClusterContact(ctx, workspaceID, canonical)
+}
+
+// UnlinkClusterContact clears the CRM contact link for a face identity.
+func (r *FaceRepo) UnlinkClusterContact(ctx context.Context, workspaceID, clusterLabel uuid.UUID) error {
+	canonical, err := r.ResolveClusterLabel(ctx, workspaceID, clusterLabel)
+	if err != nil {
+		return err
+	}
+	_, err = r.pool.Exec(ctx,
+		`DELETE FROM face_identity_contacts WHERE workspace_id = $1 AND cluster_label = $2`,
+		workspaceID, canonical,
+	)
+	if err != nil {
+		return fmt.Errorf("face repo: unlink cluster contact: %w", err)
+	}
+	return nil
 }
 
 // ListClusterAssetIDs returns distinct asset IDs that contain at least one

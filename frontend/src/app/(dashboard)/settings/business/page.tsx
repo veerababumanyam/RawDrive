@@ -132,13 +132,6 @@ export default function BusinessProfilePage() {
   const logoPreviewUrl = logoPreviewSource
     ? getStorageBackedUrl(logoPreviewSource, getStoredAccessToken())
     : "";
-  const businessSubdomain =
-    profile.business_profile_slug && profile.business_unique_code
-      ? `${profile.business_profile_slug}-${profile.business_unique_code}.rawdrive.in`
-      : "";
-  const businessSubdomainUrl = businessSubdomain
-    ? `https://${businessSubdomain}`
-    : "";
 
   if (loading) {
     return (
@@ -275,24 +268,6 @@ export default function BusinessProfilePage() {
               placeholder="https://example.com"
             />
           </label>
-          {businessSubdomainUrl && (
-            <div className="settings-inset-panel settings-form-field--full">
-              <p className="settings-panel-label">Public subdomain address</p>
-              <div className="settings-control-row settings-control-row--compact">
-                <a
-                  href={businessSubdomainUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="settings-link"
-                >
-                  {businessSubdomainUrl}
-                </a>
-                <span className="settings-panel-caption">
-                  Published galleries appear under this address.
-                </span>
-              </div>
-            </div>
-          )}
           <label className="settings-form-field">
             Public brand name
             <input

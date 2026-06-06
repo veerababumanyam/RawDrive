@@ -29,6 +29,59 @@ func TestFaceRepo_ListClusterFaces_UsesGalleryAssetMembership(t *testing.T) {
 	require.Nil(t, faces[0].GalleryID, "test row intentionally relies on gallery_assets membership")
 }
 
+func TestFaceRepo_FaceIndexStatusAndContactLink(t *testing.T) {
+	pool := getAITestPool(t)
+	ctx := context.Background()
+	repo := NewFaceRepo(pool)
+
+	workspaceID, galleryID := seedFaceIdentityWorkspace(t, ctx, pool)
+	assetID := seedFaceIdentityAsset(t, ctx, pool, workspaceID, galleryID, "sync-now.jpg")
+	_, err := pool.Exec(ctx, `
+		UPDATE assets
+		SET thumbnail_urls = '{"display_webp":"thumbs/sync-now.webp"}'::jsonb
+		WHERE id = $1
+	`, assetID)
+	require.NoError(t, err)
+
+	status, err := repo.GetFaceIndexStatus(ctx, workspaceID, galleryID)
+	require.NoError(t, err)
+	require.Equal(t, 1, status.UploadedPhotos)
+	require.Equal(t, 1, status.IndexablePhotos)
+	require.Equal(t, 0, status.IndexedFaces)
+	require.Equal(t, 0, status.IndexedPeople)
+	require.Equal(t, "empty", status.Status)
+
+	clusterLabel := uuid.New()
+	seedFaceIdentityFace(t, ctx, repo, workspaceID, assetID, &galleryID, clusterLabel, "Guest", 0)
+	status, err = repo.GetFaceIndexStatus(ctx, workspaceID, galleryID)
+	require.NoError(t, err)
+	require.Equal(t, 1, status.IndexedFaces)
+	require.Equal(t, 1, status.IndexedPeople)
+	require.Equal(t, 1, status.IndexedPhotos)
+	require.Equal(t, "ready", status.Status)
+
+	contactID := seedFaceIdentityContact(t, ctx, pool, workspaceID, "Priya Client")
+	contact, err := repo.LinkClusterContact(ctx, workspaceID, clusterLabel, contactID, &galleryID)
+	require.NoError(t, err)
+	require.NotNil(t, contact)
+	require.Equal(t, contactID, contact.ContactID)
+	require.Equal(t, "Priya Client", contact.Name)
+
+	clusters, err := repo.ListClusters(ctx, workspaceID, &galleryID)
+	require.NoError(t, err)
+	require.Len(t, clusters, 1)
+	require.NotNil(t, clusters[0].LinkedContact)
+	require.Equal(t, contactID, clusters[0].LinkedContact.ContactID)
+
+	require.NoError(t, repo.UnlinkClusterContact(ctx, workspaceID, clusterLabel))
+	contact, err = repo.GetClusterContact(ctx, workspaceID, clusterLabel)
+	require.NoError(t, err)
+	require.Nil(t, contact)
+
+	_, err = repo.LinkClusterContact(ctx, workspaceID, clusterLabel, uuid.New(), &galleryID)
+	require.ErrorIs(t, err, ErrContactNotFound)
+}
+
 func TestFaceService_MergeClusters_ValidatesAndPersistsAliases(t *testing.T) {
 	pool := getAITestPool(t)
 	ctx := context.Background()
@@ -141,6 +194,17 @@ func seedFaceIdentityAsset(t *testing.T, ctx context.Context, pool *pgxpool.Pool
 	`, galleryID, assetID)
 	require.NoError(t, err)
 	return assetID
+}
+
+func seedFaceIdentityContact(t *testing.T, ctx context.Context, pool *pgxpool.Pool, workspaceID uuid.UUID, name string) uuid.UUID {
+	t.Helper()
+	contactID := uuid.New()
+	_, err := pool.Exec(ctx, `
+		INSERT INTO contacts (id, workspace_id, name, email, phone, contact_type)
+		VALUES ($1, $2, $3, $4, $5, 'client')
+	`, contactID, workspaceID, name, "client@example.test", "+910000000000")
+	require.NoError(t, err)
+	return contactID
 }
 
 func seedFaceIdentityFace(t *testing.T, ctx context.Context, repo *FaceRepo, workspaceID, assetID uuid.UUID, galleryID *uuid.UUID, clusterLabel uuid.UUID, clusterName string, faceIndex int) {

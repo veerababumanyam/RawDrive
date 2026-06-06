@@ -310,6 +310,37 @@ describe("PublicGalleryHero", () => {
     expect(screen.queryByText("Mehendi")).not.toBeInTheDocument();
   });
 
+  it("keeps the subtitle visible when older drag configs only saved a title position", () => {
+    const design: PublicDesignConfig = {
+      cover: {
+        assetId: "asset-cover",
+        styleId: "classic-full",
+        title: "Asha & Ravi",
+        titlePosition: { x: 47, y: 58 },
+      },
+    };
+
+    render(
+      <PublicGalleryHero
+        gallery={gallery}
+        assets={[coverAsset]}
+        branding={branding}
+        design={design}
+      />,
+    );
+
+    expect(screen.getByTestId("gallery-cover-title")).toHaveTextContent(
+      "Asha & Ravi",
+    );
+    expect(screen.getByTestId("gallery-cover-subtitle")).toHaveTextContent(
+      "Wedding highlights",
+    );
+    expect(screen.getByTestId("gallery-cover-subtitle")).toHaveStyle({
+      left: "50%",
+      top: "82%",
+    });
+  });
+
   it("keeps saved design_config asset slots authoritative over the legacy cover asset", () => {
     const design: PublicDesignConfig = {
       cover: {
@@ -547,7 +578,7 @@ describe("PublicGalleryHero", () => {
         assets={[coverAsset, secondaryAsset]}
         branding={branding}
         slug="asha-ravi"
-        ws="studio-abc12345"
+        ws="legacy-abc12345"
         hasMusic
       />,
     );
@@ -561,7 +592,7 @@ describe("PublicGalleryHero", () => {
     expect(audio.getAttribute("src")).toContain(
       "/api/v1/public/galleries/asha-ravi/music",
     );
-    expect(audio.getAttribute("src")).toContain("ws=studio-abc12345");
+    expect(audio.getAttribute("src")).toContain("ws=legacy-abc12345");
   });
 
   it("renders 'Play' without auto-opening or audio when the gallery has no music", () => {

@@ -9,17 +9,19 @@ import (
 	"strings"
 )
 
-// Business-subdomain identity for *.rawdrive.in routing.
+// Deprecated internal workspace identity from migration 121.
 //
-// Each workspace owns one subdomain shaped as:
+// Each workspace still owns one DB identity shaped as:
 //
-//   <business_profile_slug>-<business_unique_code>.rawdrive.in
+//   <business_profile_slug>-<business_unique_code>
 //
 // `business_profile_slug` is derived from the workspace name (lowercased,
 // sanitized to DNS-label rules, truncated to 54 chars). `business_unique_code`
 // is an 8-char lowercase hex string drawn from crypto/rand and persisted
 // in the DB with a UNIQUE index — collisions are essentially impossible
 // (16^8 ≈ 4 billion values) but the index is the ultimate guard.
+// Generated production gallery URLs no longer use this identity; they use
+// https://rawdrive.in/g/<slug>.
 //
 // This file mirrors the contract baked into migration 121:
 //   - reservedSubdomainLabels (Go) == migration 121 CHECK list (DB)

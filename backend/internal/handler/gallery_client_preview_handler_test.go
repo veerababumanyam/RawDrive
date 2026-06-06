@@ -187,7 +187,7 @@ func TestGalleryClientPreview_UnpublishedPayloadAndAlbumScope_RealDB(t *testing.
 	require.Len(t, body.Banners, 1)
 	require.Equal(t, "Live banner", body.Banners[0].Title)
 	require.NotEmpty(t, body.PublicURL)
-	require.Contains(t, body.PublicURL, ".rawdrive.in/client-preview-wedding")
+	require.Equal(t, "https://rawdrive.in/g/client-preview-wedding", body.PublicURL)
 	require.NotContains(t, body.Gallery.Settings, "asset_access_token")
 	require.NotContains(t, body.Gallery.Settings, "cover_thumbnails")
 	require.NotContains(t, body.Gallery.Settings, "cover_asset_resolved_id")

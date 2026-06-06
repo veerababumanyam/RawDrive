@@ -277,11 +277,10 @@ func (s *GalleryService) GetByID(ctx context.Context, id uuid.UUID) (*repository
 
 // GetBySlug retrieves a gallery by slug (for public access).
 //
-// Unscoped lookup against galleries.slug — used by the legacy
+// Unscoped lookup against galleries.slug — used by the canonical
 // `https://rawdrive.in/g/<slug>` URL pattern. Works because every gallery's
 // slug includes an 8-char UUID suffix from generateSlug, so cross-workspace
-// collisions are astronomically rare. The per-business subdomain path
-// (migration 121) doesn't go through here — it calls
+// collisions are astronomically rare. Legacy workspace-scoped requests call
 // GetByBusinessSubdomainAndSlug directly with explicit workspace scope.
 func (s *GalleryService) GetBySlug(ctx context.Context, slug string) (*repository.Gallery, error) {
 	key := publicGalleryCacheKey(slug)
@@ -300,13 +299,12 @@ func (s *GalleryService) GetBySlug(ctx context.Context, slug string) (*repositor
 	return g, nil
 }
 
-// GetByBusinessSubdomainAndSlug resolves a gallery via the new per-business
-// subdomain shape: <biz-slug>-<biz-code>.rawdrive.in/<gallery-slug>. The
-// `subdomain` arg is the full leading label (e.g. "photoworks-a1b2c3d4");
-// the last 8 chars after the trailing hyphen are the business_unique_code
-// used for the workspace lookup. Returns nil, nil when the subdomain
-// doesn't match the expected shape or when no gallery is found in that
-// workspace — the caller falls back to the unscoped GetBySlug path.
+// GetByBusinessSubdomainAndSlug resolves a gallery via the deprecated
+// migration-121 workspace scope token (<biz-slug>-<biz-code>). The last 8
+// chars after the trailing hyphen are the business_unique_code used for the
+// workspace lookup. Returns nil, nil when the token doesn't match the expected
+// shape or when no gallery is found in that workspace — the caller falls back
+// to the unscoped GetBySlug path.
 func (s *GalleryService) GetByBusinessSubdomainAndSlug(ctx context.Context, subdomain, slug string) (*repository.Gallery, error) {
 	// Subdomain shape: <slug>-<code> where code is exactly 8 alphanumeric chars
 	// and the delimiter is a single hyphen. Anything shorter than 9 chars
@@ -453,13 +451,12 @@ func (s *GalleryService) cacheSet(ctx context.Context, key string, g *repository
 // photographer edit is reflected promptly instead of waiting out the TTL.
 //
 // Keying note: a gallery's slug is globally unique (8-char UUID suffix) and its
-// workspace — and therefore its business_unique_code — is immutable, so the
-// apex-slug key uniquely identifies the gallery. The per-business subdomain key
-// (publicGalleryBusinessCacheKey) is NOT invalidated here because that requires
-// the business code, which the mutate paths key by gallery ID and would need an
-// extra workspace query to derive; instead it self-heals within the short
-// publicGalleryCacheTTL (well inside the PUB-CACHE 10–30s staleness bound). The
-// apex `/g/<slug>` path — the dominant public surface — is invalidated exactly.
+// workspace is immutable, so the apex-slug key uniquely identifies the gallery.
+// The deprecated workspace-scoped cache key (publicGalleryBusinessCacheKey) is
+// NOT invalidated here because that requires the business code, which the mutate
+// paths key by gallery ID and would need an extra workspace query to derive;
+// instead it self-heals within the short publicGalleryCacheTTL. The canonical
+// apex `/g/<slug>` path is invalidated exactly.
 func (s *GalleryService) invalidatePublicGallery(ctx context.Context, slug string) {
 	if slug == "" {
 		return

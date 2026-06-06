@@ -354,6 +354,9 @@ function templateSlotFocalPoint(
   return cover?.slotFocalPoints?.[slotIndex] || { x: 50, y: 50 };
 }
 
+const DEFAULT_COVER_TITLE_POSITION = { x: 50, y: 70 };
+const DEFAULT_COVER_SUBTITLE_POSITION = { x: 50, y: 82 };
+
 function PublicCoverTemplateMedia({
   template,
   assets,
@@ -817,8 +820,15 @@ export function PublicGalleryHero({
     // crop a 21/9 panoramic style to 4/3 without picking a new style.
     const renderedAspectRatio =
       activeCover.aspectRatio || designStyle.aspectRatio;
-    const titlePos = activeCover.titlePosition;
-    const subtitlePos = activeCover.subtitlePosition;
+    const hasAnyTextPosition = Boolean(
+      activeCover.titlePosition || activeCover.subtitlePosition,
+    );
+    const titlePos =
+      activeCover.titlePosition ||
+      (hasAnyTextPosition ? DEFAULT_COVER_TITLE_POSITION : undefined);
+    const subtitlePos =
+      activeCover.subtitlePosition ||
+      (hasAnyTextPosition ? DEFAULT_COVER_SUBTITLE_POSITION : undefined);
     const useDragLayout = Boolean(titlePos || subtitlePos);
     // 2026-05-18: title/subtitle colors split into separate fields. The
     // editor picker writes both `titleColor` and `subtitleColor`; the

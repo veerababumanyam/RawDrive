@@ -14,9 +14,9 @@ describe("galleryPublicUrl", () => {
     );
   });
 
-  it("uses the canonical studio subdomain outside local development", () => {
-    expect(galleryPublicUrl(gallery, workspace, "https://app.rawdrive.in")).toBe(
-      "https://aaaa-ed9e1d7b.rawdrive.in/veeru-b08bab82",
-    );
+  it("uses the canonical apex gallery URL outside local development", () => {
+    expect(
+      galleryPublicUrl(gallery, workspace, "https://app.rawdrive.in"),
+    ).toBe("https://rawdrive.in/g/veeru-b08bab82");
   });
 });

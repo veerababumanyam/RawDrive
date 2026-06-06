@@ -71,7 +71,7 @@ export function GalleryShareQrCard({
   const fileBase = `${slug || "gallery"}-qr`;
   // Clean, human-readable address for display - strips the protocol, share
   // token, and `#rd_key` fragment so non-technical users see a tidy
-  // "studio.rawdrive.in/event" rather than a wall of key material. The QR and
+  // "rawdrive.in/g/event" rather than a wall of key material. The QR and
   // Copy use the full `url`; both the share token and fragment must travel with
   // the link for private/E2E galleries to open.
   const displayUrl = url

@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { useDecryptedAssetUrl } from "../use-decrypted-asset-url";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import {
@@ -8,7 +14,10 @@ import {
   generateRawMediaKey,
   type MediaEncryptionManifest,
 } from "../media-crypto";
-import { importGalleryMediaKeyFromInput, versionedGalleryKeyId } from "../media-key-store";
+import {
+  importGalleryMediaKeyFromInput,
+  versionedGalleryKeyId,
+} from "../media-key-store";
 import type { EncryptedAssetLike } from "../asset-media";
 
 // Non-encrypted asset used by the non-encrypted-branch tests below: it must paint
@@ -225,6 +234,77 @@ describe("useDecryptedAssetUrl", () => {
       );
     });
     expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8080/storage/thumbnails/asset-1/thumb_md_webp.webp",
+      {
+        credentials: "include",
+        headers: { Authorization: "Bearer jwt-token" },
+      },
+    );
+  });
+
+  it("falls back from legacy .webp.enc thumbnail keys to current encrypted .webp keys", async () => {
+    const key = await generateRawMediaKey();
+    const exported = await exportRawMediaKey(key);
+    window.history.replaceState(null, "", `/dashboard#rd_key=${exported}`);
+
+    const encrypted = await encryptBlob(
+      new Blob(["webp-bytes"], { type: "image/webp" }),
+      {
+        key,
+        keyId: "gallery:legacy-thumbnail-key-test",
+        objectType: "thumb_md_webp",
+        contentType: "image/webp",
+      },
+    );
+    const ciphertextBytes = await encrypted.ciphertext.arrayBuffer();
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith(".webp.enc")) {
+        return Promise.resolve(new Response("", { status: 404 }));
+      }
+      return Promise.resolve(
+        new Response(ciphertextBytes.slice(0), { status: 200 }),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <Probe
+        token="jwt-token"
+        asset={{
+          id: "asset-1",
+          filename: "photo.webp",
+          is_encrypted: true,
+          thumbnail_urls: {
+            thumb_md_webp: "thumbnails/asset-1/thumb_md_webp.webp.enc",
+          },
+          media_encryption: {
+            scheme: "rawdrive-e2ee-v1",
+            variants: {
+              thumb_md_webp: encrypted.manifest as MediaEncryptionManifest,
+            },
+          },
+        }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("src")).toHaveTextContent(
+        "blob:decrypted-webp",
+      );
+    });
+    expect(screen.getByTestId("loading")).toHaveTextContent("false");
+    expect(screen.getByTestId("error")).toBeEmptyDOMElement();
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "http://localhost:8080/storage/thumbnails/asset-1/thumb_md_webp.webp.enc",
+      {
+        credentials: "include",
+        headers: { Authorization: "Bearer jwt-token" },
+      },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
       "http://localhost:8080/storage/thumbnails/asset-1/thumb_md_webp.webp",
       {
         credentials: "include",
@@ -528,7 +608,9 @@ describe("useDecryptedAssetUrl — non-encrypted sync paint + offline upgrade", 
       undefined,
     );
 
-    const { result } = renderHook(() => useDecryptedAssetUrl(PLAIN_ASSET, TEST_VARIANTS));
+    const { result } = renderHook(() =>
+      useDecryptedAssetUrl(PLAIN_ASSET, TEST_VARIANTS),
+    );
 
     // First settled render: network URL painted synchronously inside the effect.
     expect(result.current.loading).toBe(false);
@@ -548,7 +630,9 @@ describe("useDecryptedAssetUrl — non-encrypted sync paint + offline upgrade", 
     vi.stubGlobal("caches", { match: matchSpy });
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:offline-upgrade");
 
-    const { result } = renderHook(() => useDecryptedAssetUrl(PLAIN_ASSET, TEST_VARIANTS));
+    const { result } = renderHook(() =>
+      useDecryptedAssetUrl(PLAIN_ASSET, TEST_VARIANTS),
+    );
 
     await waitFor(() => {
       expect(result.current.src).toBe("blob:offline-upgrade");

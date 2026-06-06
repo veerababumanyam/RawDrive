@@ -180,13 +180,15 @@ describe("PreviewChrome", () => {
     render(
       <PreviewChrome
         gallery={buildGallery({ is_published: false })}
-        publicUrl="https://studio.rawdrive.in/wedding-2026"
+        publicUrl="https://rawdrive.in/g/wedding-2026"
       />,
     );
 
     expect(screen.getByTestId("preview-share-button")).toBeDisabled();
     expect(screen.getByTestId("share-qr-toggle")).toBeDisabled();
-    expect(screen.getByText(/clients can't access this link yet/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/clients can't access this link yet/i),
+    ).toBeInTheDocument();
   });
 
   it("falls back to error feedback when clipboard write throws", async () => {

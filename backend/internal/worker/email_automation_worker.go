@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/rawdrive/backend/internal/email"
+	"github.com/rawdrive/backend/internal/publicurl"
 )
 
 // automationEmailSender is the subset of email.GalleryAutomationSender the
@@ -243,10 +244,10 @@ func (w *EmailAutomationWorker) sendDue(ctx context.Context) {
 			continue
 		}
 
-		link := w.publicBaseURL + "/g/" + url.PathEscape(d.slug)
+		link := publicurl.Gallery(w.publicBaseURL, d.slug)
 		logoURL := ""
 		if d.brandingPublic && d.logoAssetID != "" {
-			logoURL = fmt.Sprintf("%s/api/v1/public/galleries/%s/branding/logo", w.publicBaseURL, url.PathEscape(d.slug))
+			logoURL = fmt.Sprintf("%s/api/v1/public/galleries/%s/branding/logo", publicurl.Base(w.publicBaseURL), url.PathEscape(d.slug))
 		}
 		expiryLabel := ""
 		if d.expiresAt != nil {

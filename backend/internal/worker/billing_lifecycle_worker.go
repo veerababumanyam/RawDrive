@@ -7,13 +7,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/url"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/rawdrive/backend/internal/publicurl"
 )
 
 type billingNotificationSender interface {
@@ -318,7 +319,7 @@ func (w *BillingLifecycleWorker) actionURL(job billingLifecycleJob, data billing
 		return w.publicBaseURL + "/pricing?convert=event"
 	case "expiry_warning", "deletion_warning":
 		if data.gallerySlug != "" {
-			return w.publicBaseURL + "/g/" + url.PathEscape(data.gallerySlug)
+			return publicurl.Gallery(w.publicBaseURL, data.gallerySlug)
 		}
 		return w.publicBaseURL + "/settings/plans"
 	default:

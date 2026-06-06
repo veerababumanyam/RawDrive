@@ -352,9 +352,9 @@ func TestPublicGalleryCache_ReturnsIndependentCopy_NoAliasing(t *testing.T) {
 	}
 }
 
-// The business-scoped path (per-business subdomain) must also cache an open
-// public gallery, keyed on code+slug so a wrong business code never serves a
-// cached row meant for another scope.
+// The deprecated workspace-scoped path must also cache an open public gallery,
+// keyed on code+slug so a wrong business code never serves a cached row meant
+// for another scope.
 func TestPublicGalleryCache_BusinessScoped_CollapsesAndScopes(t *testing.T) {
 	resolver := newCountingSlugResolver()
 	g := openPublicGallery("biz-shoot-66778899")
@@ -363,7 +363,7 @@ func TestPublicGalleryCache_BusinessScoped_CollapsesAndScopes(t *testing.T) {
 	svc := newGalleryServiceForCacheTest(resolver).WithSharedCache(newFakeSharedGalleryCache())
 
 	for i := 0; i < 5; i++ {
-		got, err := svc.GetByBusinessSubdomainAndSlug(context.Background(), "studio-abcd1234", g.Slug)
+		got, err := svc.GetByBusinessSubdomainAndSlug(context.Background(), "legacy-abcd1234", g.Slug)
 		require.NoError(t, err)
 		require.NotNil(t, got)
 		assert.Equal(t, g.ID, got.ID)
@@ -373,7 +373,7 @@ func TestPublicGalleryCache_BusinessScoped_CollapsesAndScopes(t *testing.T) {
 
 	// A request with the WRONG business code must NOT be served the cached row —
 	// it must miss the cache and resolve (to nil) via the scoped DB query.
-	got, err := svc.GetByBusinessSubdomainAndSlug(context.Background(), "studio-wrongcode", g.Slug)
+	got, err := svc.GetByBusinessSubdomainAndSlug(context.Background(), "legacy-wrongcode", g.Slug)
 	require.NoError(t, err)
 	assert.Nil(t, got, "a wrong business code must never be served another scope's cached gallery")
 }

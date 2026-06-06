@@ -13,11 +13,11 @@ vi.mock("qrcode", () => ({ default: { toCanvas, toDataURL, toString } }));
 
 import { GalleryShareQrCard } from "@/components/gallery/gallery-share-qr-card";
 
-// A per-business subdomain URL carrying both the public share-session token and
-// the E2E `#rd_key` fragment, exactly what the gallery page's tokenized share
+// Canonical gallery URL carrying both the public share-session token and the
+// E2E `#rd_key` fragment, exactly what the gallery page's tokenized share
 // helper returns.
 const SHARE_URL =
-  "https://studio-ab12.rawdrive.in/sharma-wedding?share=SHARETOKEN#rd_key=SECRETKEY";
+  "https://rawdrive.in/g/sharma-wedding?share=SHARETOKEN#rd_key=SECRETKEY";
 
 describe("GalleryShareQrCard", () => {
   beforeEach(() => {
@@ -42,13 +42,17 @@ describe("GalleryShareQrCard", () => {
 
     // The visible address is clean (no protocol, no #rd_key fragment).
     expect(
-      screen.getByText("studio-ab12.rawdrive.in/sharma-wedding"),
+      screen.getByText("rawdrive.in/g/sharma-wedding"),
     ).toBeInTheDocument();
 
     await waitFor(() => expect(toCanvas).toHaveBeenCalled());
 
-    expect(screen.getByTestId("share-qr-card-download-png")).toBeInTheDocument();
-    expect(screen.getByTestId("share-qr-card-download-svg")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("share-qr-card-download-png"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("share-qr-card-download-svg"),
+    ).toBeInTheDocument();
   });
 
   it("downloads a high-res PNG named after the slug when the PNG action is clicked", async () => {
@@ -142,8 +146,6 @@ describe("GalleryShareQrCard", () => {
     expect(
       screen.queryByTestId("share-qr-card-canvas"),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByTestId("share-qr-card-unavailable"),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("share-qr-card-unavailable")).toBeInTheDocument();
   });
 });

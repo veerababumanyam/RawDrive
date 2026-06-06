@@ -91,6 +91,8 @@ services:
     env_file:
       - path: /opt/rawdrive/app/.env
         required: false
+    environment:
+      APP_PUBLIC_BASE_URL: https://rawdrive.in
     ports:
       - "8080:8080"  # exposed for peer failover from the OTHER app node
     depends_on:
@@ -194,6 +196,8 @@ services:
     env_file:
       - path: /opt/rawdrive/app/.env
         required: false
+    environment:
+      APP_PUBLIC_BASE_URL: https://rawdrive.in
     depends_on:
       backend:
         condition: service_healthy

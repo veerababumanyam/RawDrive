@@ -215,9 +215,9 @@ function assetRowsSignature(
 function assetHasWebPDisplay(asset: Asset | null | undefined): boolean {
   return Boolean(
     asset?.thumbnail_urls?.display_webp ||
-      asset?.thumbnail_urls?.thumb_lg_webp ||
+    asset?.thumbnail_urls?.thumb_lg_webp ||
     asset?.thumbnail_urls?.thumb_md_webp ||
-      asset?.thumbnail_urls?.thumb_sm_webp,
+    asset?.thumbnail_urls?.thumb_sm_webp,
   );
 }
 
@@ -226,9 +226,9 @@ function assetCanBrowserIndexFaces(
 ): asset is Asset {
   return Boolean(
     asset &&
-      !assetIsProcessing(asset) &&
-      asset.content_type?.toLowerCase().startsWith("image/") &&
-      assetHasWebPDisplay(asset),
+    !assetIsProcessing(asset) &&
+    asset.content_type?.toLowerCase().startsWith("image/") &&
+    assetHasWebPDisplay(asset),
   );
 }
 
@@ -527,12 +527,13 @@ export default function GalleryDetailPage({
   // can disable itself + show a "Saving…" state. Prevents double-submit
   // when the user clicks during the round-trip.
   const [publishing, setPublishing] = useState(false);
-  const [faceIndexRun, setFaceIndexRun] =
-    useState<FaceIndexRunState | null>(null);
+  const [faceIndexRun, setFaceIndexRun] = useState<FaceIndexRunState | null>(
+    null,
+  );
   const faceIndexAbortRef = useRef<AbortController | null>(null);
-  // Per-business subdomain identity for share URLs. Loaded once when the
-  // page mounts — share URLs are only built after this resolves; until then
-  // buildShareUrl falls back to the legacy /g/<slug> shape.
+  // Deprecated workspace identity fields are still loaded for API compatibility,
+  // but galleryPublicUrl ignores them and always builds the canonical /g/<slug>
+  // share URL.
   const [workspaceProfile, setWorkspaceProfile] =
     useState<WorkspaceProfile | null>(null);
   useEffect(() => {
@@ -544,7 +545,7 @@ export default function GalleryDetailPage({
         if (!cancelled) setWorkspaceProfile(p);
       })
       .catch(() => {
-        /* fallback to legacy URL via buildShareUrl */
+        /* galleryPublicUrl still builds the canonical apex URL without profile data. */
       });
     return () => {
       cancelled = true;
@@ -852,12 +853,9 @@ export default function GalleryDetailPage({
     [activeAlbum, refreshAlbums],
   );
 
-  // Builds the per-business subdomain URL (migration 121 shape):
-  //   https://<business_profile_slug>-<business_unique_code>.rawdrive.in/<gallery.slug>
-  // Falls back to /g/<slug> on the apex when workspaceProfile hasn't loaded
-  // yet (first render, before the useEffect fetch resolves) or when the
-  // workspace has no business identity assigned (should be impossible
-  // post-migration 121 but the helper is defensive).
+  // Builds the canonical gallery URL:
+  //   https://rawdrive.in/g/<gallery.slug>
+  // In local development, galleryPublicUrl keeps localhost as the origin.
   //
   // Album query appending: Next.js middleware passes querystring through to
   // /g/[slug], so adding `?album=<id>` to the share URL keeps album deep
@@ -1068,7 +1066,8 @@ export default function GalleryDetailPage({
         indexedFaces: 0,
         skippedAssets: 0,
         failedAssets: 0,
-        message: "No ready photos with WebP derivatives are available to index.",
+        message:
+          "No ready photos with WebP derivatives are available to index.",
       });
       return;
     }

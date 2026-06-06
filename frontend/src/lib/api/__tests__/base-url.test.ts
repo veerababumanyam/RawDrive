@@ -62,7 +62,7 @@ describe("resolveApiBaseUrl", () => {
         env: {
           INTERNAL_API_BASE_URL: "https://api.rawdrive.in",
         },
-        locationHostname: "studio-cobolt-bf998927.rawdrive.in",
+        locationHostname: "rawdrive.in",
       }),
     ).toBe("https://api.rawdrive.in");
   });
@@ -74,7 +74,7 @@ describe("resolveApiBaseUrl", () => {
         env: {
           NEXT_PUBLIC_API_URL: "http://localhost:8080",
         },
-        locationHostname: "studio-cobolt-bf998927.rawdrive.in",
+        locationHostname: "rawdrive.in",
       }),
     ).toBe("https://api.rawdrive.in");
   });
@@ -86,7 +86,7 @@ describe("resolveApiBaseUrl", () => {
         env: {
           NEXT_PUBLIC_API_URL: "http://backend:8080",
         },
-        locationHostname: "studio-cobolt-bf998927.rawdrive.in",
+        locationHostname: "rawdrive.in",
       }),
     ).toBe("https://api.rawdrive.in");
   });
@@ -98,7 +98,7 @@ describe("resolveApiBaseUrl", () => {
         env: {
           NEXT_PUBLIC_API_URL: "https://api.rawdrive.in",
         },
-        locationHostname: "studio-cobolt-bf998927.rawdrive.in",
+        locationHostname: "rawdrive.in",
       }),
     ).toBe("https://api.rawdrive.in");
   });
@@ -109,7 +109,7 @@ describe("resolveApiBaseUrl", () => {
         env: {
           NEXT_PUBLIC_API_URL: "http://backend:8080",
         },
-        locationHostname: "studio-cobolt-bf998927.rawdrive.in",
+        locationHostname: "rawdrive.in",
       }),
     ).toBe("https://api.rawdrive.in");
   });
@@ -119,7 +119,7 @@ describe("resolveApiBaseUrl", () => {
       resolveApiBaseUrl({
         isServer: false,
         env: {},
-        locationHostname: "studio-cobolt-bf998927.rawdrive.in",
+        locationHostname: "rawdrive.in",
       }),
     ).toBe("https://api.rawdrive.in");
   });

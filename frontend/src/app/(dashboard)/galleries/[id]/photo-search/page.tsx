@@ -49,6 +49,7 @@ type Stage =
   | "searching" // POST in flight
   | "result-found" // match found
   | "result-no-face" // image had no face
+  | "result-index-empty" // image had a face but gallery has no FaceID index
   | "result-no-match" // face detected but no cluster match in gallery
   | "camera-error"; // permission denied or device unavailable
 
@@ -379,9 +380,13 @@ export default function PhotoSearchPage({
         // calling it explicitly here means the user sees the light
         // go out in the same animation frame the result panel mounts.
         stopCamera();
-        setStage(
-          result.faces_detected === 0 ? "result-no-face" : "result-no-match",
-        );
+        if (result.faces_detected === 0) {
+          setStage("result-no-face");
+        } else if (result.index_status === "empty") {
+          setStage("result-index-empty");
+        } else {
+          setStage("result-no-match");
+        }
         return;
       }
 
@@ -427,6 +432,7 @@ export default function PhotoSearchPage({
     if (
       stage === "result-found" ||
       stage === "result-no-face" ||
+      stage === "result-index-empty" ||
       stage === "result-no-match"
     ) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -556,6 +562,31 @@ export default function PhotoSearchPage({
           </p>
           <p className="text-xs text-text-secondary">
             Make sure your face is centered and well lit, then try again.
+          </p>
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="inline-flex items-center gap-2 rounded-full border border-border-default bg-surface-container px-4 py-2 text-sm text-text-primary hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2"
+            >
+              <RefreshCw className="h-4 w-4" aria-hidden />
+              Try again
+            </button>
+          </div>
+        </section>
+      )}
+
+      {stage === "result-index-empty" && (
+        <section className="surface-panel p-6 text-center space-y-3">
+          <p className="text-sm font-semibold text-text-primary">
+            FaceID is not synced for this gallery yet
+          </p>
+          <p className="text-xs text-text-secondary">
+            We saw {searchResult?.faces_detected ?? 1}{" "}
+            {(searchResult?.faces_detected ?? 1) === 1 ? "face" : "faces"} in
+            the capture, but this gallery does not have indexed people yet. Use
+            Sync now in People Review, name or link the detected people, then
+            search again.
           </p>
           <div className="flex justify-center">
             <button

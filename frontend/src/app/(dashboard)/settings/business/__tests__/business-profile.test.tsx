@@ -59,11 +59,7 @@ describe("BusinessProfilePage studio identity", () => {
         .getByRole("img", { name: /kaveri stories logo preview/i })
         .getAttribute("src"),
     ).not.toContain("token=");
-    expect(
-      screen.getByRole("link", {
-        name: "https://kaveri-stories-a1b2c3d4.rawdrive.in",
-      }),
-    ).toHaveAttribute("href", "https://kaveri-stories-a1b2c3d4.rawdrive.in");
+    expect(screen.queryByText(/rawdrive\.in/)).not.toBeInTheDocument();
 
     for (const preview of [
       "Gallery preview",

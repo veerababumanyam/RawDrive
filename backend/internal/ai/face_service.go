@@ -357,6 +357,9 @@ type FaceSearchResult struct {
 	Similarity    float64
 	AssetIDs      []uuid.UUID
 	FacesDetected int
+	IndexStatus   string
+	IndexedFaces  int
+	IndexedPeople int
 }
 
 // SearchByFace runs face-svc detection on an ad-hoc image (the camera
@@ -420,6 +423,21 @@ func (s *FaceService) SearchByFace(ctx context.Context, workspaceID, galleryID u
 		return &FaceSearchResult{Found: false, FacesDetected: 0}, nil
 	}
 
+	indexStatus, err := s.GetFaceIndexStatus(ctx, workspaceID, galleryID)
+	if err != nil {
+		return nil, fmt.Errorf("face service: gallery face index status: %w", err)
+	}
+	baseNoMatch := &FaceSearchResult{
+		Found:         false,
+		FacesDetected: len(resp.Faces),
+		IndexStatus:   indexStatus.Status,
+		IndexedFaces:  indexStatus.IndexedFaces,
+		IndexedPeople: indexStatus.IndexedPeople,
+	}
+	if indexStatus.IndexedFaces == 0 || indexStatus.IndexedPeople == 0 {
+		return baseNoMatch, nil
+	}
+
 	// Pick the most confident detection. Camera captures may include
 	// background bystanders at much lower det_score — taking the max
 	// favors the foreground subject.
@@ -446,7 +464,7 @@ func (s *FaceService) SearchByFace(ctx context.Context, workspaceID, galleryID u
 	if len(matches) == 0 {
 		log.Printf("face search: workspace=%s ws_face_count=0 candidates above %.2f; faces_detected=%d",
 			workspaceID, retrievalThreshold, len(resp.Faces))
-		return &FaceSearchResult{Found: false, FacesDetected: len(resp.Faces)}, nil
+		return baseNoMatch, nil
 	}
 
 	// Cluster vote. Group candidates by cluster_label, track best
@@ -521,7 +539,7 @@ func (s *FaceService) SearchByFace(ctx context.Context, workspaceID, galleryID u
 	)
 
 	if winner == nil || (winner.bestSim < minBestSimilarity && winner.aggregate < minAggregateScore) {
-		return &FaceSearchResult{Found: false, FacesDetected: len(resp.Faces)}, nil
+		return baseNoMatch, nil
 	}
 
 	matchedLabel := winner.label
@@ -534,6 +552,9 @@ func (s *FaceService) SearchByFace(ctx context.Context, workspaceID, galleryID u
 	if err != nil {
 		return nil, fmt.Errorf("face service: list cluster assets in gallery: %w", err)
 	}
+	if len(assetIDs) == 0 {
+		return baseNoMatch, nil
+	}
 
 	return &FaceSearchResult{
 		Found:         true,
@@ -542,12 +563,20 @@ func (s *FaceService) SearchByFace(ctx context.Context, workspaceID, galleryID u
 		Similarity:    winner.bestSim,
 		AssetIDs:      assetIDs,
 		FacesDetected: len(resp.Faces),
+		IndexStatus:   indexStatus.Status,
+		IndexedFaces:  indexStatus.IndexedFaces,
+		IndexedPeople: indexStatus.IndexedPeople,
 	}, nil
 }
 
 // GetClusters returns cluster summaries for a workspace/gallery.
 func (s *FaceService) GetClusters(ctx context.Context, workspaceID uuid.UUID, galleryID *uuid.UUID) ([]*ClusterSummary, error) {
 	return s.faceRepo.ListClusters(ctx, workspaceID, galleryID)
+}
+
+// GetFaceIndexStatus returns gallery upload/index readiness for FaceID.
+func (s *FaceService) GetFaceIndexStatus(ctx context.Context, workspaceID, galleryID uuid.UUID) (*FaceIndexStatus, error) {
+	return s.faceRepo.GetFaceIndexStatus(ctx, workspaceID, galleryID)
 }
 
 // GetClusterFaces returns the face rows behind one identity for photographer
@@ -603,6 +632,21 @@ func (s *FaceService) NameCluster(ctx context.Context, workspaceID, clusterLabel
 		return ErrClusterNotFound
 	}
 	return nil
+}
+
+// GetClusterContact returns the CRM contact linked to this face identity.
+func (s *FaceService) GetClusterContact(ctx context.Context, workspaceID, clusterLabel uuid.UUID) (*FaceIdentityContactSummary, error) {
+	return s.faceRepo.GetClusterContact(ctx, workspaceID, clusterLabel)
+}
+
+// LinkClusterContact links a face identity to a CRM contact.
+func (s *FaceService) LinkClusterContact(ctx context.Context, workspaceID, clusterLabel, contactID uuid.UUID, galleryID *uuid.UUID) (*FaceIdentityContactSummary, error) {
+	return s.faceRepo.LinkClusterContact(ctx, workspaceID, clusterLabel, contactID, galleryID)
+}
+
+// UnlinkClusterContact removes the CRM contact link for a face identity.
+func (s *FaceService) UnlinkClusterContact(ctx context.Context, workspaceID, clusterLabel uuid.UUID) error {
+	return s.faceRepo.UnlinkClusterContact(ctx, workspaceID, clusterLabel)
 }
 
 // MergeClusters merges source cluster into target.

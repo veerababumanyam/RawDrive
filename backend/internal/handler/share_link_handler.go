@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	mailaddr "net/mail"
-	"net/url"
 	"strings"
 	"time"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/rawdrive/backend/internal/email"
 	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/passwordpolicy"
+	"github.com/rawdrive/backend/internal/publicurl"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
 )
@@ -206,23 +206,7 @@ func (h *ShareLinkHandler) sendGalleryShareEmails(r *http.Request, galleryID uui
 }
 
 func (h *ShareLinkHandler) galleryShareURL(r *http.Request, slug, token string) string {
-	base := h.publicBaseURL
-	if base == "" {
-		scheme := r.Header.Get("X-Forwarded-Proto")
-		if scheme == "" {
-			if r.TLS != nil {
-				scheme = "https"
-			} else {
-				scheme = "http"
-			}
-		}
-		host := r.Header.Get("X-Forwarded-Host")
-		if host == "" {
-			host = r.Host
-		}
-		base = scheme + "://" + host
-	}
-	return strings.TrimRight(base, "/") + "/g/" + url.PathEscape(slug) + "?share=" + url.QueryEscape(token)
+	return publicurl.GalleryShare(h.publicBaseURL, slug, token)
 }
 
 func shareSenderFromClaims(r *http.Request) (string, uuid.UUID) {

@@ -58,10 +58,9 @@ type WorkspaceProfile struct {
 	PANNumber       *string `json:"pan_number,omitempty"`
 	InstagramHandle *string `json:"instagram_handle,omitempty"`
 	StateCode       *string `json:"state_code,omitempty"`
-	// Per-business subdomain identity (migration 121). Read-only on this
-	// endpoint — they're populated by workspace.PgRepo.Create and never
-	// editable via the profile UI. The dashboard reads them to build the
-	// share URL: <business_profile_slug>-<business_unique_code>.rawdrive.in/<gallery-slug>
+	// Deprecated internal identity fields from migration 121. Read-only on
+	// this endpoint, never editable via the profile UI, and no longer used
+	// to build public gallery URLs.
 	BusinessProfileSlug *string `json:"business_profile_slug,omitempty"`
 	BusinessUniqueCode  *string `json:"business_unique_code,omitempty"`
 }

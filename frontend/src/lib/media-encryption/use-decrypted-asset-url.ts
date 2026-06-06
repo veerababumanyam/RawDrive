@@ -82,6 +82,27 @@ async function matchCacheStorage(storageUrl: string): Promise<Response | null> {
   }
 }
 
+function replacePathSuffix(
+  value: string,
+  fromSuffix: string,
+  toSuffix: string,
+): string | null {
+  const queryStart = value.indexOf("?");
+  const path = queryStart === -1 ? value : value.slice(0, queryStart);
+  const query = queryStart === -1 ? "" : value.slice(queryStart);
+  if (!path.toLowerCase().endsWith(fromSuffix)) return null;
+  return `${path.slice(0, -fromSuffix.length)}${toSuffix}${query}`;
+}
+
+function encryptedStorageKeyFallbacks(key: string): string[] {
+  const candidates = [key];
+  const withoutEnc = replacePathSuffix(key, ".webp.enc", ".webp");
+  if (withoutEnc) candidates.push(withoutEnc);
+  const withEnc = replacePathSuffix(key, ".webp", ".webp.enc");
+  if (withEnc) candidates.push(withEnc);
+  return Array.from(new Set(candidates));
+}
+
 export function useDecryptedAssetUrl(
   asset: EncryptedAssetLike | null | undefined,
   variants: readonly string[],
@@ -174,7 +195,9 @@ export function useDecryptedAssetUrl(
         // rawdrive-offline-<galleryId> bucket and swap in the cached blob when
         // present. Skipped on the bearer path, which already produced an
         // authenticated object URL above.
-        if (!shouldFetchStorageWithBearer(storageUrl, token, assetAccessToken)) {
+        if (
+          !shouldFetchStorageWithBearer(storageUrl, token, assetAccessToken)
+        ) {
           void (async () => {
             const hit = await matchCacheStorage(storageUrl);
             if (!hit || cancelled) return;
@@ -214,22 +237,37 @@ export function useDecryptedAssetUrl(
           try {
             // Encrypted branch: try Cache Storage first (offline copy),
             // fall back to a network fetch (with Authorization when a token
-            // is present for protected bytes). Reuses the outer storageUrl.
-            const cacheHit = await matchCacheStorage(storageUrl);
-            let encryptedBlob: Blob;
-            if (cacheHit) {
-              encryptedBlob = await cacheHit.blob();
-            } else {
+            // is present for protected bytes). Older rows can carry thumbnail
+            // keys ending in .webp.enc while the encrypted derivative handler
+            // stores thumbnail variants at the current .webp key, so try both
+            // suffix forms before giving up on a missing local derivative.
+            let encryptedBlob: Blob | null = null;
+            let encryptedFetchError = `Encrypted media fetch failed`;
+            for (const storageKey of encryptedStorageKeyFallbacks(picked.key)) {
+              const candidateUrl = getStorageBackedUrl(
+                storageKey,
+                token,
+                assetAccessToken,
+              );
+              const cacheHit = await matchCacheStorage(candidateUrl);
+              if (cacheHit) {
+                encryptedBlob = await cacheHit.blob();
+                break;
+              }
               const fetchInit: RequestInit = { credentials: "include" };
               if (token) {
                 fetchInit.headers = { Authorization: `Bearer ${token}` };
               }
-              const res = await fetch(storageUrl, fetchInit);
+              const res = await fetch(candidateUrl, fetchInit);
               if (!res.ok) {
-                throw new Error(`Encrypted media fetch failed: ${res.status}`);
+                encryptedFetchError = `Encrypted media fetch failed: ${res.status}`;
+                if (res.status === 404) continue;
+                throw new Error(encryptedFetchError);
               }
               encryptedBlob = await res.blob();
+              break;
             }
+            if (!encryptedBlob) throw new Error(encryptedFetchError);
 
             const plaintext = await decryptBlobWithAvailableMediaKeys(
               encryptedBlob,

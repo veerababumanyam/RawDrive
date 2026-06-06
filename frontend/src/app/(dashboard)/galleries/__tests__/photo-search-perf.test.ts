@@ -39,4 +39,31 @@ describe("gallery photo-search — batch hydration (PERF-23)", () => {
     expect(source).toContain("visibleFaces.map");
     expect(source).not.toContain("faces.map((face)");
   });
+
+  it("offers browser FaceID sync from the batched gallery asset list", () => {
+    const source = read(faceReviewPanelPath);
+    expect(source).toContain("indexAssetFacesFromBrowser");
+    expect(source).toContain("getGalleryFaceIndexStatus");
+    expect(source).toContain("includeAssets: true");
+    expect(source).toContain("Sync now");
+    expect(source).toContain("FACE_INDEX_CONCURRENCY");
+    expect(source).not.toContain("getAsset(");
+  });
+
+  it("links detected face identities to existing CRM contacts", () => {
+    const source = read(faceReviewPanelPath);
+    expect(source).toContain("listContacts");
+    expect(source).toContain("linkClusterContact");
+    expect(source).toContain("unlinkClusterContact");
+    expect(source).toContain("CRM client link");
+    expect(source).toContain("Linked to");
+  });
+
+  it("shows a distinct empty-index result instead of a no-match result", () => {
+    const source = read(photoSearchPath);
+    expect(source).toContain("result-index-empty");
+    expect(source).toContain('result.index_status === "empty"');
+    expect(source).toContain("FaceID is not synced for this gallery yet");
+    expect(source).toContain("<FaceIdentityReviewPanel");
+  });
 });

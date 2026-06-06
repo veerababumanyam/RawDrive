@@ -3,14 +3,14 @@
 # server block in rawdrive.conf.template.
 #
 # Root cause (F-078): the api.rawdrive.in block carried only HSTS +
-# X-Content-Type-Options, the wildcard gallery block additionally had
+# X-Content-Type-Options, the wildcard host block additionally had
 # Referrer-Policy but still lacked X-Frame-Options / X-XSS-Protection, and
 # NO server block declared a Content-Security-Policy. That left api/gallery
 # responses frameable (clickjacking) and left reflected-XSS / injection /
 # mixed-content unmitigated at the proxy.
 #
 # This test asserts that EVERY TLS-terminating server block (each `listen 443
-# ssl` block: apex rawdrive.in, api.rawdrive.in, and the wildcard gallery host)
+# ssl` block: apex rawdrive.in, api.rawdrive.in, and the retired wildcard host)
 # declares the full security-header set, including a Content-Security-Policy
 # whose policy contains `frame-ancestors 'none'`. Frontend blocks intentionally
 # keep nginx CSP narrow because the Next.js app emits the full per-request
@@ -24,7 +24,8 @@
 #   # optional: point at a different file
 #   bash deploy/nginx/templates/rawdrive.conf.headers_test.sh /path/to/template
 #
-# Exit 0 = pass, non-zero = a server block is missing a required header.
+# Exit 0 = pass, non-zero = a server block is missing a required header or the
+# deprecated wildcard host still proxies traffic.
 #
 # RED proof: delete any required add_header line (or the CSP) from any 443
 # block and re-run — the test must exit non-zero. That deleted state is
@@ -40,6 +41,39 @@ if [ ! -f "${TEMPLATE}" ]; then
   echo "FAIL: template not found at ${TEMPLATE}" >&2
   exit 2
 fi
+
+# The deprecated wildcard host must fail closed. Exact server blocks for
+# rawdrive.in, www.rawdrive.in, and api.rawdrive.in still handle their normal
+# traffic; this assertion only inspects the single-label wildcard regex block.
+awk '
+  /^[[:space:]]*server[[:space:]]*\{/ {
+    in_server = 1; depth = 0; is_wildcard = 0; has_return_410 = 0; has_proxy = 0;
+  }
+  in_server {
+    n = gsub(/\{/, "{"); depth += n;
+    m = gsub(/\}/, "}"); depth -= m;
+
+    if (index($0, "server_name \"~^[a-z0-9]") > 0 && index($0, "rawdrive") > 0) is_wildcard = 1;
+    if ($0 ~ /return[[:space:]]+410;/) has_return_410 = 1;
+    if ($0 ~ /proxy_pass[[:space:]]+/) has_proxy = 1;
+
+    if (depth <= 0) {
+      in_server = 0;
+      if (is_wildcard) {
+        wildcard_blocks++;
+        if (!has_return_410) { print "FAIL: wildcard rawdrive.in block must return 410"; fail = 1 }
+        if (has_proxy) { print "FAIL: wildcard rawdrive.in block must not proxy traffic"; fail = 1 }
+      }
+    }
+  }
+  END {
+    if (wildcard_blocks != 1) {
+      print "FAIL: expected exactly one wildcard rawdrive.in block; found " wildcard_blocks;
+      fail = 1;
+    }
+    if (fail) exit 1;
+  }
+' "${TEMPLATE}"
 
 # The single awk program below:
 #   * walks the file tracking server{...} brace depth,

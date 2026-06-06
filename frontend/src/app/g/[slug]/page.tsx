@@ -78,11 +78,8 @@ export default async function PublicGalleryPage({
     typeof query.album === "string" && query.album ? query.album : undefined;
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get("gallery_session")?.value;
-  // `ws` is set by middleware.ts when the request arrived via the per-business
-  // subdomain `<biz>-<code>.rawdrive.in/<gallery-slug>`. Forwarded to the
-  // backend API so the gallery lookup is scoped to that workspace; absence
-  // means the request hit the apex `/g/<slug>` route and falls back to the
-  // unscoped legacy lookup.
+  // `ws` is retained for legacy/session-scoped requests. Generated gallery
+  // links use the apex `/g/<slug>` route and normally omit it.
   const ws = typeof query.ws === "string" && query.ws ? query.ws : undefined;
   // S4-G2: a share-link landing arrives as /g/{slug}?share=<token>. When the
   // link is PIN-gated and no session cookie exists yet, we render the PIN gate

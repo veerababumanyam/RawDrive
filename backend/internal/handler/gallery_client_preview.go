@@ -3,12 +3,12 @@ package handler
 import (
 	"context"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/rawdrive/backend/internal/publicurl"
 	"github.com/rawdrive/backend/internal/repository"
 )
 
@@ -91,7 +91,7 @@ func (h *GalleryHandler) ClientPreview(w http.ResponseWriter, r *http.Request) {
 		Branding:        h.clientPreviewBranding(r.Context(), previewGallery, workspaceID),
 		Banners:         h.clientPreviewBanners(r.Context(), gallery.ID),
 		Products:        h.clientPreviewProducts(r.Context(), gallery.ID),
-		PublicURL:       h.clientPreviewPublicURL(r.Context(), previewGallery, workspaceID),
+		PublicURL:       h.clientPreviewPublicURL(previewGallery),
 		IsPublished:     gallery.IsPublished,
 	})
 }
@@ -304,42 +304,9 @@ func (h *GalleryHandler) clientPreviewBanners(ctx context.Context, galleryID uui
 	return banners
 }
 
-func (h *GalleryHandler) clientPreviewPublicURL(ctx context.Context, gallery *repository.Gallery, workspaceID uuid.UUID) string {
+func (h *GalleryHandler) clientPreviewPublicURL(gallery *repository.Gallery) string {
 	if gallery == nil || gallery.Slug == "" {
 		return ""
 	}
-	base := strings.TrimRight(strings.TrimSpace(h.publicBaseURL), "/")
-	if isClientPreviewLocalOrigin(base) {
-		return base + "/g/" + gallery.Slug
-	}
-
-	if h.pool != nil {
-		var slug, code string
-		err := h.pool.QueryRow(ctx, `
-			SELECT COALESCE(business_profile_slug, ''), COALESCE(business_unique_code, '')
-			FROM workspaces
-			WHERE id = $1`,
-			workspaceID,
-		).Scan(&slug, &code)
-		if err == nil && slug != "" && code != "" {
-			return publicStudioSubdomainURL(slug+"-"+code) + "/" + gallery.Slug
-		}
-	}
-
-	if base != "" {
-		return base + "/g/" + gallery.Slug
-	}
-	return "/g/" + gallery.Slug
-}
-
-func isClientPreviewLocalOrigin(origin string) bool {
-	if origin == "" {
-		return false
-	}
-	u, err := url.Parse(origin)
-	if err != nil {
-		return false
-	}
-	host := u.Hostname()
-	return host == "localhost" || host == "127.0.0.1" || host == "::1"
+	return publicurl.Gallery(h.publicBaseURL, gallery.Slug)
 }

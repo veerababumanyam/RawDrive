@@ -59,7 +59,7 @@ func TestCORSProductionAllowsRawDriveFirstPartyOrigins(t *testing.T) {
 
 	for _, origin := range []string{
 		"https://rawdrive.in",
-		"https://studio-test-9e8a5927.rawdrive.in",
+		"https://www.rawdrive.in",
 	} {
 		req := httptest.NewRequest(http.MethodGet, "/storage/thumbnails/asset/thumb_md_webp.webp", nil)
 		req.Header.Set("Origin", origin)
@@ -71,6 +71,26 @@ func TestCORSProductionAllowsRawDriveFirstPartyOrigins(t *testing.T) {
 		assert.Equal(t, origin, rec.Header().Get("Access-Control-Allow-Origin"))
 		assert.Equal(t, "true", rec.Header().Get("Access-Control-Allow-Credentials"))
 	}
+}
+
+func TestCORSProductionRejectsDeprecatedStudioSubdomainOrigins(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("GO_ENV", "")
+	t.Setenv("FRONTEND_URL", "https://app.rawdrive.in")
+
+	handler := CORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/storage/thumbnails/asset/thumb_md_webp.webp", nil)
+	req.Header.Set("Origin", "https://legacy-studio-9e8a5927.rawdrive.in")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+	assert.Empty(t, rec.Header().Get("Access-Control-Allow-Origin"))
+	assert.Empty(t, rec.Header().Get("Access-Control-Allow-Credentials"))
 }
 
 func TestCORSProductionRejectsRawDriveLookalikeOrigins(t *testing.T) {

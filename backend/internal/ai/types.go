@@ -21,6 +21,8 @@ var (
 	ErrSplitWouldEmpty  = errors.New("ai: split would empty source cluster")
 	ErrNonMemberFace    = errors.New("ai: face not a member of cluster")
 	ErrJobNotFound      = errors.New("ai: job not found")
+	ErrGalleryNotFound  = errors.New("ai: gallery not found")
+	ErrContactNotFound  = errors.New("ai: contact not found")
 )
 
 // BoundingBox represents a face region in normalized coordinates (0-1).
@@ -58,12 +60,36 @@ type FaceCluster struct {
 
 // ClusterSummary is a condensed view for listing face clusters.
 type ClusterSummary struct {
-	ClusterLabel  uuid.UUID   `json:"cluster_label"`
-	ClusterName   string      `json:"cluster_name"`
-	FaceCount     int         `json:"face_count"`
-	AssetCount    int         `json:"asset_count"`
-	SampleAssetID uuid.UUID   `json:"sample_asset_id"`
-	SampleBBox    BoundingBox `json:"sample_bounding_box"`
+	ClusterLabel  uuid.UUID                   `json:"cluster_label"`
+	ClusterName   string                      `json:"cluster_name"`
+	FaceCount     int                         `json:"face_count"`
+	AssetCount    int                         `json:"asset_count"`
+	SampleAssetID uuid.UUID                   `json:"sample_asset_id"`
+	SampleBBox    BoundingBox                 `json:"sample_bounding_box"`
+	LinkedContact *FaceIdentityContactSummary `json:"linked_contact,omitempty"`
+}
+
+// FaceIdentityContactSummary is the CRM contact linked to a canonical face
+// identity. It intentionally carries only lightweight contact fields needed by
+// review/search surfaces.
+type FaceIdentityContactSummary struct {
+	ContactID uuid.UUID  `json:"contact_id"`
+	Name      string     `json:"name"`
+	Email     *string    `json:"email,omitempty"`
+	Phone     *string    `json:"phone,omitempty"`
+	LinkedAt  *time.Time `json:"linked_at,omitempty"`
+}
+
+// FaceIndexStatus summarizes whether a gallery has uploaded photos and whether
+// those photos have a usable FaceID index.
+type FaceIndexStatus struct {
+	GalleryID       uuid.UUID `json:"gallery_id"`
+	UploadedPhotos  int       `json:"uploaded_photos"`
+	IndexablePhotos int       `json:"indexable_photos"`
+	IndexedFaces    int       `json:"indexed_faces"`
+	IndexedPeople   int       `json:"indexed_people"`
+	IndexedPhotos   int       `json:"indexed_photos"`
+	Status          string    `json:"status"` // empty, ready, unavailable
 }
 
 // FaceReviewRow is a single face row exposed to authenticated photographers
