@@ -1,9 +1,10 @@
+import { getApiBaseUrl } from "@/lib/api/base-url";
 // M35/35-7 — Super-admin streaming ledger explorer client.
 //
 // Mirrors backend/internal/streaming/handlers/admin_ledger_handler.go +
 // internal/streaming/ledger filter contract.
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 
 export type LedgerEntryType =
   | "debit_reservation"

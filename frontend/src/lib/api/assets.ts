@@ -1,6 +1,7 @@
+import { getApiBaseUrl } from "@/lib/api/base-url";
 import { authFetch } from "@/lib/api/authFetch";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 void API_BASE; // kept for any remaining public/unauthenticated calls
 
 // Normalised face bounding box in [0,1] image-space (matches backend ai.BoundingBox).

@@ -1,4 +1,5 @@
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
@@ -9,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { Plus } from "@/components/icons";
 import { getDistrictsForState } from "@/lib/data/india-districts";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 
 interface IndianState {
   id: number;

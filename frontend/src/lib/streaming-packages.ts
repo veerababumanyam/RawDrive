@@ -1,10 +1,11 @@
+import { getApiBaseUrl } from "@/lib/api/base-url";
 // M32 / F-014 E104-S6 — Public streaming packages: fetch from API instead of
 // hardcoding in tokens.ts. Used by both the public pricing page (PricingContent)
 // and the in-app recharge flow.
 
 import { useEffect, useState } from "react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 
 export interface PublicStreamingPackage {
   id: string;

@@ -1,4 +1,5 @@
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import { useState, useEffect, use } from "react";
 import Link from "next/link";
@@ -11,7 +12,7 @@ import {
 import { BackButton } from "@/components/ui/back-button";
 import { getStoredAccessToken, getStoredAccessTokenClaims } from "@/lib/auth";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 
 interface Availability {
   blocked_dates: string[];

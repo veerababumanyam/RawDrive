@@ -239,6 +239,83 @@ func StillImageFormatFromContentType(contentType string) (string, bool) {
 	return format, ok
 }
 
+// StillImageFormatFromUploadCreate resolves the still-image format at upload
+// session creation time. Browser File.type is often empty or
+// application/octet-stream for camera RAW formats such as Sony ARW, so generic
+// MIME can fall back to a passing scan manifest, but only when the request
+// filename and manifest filename agree and the extension matches a
+// server-decodable still-image format. Finalize still verifies the actual bytes.
+func StillImageFormatFromUploadCreate(contentType, filename string, manifest *UploadScanManifest) (string, bool) {
+	if format, ok := StillImageFormatFromContentType(contentType); ok {
+		return NormalizeImageFormat(format), true
+	}
+	if !isGenericUploadContentType(contentType) || manifest == nil {
+		return "", false
+	}
+	if manifest.Decision != "pass" {
+		return "", false
+	}
+	format := NormalizeImageFormat(manifest.DetectedFormat)
+	if !IsServerDecodableFormat(format) {
+		return "", false
+	}
+	if !sameUploadFilename(filename, manifest.FileName) {
+		return "", false
+	}
+	if extFormat, ok := stillImageFormatFromFilename(filename); !ok || extFormat != format {
+		return "", false
+	}
+	return format, true
+}
+
+func isGenericUploadContentType(contentType string) bool {
+	ct := strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
+	switch ct {
+	case "", "application/octet-stream", "binary/octet-stream":
+		return true
+	}
+	return false
+}
+
+func sameUploadFilename(requestFilename, manifestFilename string) bool {
+	requestFilename = strings.TrimSpace(requestFilename)
+	manifestFilename = strings.TrimSpace(manifestFilename)
+	if requestFilename == "" || manifestFilename == "" {
+		return false
+	}
+	return strings.EqualFold(requestFilename, manifestFilename)
+}
+
+func stillImageFormatFromFilename(filename string) (string, bool) {
+	name := strings.TrimSpace(filename)
+	idx := strings.LastIndex(name, ".")
+	if idx < 0 || idx == len(name)-1 {
+		return "", false
+	}
+	ext := strings.ToLower(name[idx+1:])
+	switch ext {
+	case "jpg", "jpeg", "jpe", "jfif", "jfi":
+		return "jpeg", true
+	case "png":
+		return "png", true
+	case "webp":
+		return "webp", true
+	case "gif":
+		return "gif", true
+	case "tif", "tiff":
+		return "tiff", true
+	case "heic":
+		return "heic", true
+	case "heif", "hif":
+		return "heif", true
+	case "avif":
+		return "avif", true
+	case "cr2", "cr3", "nef", "arw", "dng", "raf", "orf", "rw2":
+		return ext, true
+	}
+	return "", false
+}
+
 // ─── Format signature helpers (bounded, cheap, stateless) ──────────────────
 
 func hasJpegSignature(head []byte) bool {

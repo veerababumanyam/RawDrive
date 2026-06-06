@@ -1,9 +1,10 @@
+import { getApiBaseUrl } from "@/lib/api/base-url";
 // M31 / F-014 E103 — Super-admin streaming rate-card API client.
 //
 // Mirrors backend/internal/streaming/rate/handler.go exactly. Keep field
 // names in sync; the Go handler serialises with json tags that match 1:1.
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 
 export interface StreamingPackage {
   id: string;

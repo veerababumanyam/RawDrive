@@ -1,4 +1,5 @@
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import { useState, useEffect } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -12,7 +13,7 @@ interface DesktopSession {
   is_active: boolean;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 
 export default function DesktopPage() {
   const [sessions, setSessions] = useState<DesktopSession[]>([]);

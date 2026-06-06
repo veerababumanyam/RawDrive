@@ -1,4 +1,5 @@
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import {
   UploadDropzone,
@@ -9,7 +10,7 @@ import { useUpload } from "@/hooks/use-upload";
 import { getStoredAccessToken } from "@/lib/auth";
 
 export default function UploadPage() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+  const apiUrl = getApiBaseUrl();
   const token = getStoredAccessToken();
 
   const {

@@ -1,4 +1,5 @@
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 /**
  * PublicGalleryGrid — client-side masonry grid for the public gallery page.
@@ -81,7 +82,7 @@ import { submitPublicProofing } from "@/lib/api/proofing";
 // while the Next site serves /g/<slug> from a different origin (3000/3001),
 // so we always need an absolute URL for the download <a href>.
 const PUBLIC_API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+  getApiBaseUrl();
 
 function absoluteApiUrl(url?: string | null) {
   if (!url) return "";

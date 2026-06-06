@@ -1,3 +1,4 @@
+import { getApiBaseUrl } from "@/lib/api/base-url";
 export const invoiceStatusClasses: Record<string, string> = {
   draft: "status-badge status-badge--neutral",
   sent: "status-badge status-badge--info",
@@ -54,7 +55,7 @@ export const galleryTypeClasses: Record<string, string> = {
   delivery: "status-badge status-badge--info",
 };
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 
 /**
  * Returns true when the backend has accepted an upload but the

@@ -1,4 +1,5 @@
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import {
   useEffect,
@@ -20,7 +21,7 @@ import { GallerySlideshow } from "@/components/gallery/gallery-slideshow";
 import { SlideshowSlide } from "@/components/gallery/public-gallery-slideshow-launcher";
 import { Camera, Play } from "@/components/icons";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 
 function absoluteApiUrl(url?: string | null) {
   if (!url) return "";
@@ -160,11 +161,10 @@ interface PublicGalleryHeroProps {
   design?: PublicDesignConfig | null;
   designCoverAsset?: PublicAsset | null;
   designCoverThumbnails?: Record<string, string> | null;
-  // Public slideshow wiring. Default-off: when these are absent the hero
-  // renders no "Play" CTA and behaves exactly as before. The page passes
-  // them so the "Play" button can sit next to "View Gallery" and (when the
-  // gallery has music) the slideshow auto-opens on mount so the music plays
-  // as soon as the share link loads.
+  // Public slideshow wiring. The page passes these so the "Play" button can
+  // sit next to "View Gallery" / "Find me" and open the same full-screen
+  // slideshow the old standalone launcher exposed. Music remains optional:
+  // when configured, the slideshow auto-opens and receives the audio URL.
   slug?: string;
   ws?: string | null;
   hasMusic?: boolean;
@@ -467,18 +467,17 @@ export function PublicGalleryHero({
   viewerToken = null,
 }: PublicGalleryHeroProps) {
   const mobileViewport = useIsMobileViewport();
-  // Whether to surface the public slideshow at all: it needs a slug to build
-  // the music URL and at least one photo to show. The "Play" CTA only renders
-  // when the gallery has configured music (matching the prior launcher's
-  // behavior of treating music as the slideshow's reason-to-exist on share
-  // links).
-  const slideshowEnabled = Boolean(slug) && hasMusic && assets.length > 0;
+  // Whether to surface the public slideshow at all: it only needs a slug and
+  // at least one photo. The retired page-level launcher always showed Play for
+  // photo galleries; music only controlled whether audio was wired in.
+  const slideshowEnabled = Boolean(slug) && assets.length > 0;
+  const slideshowHasMusic = slideshowEnabled && hasMusic;
   // Auto-open on mount when the gallery has music, so the music plays as soon
   // as the /g/[slug] link opens — same UX the standalone launcher gave via
   // autoStart. Initializing state lazily from props (rather than a
   // set-state-in-effect) keeps this React-Compiler-safe and avoids a flash of
   // the closed state.
-  const [slideshowOpen, setSlideshowOpen] = useState(() => slideshowEnabled);
+  const [slideshowOpen, setSlideshowOpen] = useState(() => slideshowHasMusic);
   const openSlideshow = () => setSlideshowOpen(true);
   const closeSlideshow = () => setSlideshowOpen(false);
   const slideshowOverlay =
@@ -494,7 +493,7 @@ export function PublicGalleryHero({
           />
         )}
         musicUrl={
-          slug
+          slideshowHasMusic && slug
             ? publicGalleryMusicUrl(
                 slug,
                 ws,

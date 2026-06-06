@@ -1,6 +1,7 @@
+import { getApiBaseUrl } from "@/lib/api/base-url";
 import { getStoredAccessToken } from "@/lib/auth";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 
 export interface FreelancerListing {
   id: string;

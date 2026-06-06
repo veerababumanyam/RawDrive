@@ -37,6 +37,33 @@ describe("GallerySlideshow", () => {
     expect(screen.getByText("1 / 3")).toBeInTheDocument();
   });
 
+  it("uses the media glass surface and stable slideshow control shells", () => {
+    setup({ musicUrl: "/api/v1/public/galleries/x/music" });
+
+    const dialog = screen.getByRole("dialog", { name: "Gallery slideshow" });
+    expect(dialog).toHaveAttribute("data-glass-surface", "media");
+    expect(dialog).toHaveClass("gallery-slideshow");
+    expect(screen.getByAltText("Slide 1 of 3")).toHaveClass(
+      "gallery-slideshow__image",
+    );
+    expect(screen.getByText("1 / 3")).toHaveClass(
+      "gallery-slideshow__counter",
+    );
+    expect(
+      screen
+        .getByRole("button", { name: "Close slideshow" })
+        .closest(".gallery-slideshow__close"),
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole("button", { name: "Previous slide" })
+        .closest(".gallery-slideshow__controls"),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Pause slideshow" })).toHaveClass(
+      "gallery-slideshow__primary-control",
+    );
+  });
+
   it("auto-advances to the next slide after the interval", () => {
     setup({ intervalMs: 1000 });
     expect(screen.getByAltText("Slide 1 of 3")).toBeInTheDocument();

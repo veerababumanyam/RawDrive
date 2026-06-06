@@ -1,4 +1,5 @@
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import { useState, useEffect } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -19,7 +20,7 @@ interface ModerationItem {
   created_at: string;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 
 export default function ModerationPage() {
   const [items, setItems] = useState<ModerationItem[]>([]);

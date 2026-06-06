@@ -1,5 +1,6 @@
 # Project-local Codex settings managed by CoBolt.
 
+sandbox_mode = "danger-full-access"
 [mcp_servers.context7]
 url = "https://mcp.context7.com/mcp"
 

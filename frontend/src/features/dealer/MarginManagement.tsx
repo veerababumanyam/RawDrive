@@ -1,12 +1,13 @@
 // Design source: Stitch MCP — Admin Margin Management screen (frosted glass table, no borders)
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import { useState, useEffect } from "react";
 import MarginPreview from "./MarginPreview";
 import MarginHistory from "./MarginHistory";
 import { getStoredAccessToken } from "@/lib/auth";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API = getApiBaseUrl();
 
 function getAuthHeaders(): Record<string, string> {
   const token = getStoredAccessToken();

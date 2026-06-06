@@ -1,4 +1,5 @@
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import { useState } from "react";
 
@@ -11,7 +12,7 @@ interface Props {
   children: React.ReactNode;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 
 function absoluteApiUrl(url?: string | null) {
   if (!url) return "";

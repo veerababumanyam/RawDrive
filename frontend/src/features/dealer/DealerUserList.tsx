@@ -1,5 +1,6 @@
 // Design source: Stitch MCP Liquid Glass — data table with status badges
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import { useState, useEffect } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -89,7 +90,7 @@ export default function DealerUserList({ dealerId }: { dealerId: string }) {
 
   useEffect(() => {
     const token = getStoredAccessToken();
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/v1/dealers/users?limit=20`, {
+    fetch(`${getApiBaseUrl()}/api/v1/dealers/users?limit=20`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     })
       .then(r => r.ok ? r.json() : { users: [] })

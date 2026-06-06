@@ -1,9 +1,10 @@
 // Design source: Stitch MCP — Change History Timeline (vertical timeline, glass cards)
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import { useState, useEffect } from "react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API = getApiBaseUrl();
 
 interface HistoryEntry {
   id: string;

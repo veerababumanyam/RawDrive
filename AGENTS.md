@@ -7,6 +7,18 @@ Multi-service monorepo. Go API + Next.js app + pgvector DB, currently at v0.0.51
 > The top-level `README.md` is stale (says "React 19 + Vite, Go planned"). Reality is
 > Next.js 15 + shipped Go API. Trust this file and the code, not README marketing copy.
 
+> **Delivery is driven by Orchestra.** Plan, build, review, fix, UAT, and ship every change through the
+> Orchestra pipelines — see [`ORCHESTRA.md`](ORCHESTRA.md) for the operating contract (land via
+> `npm run ship`, the per-reviewer gate map of the laws below, and what is out of scope). The older
+> `rawdrive-*` skills are retired; their intent maps onto the Orchestra pipelines.
+>
+> **Track SDLC work on GitHub Project #2 before acting.** RawDrive's canonical planning board is
+> <https://github.com/users/manyamprasad/projects/2>. Agents and automations must create/update the
+> relevant board item (milestone, epic, dependency, user story, UAT, release gate, or production
+> decision) before fixing, shipping, or closing work. Create/update GitHub repo issues only when an
+> issue is needed for the one-unit PR tracker or durable discussion. Do not silently fix issues without
+> Project #2 status/dependency/acceptance tracking.
+
 ## Stack
 
 - **Backend:** Go (`backend/cmd`, `backend/internal`) — Chi router, JWT, pgvector
@@ -66,9 +78,10 @@ These are load-bearing — breaking them causes real bugs and has burned us befo
   decompose it into a dependency-ordered sequence of small, independently-shippable slices
   (`schema → service → API → frontend → flag-on`), each its own one-unit PR landing on `main` **behind a
   feature flag** so a partial merge never exposes a half-built feature (the flag-on slice goes last). The
-  `rawdrive-add-feature` skill automates this (its Phase-4 size gate decides when to slice, and routes
-  true multi-feature milestones to `cobolt-build` instead); the *rule* — small units, no mega-branch,
-  flag-gate incremental delivery — holds however you build.
+  **orchestra-plan-feature** / **orchestra-conductor** pipelines automate this (planning decomposes the
+  feature into dependency-ordered flag-gated slices; the conductor builds each as a one-unit PR landing
+  on `main`); the *rule* — small units, no mega-branch, flag-gate incremental delivery — holds however
+  you build.
 - **Complex bugs: reproduce first, then fix one root cause at a time.** Never fix on a guess. A bug that
   won't reproduce on demand (intermittent / flaky / race / regression of unknown origin) is made
   **deterministic first** — systematic debugging: a hypothesis log, `git bisect`, `go test -race`,
@@ -76,7 +89,8 @@ These are load-bearing — breaking them causes real bugs and has burned us befo
   cross-cutting / class root causes is fixed as a **dependency-ordered set of one-unit fixes** (a
   campaign), never one mega-diff; and one root cause spanning many sites is fixed **once** (root + guard +
   regression test) then applied to every site (grep the anti-pattern to zero), not re-patched N times. The
-  `rawdrive-fix` skill automates this (its complexity gate decides); the *rule* — repro before fix,
+  **orchestra-task-review** + **orchestra-task-fix** pipelines automate this (review/triage first, then a
+  root-cause-first TDD fix loop with anti-phantom verification); the *rule* — repro before fix,
   root-cause not symptom, one unit per fix — holds however you debug.
 - **Auth model:** OTP is **registration-only**. All subsequent logins are password-only.
   Do not add OTP paths to login flows.

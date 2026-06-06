@@ -708,6 +708,79 @@ func TestCreateSession_RejectsNonImageContentType(t *testing.T) {
 	assert.Empty(t, rig.store.uploads, "storage multipart upload must not be created for non-images")
 }
 
+func TestCreateSession_GenericMimeARWManifestAccepted(t *testing.T) {
+	rig := setupStreamingRig(t)
+
+	manifest := &service.UploadScanManifest{
+		PolicyVersion:  "v1",
+		Engine:         service.ScanEngineBrowserWorker,
+		EngineVersion:  "1.0.0",
+		FileName:       "DSC01234.ARW",
+		DeclaredType:   "application/octet-stream",
+		DetectedFormat: "arw",
+		SHA256:         hex.EncodeToString(make([]byte, 32)),
+		SizeBytes:      4096,
+		Decision:       "pass",
+		RiskScore:      0.0,
+	}
+	body, _ := json.Marshal(map[string]interface{}{
+		"filename":      "DSC01234.ARW",
+		"content_type":  "application/octet-stream",
+		"total_size":    int64(4096),
+		"chunk_size":    int64(1024),
+		"scan_manifest": manifest,
+	})
+	req := rig.authedRequest(http.MethodPost, "/api/v1/uploads", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	rig.handler.CreateSession(rr, req)
+
+	require.Equal(t, http.StatusCreated, rr.Code, "ARW session should be accepted: %s", rr.Body.String())
+	var resp struct {
+		UploadID string `json:"upload_id"`
+	}
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+	row, err := rig.sessions.GetByTUSUploadID(context.Background(), resp.UploadID)
+	require.NoError(t, err)
+	assert.Equal(t, "application/octet-stream", row.ContentType)
+	assert.NotEmpty(t, row.ScanManifest)
+	assert.Len(t, rig.store.uploads, 1, "storage multipart upload must be created for accepted ARW")
+}
+
+func TestCreateSession_GenericMimeNonImageFilenameRejected(t *testing.T) {
+	rig := setupStreamingRig(t)
+
+	manifest := &service.UploadScanManifest{
+		PolicyVersion:  "v1",
+		Engine:         service.ScanEngineBrowserWorker,
+		EngineVersion:  "1.0.0",
+		FileName:       "invoice.pdf",
+		DeclaredType:   "application/octet-stream",
+		DetectedFormat: "arw",
+		SHA256:         hex.EncodeToString(make([]byte, 32)),
+		SizeBytes:      4096,
+		Decision:       "pass",
+		RiskScore:      0.0,
+	}
+	body, _ := json.Marshal(map[string]interface{}{
+		"filename":      "invoice.pdf",
+		"content_type":  "application/octet-stream",
+		"total_size":    int64(4096),
+		"chunk_size":    int64(1024),
+		"scan_manifest": manifest,
+	})
+	req := rig.authedRequest(http.MethodPost, "/api/v1/uploads", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	rig.handler.CreateSession(rr, req)
+
+	assert.Equal(t, http.StatusUnprocessableEntity, rr.Code)
+	assert.Contains(t, rr.Body.String(), "UNSUPPORTED_UPLOAD_TYPE")
+	assert.Empty(t, rig.store.uploads, "storage multipart upload must not be created for generic non-images")
+}
+
 func TestFinalizeUpload_RejectsDisguisedImageWithoutManifest(t *testing.T) {
 	rig := setupStreamingRig(t)
 

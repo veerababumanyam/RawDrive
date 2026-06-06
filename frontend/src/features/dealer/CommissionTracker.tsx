@@ -1,5 +1,6 @@
 // Design source: Stitch MCP Liquid Glass — summary bar + filtered table
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import { useState, useEffect } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -20,7 +21,7 @@ export default function CommissionTracker({ dealerId }: { dealerId: string }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const url = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/v1/dealers/commissions?limit=20${filter ? `&status=${filter}` : ""}`;
+    const url = `${getApiBaseUrl()}/api/v1/dealers/commissions?limit=20${filter ? `&status=${filter}` : ""}`;
     const token = getStoredAccessToken();
     fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : undefined })
       .then(r => r.ok ? r.json() : { commissions: [] })

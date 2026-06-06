@@ -1,7 +1,8 @@
+import { getApiBaseUrl } from "@/lib/api/base-url";
 // M35 / F-014 story 35-6 — Streaming analytics API client.
 // Mirrors backend StreamMetrics + WorkspaceMetrics JSON shapes.
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 
 export interface ConversionBucketsDTO {
   qr: number;

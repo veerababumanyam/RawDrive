@@ -1,5 +1,6 @@
 // Design source: Stitch MCP Liquid Glass — glass-card containers with dashed upload zones
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import { useState, useCallback } from "react";
 
@@ -30,7 +31,7 @@ export default function KycDocumentUpload({ dealerId, onComplete }: Props) {
       formData.append("file", file);
       formData.append("doc_type", docType);
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/v1/admin/dealers/${dealerId}/kyc`,
+        `${getApiBaseUrl()}/api/v1/admin/dealers/${dealerId}/kyc`,
         { method: "POST", body: formData }
       );
       if (!res.ok) throw new Error("Upload failed");

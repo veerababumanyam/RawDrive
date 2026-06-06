@@ -1,7 +1,8 @@
+import { getApiBaseUrl } from "@/lib/api/base-url";
 import type { Asset } from "./assets";
 import { authFetch } from "./authFetch";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 
 export interface WorkspaceLogoMetadata {
   asset_id?: string;

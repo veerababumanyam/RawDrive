@@ -1,4 +1,5 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import { getApiBaseUrl } from "@/lib/api/base-url";
+const API_BASE = getApiBaseUrl();
 
 // CurrentUser is the minimal display profile returned by
 // GET /api/v1/auth/me. It is used by the dashboard greeting banner and

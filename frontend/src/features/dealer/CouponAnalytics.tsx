@@ -1,9 +1,10 @@
 // Design source: Stitch MCP — Coupon analytics stat cards (glass-card, accent colors)
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import { useState, useEffect } from "react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API = getApiBaseUrl();
 
 interface Analytics { coupon_id: string; total_uses: number; unique_users: number; revenue_impact: number; }
 

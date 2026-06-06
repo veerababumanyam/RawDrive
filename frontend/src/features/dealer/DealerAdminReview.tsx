@@ -1,5 +1,6 @@
 // Design source: Stitch MCP Liquid Glass — glass-card, status badges
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import { useState, useEffect, useCallback } from "react";
 import {
@@ -23,7 +24,7 @@ import DealerSearchInput from "@/components/admin/DealerSearchInput";
 // used by RegisterForm. We fetch it once and build an id→name map so the
 // dealer card can render "Maharashtra" instead of the cosmetic "State: #14"
 // that showed up during the 2026-04-12 UAT.
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 const DEFAULT_REPORT_COMMISSION_RATE = 20;
 
 type ReviewMode = "applications" | "reports";

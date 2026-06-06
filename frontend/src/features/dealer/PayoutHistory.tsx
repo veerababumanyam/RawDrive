@@ -1,5 +1,6 @@
 // Design source: Stitch MCP Liquid Glass — glass-card list with status badges
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import { useState, useEffect } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -19,7 +20,7 @@ interface Payout {
   [key: string]: unknown;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 
 function formatPaisa(paisa: number): string {
   return `₹${(paisa / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;

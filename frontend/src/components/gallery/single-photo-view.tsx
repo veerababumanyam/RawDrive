@@ -1,4 +1,5 @@
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 /**
  * SinglePhotoView — public viewer for ONE shared photo.
@@ -40,7 +41,7 @@ import {
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { WatermarkOverlay } from "./watermark-overlay";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 
 type PublicDownloadFormat = "webp" | "thumbnail" | "original";
 

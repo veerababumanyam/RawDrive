@@ -1,7 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { resolveApiBaseUrl } from "../base-url";
+
+function sourceFiles(dir: string): string[] {
+  const entries = readdirSync(dir);
+  const files: string[] = [];
+  for (const entry of entries) {
+    const path = join(dir, entry);
+    const stat = statSync(path);
+    if (stat.isDirectory()) {
+      if (entry === "__tests__") continue;
+      files.push(...sourceFiles(path));
+      continue;
+    }
+    if (/\.(ts|tsx)$/.test(entry)) files.push(path);
+  }
+  return files;
+}
 
 describe("resolveApiBaseUrl", () => {
   it("uses the internal API URL for server-rendered public gallery calls", () => {
@@ -28,6 +44,26 @@ describe("resolveApiBaseUrl", () => {
     ).toBe("http://localhost:8080");
   });
 
+  it("falls back to the production API on non-local browser hosts", () => {
+    expect(
+      resolveApiBaseUrl({
+        isServer: false,
+        env: {},
+        locationHostname: "studio-cobolt-bf998927.rawdrive.in",
+      }),
+    ).toBe("https://api.rawdrive.in");
+  });
+
+  it("keeps the localhost fallback for local browser hosts", () => {
+    expect(
+      resolveApiBaseUrl({
+        isServer: false,
+        env: {},
+        locationHostname: "localhost",
+      }),
+    ).toBe("http://localhost:8080");
+  });
+
   it("keeps public gallery API clients on the runtime API-base helper", () => {
     const publicGalleryClientPaths = [
       "src/lib/api/galleries.ts",
@@ -40,5 +76,25 @@ describe("resolveApiBaseUrl", () => {
       expect(source).toContain("getApiBaseUrl");
       expect(source).not.toContain('const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"');
     }
+  });
+
+  it("keeps localhost API fallback centralized outside tests", () => {
+    const root = join(process.cwd(), "src");
+    const offenders = sourceFiles(root).filter((path) => {
+      if (path.endsWith(join("src", "lib", "api", "base-url.ts"))) {
+        return false;
+      }
+      const source = readFileSync(path, "utf8");
+      return (
+        source.includes(
+          'process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"',
+        ) ||
+        source.includes(
+          'process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"',
+        )
+      );
+    });
+
+    expect(offenders).toEqual([]);
   });
 });

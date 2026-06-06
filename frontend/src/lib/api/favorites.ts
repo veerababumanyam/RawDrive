@@ -1,3 +1,4 @@
+import { getApiBaseUrl } from "@/lib/api/base-url";
 /**
  * Public gallery favorites API client. Pairs with the M41/105 backend:
  * 3 anonymous endpoints (scoped by guest_session_id) for the lightbox
@@ -20,7 +21,7 @@
 
 import { authFetch } from "@/lib/api/authFetch";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 
 function gallerySessionHeaders(gallerySessionToken?: string | null): Record<string, string> {
   return gallerySessionToken ? { "X-Gallery-Session": gallerySessionToken } : {};

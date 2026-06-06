@@ -1,5 +1,6 @@
 // Design source: Stitch MCP Liquid Glass — Coupon Management screen (tabbed layout)
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import { useState, useEffect } from "react";
 
@@ -18,7 +19,7 @@ interface Coupon {
 import CouponForm from "./CouponForm";
 import { getStoredAccessToken } from "@/lib/auth";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 
 function getAuthHeaders(): Record<string, string> {
   const token = getStoredAccessToken();

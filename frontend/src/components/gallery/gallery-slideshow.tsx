@@ -200,17 +200,20 @@ export function GallerySlideshow({
       aria-modal="true"
       aria-label="Gallery slideshow"
       tabIndex={-1}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-surface-scrim-strong/95"
+      data-glass-surface="media"
+      className="gallery-slideshow"
     >
-      {renderSlide ? (
-        renderSlide(index)
-      ) : (
-        <img
-          src={images ? images[index] : ""}
-          alt={`Slide ${index + 1} of ${count}`}
-          className="max-h-full max-w-full object-contain"
-        />
-      )}
+      <div className="gallery-slideshow__stage">
+        {renderSlide ? (
+          renderSlide(index)
+        ) : (
+          <img
+            src={images ? images[index] : ""}
+            alt={`Slide ${index + 1} of ${count}`}
+            className="gallery-slideshow__image"
+          />
+        )}
+      </div>
 
       {musicUrl ? (
         <audio
@@ -221,11 +224,11 @@ export function GallerySlideshow({
         />
       ) : null}
 
-      <div className="absolute left-1/2 top-4 -translate-x-1/2 text-sm text-text-media/80">
+      <div className="gallery-slideshow__counter">
         {index + 1} / {count}
       </div>
 
-      <div className="absolute right-4 top-4">
+      <div className="gallery-slideshow__close">
         <GlassIconButton
           label="Close slideshow"
           onClick={onClose}
@@ -236,7 +239,7 @@ export function GallerySlideshow({
         </GlassIconButton>
       </div>
 
-      <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-3">
+      <div className="gallery-slideshow__controls">
         <GlassIconButton
           label="Previous slide"
           onClick={prev}
@@ -251,6 +254,7 @@ export function GallerySlideshow({
           size="lg"
           variant="glass"
           active={playing}
+          className="gallery-slideshow__primary-control"
         >
           {playing ? <Pause /> : <Play />}
         </GlassIconButton>

@@ -1,3 +1,4 @@
+import { getApiBaseUrl } from "@/lib/api/base-url";
 /**
  * Viewer-public fetch wrappers — story 35-1 T2.
  *
@@ -7,7 +8,7 @@
 
 import type { ViewerTokenPair } from "./session";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 
 export interface InitialStateSnapshot {
   state: "scheduled" | "waiting_room" | "live" | "replay" | "ended";

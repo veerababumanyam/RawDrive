@@ -1,4 +1,5 @@
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 /**
  * SharePinGate — PIN entry for a share-link-gated public gallery (S4-G2,
@@ -47,7 +48,7 @@ interface Props {
 function absoluteApiUrl(url?: string | null) {
   if (!url) return "";
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+  const base = getApiBaseUrl();
   return `${base}${url}`;
 }
 

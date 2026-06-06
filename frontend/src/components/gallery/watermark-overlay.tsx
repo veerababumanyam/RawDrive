@@ -1,4 +1,5 @@
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 /**
  * WatermarkOverlay — GAL-FR-088
@@ -28,7 +29,7 @@ interface Props {
   config?: Gallery["watermark_config"];
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 
 function absoluteApiUrl(url?: string | null) {
   if (!url) return "";

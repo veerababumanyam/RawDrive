@@ -449,7 +449,7 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if _, ok := service.StillImageFormatFromContentType(input.ContentType); !ok {
+	if _, ok := service.StillImageFormatFromUploadCreate(input.ContentType, input.Filename, input.ScanManifest); !ok {
 		respondJSON(w, http.StatusUnprocessableEntity, map[string]interface{}{
 			"error":   "UNSUPPORTED_UPLOAD_TYPE",
 			"message": "photo galleries accept still-image uploads only",

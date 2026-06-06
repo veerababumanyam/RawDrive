@@ -1,4 +1,5 @@
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import Link from "next/link";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -1239,7 +1240,7 @@ export default function GalleryDetailPage({
   );
 
   // ──────── Upload Integration ────────
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+  const apiUrl = getApiBaseUrl();
   // F-089: read the access token ONCE per mount instead of on every render.
   // getStoredAccessToken() is not a pure getter — it calls
   // clearLegacyStoredTokens() which performs 4 synchronous

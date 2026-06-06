@@ -1,10 +1,11 @@
 // Design source: Stitch MCP — Monthly Statement grid (glass-card, revenue summary, PDF download)
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import { useState, useEffect } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API = getApiBaseUrl();
 
 interface Statement { month: string; gross_revenue_paisa: number; dealer_share_paisa: number; platform_share_paisa: number; payout_status: string; statement_pdf_url: string; }
 

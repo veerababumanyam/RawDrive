@@ -346,7 +346,7 @@ describe("PublicGalleryHero", () => {
     expect(audio.getAttribute("src")).toContain("ws=studio-abc12345");
   });
 
-  it("renders no 'Play' control and does not auto-open when the gallery has no music", () => {
+  it("renders 'Play' without auto-opening or audio when the gallery has no music", () => {
     render(
       <PublicGalleryHero
         gallery={gallery}
@@ -357,14 +357,61 @@ describe("PublicGalleryHero", () => {
       />,
     );
 
-    expect(
-      screen.queryByRole("button", { name: "Play slideshow" }),
-    ).not.toBeInTheDocument();
+    const play = screen.getByRole("button", { name: "Play slideshow" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.click(play);
+    expect(
+      screen.getByRole("dialog", { name: "Gallery slideshow" }),
+    ).toBeInTheDocument();
+    expect(screen.getByAltText("Wedding (42).jpg")).toHaveAttribute(
+      "src",
+      weddingPhoto,
+    );
+    expect(screen.queryByTestId("slideshow-audio")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /mute music/i }),
+    ).not.toBeInTheDocument();
     // Existing behavior unchanged: View Gallery still anchors to the grid.
     expect(screen.getByRole("link", { name: /view gallery/i })).toHaveAttribute(
       "href",
       "#gallery-grid",
+    );
+  });
+
+  it("keeps Play visible in the no-cover public header fallback", () => {
+    render(
+      <PublicGalleryHero
+        gallery={{ ...gallery, cover_template: "none" }}
+        assets={[coverAsset, secondaryAsset]}
+        branding={branding}
+        slug="asha-ravi"
+        faceDetectionEnabled
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Asha & Ravi" })).toBeVisible();
+    expect(
+      screen.queryByRole("link", { name: /view gallery/i }),
+    ).not.toBeInTheDocument();
+
+    const play = screen.getByRole("button", { name: "Play slideshow" });
+    const findMe = screen.getByRole("link", {
+      name: "Find your photos with your camera",
+    });
+    expect(play).toHaveTextContent("Play");
+    expect(findMe).toHaveTextContent("Find me");
+    expect(
+      play.compareDocumentPosition(findMe) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    fireEvent.click(play);
+    expect(
+      screen.getByRole("dialog", { name: "Gallery slideshow" }),
+    ).toBeInTheDocument();
+    expect(screen.getByAltText("Wedding (42).jpg")).toHaveAttribute(
+      "src",
+      weddingPhoto,
     );
   });
 

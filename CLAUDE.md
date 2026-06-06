@@ -4,6 +4,16 @@
 
 @AGENTS.md
 
+> **Delivery toolchain: Orchestra.** All SDLC work — plan, build, review, fix, UAT, ship — runs through
+> the Orchestra pipelines. Read [`ORCHESTRA.md`](ORCHESTRA.md) before any build/fix/review/ship task: it
+> defines the land path (`npm run ship`, never push `main`), the green commands, and the per-reviewer
+> gate map of RawDrive's laws. The `rawdrive-*` skills are retired and replaced by Orchestra.
+>
+> **Tracking before fixing.** RawDrive's canonical SDLC board is
+> <https://github.com/users/manyamprasad/projects/2>. Agents and automations must create/update the
+> relevant Project #2 item before fixing, shipping, or closing work. Use GitHub repo issues only when
+> needed as the one-unit PR tracker or durable discussion thread. No silent fixes.
+
 ---
 
 ## 1. WHAT — Project Context

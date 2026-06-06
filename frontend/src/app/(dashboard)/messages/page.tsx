@@ -1,4 +1,5 @@
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import { useState, useEffect, useRef } from "react";
 import {
@@ -353,7 +354,7 @@ export default function MessagesPage() {
     if (!token) return;
     const es = new EventSource(
       buildEventStreamUrl(
-        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080",
+        getApiBaseUrl(),
       ),
       { withCredentials: true },
     );

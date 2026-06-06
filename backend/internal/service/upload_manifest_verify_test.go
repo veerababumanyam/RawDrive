@@ -278,6 +278,110 @@ func TestStillImageFormatFromContentType(t *testing.T) {
 	}
 }
 
+func TestStillImageFormatFromUploadCreate_GenericMimeManifestFallback(t *testing.T) {
+	baseManifest := &UploadScanManifest{
+		FileName:       "DSC01234.ARW",
+		DetectedFormat: "arw",
+		Decision:       "pass",
+	}
+
+	tests := []struct {
+		name        string
+		contentType string
+		filename    string
+		manifest    *UploadScanManifest
+		format      string
+		ok          bool
+	}{
+		{
+			name:        "known content type still wins without manifest",
+			contentType: "image/jpeg",
+			filename:    "photo.jpg",
+			format:      "jpeg",
+			ok:          true,
+		},
+		{
+			name:        "generic MIME accepts ARW when pass manifest and extension agree",
+			contentType: "application/octet-stream",
+			filename:    "DSC01234.ARW",
+			manifest:    baseManifest,
+			format:      "arw",
+			ok:          true,
+		},
+		{
+			name:        "empty MIME accepts ARW when pass manifest and extension agree",
+			contentType: "",
+			filename:    "DSC01234.ARW",
+			manifest:    baseManifest,
+			format:      "arw",
+			ok:          true,
+		},
+		{
+			name:        "non-generic content type cannot use manifest fallback",
+			contentType: "application/pdf",
+			filename:    "DSC01234.ARW",
+			manifest:    baseManifest,
+			ok:          false,
+		},
+		{
+			name:        "generic MIME without manifest is rejected",
+			contentType: "application/octet-stream",
+			filename:    "DSC01234.ARW",
+			ok:          false,
+		},
+		{
+			name:        "blocked manifest is rejected",
+			contentType: "application/octet-stream",
+			filename:    "DSC01234.ARW",
+			manifest: &UploadScanManifest{
+				FileName:       "DSC01234.ARW",
+				DetectedFormat: "arw",
+				Decision:       "block",
+			},
+			ok: false,
+		},
+		{
+			name:        "filename must match manifest filename",
+			contentType: "application/octet-stream",
+			filename:    "other.ARW",
+			manifest:    baseManifest,
+			ok:          false,
+		},
+		{
+			name:        "extension must agree with manifest format",
+			contentType: "application/octet-stream",
+			filename:    "invoice.pdf",
+			manifest: &UploadScanManifest{
+				FileName:       "invoice.pdf",
+				DetectedFormat: "arw",
+				Decision:       "pass",
+			},
+			ok: false,
+		},
+		{
+			name:        "non server decodable RAW stays rejected",
+			contentType: "application/octet-stream",
+			filename:    "capture.arq",
+			manifest: &UploadScanManifest{
+				FileName:       "capture.arq",
+				DetectedFormat: "arq",
+				Decision:       "pass",
+			},
+			ok: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			format, ok := StillImageFormatFromUploadCreate(tt.contentType, tt.filename, tt.manifest)
+			if ok != tt.ok || format != tt.format {
+				t.Fatalf("StillImageFormatFromUploadCreate(%q, %q, manifest) = (%q, %v), want (%q, %v)",
+					tt.contentType, tt.filename, format, ok, tt.format, tt.ok)
+			}
+		})
+	}
+}
+
 func TestVerifyHeaderTrailer_MissingFile_Errors(t *testing.T) {
 	err := VerifyHeaderTrailer("/nonexistent.jpg", "jpeg")
 	if err == nil {

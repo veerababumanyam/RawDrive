@@ -1,5 +1,6 @@
 // Design source: design-tokens.json semantic classes
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import { useState, useEffect } from "react";
 import { getDealerDashboard, type Dealer } from "@/lib/api/dealer";
@@ -7,7 +8,7 @@ import { getDealerDashboard, type Dealer } from "@/lib/api/dealer";
 // Same pattern as DealerAdminReview: dealer responses only carry state_id,
 // so we look up id → name from GET /api/v1/states once on mount to render
 // a human-readable state label instead of the cosmetic "#24".
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE = getApiBaseUrl();
 
 export default function DealerDashboard() {
   const [dealer, setDealer] = useState<Dealer | null>(null);

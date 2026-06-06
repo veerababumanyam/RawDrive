@@ -1,4 +1,5 @@
 "use client";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
@@ -140,7 +141,7 @@ export default function StorageSettingsPage() {
   const { storageBoosters } = usePlanCatalog();
 
   useEffect(() => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+    const apiUrl = getApiBaseUrl();
     const token = getStoredAccessToken();
     fetch(`${apiUrl}/api/v1/storage/analytics`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -157,7 +158,7 @@ export default function StorageSettingsPage() {
   // analytics and plan-tier load independently — one failing does not
   // block the other.
   useEffect(() => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+    const apiUrl = getApiBaseUrl();
     const token = getStoredAccessToken();
     fetch(`${apiUrl}/api/v1/workspaces/current/plan`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
