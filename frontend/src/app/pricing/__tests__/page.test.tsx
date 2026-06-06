@@ -60,6 +60,25 @@ describe("Pricing Page", () => {
     expect(screen.getByText("Popular")).toBeInTheDocument();
   });
 
+  it("shows Studio as the best value plan", () => {
+    render(<PricingContent />);
+    expect(screen.getByText("Best Value")).toBeInTheDocument();
+  });
+
+  it("renders event validity and extension pack details", () => {
+    render(<PricingContent />);
+
+    expect(screen.getByText("Event upload")).toBeInTheDocument();
+    expect(screen.getByText("Wedding upload")).toBeInTheDocument();
+    expect(screen.getByText("30-day active phase")).toBeInTheDocument();
+    expect(screen.getByText("60-day active phase")).toBeInTheDocument();
+    expect(
+      screen.getAllByText("Auto-archive at day 90 unless extended").length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("Download + archive forever")).toBeInTheDocument();
+    expect(screen.queryByText("7 days upload window")).not.toBeInTheDocument();
+  });
+
   it("toggles between monthly and annual billing", () => {
     render(<PricingContent />);
     const toggle = screen.getByRole("switch");

@@ -13,7 +13,7 @@ const faqItems = [
   },
   {
     q: "How does Pay Per Event work?",
-    a: "Pay Per Event is for one delivery cycle: a 7-day upload window, 30 days of client access, and 90 days of storage retention without a monthly subscription.",
+    a: "Pay Per Event gives occasional photographers a one-off upload cycle: Rs. 199 events include 30 active days, Rs. 499 wedding uploads include 60 active days, and both become view-only after the active phase.",
   },
   {
     q: "Can I switch plans later?",
@@ -29,11 +29,11 @@ const faqItems = [
   },
   {
     q: "What is the wedding bundle?",
-    a: "The wedding bundle is Rs. 499 per wedding for multi-day events and larger galleries.",
+    a: "The wedding upload is Rs. 499 for multi-day events and larger galleries, with a 60-day active phase before the gallery becomes view-only.",
   },
   {
     q: "Can I extend a Pay Per Event gallery?",
-    a: "Yes. Extension packs add 30 days, 90 days, or a permanent archive for galleries that need more time.",
+    a: "Yes. After expiry you can extend 30 days for Rs. 49, extend 90 days for Rs. 99, or download plus archive forever for Rs. 199.",
   },
   {
     q: "Is my data stored in India?",
@@ -87,8 +87,37 @@ export function PricingContent() {
     },
     {
       price: "Rs. 199",
-      title: "Archive forever",
-      description: "Download plus permanent archive of the event.",
+      title: "Download + archive forever",
+      description: "Export the gallery package and keep the event archived.",
+    },
+  ];
+
+  const eventOptions = [
+    {
+      price: "Rs. 199",
+      unit: "/ event upload",
+      title: "Event upload",
+      activePhase: "30-day active phase",
+      summary: "Best for occasional shoots and beginners who do not want a subscription.",
+      points: [
+        "Upload for 30 days",
+        "View-only after 30 days",
+        "No new uploads after expiry",
+        "Auto-archive at day 90 unless extended",
+      ],
+    },
+    {
+      price: "Rs. 499",
+      unit: "/ wedding upload",
+      title: "Wedding upload",
+      activePhase: "60-day active phase",
+      summary: "Built for multi-day weddings, larger delivery sets, and longer client selection cycles.",
+      points: [
+        "Upload for 60 days",
+        "View-only after 60 days",
+        "No new uploads after expiry",
+        "Auto-archive at day 90 unless extended",
+      ],
     },
   ];
 
@@ -176,64 +205,80 @@ export function PricingContent() {
 
       {payPerEventPlan && (
         <section className="px-4 pb-10 lg:px-8">
-          <div className="surface-panel mx-auto max-w-7xl p-6 lg:p-8">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-              <div className="space-y-4">
+          <div className="mx-auto max-w-7xl space-y-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="space-y-3">
                 <span className="inline-flex rounded-full border border-border bg-surface-sunken px-3 py-1 text-xs font-bold uppercase text-accent">
                   No subscription
                 </span>
                 <div className="space-y-2">
                   <h2 className="font-headline text-2xl font-bold text-text-primary">
-                    {payPerEventPlan.name} - Delivery Cycle
+                    {payPerEventPlan.name}
                   </h2>
                   <p className="max-w-2xl text-sm leading-7 text-text-secondary">
-                    The way many photographers actually work. One clean price
-                    per event, no monthly commitment.
+                    The way many photographers actually work. Pay once for an
+                    event, keep the active upload phase clear, then extend only
+                    when the client needs more time.
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    "7 days upload window",
-                    "30 days client access",
-                    "90 days storage retention",
-                  ].map((item) => (
-                    <span
-                      key={item}
-                      className="rounded-lg border border-border bg-surface-sunken px-3 py-2 text-xs font-medium text-text-secondary"
-                    >
-                      {item}
-                    </span>
-                  ))}
-                </div>
-                <p className="text-sm text-text-secondary">
-                  Wedding bundle:{" "}
-                  <span className="font-semibold text-accent">
-                    Rs. 499 per wedding
-                  </span>{" "}
-                  for multi-day, larger galleries.
-                </p>
               </div>
-              <div className="flex shrink-0 flex-col gap-4 sm:flex-row lg:flex-col">
-                <div>
-                  <p className="text-4xl font-extrabold text-text-primary">
-                    {formatPrice(payPerEventPlan.monthlyPrice)}
-                  </p>
-                  <p className="text-sm font-medium text-text-secondary">
-                    / event
-                  </p>
-                </div>
-                <Link
-                  href="/register?plan=free"
-                  className="inline-flex items-center justify-center rounded-lg bg-accent px-5 py-3 text-sm font-semibold text-text-inverse transition-colors hover:bg-accent-hover"
-                  style={{
-                    minHeight: "var(--touch-target-min)",
-                    transitionDuration: "var(--duration-fast)",
-                  }}
-                >
-                  Create account
-                </Link>
-              </div>
+              <Link
+                href="/register?plan=free"
+                className="inline-flex items-center justify-center rounded-lg bg-accent px-5 py-3 text-sm font-semibold text-text-inverse transition-colors hover:bg-accent-hover"
+                style={{
+                  minHeight: "var(--touch-target-min)",
+                  transitionDuration: "var(--duration-fast)",
+                }}
+              >
+                Create account
+              </Link>
             </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              {eventOptions.map((option) => (
+                <article key={option.title} className="surface-panel p-6">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-2">
+                      <h3 className="font-headline text-xl font-bold text-text-primary">
+                        {option.title}
+                      </h3>
+                      <p className="text-sm leading-7 text-text-secondary">
+                        {option.summary}
+                      </p>
+                    </div>
+                    <div className="shrink-0 sm:text-right">
+                      <p className="text-3xl font-extrabold text-text-primary">
+                        {option.price}
+                      </p>
+                      <p className="text-sm font-medium text-text-secondary">
+                        {option.unit}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-5 inline-flex rounded-lg border border-border bg-surface-sunken px-3 py-2 text-xs font-semibold uppercase text-accent">
+                    {option.activePhase}
+                  </div>
+                  <ul className="mt-5 space-y-3">
+                    {option.points.map((point) => (
+                      <li
+                        key={point}
+                        className="flex items-start gap-2 text-sm text-text-secondary"
+                      >
+                        <Check
+                          className="mt-0.5 h-4 w-4 shrink-0 text-accent"
+                          aria-hidden="true"
+                        />
+                        {point}
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              ))}
+            </div>
+            <p className="text-sm text-text-secondary">
+              After the active phase, galleries become view-only and reject new
+              uploads. After 90 days total, they auto-archive unless the
+              photographer buys an extension pack.
+            </p>
           </div>
         </section>
       )}
@@ -253,13 +298,15 @@ export function PricingContent() {
                 : plan.id === "pro_photographer"
                   ? "Go Pro"
                   : `Start ${plan.name}`;
+            const isStudioPlan = plan.id === "studio";
+            const isFeaturedPlan = plan.popular || isStudioPlan;
 
             return (
               <div
                 key={plan.id}
                 data-plan={plan.id}
                 className={`relative flex flex-col rounded-xl border p-6 shadow-glass ${
-                  plan.popular
+                  isFeaturedPlan
                     ? "border-accent bg-accent-subtle"
                     : "border-border bg-surface-elevated"
                 }`}
@@ -267,6 +314,11 @@ export function PricingContent() {
                 {plan.popular && (
                   <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-accent px-3 py-1 text-xs font-semibold text-text-inverse">
                     Popular
+                  </span>
+                )}
+                {isStudioPlan && (
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-accent px-3 py-1 text-xs font-semibold text-text-inverse">
+                    Best Value
                   </span>
                 )}
                 <h3 className="text-lg font-semibold text-text-primary">
@@ -298,7 +350,7 @@ export function PricingContent() {
                 <Link
                   href={ctaHref}
                   className={`mt-6 inline-flex items-center justify-center rounded-lg px-4 py-3 text-sm font-semibold transition-colors ${
-                    plan.popular
+                    isFeaturedPlan
                       ? "bg-accent text-text-inverse hover:bg-accent-hover"
                       : "border border-border bg-surface-elevated text-text-primary hover:bg-accent-subtle hover:text-accent"
                   }`}
