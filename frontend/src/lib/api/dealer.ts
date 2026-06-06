@@ -61,7 +61,10 @@ const headers = (token: string) => ({
   "Content-Type": "application/json",
 });
 
-export async function createDealer(token: string, data: CreateDealerRequest): Promise<Dealer> {
+export async function createDealer(
+  token: string,
+  data: CreateDealerRequest,
+): Promise<Dealer> {
   const res = await fetch(`${API_BASE}/api/v1/admin/dealers`, {
     method: "POST",
     headers: headers(token),
@@ -74,9 +77,25 @@ export async function createDealer(token: string, data: CreateDealerRequest): Pr
   return res.json();
 }
 
-export async function listDealers(token: string, params?: { status?: string; state_id?: string }): Promise<Dealer[]> {
-  const query = new URLSearchParams(params as Record<string, string>).toString();
-  const res = await fetch(`${API_BASE}/api/v1/admin/dealers?${query}`, { headers: headers(token) });
+export async function listDealers(
+  token: string,
+  params?: {
+    status?: string;
+    state_id?: string | number;
+    q?: string;
+    limit?: number;
+  },
+): Promise<Dealer[]> {
+  const queryParams = new URLSearchParams();
+  if (params?.status) queryParams.set("status", params.status);
+  if (params?.state_id) queryParams.set("state_id", String(params.state_id));
+  if (params?.q) queryParams.set("q", params.q);
+  if (params?.limit) queryParams.set("limit", String(params.limit));
+  const query = queryParams.toString();
+  const suffix = query ? `?${query}` : "";
+  const res = await fetch(`${API_BASE}/api/v1/admin/dealers${suffix}`, {
+    headers: headers(token),
+  });
   if (!res.ok) throw new Error("Failed to fetch dealers");
   const body = await res.json();
   if (Array.isArray(body)) return body;
@@ -84,7 +103,11 @@ export async function listDealers(token: string, params?: { status?: string; sta
   return [];
 }
 
-export async function approveDealer(token: string, id: string, commissionRate: number): Promise<Dealer> {
+export async function approveDealer(
+  token: string,
+  id: string,
+  commissionRate: number,
+): Promise<Dealer> {
   const res = await fetch(`${API_BASE}/api/v1/admin/dealers/${id}/approve`, {
     method: "PUT",
     headers: headers(token),
@@ -94,7 +117,11 @@ export async function approveDealer(token: string, id: string, commissionRate: n
   return res.json();
 }
 
-export async function rejectDealer(token: string, id: string, reason: string): Promise<void> {
+export async function rejectDealer(
+  token: string,
+  id: string,
+  reason: string,
+): Promise<void> {
   const res = await fetch(`${API_BASE}/api/v1/admin/dealers/${id}/reject`, {
     method: "PUT",
     headers: headers(token),
@@ -106,7 +133,11 @@ export async function rejectDealer(token: string, id: string, reason: string): P
 // QA #49: admin can suspend an approved dealer (freezes commissions + hides
 // from live listings) without deleting the audit trail. Backend endpoint
 // exists at backend/internal/handler/dealer_handler.go:120 SuspendDealer.
-export async function suspendDealer(token: string, id: string, reason: string): Promise<void> {
+export async function suspendDealer(
+  token: string,
+  id: string,
+  reason: string,
+): Promise<void> {
   const res = await fetch(`${API_BASE}/api/v1/admin/dealers/${id}/suspend`, {
     method: "PUT",
     headers: headers(token),
@@ -142,7 +173,9 @@ export async function getStates(): Promise<StateRef[]> {
   const res = await fetch(`${API_BASE}/api/v1/states`);
   if (!res.ok) throw new Error("Failed to fetch states");
   const body = await res.json();
-  const states: { id: number; name: string }[] = Array.isArray(body?.states) ? body.states : [];
+  const states: { id: number; name: string }[] = Array.isArray(body?.states)
+    ? body.states
+    : [];
   return states.map((s) => ({ id: s.id, name: s.name }));
 }
 
@@ -174,6 +207,7 @@ export interface RevenueCalendarResponse {
 export interface AdminDealerStateReport {
   dealer_id: string;
   business_name: string;
+  email: string;
   state_id: number;
   state_name: string;
   territory_type: TerritoryType;
@@ -195,6 +229,12 @@ export interface AdminDealerStateReportsResponse {
   reports: AdminDealerStateReport[];
 }
 
+export interface AdminDealerStateReportEmailResponse {
+  sent_to: string;
+  dealer_id: string;
+  business_name: string;
+}
+
 export async function getDealerPhotographers(): Promise<StatePhotographer[]> {
   const res = await authFetch(`/api/v1/dealer/photographers`);
   if (!res.ok) throw new Error("Failed to fetch photographers");
@@ -202,8 +242,13 @@ export async function getDealerPhotographers(): Promise<StatePhotographer[]> {
   return Array.isArray(body) ? body : [];
 }
 
-export async function getDealerRevenueCalendar(year: number, month: number): Promise<RevenueCalendarResponse> {
-  const res = await authFetch(`/api/v1/dealer/revenue-calendar?year=${year}&month=${month}`);
+export async function getDealerRevenueCalendar(
+  year: number,
+  month: number,
+): Promise<RevenueCalendarResponse> {
+  const res = await authFetch(
+    `/api/v1/dealer/revenue-calendar?year=${year}&month=${month}`,
+  );
   if (!res.ok) throw new Error("Failed to fetch revenue calendar");
   return res.json();
 }
@@ -225,6 +270,30 @@ export async function getAdminDealerStateReports(
     },
   );
   if (!res.ok) throw new Error("Failed to fetch dealer state reports");
+  return res.json();
+}
+
+export async function emailAdminDealerStateReport(
+  token: string,
+  params: {
+    dealer_id: string;
+    year?: number;
+    month?: number;
+    commission_rate_pct?: number;
+  },
+): Promise<AdminDealerStateReportEmailResponse> {
+  const res = await fetch(
+    `${API_BASE}/api/v1/admin/dealers/reports/statewide/email`,
+    {
+      method: "POST",
+      headers: headers(token),
+      body: JSON.stringify(params),
+    },
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "unknown" }));
+    throw new Error(err.error || "Failed to email dealer state report");
+  }
   return res.json();
 }
 
@@ -257,7 +326,9 @@ export async function listSubDealers(): Promise<SubDealer[]> {
   return Array.isArray(body) ? body : [];
 }
 
-export async function createSubDealer(data: CreateSubDealerRequest): Promise<SubDealer> {
+export async function createSubDealer(
+  data: CreateSubDealerRequest,
+): Promise<SubDealer> {
   const res = await authFetch(`/api/v1/dealer/sub-dealers`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -270,14 +341,19 @@ export async function createSubDealer(data: CreateSubDealerRequest): Promise<Sub
   return res.json();
 }
 
-export async function validateCoupon(token: string, couponCode: string): Promise<CouponValidationResponse> {
+export async function validateCoupon(
+  token: string,
+  couponCode: string,
+): Promise<CouponValidationResponse> {
   const res = await fetch(`${API_BASE}/api/v1/onboarding/coupon`, {
     method: "POST",
     headers: headers(token),
     body: JSON.stringify({ coupon_code: couponCode }),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ code: "UNKNOWN", message: "Unknown error" }));
+    const err = await res
+      .json()
+      .catch(() => ({ code: "UNKNOWN", message: "Unknown error" }));
     throw new Error(err.message || err.code || "Coupon validation failed");
   }
   return res.json();

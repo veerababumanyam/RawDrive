@@ -12,6 +12,7 @@ const adminNav = [
   { href: "/admin/moderation", label: "Moderation" },
   { href: "/admin/workspaces", label: "Workspaces" },
   { href: "/admin/plans", label: "Tier Plans", superAdminOnly: true },
+  { href: "/admin/billing-analytics", label: "Billing Analytics" },
   { href: "/admin/revenue", label: "Revenue" },
   { href: "/admin/analytics", label: "Analytics" },
   { href: "/admin/system", label: "System Health" },

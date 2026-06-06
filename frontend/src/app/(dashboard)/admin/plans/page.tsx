@@ -2,9 +2,15 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
+  approvePricingChangeRequest,
+  createPricingChangeRequest,
   listAdminPlans,
-  updateAdminPlan,
+  listPricingChangeRequests,
+  publishPricingChangeRequest,
+  rejectPricingChangeRequest,
+  submitPricingChangeRequest,
   type AdminPlan,
+  type PricingChangeRequest,
 } from "@/lib/api/admin";
 import { getStoredAccessToken, getStoredPlatformRole } from "@/lib/auth";
 import { formatQuotaBytes } from "@/lib/plans";
@@ -56,8 +62,13 @@ function toUpdateInput(plan: EditablePlan): Omit<AdminPlan, "tier"> {
 
 export default function AdminPlansPage() {
   const [plans, setPlans] = useState<EditablePlan[]>([]);
+  const [originalPlans, setOriginalPlans] = useState<AdminPlan[]>([]);
+  const [changes, setChanges] = useState<PricingChangeRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingTier, setSavingTier] = useState<string | null>(null);
+  const [transitioningChange, setTransitioningChange] = useState<string | null>(
+    null,
+  );
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [canManage] = useState(
@@ -70,6 +81,7 @@ export default function AdminPlansPage() {
     listAdminPlans(token)
       .then((data) => {
         if (!active) return;
+        setOriginalPlans(data);
         setPlans(data.map(toEditablePlan));
         setError(null);
       })
@@ -80,6 +92,11 @@ export default function AdminPlansPage() {
       .finally(() => {
         if (active) setLoading(false);
       });
+    listPricingChangeRequests(token)
+      .then((data) => {
+        if (active) setChanges(data);
+      })
+      .catch(() => {});
     return () => {
       active = false;
     };
@@ -105,19 +122,118 @@ export default function AdminPlansPage() {
     setSavingTier(plan.tier);
     try {
       const token = getStoredAccessToken() || "";
-      const saved = await updateAdminPlan(token, plan.tier, toUpdateInput(plan));
-      setPlans((current) =>
-        current.map((item) =>
-          item.tier === saved.tier ? toEditablePlan(saved) : item,
-        ),
+      const afterState = { tier: plan.tier, ...toUpdateInput(plan) };
+      const beforeState =
+        originalPlans.find((item) => item.tier === plan.tier) ?? {
+          tier: plan.tier,
+        };
+      const created = await createPricingChangeRequest(token, {
+        request_type: "plan_update",
+        target_type: "subscription_plan",
+        target_key: plan.tier,
+        before_state: beforeState as unknown as Record<string, unknown>,
+        after_state: afterState,
+        impact_summary: {
+          previous_monthly_price_paise:
+            "monthly_price_paise" in beforeState
+              ? beforeState.monthly_price_paise
+              : null,
+          next_monthly_price_paise: afterState.monthly_price_paise,
+          quota_bytes: afterState.quota_bytes,
+          rank: afterState.rank,
+        },
+        email_preview: {
+          notice_required: true,
+          delivery_channel: "email",
+        },
+      });
+      const submitted = await submitPricingChangeRequest(token, created.id);
+      setChanges((current) => [submitted, ...current]);
+      setMessage(
+        `${plan.name || plan.tier} pricing change submitted for approval.`,
       );
-      setMessage(`${saved.name} plan updated.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save plan");
+      setError(
+        err instanceof Error ? err.message : "Failed to submit plan change",
+      );
     } finally {
       setSavingTier(null);
     }
   }
+
+  async function reloadPlansAndChanges() {
+    const token = getStoredAccessToken() || "";
+    const [nextPlans, nextChanges] = await Promise.all([
+      listAdminPlans(token),
+      listPricingChangeRequests(token),
+    ]);
+    setOriginalPlans(nextPlans);
+    setPlans(nextPlans.map(toEditablePlan));
+    setChanges(nextChanges);
+  }
+
+  async function handleApprove(change: PricingChangeRequest) {
+    const comment = window.prompt("Approval comment");
+    if (!comment?.trim()) return;
+    setTransitioningChange(change.id);
+    setError(null);
+    try {
+      const token = getStoredAccessToken() || "";
+      const updated = await approvePricingChangeRequest(
+        token,
+        change.id,
+        comment.trim(),
+      );
+      setChanges((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      setMessage("Pricing change approved.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Approval failed");
+    } finally {
+      setTransitioningChange(null);
+    }
+  }
+
+  async function handleReject(change: PricingChangeRequest) {
+    const reason = window.prompt("Rejection reason");
+    if (!reason?.trim()) return;
+    setTransitioningChange(change.id);
+    setError(null);
+    try {
+      const token = getStoredAccessToken() || "";
+      const updated = await rejectPricingChangeRequest(
+        token,
+        change.id,
+        reason.trim(),
+      );
+      setChanges((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      setMessage("Pricing change rejected.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Rejection failed");
+    } finally {
+      setTransitioningChange(null);
+    }
+  }
+
+  async function handlePublish(change: PricingChangeRequest) {
+    setTransitioningChange(change.id);
+    setError(null);
+    try {
+      const token = getStoredAccessToken() || "";
+      await publishPricingChangeRequest(token, change.id);
+      await reloadPlansAndChanges();
+      setMessage("Pricing change published to public catalog.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Publish failed");
+    } finally {
+      setTransitioningChange(null);
+    }
+  }
+
+  const visibleChanges = changes.slice(0, 8);
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 p-8">
@@ -211,7 +327,7 @@ export default function AdminPlansPage() {
                     disabled={saving || !canManage}
                     className="touch-min rounded-full bg-accent px-5 py-2 text-sm font-semibold text-text-inverse transition-opacity hover:opacity-90 disabled:opacity-60"
                   >
-                    {saving ? "Saving…" : "Save plan"}
+                    {saving ? "Submitting..." : "Submit change"}
                   </button>
                 </div>
 
@@ -397,6 +513,96 @@ export default function AdminPlansPage() {
           })}
         </div>
       )}
+
+      <section className="rounded-2xl border border-border-subtle bg-surface-container-low p-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-text-primary">
+              Pricing Approval Timeline
+            </h2>
+            <p className="text-sm text-text-secondary">
+              Drafts, approvals, rejections, and publishes are recorded before
+              public pricing changes.
+            </p>
+          </div>
+          <a
+            href="/pricing"
+            target="_blank"
+            className="touch-min rounded-full border border-border-subtle px-4 py-2 text-sm font-semibold text-text-primary"
+          >
+            Preview public pricing
+          </a>
+        </div>
+
+        <div className="mt-4 grid gap-3">
+          {visibleChanges.length === 0 ? (
+            <p className="text-sm text-text-secondary">
+              No pricing changes have been submitted yet.
+            </p>
+          ) : (
+            visibleChanges.map((change) => {
+              const busy = transitioningChange === change.id;
+              return (
+                <div
+                  key={change.id}
+                  className="rounded-xl border border-border-subtle bg-surface px-4 py-3"
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-text-primary">
+                        {change.request_type} · {change.target_key}
+                      </p>
+                      <p className="text-xs text-text-tertiary">
+                        {change.status}
+                        {change.approval_comment
+                          ? ` · ${change.approval_comment}`
+                          : ""}
+                        {change.rejection_reason
+                          ? ` · ${change.rejection_reason}`
+                          : ""}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {change.status === "pending_approval" && canManage && (
+                        <>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => handleApprove(change)}
+                            className="touch-min rounded-full bg-feedback-success px-4 py-2 text-xs font-semibold text-text-inverse disabled:opacity-60"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => handleReject(change)}
+                            className="touch-min rounded-full bg-feedback-error px-4 py-2 text-xs font-semibold text-text-inverse disabled:opacity-60"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+                      {(change.status === "approved" ||
+                        change.status === "scheduled") &&
+                        canManage && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => handlePublish(change)}
+                            className="touch-min rounded-full bg-accent px-4 py-2 text-xs font-semibold text-text-inverse disabled:opacity-60"
+                          >
+                            Publish
+                          </button>
+                        )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </section>
     </div>
   );
 }

@@ -33,6 +33,7 @@ type DailyRevenueShare struct {
 type AdminDealerStateReport struct {
 	DealerID               uuid.UUID `json:"dealer_id"`
 	BusinessName           string    `json:"business_name"`
+	Email                  string    `json:"email"`
 	StateID                int       `json:"state_id"`
 	StateName              string    `json:"state_name"`
 	TerritoryType          string    `json:"territory_type"`
@@ -155,11 +156,12 @@ func (r *DealerAnalyticsRepo) GetDailyRevenueShares(ctx context.Context, stateID
 func (r *DealerAnalyticsRepo) GetAdminStateReports(ctx context.Context, from, to time.Time, fallbackCommissionRatePct float64) ([]AdminDealerStateReport, error) {
 	rows, err := r.DB.Query(ctx, `
 		SELECT
-			d.id,
-			d.business_name,
-			d.state_id,
-			st.name AS state_name,
-			d.territory_type,
+				d.id,
+				d.business_name,
+				COALESCE(u.email, '') AS email,
+				d.state_id,
+				st.name AS state_name,
+				d.territory_type,
 			d.status,
 			COALESCE(d.commission_rate_pct, $3::numeric)::float8 AS commission_rate_pct,
 			COALESCE(SUM(s.amount_paisa), 0)::bigint AS total_subscription_paisa,
@@ -168,18 +170,29 @@ func (r *DealerAnalyticsRepo) GetAdminStateReports(ctx context.Context, from, to
 				COALESCE(d.commission_rate_pct, $3::numeric) / 100
 			)::bigint AS dealer_share_paisa,
 			COUNT(DISTINCT s.user_id)::bigint AS subscriber_count
-		FROM dealers d
-		JOIN states st ON st.id = d.state_id
-		LEFT JOIN workspaces w ON w.state_id = d.state_id
-		LEFT JOIN subscriptions s ON s.workspace_id = w.id
+			FROM dealers d
+			JOIN states st ON st.id = d.state_id
+			LEFT JOIN users u ON u.id = d.user_id
+			LEFT JOIN workspaces w ON w.state_id = d.state_id
+			LEFT JOIN subscriptions s ON s.workspace_id = w.id
 			AND s.status = 'active'
 			AND s.tier_slug != 'free'
 			AND COALESCE(s.started_at, s.created_at) >= $1
 			AND COALESCE(s.started_at, s.created_at) < $2
-		WHERE d.deleted_at IS NULL
-		GROUP BY d.id, d.business_name, d.state_id, st.name, d.territory_type, d.status, d.commission_rate_pct
-		ORDER BY st.name ASC, d.business_name ASC
-	`, from, to, fallbackCommissionRatePct)
+			WHERE d.deleted_at IS NULL
+			GROUP BY d.id, d.business_name, u.email, d.state_id, st.name, d.territory_type, d.status, d.commission_rate_pct, d.approved_at, d.created_at
+			ORDER BY
+				st.name ASC,
+				CASE d.status WHEN 'approved' THEN 0 ELSE 1 END,
+				CASE d.territory_type
+					WHEN 'primary' THEN 0
+					WHEN 'secondary' THEN 1
+					ELSE 2
+				END,
+				d.approved_at DESC NULLS LAST,
+				d.created_at DESC,
+				d.business_name ASC
+		`, from, to, fallbackCommissionRatePct)
 	if err != nil {
 		return nil, err
 	}
@@ -191,6 +204,7 @@ func (r *DealerAnalyticsRepo) GetAdminStateReports(ctx context.Context, from, to
 		if err := rows.Scan(
 			&row.DealerID,
 			&row.BusinessName,
+			&row.Email,
 			&row.StateID,
 			&row.StateName,
 			&row.TerritoryType,

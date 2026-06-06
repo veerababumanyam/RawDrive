@@ -1356,6 +1356,9 @@ func main() {
 	// platform_settings -> environment -> fail lookup order.
 	platformSettingsRepo := repository.NewPlatformSettingsRepo(dbPool)
 	planCatalogSvc := service.NewPlanCatalogService(dbPool)
+	pricingCatalogSvc := service.NewPricingCatalogService(dbPool)
+	pricingChangeRequestSvc := service.NewPricingChangeRequestService(dbPool)
+	billingAnalyticsSvc := service.NewAdminBillingAnalyticsService(dbPool)
 	{
 		kekHex := os.Getenv("PLATFORM_SETTINGS_KEK")
 		if kekHex != "" {
@@ -1785,6 +1788,7 @@ func main() {
 	statesHandler := handler.NewStatesHandler(handler.NewPgStatesRepo(dbPool))
 	r.Get("/api/v1/states", statesHandler.List)
 	handler.RegisterPlanCatalogRoutes(r, planCatalogSvc)
+	handler.RegisterPricingCatalogRoutes(r, pricingCatalogSvc)
 
 	// F-007 (M17 wave 2): MFA public route. /auth/verify-totp uses the
 	// mfa_token issued by Login as its own credential, so it must NOT
@@ -2757,6 +2761,7 @@ func main() {
 		// concrete pointer is non-nil, so DealerService.credsSender != nil works.
 		if notificationEmailSender != nil {
 			m6Deps.CredentialsSender = notificationEmailSender
+			m6Deps.ReportEmailSender = notificationEmailSender
 		}
 		handler.RegisterM6Routes(api, m6Deps)
 
@@ -2842,13 +2847,16 @@ func main() {
 			// repo layer (UPDATE-only) writes no compensating audit row, so
 			// SOC2/DPDPA reconstruction of who suspended/deleted a workspace
 			// is lost. Mirrors workspacePolicySvc.WithAuditLog above.
-			WorkspaceSvc:   newAdminWorkspaceService(adminWorkspaceRepo, auditLogSvc),
-			RevenueSvc:     adminRevenueSvc,
-			AnalyticsSvc:   service.NewAdminAnalyticsService(adminAnalyticsRepo),
-			ExportSvc:      service.NewAdminExportService(adminUserRepo, adminRevenueRepo),
-			HealthSvc:      service.NewAdminHealthService(adminHealthRepo).WithDataplane(dbPool, valkeyCacheStatSource(valkeyClient)),
-			AuditLogSvc:    auditLogSvc,
-			PlanCatalogSvc: planCatalogSvc,
+			WorkspaceSvc:            newAdminWorkspaceService(adminWorkspaceRepo, auditLogSvc),
+			RevenueSvc:              adminRevenueSvc,
+			BillingAnalyticsSvc:     billingAnalyticsSvc,
+			AnalyticsSvc:            service.NewAdminAnalyticsService(adminAnalyticsRepo),
+			ExportSvc:               service.NewAdminExportService(adminUserRepo, adminRevenueRepo),
+			HealthSvc:               service.NewAdminHealthService(adminHealthRepo).WithDataplane(dbPool, valkeyCacheStatSource(valkeyClient)),
+			AuditLogSvc:             auditLogSvc,
+			PlanCatalogSvc:          planCatalogSvc,
+			PricingCatalogSvc:       pricingCatalogSvc,
+			PricingChangeRequestSvc: pricingChangeRequestSvc,
 			// M16 Tier D admin surfaces
 			WorkspacePolicySvc:  workspacePolicySvc,
 			UploadModerationSvc: uploadModerationSvc,
@@ -3358,6 +3366,12 @@ func main() {
 	workerRegistry.Register("asset-purge", purgeWorker)
 	expiryWorker := worker.NewGalleryExpiryWorker(dbPool)
 	workerRegistry.Register("gallery-expiry", expiryWorker)
+	billingLifecycleBaseURL := os.Getenv("APP_PUBLIC_BASE_URL")
+	if billingLifecycleBaseURL == "" {
+		billingLifecycleBaseURL = os.Getenv("FRONTEND_URL")
+	}
+	billingLifecycleWorker := worker.NewBillingLifecycleWorker(dbPool, notificationEmailSender, billingLifecycleBaseURL)
+	workerRegistry.Register("billing-lifecycle", billingLifecycleWorker)
 	// Gallery Enhancements June 2026: branded client email automation. Self-
 	// seeding drip (ready / reminder / last-chance). Only wired when SMTP is
 	// available; falls back to the standard public base URL for gallery links.

@@ -24,6 +24,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/api/admin", () => ({
   downloadRevenueRecordsPDF: vi.fn(),
   emailRevenueRecordsToDealer: vi.fn(),
+  exportRevenue: vi.fn(),
   getRevenueDashboard: vi.fn(),
   getRevenueTimeSeries: vi.fn(),
   getRevenueStateBreakdown: vi.fn(),
@@ -41,6 +42,7 @@ vi.mock("@/lib/api/dealer", () => ({
 import {
   downloadRevenueRecordsPDF,
   emailRevenueRecordsToDealer,
+  exportRevenue,
   getRevenueDashboard,
   getRevenueTimeSeries,
   getRevenueStateBreakdown,
@@ -51,6 +53,7 @@ import AdminRevenuePage from "../revenue/page";
 
 const mockDownloadPDF = vi.mocked(downloadRevenueRecordsPDF);
 const mockEmailDealer = vi.mocked(emailRevenueRecordsToDealer);
+const mockExportRevenue = vi.mocked(exportRevenue);
 const mockRevenue = vi.mocked(getRevenueDashboard);
 const mockTimeSeries = vi.mocked(getRevenueTimeSeries);
 const mockStateBreakdown = vi.mocked(getRevenueStateBreakdown);
@@ -123,7 +126,12 @@ beforeEach(() => {
       },
     ],
   });
-  mockDownloadPDF.mockResolvedValue(new Blob(["pdf"], { type: "application/pdf" }));
+  mockDownloadPDF.mockResolvedValue(
+    new Blob(["pdf"], { type: "application/pdf" }),
+  );
+  mockExportRevenue.mockResolvedValue(
+    new Blob(["export"], { type: "text/csv" }),
+  );
   mockEmailDealer.mockResolvedValue({
     sent_to: "dealer@example.test",
     dealer_id: "dealer-1",
@@ -230,7 +238,9 @@ describe("AdminRevenuePage", () => {
       target: { value: "12" },
     });
     await waitFor(() => {
-      expect(screen.getByRole("option", { name: "Bengaluru Urban" })).toBeTruthy();
+      expect(
+        screen.getByRole("option", { name: "Bengaluru Urban" }),
+      ).toBeTruthy();
     });
     fireEvent.change(screen.getByLabelText("District"), {
       target: { value: "Bengaluru Urban" },
@@ -263,6 +273,29 @@ describe("AdminRevenuePage", () => {
     });
   });
 
+  it("exports revenue CSV and PDF through the export endpoint", async () => {
+    render(<AdminRevenuePage />);
+
+    await screen.findByText("Revenue Dashboard");
+    fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
+
+    await waitFor(() => {
+      expect(mockExportRevenue).toHaveBeenCalledWith("test-token", {
+        granularity: "month",
+        format: "csv",
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Export PDF" }));
+
+    await waitFor(() => {
+      expect(mockExportRevenue).toHaveBeenLastCalledWith("test-token", {
+        granularity: "month",
+        format: "pdf",
+      });
+    });
+  });
+
   it("emails the selected revenue report to the state dealer", async () => {
     render(<AdminRevenuePage />);
 
@@ -278,6 +311,8 @@ describe("AdminRevenuePage", () => {
         district: undefined,
       });
     });
-    expect(await screen.findByText("Report emailed to dealer@example.test.")).toBeTruthy();
+    expect(
+      await screen.findByText("Report emailed to dealer@example.test."),
+    ).toBeTruthy();
   });
 });

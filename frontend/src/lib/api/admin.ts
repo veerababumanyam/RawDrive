@@ -126,6 +126,82 @@ export interface FeatureAdoption {
   active_users: number;
 }
 
+export interface AdminBillingAnalyticsSummary {
+  active_subscribers: number;
+  mrr_paise: number;
+  arr_paise: number;
+  subscription_revenue_paise: number;
+  storage_booster_revenue_paise: number;
+  expiry_extension_revenue_paise: number;
+  event_upload_revenue_paise: number;
+  active_storage_boosters: number;
+  churn_risk_count: number;
+  pending_renewal_failures: number;
+  pending_pricing_approvals: number;
+  safe_reduction_overage_workspaces: number;
+}
+
+export interface AdminBillingPlanAnalytics {
+  tier_slug: string;
+  plan_name: string;
+  active_subscribers: number;
+  past_due_subscribers: number;
+  mrr_paise: number;
+  arr_paise: number;
+  quota_bytes: number;
+}
+
+export interface AdminBillingProductRevenue {
+  order_type: string;
+  paid_orders: number;
+  revenue_paise: number;
+  average_paise: number;
+}
+
+export interface AdminBillingLifecycleAnalytics {
+  due_renewal_reminders: number;
+  due_expiry_warnings: number;
+  due_deletion_warnings: number;
+  failed_lifecycle_jobs: number;
+  queued_pricing_email_batches: number;
+  sent_proofs: number;
+  failed_proofs: number;
+}
+
+export interface AdminBillingApprovalAnalytics {
+  draft: number;
+  pending_approval: number;
+  approved: number;
+  published: number;
+  rejected: number;
+}
+
+export interface AdminBillingRecentOrder {
+  id: string;
+  source_table: string;
+  order_type: string;
+  target_type: string;
+  target_id?: string;
+  status: string;
+  provider: string;
+  amount_paise: number;
+  currency: string;
+  workspace_id: string;
+  created_at: string;
+  paid_at?: string;
+}
+
+export interface AdminBillingAnalyticsDashboard {
+  generated_at: string;
+  window_days: number;
+  summary: AdminBillingAnalyticsSummary;
+  plans: AdminBillingPlanAnalytics[];
+  revenue_by_product: AdminBillingProductRevenue[];
+  lifecycle: AdminBillingLifecycleAnalytics;
+  approvals: AdminBillingApprovalAnalytics;
+  recent_orders: AdminBillingRecentOrder[];
+}
+
 export interface SystemMetrics {
   api_latency_p50_ms: number;
   api_latency_p95_ms: number;
@@ -464,6 +540,15 @@ export async function getFeatureAdoption(token: string): Promise<FeatureAdoption
   return get(token, "/analytics/features");
 }
 
+export async function getBillingAnalyticsDashboard(
+  token: string,
+  windowDays = 30,
+): Promise<AdminBillingAnalyticsDashboard> {
+  return get(token, "/billing-analytics", {
+    window_days: String(windowDays),
+  });
+}
+
 // ── Export ──
 
 export async function exportUsers(token: string, params?: Record<string, string>): Promise<Blob> {
@@ -708,6 +793,136 @@ export async function updateAdminPlan(
     throw new Error("Update admin plan failed: missing plan");
   }
   return body.plan;
+}
+
+export interface PricingChangeRequest {
+  id: string;
+  request_type: string;
+  target_type: string;
+  target_key: string;
+  status: string;
+  before_state: Record<string, unknown>;
+  after_state: Record<string, unknown>;
+  impact_summary: Record<string, unknown>;
+  email_preview: Record<string, unknown>;
+  approval_comment?: string;
+  rejection_reason?: string;
+  effective_from?: string;
+  submitted_at?: string;
+  approved_at?: string;
+  rejected_at?: string;
+  published_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PricingChangeRequestInput {
+  request_type: string;
+  target_type: string;
+  target_key: string;
+  before_state?: Record<string, unknown>;
+  after_state?: Record<string, unknown>;
+  impact_summary?: Record<string, unknown>;
+  email_preview?: Record<string, unknown>;
+}
+
+export async function listPricingChangeRequests(
+  token: string,
+  status?: string,
+): Promise<PricingChangeRequest[]> {
+  const params = status ? `?status=${encodeURIComponent(status)}` : "";
+  const res = await fetch(
+    `${API_BASE}/api/v1/admin/pricing-change-requests${params}`,
+    { headers: headers(token) },
+  );
+  if (!res.ok) {
+    throw new Error(`List pricing changes failed: ${res.status}`);
+  }
+  const body = (await res.json()) as { requests?: PricingChangeRequest[] };
+  return Array.isArray(body.requests) ? body.requests : [];
+}
+
+export async function createPricingChangeRequest(
+  token: string,
+  input: PricingChangeRequestInput,
+): Promise<PricingChangeRequest> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/pricing-change-requests`, {
+    method: "POST",
+    headers: headers(token),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    let msg = `Create pricing change failed: ${res.status}`;
+    try {
+      const b = await res.json();
+      if (b?.error) msg = String(b.error);
+    } catch {}
+    throw new Error(msg);
+  }
+  const body = (await res.json()) as { request?: PricingChangeRequest };
+  if (!body.request) throw new Error("Create pricing change failed");
+  return body.request;
+}
+
+async function transitionPricingChangeRequest(
+  token: string,
+  id: string,
+  action: "submit" | "approve" | "reject" | "publish",
+  body?: Record<string, unknown>,
+): Promise<PricingChangeRequest> {
+  const res = await fetch(
+    `${API_BASE}/api/v1/admin/pricing-change-requests/${encodeURIComponent(id)}/${action}`,
+    {
+      method: "POST",
+      headers: headers(token),
+      body: body ? JSON.stringify(body) : undefined,
+    },
+  );
+  if (!res.ok) {
+    let msg = `Pricing change ${action} failed: ${res.status}`;
+    try {
+      const b = await res.json();
+      if (b?.error) msg = String(b.error);
+    } catch {}
+    throw new Error(msg);
+  }
+  const payload = (await res.json()) as { request?: PricingChangeRequest };
+  if (!payload.request) throw new Error(`Pricing change ${action} failed`);
+  return payload.request;
+}
+
+export function submitPricingChangeRequest(
+  token: string,
+  id: string,
+): Promise<PricingChangeRequest> {
+  return transitionPricingChangeRequest(token, id, "submit");
+}
+
+export function approvePricingChangeRequest(
+  token: string,
+  id: string,
+  comment: string,
+  effectiveFrom?: string,
+): Promise<PricingChangeRequest> {
+  return transitionPricingChangeRequest(token, id, "approve", {
+    comment,
+    effective_from: effectiveFrom,
+  });
+}
+
+export function rejectPricingChangeRequest(
+  token: string,
+  id: string,
+  reason: string,
+): Promise<PricingChangeRequest> {
+  return transitionPricingChangeRequest(token, id, "reject", { reason });
+}
+
+export function publishPricingChangeRequest(
+  token: string,
+  id: string,
+): Promise<PricingChangeRequest> {
+  return transitionPricingChangeRequest(token, id, "publish");
 }
 
 /**

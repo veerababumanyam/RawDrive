@@ -9,6 +9,7 @@ const dealerApi = vi.hoisted(() => ({
   suspendDealer: vi.fn(),
   enableDealer: vi.fn(),
   getAdminDealerStateReports: vi.fn(),
+  emailAdminDealerStateReport: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -47,6 +48,7 @@ const reportResponse = {
     {
       dealer_id: "dealer-1",
       business_name: "Telangana Dealer",
+      email: "dealer@example.test",
       state_id: 1,
       state_name: "Telangana",
       territory_type: "primary",
@@ -63,6 +65,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   dealerApi.listDealers.mockResolvedValue([pendingDealer]);
   dealerApi.getAdminDealerStateReports.mockResolvedValue(reportResponse);
+  dealerApi.emailAdminDealerStateReport.mockResolvedValue({
+    sent_to: "dealer@example.test",
+    dealer_id: "dealer-1",
+    business_name: "Telangana Dealer",
+  });
   dealerApi.approveDealer.mockResolvedValue({
     ...pendingDealer,
     status: "approved",
@@ -105,5 +112,50 @@ describe("DealerAdminReview reports toggle", () => {
 
     const input = screen.getByLabelText("Commission Rate (%)");
     expect(input).toHaveValue(20);
+  });
+
+  it("searches dealer applications by q", async () => {
+    render(<DealerAdminReview />);
+
+    await screen.findByText("Telangana Dealer");
+    fireEvent.change(
+      screen.getByPlaceholderText("Search dealer name, email, or PAN"),
+      {
+        target: { value: "telangana" },
+      },
+    );
+
+    await waitFor(() => {
+      expect(dealerApi.listDealers).toHaveBeenLastCalledWith("admin-token", {
+        q: "telangana",
+        limit: 100,
+      });
+    });
+  });
+
+  it("emails a statewide report for the selected dealer row", async () => {
+    render(<DealerAdminReview />);
+
+    await screen.findByText("Dealer Applications");
+    fireEvent.click(screen.getByRole("button", { name: "Reports" }));
+    const emailButton = await screen.findByRole("button", {
+      name: "Email Report",
+    });
+    fireEvent.click(emailButton);
+
+    await waitFor(() => {
+      expect(dealerApi.emailAdminDealerStateReport).toHaveBeenCalledWith(
+        "admin-token",
+        {
+          dealer_id: "dealer-1",
+          year: 2026,
+          month: 6,
+          commission_rate_pct: 20,
+        },
+      );
+    });
+    expect(
+      await screen.findByText("Report emailed to dealer@example.test."),
+    ).toBeInTheDocument();
   });
 });

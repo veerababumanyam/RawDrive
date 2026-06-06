@@ -4,6 +4,10 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/rawdrive/backend/internal/repository"
 )
 
 // TestResolvePeriodRange pins down date-math for every supported Period.
@@ -136,5 +140,36 @@ func TestResolvePeriodRange_Invalid(t *testing.T) {
 func TestDefaultDealerReportCommissionRatePct(t *testing.T) {
 	if DefaultDealerReportCommissionRatePct != 20 {
 		t.Fatalf("statewide dealer reports must default to 20%% commission, got %.2f", DefaultDealerReportCommissionRatePct)
+	}
+}
+
+func TestSummarizeAdminStateReportTotals_DedupesStateRevenue(t *testing.T) {
+	reports := []repository.AdminDealerStateReport{
+		{
+			DealerID:               uuid.New(),
+			StateID:                12,
+			TotalSubscriptionPaisa: 100000,
+			DealerSharePaisa:       20000,
+		},
+		{
+			DealerID:               uuid.New(),
+			StateID:                12,
+			TotalSubscriptionPaisa: 100000,
+			DealerSharePaisa:       15000,
+		},
+		{
+			DealerID:               uuid.New(),
+			StateID:                27,
+			TotalSubscriptionPaisa: 50000,
+			DealerSharePaisa:       10000,
+		},
+	}
+
+	totalRevenue, totalShare := summarizeAdminStateReportTotals(reports)
+	if totalRevenue != 150000 {
+		t.Fatalf("expected unique-state revenue total 150000, got %d", totalRevenue)
+	}
+	if totalShare != 30000 {
+		t.Fatalf("expected representative-state share total 30000, got %d", totalShare)
 	}
 }

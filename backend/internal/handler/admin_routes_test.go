@@ -43,9 +43,11 @@ func TestAdminRoutes_AllEndpointsRegistered(t *testing.T) {
 		"GET /api/v1/admin/revenue",
 		"GET /api/v1/admin/revenue/timeseries",
 		"GET /api/v1/admin/revenue/states",
+		"GET /api/v1/admin/revenue/districts",
 		"GET /api/v1/admin/revenue/records",
 		"GET /api/v1/admin/revenue/records/pdf",
 		"POST /api/v1/admin/revenue/records/email",
+		"GET /api/v1/admin/billing-analytics",
 		"GET /api/v1/admin/analytics/engagement",
 		"GET /api/v1/admin/analytics/growth",
 		"GET /api/v1/admin/analytics/features",
@@ -79,6 +81,7 @@ func TestAdminRoutes_UnauthenticatedReturns401(t *testing.T) {
 		"/api/v1/admin/moderation",
 		"/api/v1/admin/workspaces",
 		"/api/v1/admin/revenue",
+		"/api/v1/admin/billing-analytics",
 		"/api/v1/admin/revenue/records",
 		"/api/v1/admin/revenue/records/pdf",
 		"/api/v1/admin/analytics/engagement",
@@ -105,6 +108,7 @@ func TestAdminRoutes_NonSuperAdminReturns403(t *testing.T) {
 		"/api/v1/admin/plans",
 		"/api/v1/admin/moderation",
 		"/api/v1/admin/revenue",
+		"/api/v1/admin/billing-analytics",
 		"/api/v1/admin/revenue/records",
 		"/api/v1/admin/audit-logs",
 	}
@@ -366,6 +370,14 @@ func TestAdminRevenueHandler_EmailRecordsToDealer_MissingStateID(t *testing.T) {
 	h.EmailRecordsToDealer(rr, httptest.NewRequest(http.MethodPost, "/api/v1/admin/revenue/records/email", strings.NewReader(`{}`)))
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 	assert.Contains(t, rr.Body.String(), "state_id is required")
+}
+
+func TestAdminExportHandler_ExportRevenue_InvalidFormat(t *testing.T) {
+	h := NewAdminExportHandler(nil)
+	rr := httptest.NewRecorder()
+	h.ExportRevenue(rr, httptest.NewRequest(http.MethodGet, "/api/v1/admin/export/revenue?format=xlsx", nil))
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Contains(t, rr.Body.String(), "format must be csv or pdf")
 }
 
 // ──────────────────────── respondJSON utility ────────────────────────

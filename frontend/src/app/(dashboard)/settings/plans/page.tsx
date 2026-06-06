@@ -298,9 +298,14 @@ function PlansPageContent() {
 
                 {/* CTA */}
                 {isCurrent ? (
-                  <div className="flex items-center justify-center rounded-full border border-accent/30 bg-accent/10 py-2 text-sm font-semibold text-accent">
-                    Your current plan
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleUpgrade(plan.tier)}
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition-opacity hover:opacity-90"
+                  >
+                    <Zap className="h-4 w-4" />
+                    Renew {plan.name}
+                  </button>
                 ) : isUpgrade ? (
                   <button
                     type="button"

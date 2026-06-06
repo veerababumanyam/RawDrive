@@ -534,9 +534,11 @@ func buildPDF(title string, lines []string) ([]byte, error) {
 	// 3: Font
 	// 4..4+N-1: Page objects
 	// 4+N..: Content streams
+	// 4+2N: Info metadata
 	numPages := len(pages)
 	pageObjStart := 4
 	contentObjStart := pageObjStart + numPages
+	infoObjID := contentObjStart + numPages
 
 	var buf bytes.Buffer
 	offsets := []int{0} // obj 0 is the free entry
@@ -597,9 +599,12 @@ func buildPDF(title string, lines []string) ([]byte, error) {
 			contentObjStart+i, len(stream), stream))
 	}
 
+	writeObj(fmt.Sprintf("%d 0 obj\n<< /Title (%s) /Producer (RawDrive PDFService) >>\nendobj\n",
+		infoObjID, escapePDFString(title)))
+
 	// xref
 	xrefOffset := buf.Len()
-	totalObjs := 1 + 3 + numPages + numPages // obj0 free + catalog/pages/font + pages + streams
+	totalObjs := 1 + 3 + numPages + numPages + 1 // obj0 free + catalog/pages/font + pages + streams + info
 	fmt.Fprintf(&buf, "xref\n0 %d\n", totalObjs)
 	buf.WriteString("0000000000 65535 f \n")
 	for i := 1; i < totalObjs; i++ {
@@ -607,13 +612,8 @@ func buildPDF(title string, lines []string) ([]byte, error) {
 	}
 
 	// trailer
-	fmt.Fprintf(&buf, "trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF",
-		totalObjs, xrefOffset)
-
-	// Silence unused warning for `title` — currently we do not write a
-	// document info dict, but callers pass it so we can add /Info in a
-	// future iteration without changing the signature.
-	_ = title
+	fmt.Fprintf(&buf, "trailer\n<< /Size %d /Root 1 0 R /Info %d 0 R >>\nstartxref\n%d\n%%%%EOF",
+		totalObjs, infoObjID, xrefOffset)
 
 	return buf.Bytes(), nil
 }

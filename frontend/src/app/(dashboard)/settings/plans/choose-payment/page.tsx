@@ -36,6 +36,7 @@ import { ChevronLeft } from "@/components/icons";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { usePlanCatalog } from "@/hooks/use-plan-catalog";
 import { getStoredAccessToken } from "@/lib/auth";
+import type { PricingCatalogProduct } from "@/lib/plans";
 import { viewportThemeColors } from "@/lib/tokens";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
@@ -115,9 +116,10 @@ declare global {
   }
 }
 
-interface UpgradeOrderResponse {
+interface PaymentOrderResponse {
   provider: ProviderId;
   upgrade_order_id: string;
+  billing_order_id?: string;
   amount_paise: number;
   currency: string;
   // Razorpay fields:
@@ -132,9 +134,13 @@ function ChoosePaymentContent() {
   const router = useRouter();
   const searchParams = useSearchParams() ?? new URLSearchParams();
   const tier = searchParams.get("tier") ?? "";
+  const productCode = searchParams.get("product_code") ?? "";
+  const targetType = searchParams.get("target_type") ?? "";
+  const targetId = searchParams.get("target_id") ?? "";
   const interval =
     searchParams.get("interval") === "annual" ? "annual" : "monthly";
-  const { plans } = usePlanCatalog();
+  const { plans, eventPacks, galleryExtensions, storageBoosters } =
+    usePlanCatalog();
 
   const plan = useMemo(
     () =>
@@ -148,6 +154,14 @@ function ChoosePaymentContent() {
       ),
     [plans, tier],
   );
+  const product = useMemo<PricingCatalogProduct | undefined>(
+    () =>
+      [...eventPacks, ...galleryExtensions, ...storageBoosters].find(
+        (item) => item.code === productCode && item.active,
+      ),
+    [eventPacks, galleryExtensions, productCode, storageBoosters],
+  );
+  const isProductOrder = Boolean(productCode);
 
   // Remember the user's last choice for the "Last used" hint badge.
   // Doesn't auto-select — the user still clicks deliberately each time.
@@ -264,7 +278,7 @@ function ChoosePaymentContent() {
 
   const startPayment = useCallback(
     async (provider: ProviderId) => {
-      if (!plan) return;
+      if (!plan && !product) return;
       setErrorMsg("");
       setProcessing(provider);
       persistChoice(provider);
@@ -274,18 +288,29 @@ function ChoosePaymentContent() {
         if (!token) throw new Error("Not authenticated — please log in again.");
 
         const res = await fetch(
-          `${API_BASE}/api/v1/workspace/subscription/upgrade`,
+          isProductOrder
+            ? `${API_BASE}/api/v1/workspace/billing/orders`
+            : `${API_BASE}/api/v1/workspace/subscription/upgrade`,
           {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({
-              to_tier: plan.id,
-              provider,
-              billing_interval: interval,
-            }),
+            body: JSON.stringify(
+              isProductOrder
+                ? {
+                    product_code: product?.code,
+                    provider,
+                    target_type: targetType,
+                    target_id: targetId,
+                  }
+                : {
+                    to_tier: plan?.id,
+                    provider,
+                    billing_interval: interval,
+                  },
+            ),
           },
         );
         if (!res.ok) {
@@ -297,7 +322,7 @@ function ChoosePaymentContent() {
           }
           throw new Error(err.error ?? `HTTP ${res.status}`);
         }
-        const order = (await res.json()) as UpgradeOrderResponse;
+        const order = (await res.json()) as PaymentOrderResponse;
 
         if (order.provider === "phonepe") {
           if (!order.redirect_url)
@@ -312,7 +337,7 @@ function ChoosePaymentContent() {
           try {
             window.sessionStorage.setItem(
               "rawdrive-pending-plan-name",
-              plan.name,
+              plan?.name ?? product?.name ?? "RawDrive purchase",
             );
           } catch {
             /* non-critical */
@@ -346,11 +371,15 @@ function ChoosePaymentContent() {
           currency: order.currency,
           order_id: order.razorpay_order_id,
           name: "RawDrive",
-          description: `Upgrade to ${plan.name}`,
+          description: isProductOrder
+            ? `Purchase ${product?.name ?? "RawDrive add-on"}`
+            : `Upgrade to ${plan?.name}`,
           handler: async (response) => {
             try {
               const verifyRes = await fetch(
-                `${API_BASE}/api/v1/workspace/subscription/verify`,
+                isProductOrder
+                  ? `${API_BASE}/api/v1/workspace/billing/orders/verify`
+                  : `${API_BASE}/api/v1/workspace/subscription/verify`,
                 {
                   method: "POST",
                   headers: {
@@ -358,6 +387,7 @@ function ChoosePaymentContent() {
                     Authorization: `Bearer ${token}`,
                   },
                   body: JSON.stringify({
+                    provider: "razorpay",
                     razorpay_payment_id: response.razorpay_payment_id,
                     razorpay_order_id: response.razorpay_order_id,
                     razorpay_signature: response.razorpay_signature,
@@ -374,18 +404,28 @@ function ChoosePaymentContent() {
               }
               const verified = (await verifyRes.json()) as {
                 status: string;
-                plan_tier: string;
+                plan_tier?: string;
               };
+              if (isProductOrder) {
+                router.push(
+                  product?.product_type === "storage_booster"
+                    ? "/settings/storage?success=storage_booster"
+                    : targetId
+                      ? `/galleries/${encodeURIComponent(targetId)}?success=billing`
+                      : "/settings/plans?success=billing",
+                );
+                return;
+              }
               // Sidebar plan chip refresh — same pattern as the legacy plans page.
               if (typeof window !== "undefined") {
                 window.dispatchEvent(
                   new CustomEvent("rawdrive:plan-changed", {
-                    detail: { plan_tier: verified.plan_tier || plan.id },
+                    detail: { plan_tier: verified.plan_tier || plan?.id },
                   }),
                 );
               }
               router.push(
-                `/settings/plans?success=1&tier=${encodeURIComponent(verified.plan_tier || plan.id)}`,
+                `/settings/plans?success=1&tier=${encodeURIComponent(verified.plan_tier || plan?.id || "")}`,
               );
             } catch (err) {
               setErrorMsg(
@@ -413,16 +453,25 @@ function ChoosePaymentContent() {
         setProcessing(null);
       }
     },
-    [interval, plan, persistChoice, router],
+    [
+      interval,
+      isProductOrder,
+      persistChoice,
+      plan,
+      product,
+      router,
+      targetId,
+      targetType,
+    ],
   );
 
-  // Invalid / missing tier — bounce back to /settings/plans.
-  if (!plan) {
+  // Invalid / missing purchase target — bounce back to the relevant surface.
+  if (!plan && !product) {
     return (
       <div className="max-w-3xl mx-auto space-y-6 p-8">
         <div className="surface-panel p-6">
           <p className="text-sm text-text-secondary">
-            That plan isn&apos;t available. Choose a plan first.
+            That purchase isn&apos;t available. Choose a plan or add-on first.
           </p>
           <Link
             href="/settings/plans"
@@ -437,14 +486,30 @@ function ChoosePaymentContent() {
   }
 
   const displayPrice =
-    interval === "annual"
-      ? (plan.annualPrice as number)
-      : (plan.monthlyPrice as number);
-  const periodLabel = interval === "annual" ? "yr" : "mo";
+    product
+      ? Math.round(product.price_paise / 100)
+      : interval === "annual"
+        ? (plan?.annualPrice ?? 0)
+        : (plan?.monthlyPrice ?? 0);
+  const periodLabel = product
+    ? product.billing_interval === "monthly"
+      ? "mo"
+      : "once"
+    : interval === "annual"
+      ? "yr"
+      : "mo";
   const billingNote =
-    interval === "annual"
+    product
+      ? product.billing_interval === "monthly"
+        ? "Billed monthly"
+        : "One-time add-on"
+      : interval === "annual"
       ? "Billed annually · Cancel anytime"
       : "Billed monthly · Cancel anytime";
+  const purchaseName = plan?.name ?? product?.name ?? "RawDrive purchase";
+  const purchaseDescription = product
+    ? product.description
+    : `${plan?.storage} storage · ${billingNote}`;
   // GST is backend-owned; keep this copy aligned with the order amount the
   // upgrade endpoint returns.
   return (
@@ -466,8 +531,8 @@ function ChoosePaymentContent() {
             Choose Payment Method
           </h1>
           <p className="text-text-secondary text-sm mt-0.5">
-            Pick how you&apos;d like to pay for the <strong>{plan.name}</strong>{" "}
-            plan.
+            Pick how you&apos;d like to pay for the <strong>{purchaseName}</strong>{" "}
+            {product ? "add-on" : "plan"}.
           </p>
         </div>
       </header>
@@ -480,11 +545,9 @@ function ChoosePaymentContent() {
               Order summary
             </p>
             <h2 className="mt-1 text-base font-bold text-text-primary">
-              {plan.name} Plan
+              {purchaseName}
             </h2>
-            <p className="text-sm text-text-secondary">
-              {plan.storage} storage · {billingNote}
-            </p>
+            <p className="text-sm text-text-secondary">{purchaseDescription}</p>
           </div>
           <div className="text-right">
             <p className="text-xs text-text-tertiary">Total today</p>

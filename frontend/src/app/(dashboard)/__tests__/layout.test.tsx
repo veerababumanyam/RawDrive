@@ -327,10 +327,13 @@ describe("DashboardLayout role-based sidebar", () => {
       "href",
       "/admin/revenue",
     );
-    expect(screen.getByRole("link", { name: /Analytics/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /^Analytics$/i })).toHaveAttribute(
       "href",
       "/admin/analytics",
     );
+    expect(
+      screen.getByRole("link", { name: /Billing Analytics/i }),
+    ).toHaveAttribute("href", "/admin/billing-analytics");
     expect(screen.getByRole("link", { name: /Workspaces/i })).toHaveAttribute(
       "href",
       "/admin/workspaces",

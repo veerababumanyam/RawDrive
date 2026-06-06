@@ -49,6 +49,12 @@ describe("Pricing Page", () => {
     render(<PricingContent />);
     expect(screen.getAllByText(/Starter/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Pay Per Event/i).length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("heading", {
+        level: 2,
+        name: /Monthly subscriptions/i,
+      }),
+    ).toBeInTheDocument();
     expect(screen.getAllByText("Creator").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Pro Photographer").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Studio").length).toBeGreaterThan(0);

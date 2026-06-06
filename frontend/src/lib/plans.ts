@@ -25,6 +25,36 @@ export interface PlansResponse {
   plans?: ApiPlan[];
 }
 
+export interface PricingCatalogProduct {
+  code: string;
+  product_type: string;
+  version_id: string;
+  version: number;
+  name: string;
+  description: string;
+  currency: string;
+  price_paise: number;
+  billing_interval: string;
+  metadata?: Record<string, unknown>;
+  rank: number;
+  active: boolean;
+  effective_from: string;
+}
+
+export interface PricingCatalogResponse extends PlansResponse {
+  generated_at?: string;
+  event_packs?: PricingCatalogProduct[];
+  gallery_extensions?: PricingCatalogProduct[];
+  storage_boosters?: PricingCatalogProduct[];
+}
+
+export interface PricingCatalogData {
+  plans: PlanCatalogPlan[];
+  eventPacks: PricingCatalogProduct[];
+  galleryExtensions: PricingCatalogProduct[];
+  storageBoosters: PricingCatalogProduct[];
+}
+
 export interface PlanCatalogPlan {
   id: string;
   tier: string;
@@ -108,6 +138,12 @@ export function normalizeApiPlan(plan: ApiPlan): PlanCatalogPlan {
 }
 
 export async function fetchPublicPlans(): Promise<PlanCatalogPlan[]> {
+  try {
+    const catalog = await fetchPricingCatalog();
+    if (catalog.plans.length > 0) return catalog.plans;
+  } catch {
+    // Fall through to the legacy /plans endpoint for older API deployments.
+  }
   const response = await fetch(`${API_BASE}/api/v1/plans`, {
     headers: { Accept: "application/json" },
   });
@@ -117,6 +153,31 @@ export async function fetchPublicPlans(): Promise<PlanCatalogPlan[]> {
   const body = (await response.json()) as PlansResponse;
   const plans = Array.isArray(body.plans) ? body.plans : [];
   return plans.map(normalizeApiPlan).sort((a, b) => a.rank - b.rank);
+}
+
+export async function fetchPricingCatalog(): Promise<PricingCatalogData> {
+  const response = await fetch(`${API_BASE}/api/v1/pricing-catalog`, {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`Load pricing catalog failed: ${response.status}`);
+  }
+  const body = (await response.json()) as PricingCatalogResponse;
+  const plans = Array.isArray(body.plans) ? body.plans : [];
+  return {
+    plans: plans.map(normalizeApiPlan).sort((a, b) => a.rank - b.rank),
+    eventPacks: sortProducts(body.event_packs),
+    galleryExtensions: sortProducts(body.gallery_extensions),
+    storageBoosters: sortProducts(body.storage_boosters),
+  };
+}
+
+function sortProducts(
+  products: PricingCatalogProduct[] | undefined,
+): PricingCatalogProduct[] {
+  return Array.isArray(products)
+    ? products.filter((product) => product.active).sort((a, b) => a.rank - b.rank)
+    : [];
 }
 
 export function paidSelfServePlans(plans: PlanCatalogPlan[]): PlanCatalogPlan[] {

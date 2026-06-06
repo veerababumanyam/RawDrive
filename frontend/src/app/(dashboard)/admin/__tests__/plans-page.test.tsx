@@ -7,19 +7,28 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/api/admin", () => ({
+  createPricingChangeRequest: vi.fn(),
   listAdminPlans: vi.fn(),
-  updateAdminPlan: vi.fn(),
+  listPricingChangeRequests: vi.fn(),
+  submitPricingChangeRequest: vi.fn(),
+  approvePricingChangeRequest: vi.fn(),
+  rejectPricingChangeRequest: vi.fn(),
+  publishPricingChangeRequest: vi.fn(),
 }));
 
 import {
+  createPricingChangeRequest,
   listAdminPlans,
-  updateAdminPlan,
+  listPricingChangeRequests,
+  submitPricingChangeRequest,
   type AdminPlan,
 } from "@/lib/api/admin";
 import AdminPlansPage from "../plans/page";
 
 const mockListAdminPlans = vi.mocked(listAdminPlans);
-const mockUpdateAdminPlan = vi.mocked(updateAdminPlan);
+const mockListPricingChangeRequests = vi.mocked(listPricingChangeRequests);
+const mockCreatePricingChangeRequest = vi.mocked(createPricingChangeRequest);
+const mockSubmitPricingChangeRequest = vi.mocked(submitPricingChangeRequest);
 
 const creatorPlan: AdminPlan = {
   tier: "creator",
@@ -43,34 +52,66 @@ const creatorPlan: AdminPlan = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockListAdminPlans.mockResolvedValue([creatorPlan]);
-  mockUpdateAdminPlan.mockImplementation(async (_token, tier, input) => ({
-    tier,
-    ...input,
-  }));
+  mockListPricingChangeRequests.mockResolvedValue([]);
+  mockCreatePricingChangeRequest.mockResolvedValue({
+    id: "change-1",
+    request_type: "plan_update",
+    target_type: "subscription_plan",
+    target_key: "creator",
+    status: "draft",
+    before_state: creatorPlan as unknown as Record<string, unknown>,
+    after_state: {},
+    impact_summary: {},
+    email_preview: {},
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+  mockSubmitPricingChangeRequest.mockResolvedValue({
+    id: "change-1",
+    request_type: "plan_update",
+    target_type: "subscription_plan",
+    target_key: "creator",
+    status: "pending_approval",
+    before_state: creatorPlan as unknown as Record<string, unknown>,
+    after_state: {},
+    impact_summary: {},
+    email_preview: {},
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
 });
 
 describe("AdminPlansPage", () => {
-  it("loads tier plans and saves edits", async () => {
+  it("loads tier plans and submits edits for approval", async () => {
     render(<AdminPlansPage />);
 
     expect(await screen.findByRole("heading", { name: "Tier Plans" })).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Creator")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Creator")).toBeInTheDocument();
 
     fireEvent.change(screen.getByDisplayValue("499"), {
       target: { value: "149" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save plan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit change" }));
 
     await waitFor(() => {
-      expect(mockUpdateAdminPlan).toHaveBeenCalledWith(
+      expect(mockCreatePricingChangeRequest).toHaveBeenCalledWith(
         "test-token",
-        "creator",
         expect.objectContaining({
-          monthly_price_paise: 14900,
-          name: "Creator",
+          request_type: "plan_update",
+          target_key: "creator",
+          after_state: expect.objectContaining({
+            monthly_price_paise: 14900,
+            name: "Creator",
+          }),
         }),
       );
     });
-    expect(await screen.findByText("Creator plan updated.")).toBeInTheDocument();
+    expect(mockSubmitPricingChangeRequest).toHaveBeenCalledWith(
+      "test-token",
+      "change-1",
+    );
+    expect(
+      await screen.findByText("Creator pricing change submitted for approval."),
+    ).toBeInTheDocument();
   });
 });

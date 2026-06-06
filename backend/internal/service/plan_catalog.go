@@ -143,7 +143,7 @@ func PlanCatalog() []PlanCatalogEntry {
 }
 
 func planByTier(tier string) (PlanCatalogEntry, bool) {
-	tier = normalizePlanTierSlug(tier)
+	tier = NormalizePlanTierSlug(tier)
 	for _, p := range planCatalog {
 		if p.Tier == tier {
 			return clonePlanCatalogEntry(p), true
@@ -249,7 +249,7 @@ func (s *PlanCatalogService) List(ctx context.Context, includeInactive bool) ([]
 }
 
 func (s *PlanCatalogService) Get(ctx context.Context, tier string) (PlanCatalogEntry, bool, error) {
-	tier = normalizePlanTierSlug(tier)
+	tier = NormalizePlanTierSlug(tier)
 	if tier == "" {
 		return PlanCatalogEntry{}, false, nil
 	}
@@ -277,7 +277,7 @@ func (s *PlanCatalogService) Update(ctx context.Context, tier string, input Plan
 	if s == nil || s.db == nil {
 		return PlanCatalogEntry{}, fmt.Errorf("plan catalog database not configured")
 	}
-	tier = normalizePlanTierSlug(tier)
+	tier = NormalizePlanTierSlug(tier)
 	if tier == "" {
 		return PlanCatalogEntry{}, ErrPlanNotFound
 	}
@@ -401,7 +401,10 @@ func filterStaticPlanCatalog(includeInactive bool) []PlanCatalogEntry {
 	return out
 }
 
-func normalizePlanTierSlug(tier string) string {
+// NormalizePlanTierSlug maps historical plan slugs onto the current catalog
+// slugs. Keep this as the shared normalizer for billing and backfills so legacy
+// records do not drift from the runtime plan catalog.
+func NormalizePlanTierSlug(tier string) string {
 	switch strings.ToLower(strings.TrimSpace(tier)) {
 	case "standard":
 		return "free"

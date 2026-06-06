@@ -6,6 +6,7 @@ import { getStoredAccessToken } from "@/lib/auth";
 import {
   downloadRevenueRecordsPDF,
   emailRevenueRecordsToDealer,
+  exportRevenue,
   getRevenueDashboard,
   getRevenueTimeSeries,
   searchRevenueRecords,
@@ -173,10 +174,14 @@ export default function AdminRevenuePage() {
   const [reportLoading, setReportLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
+  const [exportLoading, setExportLoading] = useState<"csv" | "pdf" | null>(
+    null,
+  );
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportNotice, setReportNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const loadData = useCallback(() => {
     setLoading(true);
@@ -211,6 +216,23 @@ export default function AdminRevenuePage() {
     router.refresh();
     loadData();
   }, [router, loadData]);
+
+  const handleExportRevenue = useCallback(async (format: "csv" | "pdf") => {
+    const token = getStoredAccessToken();
+    setExportLoading(format);
+    setExportError(null);
+    try {
+      const blob = await exportRevenue(token, {
+        granularity: "month",
+        format,
+      });
+      downloadBlob(blob, `revenue-export.${format}`);
+    } catch {
+      setExportError(`Failed to export revenue ${format.toUpperCase()}`);
+    } finally {
+      setExportLoading(null);
+    }
+  }, []);
 
   useEffect(() => {
     void Promise.resolve().then(loadData);
@@ -353,14 +375,35 @@ export default function AdminRevenuePage() {
             MRR, ARR, churn, and state-wise revenue breakdown.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleRefresh}
-          className="shrink-0 inline-flex items-center gap-2 rounded-xl bg-surface-container-high px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-surface-container-highest"
-        >
-          Refresh
-        </button>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void handleExportRevenue("csv")}
+            disabled={exportLoading !== null}
+            className="touch-min inline-flex items-center rounded-xl bg-surface-container-high px-4 text-sm font-medium text-text-primary transition-colors hover:bg-surface-container-highest disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {exportLoading === "csv" ? "Exporting..." : "Export CSV"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleExportRevenue("pdf")}
+            disabled={exportLoading !== null}
+            className="touch-min inline-flex items-center rounded-xl bg-surface-container-high px-4 text-sm font-medium text-text-primary transition-colors hover:bg-surface-container-highest disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {exportLoading === "pdf" ? "Exporting..." : "Export PDF"}
+          </button>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            className="touch-min inline-flex items-center rounded-xl bg-surface-container-high px-4 text-sm font-medium text-text-primary transition-colors hover:bg-surface-container-highest"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
+      {exportError && (
+        <p className="text-sm text-feedback-error">{exportError}</p>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard

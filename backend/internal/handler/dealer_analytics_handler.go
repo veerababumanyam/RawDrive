@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
@@ -69,6 +72,75 @@ func (h *DealerAnalyticsHandler) Dashboard(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	respondJSON(w, http.StatusOK, resp)
+}
+
+// EmailAdminStateReportToDealer sends one statewide monthly report to the
+// specific dealer selected by platform staff.
+// POST /api/v1/admin/dealers/reports/statewide/email
+func (h *DealerAnalyticsHandler) EmailAdminStateReportToDealer(w http.ResponseWriter, r *http.Request) {
+	if h.svc == nil {
+		http.Error(w, `{"error":"dealer analytics unavailable"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	now := time.Now().UTC()
+	body := struct {
+		DealerID          string  `json:"dealer_id"`
+		Year              int     `json:"year"`
+		Month             int     `json:"month"`
+		CommissionRatePct float64 `json:"commission_rate_pct"`
+	}{
+		Year:              now.Year(),
+		Month:             int(now.Month()),
+		CommissionRatePct: service.DefaultDealerReportCommissionRatePct,
+	}
+	if r.Body != nil {
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&body); err != nil {
+			http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+			return
+		}
+	}
+	dealerID, err := uuid.Parse(body.DealerID)
+	if err != nil {
+		http.Error(w, `{"error":"invalid dealer_id"}`, http.StatusBadRequest)
+		return
+	}
+	if body.Year < 2000 {
+		http.Error(w, `{"error":"invalid year"}`, http.StatusBadRequest)
+		return
+	}
+	if body.Month < 1 || body.Month > 12 {
+		http.Error(w, `{"error":"invalid month"}`, http.StatusBadRequest)
+		return
+	}
+	if body.CommissionRatePct <= 0 || body.CommissionRatePct > 100 {
+		http.Error(w, `{"error":"invalid commission_rate_pct"}`, http.StatusBadRequest)
+		return
+	}
+
+	resp, err := h.svc.EmailAdminStateReportToDealer(
+		r.Context(),
+		dealerID,
+		body.Year,
+		body.Month,
+		body.CommissionRatePct,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrRevenueReportEmailDisabled):
+			http.Error(w, `{"error":"email is not configured"}`, http.StatusServiceUnavailable)
+		case errors.Is(err, service.ErrRevenueReportDealerMissing):
+			http.Error(w, `{"error":"dealer report not found"}`, http.StatusNotFound)
+		case errors.Is(err, service.ErrRevenueReportDealerNoEmail):
+			http.Error(w, `{"error":"dealer has no email"}`, http.StatusUnprocessableEntity)
+		default:
+			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		}
 		return
 	}
 	respondJSON(w, http.StatusOK, resp)

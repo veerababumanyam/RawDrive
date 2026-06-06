@@ -71,6 +71,14 @@ func (h *DealerHandler) List(w http.ResponseWriter, r *http.Request) {
 			filter.Limit = limit
 		}
 	}
+	if stateIDStr := q.Get("state_id"); stateIDStr != "" {
+		stateID, err := strconv.Atoi(stateIDStr)
+		if err != nil || stateID <= 0 {
+			http.Error(w, `{"error":"invalid state_id"}`, http.StatusBadRequest)
+			return
+		}
+		filter.StateID = &stateID
+	}
 	dealers, err := h.svc.ListDealers(r.Context(), filter)
 	if err != nil {
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)

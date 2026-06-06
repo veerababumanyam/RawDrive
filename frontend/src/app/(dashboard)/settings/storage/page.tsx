@@ -11,6 +11,7 @@ import {
   Zap,
   type LucideIcon,
 } from "@/components/icons";
+import { usePlanCatalog } from "@/hooks/use-plan-catalog";
 import { getStoredAccessToken } from "@/lib/auth";
 import {
   SettingsPageHeader,
@@ -63,6 +64,11 @@ function formatBytes(bytes: number): string {
   const units = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+}
+
+function productQuotaBytes(metadata: Record<string, unknown> | undefined) {
+  const value = metadata?.quota_bytes;
+  return typeof value === "number" ? value : 0;
 }
 
 function planTierLabel(tier: PlanTier | null): string {
@@ -131,6 +137,7 @@ export default function StorageSettingsPage() {
 
   const [analytics, setAnalytics] = useState<StorageAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
+  const { storageBoosters } = usePlanCatalog();
 
   useEffect(() => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -321,6 +328,40 @@ export default function StorageSettingsPage() {
             Your workspace stays on managed Backblaze B2 storage. Elite Studio
             workspaces can add bring-your-own-storage overrides.
           </p>
+        </SettingsPanel>
+      )}
+
+      {storageBoosters.length > 0 && (
+        <SettingsPanel
+          title="Storage Boosters"
+          description="Add recurring storage without changing your subscription tier."
+          icon={<Cloud />}
+        >
+          <div className="settings-form-grid">
+            {storageBoosters.map((product) => (
+              <div key={product.code} className="settings-storage-row">
+                <div className="settings-storage-row__meta">
+                  <span className="settings-storage-row__name">
+                    {product.name}
+                  </span>
+                  <span>
+                    ₹{Math.round(product.price_paise / 100).toLocaleString("en-IN")}
+                    /mo
+                  </span>
+                </div>
+                <p className="settings-panel-copy">
+                  {formatBytes(productQuotaBytes(product.metadata))} extra
+                  storage · safe reduction at expiry
+                </p>
+                <Link
+                  href={`/settings/plans/choose-payment?product_code=${encodeURIComponent(product.code)}&target_type=workspace`}
+                  className="glass-button glass-button--sm glass-button--surface"
+                >
+                  Add Storage
+                </Link>
+              </div>
+            ))}
+          </div>
         </SettingsPanel>
       )}
 

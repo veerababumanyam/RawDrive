@@ -304,6 +304,7 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 
 		r.Get("/api/v1/workspace/subscription/payment-providers", deps.SubscriptionUpgradeHandler.PaymentProviders)
 		r.Post("/api/v1/workspace/subscription/upgrade", deps.SubscriptionUpgradeHandler.Upgrade)
+		r.Post("/api/v1/workspace/billing/orders", deps.SubscriptionUpgradeHandler.CreateBillingOrder)
 		// 2026-05-18: interactive payment verification — the Razorpay
 		// Checkout `handler` callback POSTs the payment_id/order_id/
 		// signature triple here, the server HMAC-verifies it, applies
@@ -312,6 +313,7 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 		// immediately. Required for localhost dev where Razorpay servers
 		// can't reach the webhook URL.
 		r.Post("/api/v1/workspace/subscription/verify", deps.SubscriptionUpgradeHandler.Verify)
+		r.Post("/api/v1/workspace/billing/orders/verify", deps.SubscriptionUpgradeHandler.VerifyBillingOrder)
 	}
 
 	// M14: Download routes
@@ -597,6 +599,8 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 	// verified inside the handlers).
 	r.Post("/api/v1/webhooks/razorpay/subscription", deps.SubscriptionUpgradeHandler.Webhook)
 	r.Post("/api/v1/webhooks/phonepe/subscription", deps.SubscriptionUpgradeHandler.PhonePeWebhook)
+	r.Post("/api/v1/webhooks/razorpay/billing", deps.SubscriptionUpgradeHandler.RazorpayBillingWebhook)
+	r.Post("/api/v1/webhooks/phonepe/billing", deps.SubscriptionUpgradeHandler.PhonePeBillingWebhook)
 }
 
 // aliasGalleryPINKey bridges the public gallery verify-pin route (segment

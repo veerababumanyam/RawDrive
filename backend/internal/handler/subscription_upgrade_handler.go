@@ -15,6 +15,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -25,6 +26,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -316,6 +318,50 @@ func (h *SubscriptionUpgradeHandler) planQuotaBytes(ctx context.Context, tier st
 	return quota
 }
 
+func (h *SubscriptionUpgradeHandler) subscriptionOrderSnapshot(ctx context.Context, tier, billingInterval string, amountPaise int64, orderType string) (*uuid.UUID, []byte, error) {
+	pricingCatalog := service.NewPricingCatalogService(h.db)
+	versionID, plan, ok, err := pricingCatalog.CurrentPlanVersion(ctx, tier, time.Now().UTC())
+	if err != nil {
+		return nil, nil, err
+	}
+	if !ok {
+		return nil, nil, service.ErrPlanNotFound
+	}
+	snapshot, err := json.Marshal(map[string]any{
+		"snapshot_schema": "subscription_checkout_snapshot.v1",
+		"source":          "subscription_checkout",
+		"order_type":      orderType,
+		"billing": map[string]any{
+			"amount_paise":     amountPaise,
+			"billing_interval": billingInterval,
+			"currency":         plan.Currency,
+		},
+		"plan": map[string]any{
+			"version_id":          versionID.String(),
+			"tier":                plan.Tier,
+			"name":                plan.Name,
+			"description":         plan.Description,
+			"currency":            plan.Currency,
+			"monthly_price_paise": plan.MonthlyPricePaise,
+			"annual_price_paise":  plan.AnnualPricePaise,
+			"quota_bytes":         plan.QuotaBytes,
+			"gallery_limit":       plan.GalleryLimit,
+			"client_limit":        plan.ClientLimit,
+			"features":            plan.Features,
+			"popular":             plan.Popular,
+			"paid":                plan.Paid,
+			"active":              plan.Active,
+			"self_serve":          plan.SelfServe,
+			"trial_days":          plan.TrialDays,
+			"rank":                plan.Rank,
+		},
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return &versionID, snapshot, nil
+}
+
 func (h *SubscriptionUpgradeHandler) configured() bool {
 	return h.currentPaymentConfig(context.Background()).razorpayConfigured()
 }
@@ -460,13 +506,22 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "plan catalog unavailable"})
 		return
 	}
-	if !strictUpgrade {
+	orderType := "subscription_upgrade"
+	if service.NormalizePlanTierSlug(fromTier) == service.NormalizePlanTierSlug(body.ToTier) {
+		orderType = "subscription_renewal"
+	} else if !strictUpgrade {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "target tier must be higher than current tier"})
 		return
 	}
 
 	upgradeOrderID := uuid.New()
 	userID := userIDFromSubscriptionCtx(r)
+	planVersionID, catalogSnapshot, err := h.subscriptionOrderSnapshot(r.Context(), body.ToTier, billingInterval, amountPaise, orderType)
+	if err != nil {
+		log.Printf("subscription upgrade: catalog snapshot failed: %v", err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "plan catalog unavailable"})
+		return
+	}
 
 	if provider == "phonepe" {
 		if strings.TrimSpace(cfg.publicBaseURL) == "" {
@@ -505,10 +560,11 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 		_, err = h.db.Exec(r.Context(), `
 			INSERT INTO subscription_upgrade_orders
 			    (id, workspace_id, from_tier, to_tier, amount_paise,
-			     provider, provider_order_id, initiated_by, billing_interval)
-			VALUES ($1, $2, $3, $4, $5, 'phonepe', $6, $7, $8)`,
+			     provider, provider_order_id, initiated_by, billing_interval,
+			     plan_version_id, catalog_snapshot, order_type)
+			VALUES ($1, $2, $3, $4, $5, 'phonepe', $6, $7, $8, $9, $10::jsonb, $11)`,
 			upgradeOrderID, wsID, fromTier, body.ToTier, amountPaise,
-			upgradeOrderID.String(), userID, billingInterval,
+			upgradeOrderID.String(), userID, billingInterval, planVersionID, catalogSnapshot, orderType,
 		)
 		if err != nil {
 			log.Printf("subscription upgrade: persist phonepe order failed: %v", err)
@@ -535,9 +591,11 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 	_, err = h.db.Exec(r.Context(), `
 		INSERT INTO subscription_upgrade_orders
 		    (id, workspace_id, from_tier, to_tier, amount_paise,
-		     razorpay_order_id, provider, provider_order_id, initiated_by, billing_interval)
-		VALUES ($1, $2, $3, $4, $5, $6, 'razorpay', $6, $7, $8)`,
-		upgradeOrderID, wsID, fromTier, body.ToTier, amountPaise, rzpOrderID, userID, billingInterval,
+		     razorpay_order_id, provider, provider_order_id, initiated_by, billing_interval,
+		     plan_version_id, catalog_snapshot, order_type)
+		VALUES ($1, $2, $3, $4, $5, $6, 'razorpay', $6, $7, $8, $9, $10::jsonb, $11)`,
+		upgradeOrderID, wsID, fromTier, body.ToTier, amountPaise, rzpOrderID, userID,
+		billingInterval, planVersionID, catalogSnapshot, orderType,
 	)
 	if err != nil {
 		log.Printf("subscription upgrade: persist razorpay order failed: %v", err)
@@ -802,55 +860,210 @@ func (h *SubscriptionUpgradeHandler) applyPhonePePayment(ctx context.Context, me
 	var toTier string
 	var amountPaise int64
 	var billingIntervalPP string
+	var upgradeOrderID uuid.UUID
+	var planVersionID uuid.UUID
+	var catalogSnapshot []byte
+	var orderType string
 	err = tx.QueryRow(ctx, `
 		UPDATE subscription_upgrade_orders
 		   SET status = 'paid', provider_payment_id = $1, updated_at = NOW()
 		 WHERE id::text = $2 AND provider = 'phonepe' AND status IN ('pending', 'failed')
-		RETURNING workspace_id, to_tier, amount_paise, COALESCE(billing_interval, 'monthly')`,
+		RETURNING id, workspace_id, to_tier, amount_paise, COALESCE(billing_interval, 'monthly'),
+		          COALESCE(plan_version_id, '00000000-0000-0000-0000-000000000000'::uuid),
+		          COALESCE(catalog_snapshot, '{}'::jsonb),
+		          COALESCE(order_type, 'subscription_upgrade')`,
 		transactionID, merchantOrderID,
-	).Scan(&wsID, &toTier, &amountPaise, &billingIntervalPP)
+	).Scan(&upgradeOrderID, &wsID, &toTier, &amountPaise, &billingIntervalPP, &planVersionID, &catalogSnapshot, &orderType)
 	if err != nil {
 		// Already settled (idempotent) or no matching pending row.
 		return tx.Commit(ctx)
 	}
 
+	now := time.Now().UTC()
+	expiresAtPP, err := h.settlePaidSubscriptionOrder(ctx, tx, wsID, toTier, amountPaise, billingIntervalPP, orderType, now, planVersionID, catalogSnapshot)
+	if err != nil {
+		return err
+	}
+	if err := h.scheduleSubscriptionLifecycleJobs(ctx, tx, upgradeOrderID, wsID, billingIntervalPP, expiresAtPP); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	h.invalidateStorageAnalytics(wsID)
+	return nil
+}
+
+func (h *SubscriptionUpgradeHandler) settlePaidSubscriptionOrder(ctx context.Context, tx pgx.Tx, wsID uuid.UUID, toTier string, amountPaise int64, billingInterval string, orderType string, now time.Time, planVersionID uuid.UUID, catalogSnapshot []byte) (time.Time, error) {
+	expiresAt := addBillingInterval(now, billingInterval)
+	if err := cancelPendingWorkspaceLifecycleJobs(ctx, tx, wsID); err != nil {
+		return time.Time{}, fmt.Errorf("cancel stale lifecycle jobs: %w", err)
+	}
+	if orderType == "subscription_renewal" {
+		err := tx.QueryRow(ctx, `
+			UPDATE subscriptions
+			   SET amount_paisa = $2,
+			       expires_at = CASE
+			           WHEN expires_at IS NOT NULL AND expires_at > $3
+			           THEN CASE WHEN $4 = 'annual' THEN expires_at + INTERVAL '1 year' ELSE expires_at + INTERVAL '1 month' END
+			           ELSE $5
+			       END,
+			       billing_interval = $4,
+			       plan_version_id = NULLIF($6::uuid, '00000000-0000-0000-0000-000000000000'::uuid),
+			       catalog_snapshot = $7::jsonb,
+			       updated_at = NOW()
+			 WHERE workspace_id = $1 AND status = 'active'
+			RETURNING expires_at`,
+			wsID, amountPaise, now, billingInterval, expiresAt, planVersionID, catalogSnapshot,
+		).Scan(&expiresAt)
+		if errors.Is(err, pgx.ErrNoRows) {
+			_, err = tx.Exec(ctx, `
+				INSERT INTO subscriptions
+				    (workspace_id, tier_slug, amount_paisa, status, started_at, expires_at,
+				     billing_interval, plan_version_id, catalog_snapshot)
+				VALUES ($1, $2, $3, 'active', $4, $5, $6,
+				        NULLIF($7::uuid, '00000000-0000-0000-0000-000000000000'::uuid), $8::jsonb)`,
+				wsID, toTier, amountPaise, now, expiresAt, billingInterval, planVersionID, catalogSnapshot,
+			)
+		}
+		if err != nil {
+			return time.Time{}, fmt.Errorf("renew subscription: %w", err)
+		}
+		return expiresAt, nil
+	}
+
 	if _, err := tx.Exec(ctx,
 		`UPDATE workspaces SET plan_tier = $1 WHERE id = $2`, toTier, wsID,
 	); err != nil {
-		return fmt.Errorf("update plan_tier: %w", err)
+		return time.Time{}, fmt.Errorf("update plan_tier: %w", err)
 	}
-	// Sync storage quota to the new plan tier.
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes)
 		 VALUES ($1, 0, 0, $2)
 		 ON CONFLICT (workspace_id) DO UPDATE SET quota_bytes = $2`,
 		wsID, h.planQuotaBytes(ctx, toTier),
 	); err != nil {
-		return fmt.Errorf("update storage quota: %w", err)
+		return time.Time{}, fmt.Errorf("update storage quota: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
 		UPDATE subscriptions SET status = 'churned', cancelled_at = NOW()
 		 WHERE workspace_id = $1 AND status = 'active'`, wsID,
 	); err != nil {
-		return fmt.Errorf("deactivate old subscription: %w", err)
-	}
-	now := time.Now().UTC()
-	expiresAtPP := now.AddDate(0, 1, 0)
-	if billingIntervalPP == "annual" {
-		expiresAtPP = now.AddDate(1, 0, 0)
+		return time.Time{}, fmt.Errorf("deactivate old subscription: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO subscriptions
-		    (workspace_id, tier_slug, amount_paisa, status, started_at, expires_at, billing_interval)
-		VALUES ($1, $2, $3, 'active', $4, $5, $6)`,
-		wsID, toTier, amountPaise, now, expiresAtPP, billingIntervalPP,
+		    (workspace_id, tier_slug, amount_paisa, status, started_at, expires_at,
+		     billing_interval, plan_version_id, catalog_snapshot)
+		VALUES ($1, $2, $3, 'active', $4, $5, $6,
+		        NULLIF($7::uuid, '00000000-0000-0000-0000-000000000000'::uuid), $8::jsonb)`,
+		wsID, toTier, amountPaise, now, expiresAt, billingInterval, planVersionID, catalogSnapshot,
 	); err != nil {
-		return fmt.Errorf("insert subscription: %w", err)
+		return time.Time{}, fmt.Errorf("insert subscription: %w", err)
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return err
+	return expiresAt, nil
+}
+
+func addBillingInterval(from time.Time, billingInterval string) time.Time {
+	if billingInterval == "annual" {
+		return from.AddDate(1, 0, 0)
 	}
-	h.invalidateStorageAnalytics(wsID)
+	return from.AddDate(0, 1, 0)
+}
+
+func (h *SubscriptionUpgradeHandler) scheduleSubscriptionLifecycleJobs(ctx context.Context, tx pgx.Tx, orderID uuid.UUID, wsID uuid.UUID, billingInterval string, expiresAt time.Time) error {
+	policyCode := "subscription_monthly_default"
+	if billingInterval == "annual" {
+		policyCode = "subscription_annual_default"
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO billing_lifecycle_jobs (
+			policy_code, job_type, target_type, target_id,
+			workspace_id, due_at, proof_snapshot, metadata
+		) VALUES (
+			$1, 'payment_success', 'billing_order', $2,
+			$3, NOW(), jsonb_build_object('billing_order_id', $2::text),
+			jsonb_build_object('source', 'subscription_payment_settlement')
+		)
+	`, policyCode, orderID, wsID); err != nil {
+		return fmt.Errorf("schedule payment success lifecycle job: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO billing_lifecycle_jobs (
+			policy_code, job_type, target_type, target_id,
+			workspace_id, due_at, proof_snapshot, metadata
+		)
+		SELECT p.code, 'renewal_reminder', 'workspace', $2, $3,
+		       $4 - (days * INTERVAL '1 day'),
+		       jsonb_build_object('workspace_id', $3::text, 'expires_at', $4::text, 'days_before', days),
+		       jsonb_build_object('source', 'subscription_payment_settlement')
+		  FROM billing_lifecycle_policies p
+		  CROSS JOIN LATERAL unnest(p.renewal_reminder_days) AS days
+		 WHERE p.code = $1
+		   AND $4 - (days * INTERVAL '1 day') > NOW()
+	`, policyCode, wsID, wsID, expiresAt); err != nil {
+		return fmt.Errorf("schedule renewal reminders: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO billing_lifecycle_jobs (
+			policy_code, job_type, target_type, target_id,
+			workspace_id, due_at, proof_snapshot, metadata
+		)
+		SELECT p.code, 'expiry_warning', 'workspace', $2, $3,
+		       $4 - (days * INTERVAL '1 day'),
+		       jsonb_build_object('workspace_id', $3::text, 'expires_at', $4::text, 'days_before', days),
+		       jsonb_build_object('source', 'subscription_payment_settlement')
+		  FROM billing_lifecycle_policies p
+		  CROSS JOIN LATERAL unnest(p.expiry_warning_days) AS days
+		 WHERE p.code = $1
+		   AND $4 - (days * INTERVAL '1 day') > NOW()
+	`, policyCode, wsID, wsID, expiresAt); err != nil {
+		return fmt.Errorf("schedule expiry warnings: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO billing_lifecycle_jobs (
+			policy_code, job_type, target_type, target_id,
+			workspace_id, due_at, proof_snapshot, metadata
+		)
+		SELECT p.code, 'deletion_warning', 'workspace', $2, $3,
+		       ($4 + (p.account_delete_grace_days * INTERVAL '1 day')) - (days * INTERVAL '1 day'),
+		       jsonb_build_object('workspace_id', $3::text, 'expires_at', $4::text, 'days_before_delete', days),
+		       jsonb_build_object('source', 'subscription_payment_settlement')
+		  FROM billing_lifecycle_policies p
+		  CROSS JOIN LATERAL unnest(p.deletion_warning_days) AS days
+		 WHERE p.code = $1
+		   AND ($4 + (p.account_delete_grace_days * INTERVAL '1 day')) - (days * INTERVAL '1 day') > NOW()
+	`, policyCode, wsID, wsID, expiresAt); err != nil {
+		return fmt.Errorf("schedule deletion warnings: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO billing_lifecycle_jobs (
+			policy_code, job_type, target_type, target_id,
+			workspace_id, due_at, proof_snapshot, metadata
+		)
+		SELECT p.code, 'gallery_delete', 'workspace', $2, $3,
+		       $4 + (p.gallery_delete_grace_days * INTERVAL '1 day'),
+		       jsonb_build_object('workspace_id', $3::text, 'expires_at', $4::text, 'gallery_delete_grace_days', p.gallery_delete_grace_days),
+		       jsonb_build_object('source', 'subscription_payment_settlement')
+		  FROM billing_lifecycle_policies p
+		 WHERE p.code = $1
+	`, policyCode, wsID, wsID, expiresAt); err != nil {
+		return fmt.Errorf("schedule gallery delete job: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO billing_lifecycle_jobs (
+			policy_code, job_type, target_type, target_id,
+			workspace_id, due_at, proof_snapshot, metadata
+		)
+		SELECT p.code, 'account_delete', 'workspace', $2, $3,
+		       $4 + (p.account_delete_grace_days * INTERVAL '1 day'),
+		       jsonb_build_object('workspace_id', $3::text, 'expires_at', $4::text, 'account_delete_grace_days', p.account_delete_grace_days),
+		       jsonb_build_object('source', 'subscription_payment_settlement')
+		  FROM billing_lifecycle_policies p
+		 WHERE p.code = $1
+	`, policyCode, wsID, wsID, expiresAt); err != nil {
+		return fmt.Errorf("schedule account delete job: %w", err)
+	}
 	return nil
 }
 
@@ -1088,57 +1301,31 @@ func (h *SubscriptionUpgradeHandler) applyPayment(ctx context.Context, rzpOrderI
 	var toTier string
 	var amountPaise int64
 	var billingIntervalApply string
+	var planVersionID uuid.UUID
+	var catalogSnapshot []byte
+	var orderType string
 	err = tx.QueryRow(ctx, `
 		UPDATE subscription_upgrade_orders
 		   SET status = 'paid', razorpay_payment_id = $1, updated_at = NOW()
 		 WHERE razorpay_order_id = $2 AND status = 'pending'
-		RETURNING id, workspace_id, to_tier, amount_paise, COALESCE(billing_interval, 'monthly')`,
+		RETURNING id, workspace_id, to_tier, amount_paise, COALESCE(billing_interval, 'monthly'),
+		          COALESCE(plan_version_id, '00000000-0000-0000-0000-000000000000'::uuid),
+		          COALESCE(catalog_snapshot, '{}'::jsonb),
+		          COALESCE(order_type, 'subscription_upgrade')`,
 		rzpPaymentID, rzpOrderID,
-	).Scan(&upgradeOrderID, &wsID, &toTier, &amountPaise, &billingIntervalApply)
+	).Scan(&upgradeOrderID, &wsID, &toTier, &amountPaise, &billingIntervalApply, &planVersionID, &catalogSnapshot, &orderType)
 	if err != nil {
 		// Already processed (idempotent) or unknown order — treat as OK.
 		return tx.Commit(ctx)
 	}
 
-	// Update workspace plan tier.
-	if _, err := tx.Exec(ctx,
-		`UPDATE workspaces SET plan_tier = $1 WHERE id = $2`, toTier, wsID,
-	); err != nil {
-		return fmt.Errorf("update plan_tier: %w", err)
-	}
-
-	// Sync storage quota to the new plan tier.
-	if _, err := tx.Exec(ctx,
-		`INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes)
-		 VALUES ($1, 0, 0, $2)
-		 ON CONFLICT (workspace_id) DO UPDATE SET quota_bytes = $2`,
-		wsID, h.planQuotaBytes(ctx, toTier),
-	); err != nil {
-		return fmt.Errorf("update storage quota: %w", err)
-	}
-
-	// Deactivate any existing active subscription row for this workspace.
-	if _, err := tx.Exec(ctx, `
-		UPDATE subscriptions SET status = 'churned', cancelled_at = NOW()
-		 WHERE workspace_id = $1 AND status = 'active'`, wsID,
-	); err != nil {
-		return fmt.Errorf("deactivate old subscription: %w", err)
-	}
-
-	// Insert new active subscription record. Expiry is 1 year for annual
-	// billing, 1 month for monthly.
 	now := time.Now().UTC()
-	expiresAt := now.AddDate(0, 1, 0)
-	if billingIntervalApply == "annual" {
-		expiresAt = now.AddDate(1, 0, 0)
+	expiresAt, err := h.settlePaidSubscriptionOrder(ctx, tx, wsID, toTier, amountPaise, billingIntervalApply, orderType, now, planVersionID, catalogSnapshot)
+	if err != nil {
+		return err
 	}
-	if _, err := tx.Exec(ctx, `
-		INSERT INTO subscriptions
-		    (workspace_id, tier_slug, amount_paisa, status, started_at, expires_at, billing_interval)
-		VALUES ($1, $2, $3, 'active', $4, $5, $6)`,
-		wsID, toTier, amountPaise, now, expiresAt, billingIntervalApply,
-	); err != nil {
-		return fmt.Errorf("insert subscription: %w", err)
+	if err := h.scheduleSubscriptionLifecycleJobs(ctx, tx, upgradeOrderID, wsID, billingIntervalApply, expiresAt); err != nil {
+		return err
 	}
 
 	if err := tx.Commit(ctx); err != nil {

@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -109,10 +111,24 @@ type DealerDashboardResponse struct {
 type DealerAnalyticsService struct {
 	analyticsRepo *repository.DealerAnalyticsRepo
 	dealerRepo    *repository.DealerRepo
+	pdf           *PDFService
+	reportEmail   RevenueReportEmailSender
 }
 
 func NewDealerAnalyticsService(analyticsRepo *repository.DealerAnalyticsRepo, dealerRepo *repository.DealerRepo) *DealerAnalyticsService {
-	return &DealerAnalyticsService{analyticsRepo: analyticsRepo, dealerRepo: dealerRepo}
+	return &DealerAnalyticsService{analyticsRepo: analyticsRepo, dealerRepo: dealerRepo, pdf: NewPDFService()}
+}
+
+func (s *DealerAnalyticsService) WithPDFService(pdf *PDFService) *DealerAnalyticsService {
+	if pdf != nil {
+		s.pdf = pdf
+	}
+	return s
+}
+
+func (s *DealerAnalyticsService) WithReportEmailSender(sender RevenueReportEmailSender) *DealerAnalyticsService {
+	s.reportEmail = sender
+	return s
 }
 
 // RevenueCalendarResponse wraps per-day revenue shares for a calendar month.
@@ -134,6 +150,12 @@ type AdminDealerStateReportsResponse struct {
 	TotalSubscriptionPaisa         int64                               `json:"total_subscription_paisa"`
 	TotalProjectedDealerSharePaisa int64                               `json:"total_projected_dealer_share_paisa"`
 	Reports                        []repository.AdminDealerStateReport `json:"reports"`
+}
+
+type AdminDealerStateReportEmailResponse struct {
+	SentTo       string `json:"sent_to"`
+	DealerID     string `json:"dealer_id"`
+	BusinessName string `json:"business_name"`
 }
 
 // GetStatePhotographers returns all photographers registered in the same state as the dealer.
@@ -198,11 +220,7 @@ func (s *DealerAnalyticsService) GetAdminStateReports(ctx context.Context, year,
 		reports = []repository.AdminDealerStateReport{}
 	}
 
-	var totalSubscription, totalDealerShare int64
-	for _, report := range reports {
-		totalSubscription += report.TotalSubscriptionPaisa
-		totalDealerShare += report.DealerSharePaisa
-	}
+	totalSubscription, totalDealerShare := summarizeAdminStateReportTotals(reports)
 
 	return &AdminDealerStateReportsResponse{
 		Year:                           year,
@@ -214,6 +232,107 @@ func (s *DealerAnalyticsService) GetAdminStateReports(ctx context.Context, year,
 		TotalProjectedDealerSharePaisa: totalDealerShare,
 		Reports:                        reports,
 	}, nil
+}
+
+func (s *DealerAnalyticsService) EmailAdminStateReportToDealer(ctx context.Context, dealerID uuid.UUID, year, month int, fallbackCommissionRatePct float64) (*AdminDealerStateReportEmailResponse, error) {
+	if s.reportEmail == nil {
+		return nil, ErrRevenueReportEmailDisabled
+	}
+	reportSet, err := s.GetAdminStateReports(ctx, year, month, fallbackCommissionRatePct)
+	if err != nil {
+		return nil, err
+	}
+
+	var selected *repository.AdminDealerStateReport
+	for i := range reportSet.Reports {
+		if reportSet.Reports[i].DealerID == dealerID {
+			selected = &reportSet.Reports[i]
+			break
+		}
+	}
+	if selected == nil {
+		return nil, ErrRevenueReportDealerMissing
+	}
+	if strings.TrimSpace(selected.Email) == "" {
+		return nil, ErrRevenueReportDealerNoEmail
+	}
+
+	scope := fmt.Sprintf("%s - %04d-%02d", selected.StateName, reportSet.Year, reportSet.Month)
+	subject := "RawDrive dealer revenue report - " + scope
+	body := buildAdminDealerStateReportText(reportSet, *selected)
+	if sender, ok := s.reportEmail.(RevenueReportAttachmentEmailSender); ok {
+		renderer := s.pdf
+		if renderer == nil {
+			renderer = NewPDFService()
+		}
+		pdf, err := renderer.RenderText(body)
+		if err != nil {
+			return nil, err
+		}
+		if err := sender.SendWithAttachment(
+			ctx,
+			selected.Email,
+			subject,
+			body,
+			"",
+			adminDealerStateReportPDFName(reportSet, *selected),
+			"application/pdf",
+			pdf,
+		); err != nil {
+			return nil, err
+		}
+	} else if err := s.reportEmail.Send(ctx, selected.Email, subject, body, ""); err != nil {
+		return nil, err
+	}
+
+	return &AdminDealerStateReportEmailResponse{
+		SentTo:       selected.Email,
+		DealerID:     selected.DealerID.String(),
+		BusinessName: selected.BusinessName,
+	}, nil
+}
+
+func summarizeAdminStateReportTotals(reports []repository.AdminDealerStateReport) (totalSubscription, totalDealerShare int64) {
+	seenState := map[int]struct{}{}
+	for _, report := range reports {
+		if _, seen := seenState[report.StateID]; seen {
+			continue
+		}
+		seenState[report.StateID] = struct{}{}
+		totalSubscription += report.TotalSubscriptionPaisa
+		totalDealerShare += report.DealerSharePaisa
+	}
+	return totalSubscription, totalDealerShare
+}
+
+func buildAdminDealerStateReportText(reportSet *AdminDealerStateReportsResponse, report repository.AdminDealerStateReport) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "RawDrive Dealer Revenue Report\n")
+	fmt.Fprintf(&b, "Dealer: %s\n", report.BusinessName)
+	fmt.Fprintf(&b, "Dealer email: %s\n", report.Email)
+	fmt.Fprintf(&b, "State: %s\n", report.StateName)
+	fmt.Fprintf(&b, "Report month: %04d-%02d\n", reportSet.Year, reportSet.Month)
+	fmt.Fprintf(&b, "Period: %s to %s\n\n",
+		reportSet.PeriodStart.Format(time.RFC3339),
+		reportSet.PeriodEnd.Format(time.RFC3339),
+	)
+	fmt.Fprintf(&b, "Status: %s\n", report.Status)
+	fmt.Fprintf(&b, "Territory: %s\n", report.TerritoryType)
+	fmt.Fprintf(&b, "Commission rate: %.2f%%\n", report.CommissionRatePct)
+	fmt.Fprintf(&b, "State revenue: %s\n", formatReportINR(report.TotalSubscriptionPaisa))
+	fmt.Fprintf(&b, "Subscribers: %d\n", report.SubscriberCount)
+	fmt.Fprintf(&b, "Projected dealer share: %s\n", formatReportINR(report.DealerSharePaisa))
+	fmt.Fprintf(&b, "\nThis report is generated from active, paid subscriptions attributed to the dealer's state for the selected month.\n")
+	return b.String()
+}
+
+func adminDealerStateReportPDFName(reportSet *AdminDealerStateReportsResponse, report repository.AdminDealerStateReport) string {
+	return fmt.Sprintf(
+		"dealer-revenue-report-%s-%04d-%02d.pdf",
+		revenueReportFilenamePart(report.BusinessName),
+		reportSet.Year,
+		reportSet.Month,
+	)
 }
 
 // GetDashboard returns dealer dashboard metrics for the given period. Missing

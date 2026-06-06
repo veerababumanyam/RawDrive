@@ -231,3 +231,29 @@ func RegisterPlanCatalogRoutes(r chi.Router, catalog planCatalogService) {
 	h := NewPublicPlansHandler(catalog)
 	r.Get("/api/v1/plans", h.List)
 }
+
+type PricingCatalogHandler struct {
+	catalog *service.PricingCatalogService
+}
+
+func NewPricingCatalogHandler(catalog *service.PricingCatalogService) *PricingCatalogHandler {
+	return &PricingCatalogHandler{catalog: catalog}
+}
+
+func (h *PricingCatalogHandler) PublicCatalog(w http.ResponseWriter, r *http.Request) {
+	if h.catalog == nil {
+		respondJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "pricing catalog unavailable"})
+		return
+	}
+	catalog, err := h.catalog.PublicCatalog(r.Context())
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "list pricing catalog failed"})
+		return
+	}
+	respondJSON(w, http.StatusOK, catalog)
+}
+
+func RegisterPricingCatalogRoutes(r chi.Router, catalog *service.PricingCatalogService) {
+	h := NewPricingCatalogHandler(catalog)
+	r.Get("/api/v1/pricing-catalog", h.PublicCatalog)
+}

@@ -25,6 +25,7 @@ type M6Dependencies struct {
 	DealerAnalytics   *service.DealerAnalyticsService
 	AuditLogSvc       *service.AuditLogService
 	CredentialsSender service.DealerCredentialsSender // optional email sender
+	ReportEmailSender service.RevenueReportEmailSender
 	FrontendURL       string
 }
 
@@ -37,6 +38,9 @@ func RegisterM6Routes(r chi.Router, deps M6Dependencies) {
 	couponValidationSvc := service.NewCouponValidationService(deps.CouponRepo)
 
 	dealerHandler := NewDealerHandler(dealerSvc).WithAuditLog(deps.AuditLogSvc)
+	if deps.DealerAnalytics != nil {
+		deps.DealerAnalytics.WithReportEmailSender(deps.ReportEmailSender)
+	}
 	analyticsHandler := NewDealerAnalyticsHandler(deps.DealerAnalytics, deps.DealerRepo)
 	marginHandler := NewMarginHandler(marginSvc)
 	couponHandler := NewCouponHandler(deps.CouponRepo)
@@ -51,6 +55,7 @@ func RegisterM6Routes(r chi.Router, deps M6Dependencies) {
 		r.Post("/", dealerHandler.Create)
 		r.Get("/", dealerHandler.List)
 		r.Get("/reports/statewide", analyticsHandler.AdminStateReports)
+		r.Post("/reports/statewide/email", analyticsHandler.EmailAdminStateReportToDealer)
 		r.Put("/{id}/approve", dealerHandler.Approve)
 		r.Put("/{id}/reject", dealerHandler.Reject)
 		r.Put("/{id}/suspend", dealerHandler.Suspend)

@@ -9,6 +9,7 @@ import {
   suspendDealer,
   enableDealer,
   getAdminDealerStateReports,
+  emailAdminDealerStateReport,
   type AdminDealerStateReportsResponse,
   type Dealer,
 } from "@/lib/api/dealer";
@@ -16,6 +17,7 @@ import { getStoredAccessToken } from "@/lib/auth";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { Trash, CheckCircle, XCircle } from "@/components/icons";
 import DealerDeleteConfirmDialog from "@/components/admin/DealerDeleteConfirmDialog";
+import DealerSearchInput from "@/components/admin/DealerSearchInput";
 
 // Public GET /api/v1/states returns a sorted list of Indian states, already
 // used by RegisterForm. We fetch it once and build an id→name map so the
@@ -44,6 +46,8 @@ const formatPaisa = (paisa: number) =>
 export default function DealerAdminReview() {
   const [dealers, setDealers] = useState<Dealer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dealerSearch, setDealerSearch] = useState("");
+  const [dealerSearchLoading, setDealerSearchLoading] = useState(false);
   const [mode, setMode] = useState<ReviewMode>("applications");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [commissionRate, setCommissionRate] = useState(
@@ -55,6 +59,13 @@ export default function DealerAdminReview() {
     useState<AdminDealerStateReportsResponse | null>(null);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportsError, setReportsError] = useState<string | null>(null);
+  const [reportsActionError, setReportsActionError] = useState<string | null>(
+    null,
+  );
+  const [reportsNotice, setReportsNotice] = useState<string | null>(null);
+  const [reportEmailLoading, setReportEmailLoading] = useState<string | null>(
+    null,
+  );
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;
     name: string;
@@ -62,12 +73,25 @@ export default function DealerAdminReview() {
 
   const invalidateReports = () => setReports(null);
 
-  useEffect(() => {
+  const loadDealers = useCallback(async (q = "") => {
     const token = getStoredAccessToken();
-    listDealers(token)
-      .then(setDealers)
-      .catch(() => setDealers([]))
-      .finally(() => setLoading(false));
+    setDealerSearchLoading(true);
+    try {
+      const nextDealers = await listDealers(token, {
+        q: q.trim() || undefined,
+        limit: 100,
+      });
+      setDealers(nextDealers);
+    } catch {
+      setDealers([]);
+    } finally {
+      setLoading(false);
+      setDealerSearchLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void Promise.resolve().then(() => loadDealers(""));
 
     // Build the id→name lookup in parallel. Failing to load the map is
     // non-fatal — we fall back to rendering the numeric id on the card.
@@ -81,7 +105,7 @@ export default function DealerAdminReview() {
       .catch(() => {
         /* keep empty map — card falls back to the raw id */
       });
-  }, []);
+  }, [loadDealers]);
 
   const loadReports = useCallback(async () => {
     const token = getStoredAccessToken();
@@ -92,6 +116,8 @@ export default function DealerAdminReview() {
         commission_rate_pct: DEFAULT_REPORT_COMMISSION_RATE,
       });
       setReports(body);
+      setReportsNotice(null);
+      setReportsActionError(null);
     } catch (err) {
       console.error("Dealer reports failed:", err);
       setReportsError("Failed to load dealer reports.");
@@ -100,6 +126,14 @@ export default function DealerAdminReview() {
       setReportsLoading(false);
     }
   }, []);
+
+  const handleDealerSearch = useCallback(
+    (q: string) => {
+      setDealerSearch(q);
+      void loadDealers(q);
+    },
+    [loadDealers],
+  );
 
   const handleModeChange = (nextMode: ReviewMode) => {
     setMode(nextMode);
@@ -183,6 +217,30 @@ export default function DealerAdminReview() {
     }
   };
 
+  const handleEmailStateReport = useCallback(
+    async (dealerId: string) => {
+      if (!reports) return;
+      const token = getStoredAccessToken();
+      setReportEmailLoading(dealerId);
+      setReportsActionError(null);
+      setReportsNotice(null);
+      try {
+        const result = await emailAdminDealerStateReport(token, {
+          dealer_id: dealerId,
+          year: reports.year,
+          month: reports.month,
+          commission_rate_pct: reports.default_commission_rate_pct,
+        });
+        setReportsNotice(`Report emailed to ${result.sent_to}.`);
+      } catch {
+        setReportsActionError("Failed to email dealer report.");
+      } finally {
+        setReportEmailLoading(null);
+      }
+    },
+    [reports],
+  );
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -240,6 +298,17 @@ export default function DealerAdminReview() {
 
       {mode === "applications" ? (
         <>
+          <div className="table-toolbar-panel flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+            <DealerSearchInput
+              defaultValue={dealerSearch}
+              onChange={handleDealerSearch}
+              placeholder="Search dealer name, email, or PAN"
+            />
+            {dealerSearchLoading && (
+              <span className="text-sm text-text-tertiary">Searching...</span>
+            )}
+          </div>
+
           {dealers.map((dealer) => (
             <div key={dealer.id} className="glass-card p-6 space-y-4">
               <div className="flex items-center justify-between">
@@ -398,7 +467,11 @@ export default function DealerAdminReview() {
           reports={reports}
           loading={reportsLoading}
           error={reportsError}
+          actionError={reportsActionError}
+          notice={reportsNotice}
+          emailingDealerId={reportEmailLoading}
           onRefresh={loadReports}
+          onEmailReport={handleEmailStateReport}
         />
       )}
 
@@ -423,12 +496,20 @@ function DealerReportsView({
   reports,
   loading,
   error,
+  actionError,
+  notice,
+  emailingDealerId,
   onRefresh,
+  onEmailReport,
 }: {
   reports: AdminDealerStateReportsResponse | null;
   loading: boolean;
   error: string | null;
+  actionError: string | null;
+  notice: string | null;
+  emailingDealerId: string | null;
   onRefresh: () => Promise<void>;
+  onEmailReport: (dealerId: string) => Promise<void>;
 }) {
   if (loading) {
     return (
@@ -513,6 +594,16 @@ function DealerReportsView({
             Refresh
           </button>
         </div>
+        {notice && (
+          <p className="border-b border-border-subtle px-5 py-3 text-sm text-feedback-success">
+            {notice}
+          </p>
+        )}
+        {actionError && (
+          <p className="border-b border-border-subtle px-5 py-3 text-sm text-feedback-error">
+            {actionError}
+          </p>
+        )}
 
         {rows.length === 0 ? (
           <div className="p-8 text-center text-text-secondary">
@@ -530,6 +621,7 @@ function DealerReportsView({
                   <th className="px-5 py-3 font-semibold">Subscribers</th>
                   <th className="px-5 py-3 font-semibold">Revenue</th>
                   <th className="px-5 py-3 font-semibold">Dealer share</th>
+                  <th className="px-5 py-3 font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-subtle">
@@ -555,6 +647,22 @@ function DealerReportsView({
                     </td>
                     <td className="px-5 py-4 font-semibold text-accent-secondary">
                       {formatPaisa(row.dealer_share_paisa)}
+                    </td>
+                    <td className="px-5 py-4">
+                      <button
+                        type="button"
+                        onClick={() => void onEmailReport(row.dealer_id)}
+                        disabled={
+                          !row.email || emailingDealerId === row.dealer_id
+                        }
+                        className="touch-min rounded-full bg-surface-container-high px-4 text-sm font-medium text-text-primary transition-colors hover:bg-surface-container-highest disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {emailingDealerId === row.dealer_id
+                          ? "Sending..."
+                          : row.email
+                            ? "Email Report"
+                            : "No email"}
+                      </button>
                     </td>
                   </tr>
                 ))}

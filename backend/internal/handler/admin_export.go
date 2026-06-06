@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/rawdrive/backend/internal/repository"
@@ -46,10 +48,36 @@ func (h *AdminExportHandler) ExportRevenue(w http.ResponseWriter, r *http.Reques
 	if granularity == "" {
 		granularity = "day"
 	}
-	filename := fmt.Sprintf("revenue_export_%s.csv", time.Now().Format("20060102_150405"))
+	format := strings.ToLower(strings.TrimSpace(q.Get("format")))
+	if format == "" {
+		format = "csv"
+	}
+	if format != "csv" && format != "pdf" {
+		http.Error(w, `{"error":"format must be csv or pdf"}`, http.StatusBadRequest)
+		return
+	}
+
+	timestamp := time.Now().Format("20060102_150405")
+	if format == "pdf" {
+		pdf, err := h.svc.ExportRevenuePDF(r.Context(), from, to, granularity)
+		if err != nil {
+			http.Error(w, `{"error":"export failed"}`, http.StatusInternalServerError)
+			return
+		}
+		filename := fmt.Sprintf("revenue_export_%s.pdf", timestamp)
+		w.Header().Set("Content-Type", "application/pdf")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+		_, _ = w.Write(pdf)
+		return
+	}
+
+	var buf bytes.Buffer
+	if err := h.svc.ExportRevenueCSV(r.Context(), from, to, granularity, &buf); err != nil {
+		http.Error(w, `{"error":"export failed"}`, http.StatusInternalServerError)
+		return
+	}
+	filename := fmt.Sprintf("revenue_export_%s.csv", timestamp)
 	w.Header().Set("Content-Type", "text/csv")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
-	if err := h.svc.ExportRevenueCSV(r.Context(), from, to, granularity, w); err != nil {
-		http.Error(w, `{"error":"export failed"}`, http.StatusInternalServerError)
-	}
+	_, _ = w.Write(buf.Bytes())
 }

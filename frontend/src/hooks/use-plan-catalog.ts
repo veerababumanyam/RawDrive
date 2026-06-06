@@ -3,23 +3,34 @@
 import { useEffect, useState } from "react";
 import {
   fallbackPlanCatalog,
-  fetchPublicPlans,
+  fetchPricingCatalog,
   type PlanCatalogPlan,
+  type PricingCatalogProduct,
 } from "@/lib/plans";
 
 export function usePlanCatalog() {
   const [plans, setPlans] = useState<PlanCatalogPlan[]>(fallbackPlanCatalog);
+  const [eventPacks, setEventPacks] = useState<PricingCatalogProduct[]>([]);
+  const [galleryExtensions, setGalleryExtensions] = useState<
+    PricingCatalogProduct[]
+  >([]);
+  const [storageBoosters, setStorageBoosters] = useState<
+    PricingCatalogProduct[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    fetchPublicPlans()
+    fetchPricingCatalog()
       .then((data) => {
         if (!active) return;
-        if (data.length > 0) {
-          setPlans(data);
+        if (data.plans.length > 0) {
+          setPlans(data.plans);
         }
+        setEventPacks(data.eventPacks);
+        setGalleryExtensions(data.galleryExtensions);
+        setStorageBoosters(data.storageBoosters);
         setError(null);
       })
       .catch((err) => {
@@ -34,5 +45,12 @@ export function usePlanCatalog() {
     };
   }, []);
 
-  return { plans, loading, error };
+  return {
+    plans,
+    eventPacks,
+    galleryExtensions,
+    storageBoosters,
+    loading,
+    error,
+  };
 }

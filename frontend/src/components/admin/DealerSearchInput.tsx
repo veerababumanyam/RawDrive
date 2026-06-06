@@ -21,8 +21,13 @@ export default function DealerSearchInput({
 }: DealerSearchInputProps) {
   const [value, setValue] = useState(defaultValue);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didMountRef = useRef(false);
 
   useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => onChange(value), debounceMs);
     return () => {
@@ -38,7 +43,7 @@ export default function DealerSearchInput({
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder={placeholder}
-        className="rounded-md border border-border-subtle bg-surface px-3 py-2 w-64"
+        className="input-base min-h-11 w-full text-sm md:w-64"
       />
     </label>
   );
