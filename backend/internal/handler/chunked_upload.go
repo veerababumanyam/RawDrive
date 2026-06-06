@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1092,6 +1093,27 @@ func (h *ChunkedUploadHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// completedPartsFromETags maps persisted part etags to the storage.CompletedPart
+// slice, sorted by PartNumber ascending. S3/R2 CompleteMultipartUpload REQUIRES
+// parts in ascending part-number order; row.R2PartETags is persisted in the order
+// chunks were uploaded, which is NOT ascending when chunks upload concurrently —
+// passing that order straight through is what caused intermittent S3
+// "InvalidPartOrder: The list of parts was not in ascending order" finalize
+// failures. Sorting here makes finalize order-independent.
+func completedPartsFromETags(parts []repository.UploadPartETag) []storage.CompletedPart {
+	completed := make([]storage.CompletedPart, 0, len(parts))
+	for _, p := range parts {
+		completed = append(completed, storage.CompletedPart{
+			PartNumber: int32(p.PartNumber),
+			ETag:       p.ETag,
+		})
+	}
+	sort.Slice(completed, func(i, j int) bool {
+		return completed[i].PartNumber < completed[j].PartNumber
+	})
+	return completed
+}
+
 // finalizeUpload composes the R2 multipart upload, verifies the manifest
 // against the actual uploaded bytes (F-003), persists the scan metadata
 // onto the asset row (F-004), and marks the session complete. It is
@@ -1137,13 +1159,7 @@ func (h *ChunkedUploadHandler) finalizeUpload(
 		return nil, storage.ErrMultipartNotSupported
 	}
 
-	completed := make([]storage.CompletedPart, 0, len(parts))
-	for _, p := range parts {
-		completed = append(completed, storage.CompletedPart{
-			PartNumber: int32(p.PartNumber),
-			ETag:       p.ETag,
-		})
-	}
+	completed := completedPartsFromETags(parts)
 	if err := mpc.CompleteMultipartUpload(ctx, storageKey, mpID, completed); err != nil {
 		return nil, fmt.Errorf("complete multipart: %w", err)
 	}
