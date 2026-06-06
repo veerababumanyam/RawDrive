@@ -96,4 +96,37 @@ describe("indexAssetFacesFromBrowser", () => {
       "/storage/thumb-md.webp",
     );
   });
+
+  it("falls back to the encrypted original when derivative objects are missing", async () => {
+    mockFetch
+      .mockResolvedValueOnce(new Response("missing", { status: 404 }))
+      .mockResolvedValueOnce(
+        new Response(new Blob(["original"], { type: "image/jpeg" })),
+      )
+      .mockResolvedValueOnce(jsonResponse({ stored: 3 }));
+
+    const result = await indexAssetFacesFromBrowser(
+      {
+        id: "asset-3",
+        is_encrypted: false,
+        storage_key: "originals/asset-3/original.jpeg",
+        thumbnail_urls: {
+          display_webp: "derivatives/asset-3/display_webp.webp",
+        },
+      },
+      { galleryId: "gallery-1", token: "owner-token" },
+    );
+
+    expect(result).toEqual({
+      stored: 3,
+      variant: "original",
+      encrypted: false,
+    });
+    expect(String(mockFetch.mock.calls[0][0])).toContain(
+      "/storage/derivatives/asset-3/display_webp.webp",
+    );
+    expect(String(mockFetch.mock.calls[1][0])).toContain(
+      "/storage/originals/asset-3/original.jpeg",
+    );
+  });
 });

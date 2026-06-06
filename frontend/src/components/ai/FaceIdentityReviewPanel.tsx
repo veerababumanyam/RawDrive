@@ -73,7 +73,7 @@ function assetCanBrowserIndexFaces(asset: Asset): boolean {
   return (
     asset.status === "ready" &&
     asset.content_type.toLowerCase().startsWith("image/") &&
-    hasFaceIndexDerivative(asset)
+    (hasFaceIndexDerivative(asset) || Boolean(asset.storage_key || asset.download_url))
   );
 }
 
@@ -468,7 +468,7 @@ export function FaceIdentityReviewPanel({
     if (targets.length === 0) {
       setError(
         assetsById.size > 0
-          ? "No ready WebP derivatives are available for FaceID sync yet."
+          ? "No ready gallery media files are available for FaceID sync yet."
           : "No uploaded gallery photos are available for FaceID sync.",
       );
       return;
@@ -540,14 +540,16 @@ export function FaceIdentityReviewPanel({
           () => worker(),
         ),
       );
+      let finalError = "";
       if (controller.signal.aborted) {
-        setError("FaceID sync stopped before all photos were indexed.");
+        finalError = "FaceID sync stopped before all photos were indexed.";
       } else if (failed > 0) {
         const suffix =
           lastError instanceof Error ? ` ${lastError.message}` : "";
-        setError(`${failed} photos could not be indexed.${suffix}`.trim());
+        finalError = `${failed} photos could not be indexed.${suffix}`.trim();
       }
       await Promise.all([loadIndexStatus(), loadClusters()]);
+      if (finalError) setError(finalError);
     } finally {
       if (faceIndexAbortRef.current === controller) {
         faceIndexAbortRef.current = null;
@@ -584,8 +586,7 @@ export function FaceIdentityReviewPanel({
     [clusters, indexStatus],
   );
   const uploadedPhotoCount = indexStatus?.uploaded_photos ?? assetsById.size;
-  const indexablePhotoCount =
-    indexStatus?.indexable_photos ?? indexableAssets.length;
+  const syncablePhotoCount = indexableAssets.length;
 
   return (
     <section className="surface-panel space-y-4 p-4">
@@ -631,7 +632,7 @@ export function FaceIdentityReviewPanel({
             <button
               type="button"
               onClick={() => void handleSyncNow()}
-              disabled={indexablePhotoCount === 0}
+              disabled={syncablePhotoCount === 0}
               className="surface-button text-xs disabled:opacity-60"
             >
               Sync now
@@ -683,17 +684,17 @@ export function FaceIdentityReviewPanel({
               <button
                 type="button"
                 onClick={() => void handleSyncNow()}
-                disabled={indexRun.running || indexablePhotoCount === 0}
+                disabled={indexRun.running || syncablePhotoCount === 0}
                 className="surface-button text-sm disabled:opacity-60"
               >
                 {indexRun.running ? "Syncing" : "Sync now"}
               </button>
               <span className="text-xs text-text-tertiary">
-                {indexablePhotoCount > 0
-                  ? `${indexablePhotoCount} ready ${
-                      indexablePhotoCount === 1 ? "photo" : "photos"
+                {syncablePhotoCount > 0
+                  ? `${syncablePhotoCount} ready ${
+                      syncablePhotoCount === 1 ? "photo" : "photos"
                     } can be indexed from browser media.`
-                  : "WebP derivatives are still preparing, so FaceID sync is not ready yet."}
+                  : "Gallery media is still preparing, so FaceID sync is not ready yet."}
               </span>
             </div>
           ) : null}

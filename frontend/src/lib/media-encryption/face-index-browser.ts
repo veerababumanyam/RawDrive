@@ -4,8 +4,10 @@ import { uploadAssetFaceIndexImage } from "@/lib/api/ai";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import {
   assetUsesClientMediaEncryption,
+  originalManifest,
   pickAssetMediaCandidates,
   type EncryptedAssetLike,
+  type PickedAssetMedia,
 } from "./asset-media";
 import { decryptBlobWithAvailableMediaKeys } from "./media-key-store";
 
@@ -60,6 +62,22 @@ function canRetryWithSmallerVariant(err: unknown): boolean {
   return message.includes("too large") || message.includes("413");
 }
 
+function pickFaceIndexCandidates(asset: EncryptedAssetLike): PickedAssetMedia[] {
+  const candidates = pickAssetMediaCandidates(asset, FACE_INDEX_BROWSER_VARIANTS);
+  const originalKey = asset.storage_key || asset.download_url;
+  if (!originalKey) return candidates;
+  const alreadyPicked = candidates.some((candidate) => candidate.key === originalKey);
+  if (alreadyPicked) return candidates;
+  return [
+    ...candidates,
+    {
+      variant: "original",
+      key: originalKey,
+      manifest: originalManifest(asset),
+    },
+  ];
+}
+
 export async function indexAssetFacesFromBrowser(
   asset: EncryptedAssetLike,
   opts: {
@@ -70,9 +88,9 @@ export async function indexAssetFacesFromBrowser(
   } = {},
 ): Promise<BrowserFaceIndexResult> {
   if (!asset.id) throw new Error("Face index asset id is required");
-  const candidates = pickAssetMediaCandidates(asset, FACE_INDEX_BROWSER_VARIANTS);
+  const candidates = pickFaceIndexCandidates(asset);
   if (candidates.length === 0) {
-    throw new Error("No WebP media derivative is available for FaceID indexing");
+    throw new Error("No media file is available for FaceID indexing");
   }
 
   const encrypted = assetUsesClientMediaEncryption(asset);

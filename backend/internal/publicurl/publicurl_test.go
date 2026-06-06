@@ -26,6 +26,22 @@ func TestGalleryUsesApexForWww(t *testing.T) {
 	}
 }
 
+func TestGalleryForcesHttpsApexForRawDriveApex(t *testing.T) {
+	got := Gallery("http://rawdrive.in", "davidrajkumar-9734ec4c")
+	want := "https://rawdrive.in/g/davidrajkumar-9734ec4c"
+	if got != want {
+		t.Fatalf("Gallery() = %q, want %q", got, want)
+	}
+}
+
+func TestGalleryDoesNotUseApiRawDriveAsPublicOrigin(t *testing.T) {
+	got := Gallery("https://api.rawdrive.in", "davidrajkumar-9734ec4c")
+	want := "https://rawdrive.in/g/davidrajkumar-9734ec4c"
+	if got != want {
+		t.Fatalf("Gallery() = %q, want %q", got, want)
+	}
+}
+
 func TestGallerySharePreservesShareToken(t *testing.T) {
 	got := GalleryShare("https://app.rawdrive.in", "davidrajkumar-9734ec4c", "31582713cfae684725c70f6ede402a25")
 	want := "https://rawdrive.in/g/davidrajkumar-9734ec4c?share=31582713cfae684725c70f6ede402a25"

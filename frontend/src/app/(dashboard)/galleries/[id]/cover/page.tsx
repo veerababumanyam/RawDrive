@@ -258,6 +258,24 @@ const COVER_COLORS = designComponents.mediaCover.presetColors;
 const COVER_FIELD_CLASS = "input-base w-full text-sm";
 const COVER_RANGE_CLASS = "cover-range-input";
 const COVER_COLOR_CLASS = "cover-color-input";
+const COVER_PREVIEW_UNAVAILABLE =
+  "Preview unavailable. Refresh or regenerate thumbnails.";
+
+function coverPreviewErrorMessage(
+  error: string | null | undefined,
+  fallback = "Preview unavailable",
+): string {
+  if (!error) return fallback;
+  if (
+    error.startsWith("Encrypted media fetch failed:") ||
+    error.startsWith("Media fetch failed:") ||
+    error === "Encrypted media decrypt failed" ||
+    error === "Missing encrypted media manifest"
+  ) {
+    return COVER_PREVIEW_UNAVAILABLE;
+  }
+  return error;
+}
 
 const COVER_PRESETS: Array<{
   id: CoverPresetId;
@@ -3114,7 +3132,7 @@ function CoverTemplateStageSlot({
   const previewStatus = media.loading
     ? "Decrypting cover preview"
     : media.error
-      ? "Cover key needed"
+      ? coverPreviewErrorMessage(media.error, "Cover key needed")
       : asset
         ? "Cover preview unavailable"
         : "Choose a photo for this template slot";
@@ -3707,6 +3725,7 @@ function DecryptedPreviewImage({
   const media = useDecryptedAssetUrl(asset, variants, token);
 
   if (!asset) return null;
+  const previewErrorMessage = coverPreviewErrorMessage(media.error);
 
   if (media.loading) {
     if (fallbackMode === "compact") {
@@ -3749,7 +3768,7 @@ function DecryptedPreviewImage({
       <LockedMediaFallback
         asset={asset}
         error={media.error}
-        message={media.error || "Preview unavailable"}
+        message={previewErrorMessage}
         mode="compact"
         allowRecovery={false}
         className="cover-photo-tile__fallback"
@@ -3761,7 +3780,7 @@ function DecryptedPreviewImage({
     <LockedMediaFallback
       asset={asset}
       error={media.error}
-      message={media.error || "Preview unavailable"}
+      message={previewErrorMessage}
       className="bg-surface-container-high px-2 text-2xs text-on-surface-variant"
     />
   );

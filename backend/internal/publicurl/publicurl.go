@@ -24,7 +24,7 @@ func Base(configured string) string {
 		return base
 	}
 	if host == "rawdrive.in" {
-		return parsed.Scheme + "://" + parsed.Host
+		return DefaultBaseURL
 	}
 	if host == "www.rawdrive.in" {
 		return DefaultBaseURL

@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   uploadAddFiles: vi.fn(),
   uploadCancel: vi.fn(),
   uploadRetry: vi.fn(),
+  useDecryptedAssetUrl: vi.fn(),
 }));
 
 vi.mock("next/link", () => ({
@@ -125,17 +126,7 @@ vi.mock("@/lib/api/assets", () => ({
 }));
 
 vi.mock("@/lib/media-encryption/use-decrypted-asset-url", () => ({
-  useDecryptedAssetUrl: (
-    mediaAsset: Asset | PublicAsset | null | undefined,
-    variants: readonly string[],
-  ) => ({
-    src:
-      variants
-        .map((variant) => mediaAsset?.thumbnail_urls?.[variant])
-        .find(Boolean) || "",
-    loading: false,
-    error: null,
-  }),
+  useDecryptedAssetUrl: mocks.useDecryptedAssetUrl,
 }));
 
 async function renderPage() {
@@ -156,6 +147,19 @@ describe("CoverDesignPage", () => {
       retry: mocks.uploadRetry,
       isPaused: false,
     });
+    mocks.useDecryptedAssetUrl.mockImplementation(
+      (
+        mediaAsset: Asset | PublicAsset | null | undefined,
+        variants: readonly string[],
+      ) => ({
+        src:
+          variants
+            .map((variant) => mediaAsset?.thumbnail_urls?.[variant])
+            .find(Boolean) || "",
+        loading: false,
+        error: null,
+      }),
+    );
   });
 
   it("applies cover presets and saves the expanded experience config", async () => {
@@ -337,6 +341,34 @@ describe("CoverDesignPage", () => {
         },
       },
     });
+  });
+
+  it("maps cover preview fetch errors to an editor-safe message", async () => {
+    mocks.useDecryptedAssetUrl.mockImplementation(
+      (mediaAsset: Asset | PublicAsset | null | undefined) => ({
+        src: "",
+        loading: false,
+        error: mediaAsset
+          ? mediaAsset.id === "asset-1"
+            ? "Encrypted media fetch failed: 404"
+            : "Media fetch failed: 404"
+          : null,
+      }),
+    );
+
+    await renderPage();
+
+    fireEvent.change(await screen.findByLabelText("Editor section"), {
+      target: { value: "grid" },
+    });
+
+    expect(
+      await screen.findAllByText(/Preview unavailable/i),
+    ).not.toHaveLength(0);
+    expect(
+      screen.queryByText(/Encrypted media fetch failed: 404/i),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Media fetch failed: 404/i)).not.toBeInTheDocument();
   });
 
   it("always shows drag/drop and browse upload in the Cover photo picker", async () => {
