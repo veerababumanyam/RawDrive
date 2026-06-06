@@ -43,6 +43,10 @@ func (s *stubUserService) GetByID(_ context.Context, id string) (*user.User, err
 	return nil, user.ErrNotFound
 }
 
+func (s *stubUserService) PhoneInUse(_ context.Context, _ string) (bool, error) {
+	return false, nil
+}
+
 func (s *stubUserService) GetByEmail(_ context.Context, email string) (*user.User, error) {
 	for _, u := range s.users {
 		if u.Email == email {

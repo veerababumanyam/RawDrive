@@ -24,7 +24,7 @@ func TestAuthAdapter_Create_TranslatesPhoneTaken(t *testing.T) {
 
 	// First register claims the phone.
 	_, err := user.NewAuthAdapter(svc).Create(
-		ctx, "first@example.com", "Secret12345", "First", "+919876543210", nil, "",
+		ctx, "first@example.com", "Secret12345", "First", "+919876543210", nil, "", "",
 	)
 	require.NoError(t, err)
 
@@ -32,7 +32,7 @@ func TestAuthAdapter_Create_TranslatesPhoneTaken(t *testing.T) {
 	// auth.ErrPhoneTaken, NOT user.ErrPhoneTaken (cycle-safe) and NOT
 	// a generic wrapped error.
 	_, err = user.NewAuthAdapter(svc).Create(
-		ctx, "second@example.com", "Secret12345", "Second", "+919876543210", nil, "",
+		ctx, "second@example.com", "Secret12345", "Second", "+919876543210", nil, "", "",
 	)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, auth.ErrPhoneTaken),
@@ -49,7 +49,7 @@ func TestAuthAdapter_Create_PropagatesOtherErrors(t *testing.T) {
 
 	// Seed an email.
 	_, err := user.NewAuthAdapter(svc).Create(
-		ctx, "dup@example.com", "Secret12345", "First", "", nil, "",
+		ctx, "dup@example.com", "Secret12345", "First", "", nil, "", "",
 	)
 	require.NoError(t, err)
 
@@ -57,7 +57,7 @@ func TestAuthAdapter_Create_PropagatesOtherErrors(t *testing.T) {
 	// by the register handler's FindByEmail pre-check, but the adapter
 	// must not translate it to auth.ErrPhoneTaken).
 	_, err = user.NewAuthAdapter(svc).Create(
-		ctx, "dup@example.com", "Secret12345", "Dup", "", nil, "",
+		ctx, "dup@example.com", "Secret12345", "Dup", "", nil, "", "",
 	)
 	require.Error(t, err)
 	assert.False(t, errors.Is(err, auth.ErrPhoneTaken),

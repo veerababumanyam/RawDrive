@@ -28,8 +28,8 @@ func NewAuthAdapter(svc Service) *AuthAdapter {
 // auth package can recognize the condition and respond 409 without
 // needing to import this package (which would create a cycle —
 // user already imports auth for UserProfile).
-func (a *AuthAdapter) Create(ctx context.Context, email, password, displayName, phone string, stateID *int, district string) (string, error) {
-	u, err := a.svc.Create(ctx, CreateUserInput{Email: email, Password: password, DisplayName: displayName, Phone: phone, StateID: stateID, District: district})
+func (a *AuthAdapter) Create(ctx context.Context, email, password, displayName, phone string, stateID *int, district, phoneReuseState string) (string, error) {
+	u, err := a.svc.Create(ctx, CreateUserInput{Email: email, Password: password, DisplayName: displayName, Phone: phone, StateID: stateID, District: district, PhoneReuseState: phoneReuseState})
 	if err != nil {
 		if errors.Is(err, ErrPhoneTaken) {
 			return "", auth.ErrPhoneTaken
@@ -37,6 +37,12 @@ func (a *AuthAdapter) Create(ctx context.Context, email, password, displayName, 
 		return "", err
 	}
 	return u.ID, nil
+}
+
+// PhoneInUse reports whether the canonical phone identity already belongs to an
+// account. Backs the registration free-vs-paid_pending routing decision.
+func (a *AuthAdapter) PhoneInUse(ctx context.Context, normalized string) (bool, error) {
+	return a.svc.PhoneInUse(ctx, normalized)
 }
 
 // FindByEmail returns (userID, exists, error).

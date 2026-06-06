@@ -29,10 +29,14 @@ func newTestUserService() *testUserService {
 	return &testUserService{users: make(map[string]string)}
 }
 
-func (s *testUserService) Create(_ context.Context, email, password, _, _ string, _ *int, _ string) (string, error) {
+func (s *testUserService) Create(_ context.Context, email, password, _, _ string, _ *int, _, _ string) (string, error) {
 	id := "test-user-" + email
 	s.users[email] = id
 	return id, nil
+}
+
+func (s *testUserService) PhoneInUse(_ context.Context, _ string) (bool, error) {
+	return false, nil
 }
 
 func (s *testUserService) FindByEmail(_ context.Context, email string) (string, bool, error) {
@@ -366,7 +370,7 @@ func TestSessionRotation(t *testing.T) {
 	defer ts.Close()
 
 	// Register user
-	_, err := userSvc.Create(context.Background(), "rotate@example.com", "TestPassword123!", "Test User", "9876543210", nil, "")
+	_, err := userSvc.Create(context.Background(), "rotate@example.com", "TestPassword123!", "Test User", "9876543210", nil, "", "")
 	require.NoError(t, err)
 
 	// Get OTP and verify

@@ -17,6 +17,7 @@ import (
 
 	"github.com/rawdrive/backend/internal/logging"
 	"github.com/rawdrive/backend/internal/passwordpolicy"
+	"github.com/rawdrive/backend/internal/phone"
 )
 
 // ErrPhoneTaken is returned by UserService.Create when the phone column
@@ -64,6 +65,14 @@ func normalizePlan(p string) (plan string, ok bool) {
 		return p, true
 	}
 	return "free", true
+}
+
+// isPaidPlanIntent reports whether a CANONICAL plan id signals paid intent. This
+// is INTENT ONLY — it decides routing (free-signup vs paid_pending), never the
+// granted tier. A paid tier is conferred solely by a provider-verified payment
+// (Razorpay HMAC / PhonePe status API), never by req.Plan, which is user input.
+func isPaidPlanIntent(canonicalPlan string) bool {
+	return canonicalPlan != "" && canonicalPlan != "free"
 }
 
 type LoginRequest struct {
@@ -136,7 +145,11 @@ type UserProfile struct {
 }
 
 type UserService interface {
-	Create(ctx context.Context, email, password, displayName, phone string, stateID *int, district string) (string, error)
+	Create(ctx context.Context, email, password, displayName, phone string, stateID *int, district, phoneReuseState string) (string, error)
+	// PhoneInUse reports whether the given canonical phone identity already
+	// belongs to an account (any phone-reuse state). Backs registration's
+	// free-vs-paid_pending routing.
+	PhoneInUse(ctx context.Context, normalized string) (bool, error)
 	FindByEmail(ctx context.Context, email string) (string, bool, error)
 	VerifyPassword(ctx context.Context, email, password string) (string, bool, bool, error)
 	MarkEmailVerified(ctx context.Context, userID string) error
@@ -174,6 +187,15 @@ type TermsManager interface {
 	TermsStatusForUser(ctx context.Context, userID uuid.UUID) (needsAcceptance bool, acceptedVersion string, acceptedAt *time.Time, currentVersion string, err error)
 }
 
+// PhoneReuseEnforcement reports whether the phone-reuse paid_pending routing is
+// enabled. When the handler's flag is nil OR returns false, registration still
+// enforces one-account-per-(normalized)-phone but never creates a paid_pending
+// account (today's behavior, normalization-aware). The concrete
+// *featureflag.PhoneReuseEnforcementFlag satisfies this.
+type PhoneReuseEnforcement interface {
+	Enabled(ctx context.Context) bool
+}
+
 // ──────────────────────────── Handler ────────────────────────────
 
 type Handler struct {
@@ -183,6 +205,9 @@ type Handler struct {
 	users      UserService
 	workspaces WorkspaceLookup
 	planTier   PlanTierLookup
+	// phoneReuse gates the paid_pending routing path (phone-reuse epic). When
+	// nil, the feature is off: duplicates are rejected, never routed to paid.
+	phoneReuse PhoneReuseEnforcement
 	// F-007 (M17 wave 2): MFA enrollment store for login step-up.
 	// When nil, Login falls back to the pre-M17 password-only flow.
 	mfaEnrollments MFAEnrollmentStore
@@ -208,6 +233,14 @@ func NewHandler(otp OTPService, jwt JWTService, oauth *OAuthService, users UserS
 // WithWorkspaceLookup attaches a workspace resolver to the handler.
 func (h *Handler) WithWorkspaceLookup(wl WorkspaceLookup) *Handler {
 	h.workspaces = wl
+	return h
+}
+
+// WithPhoneReuseEnforcement attaches the phone-reuse enforcement flag. When set
+// and enabled, a paid-intent signup on an already-used phone is routed to a
+// paid_pending account; otherwise duplicates are rejected.
+func (h *Handler) WithPhoneReuseEnforcement(f PhoneReuseEnforcement) *Handler {
+	h.phoneReuse = f
 	return h
 }
 
@@ -444,14 +477,46 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := h.users.Create(r.Context(), req.Email, req.Password, req.FullName, req.Phone, req.StateID, req.District)
+	// Phone-reuse routing (phone-reuse epic). Duplication is decided on the
+	// canonical identity, not the raw string, so reformatting cannot bypass it.
+	// - phone not in use            -> create as "free" (empty => repo default)
+	// - in use + enforcement + paid -> create as "paid_pending" (no workspace
+	//                                  until a provider-verified payment)
+	// - in use otherwise            -> 409 (preserves one-account-per-phone)
+	normalizedPhone := phone.Normalize(req.Phone)
+	phoneReuseState := ""
+	if normalizedPhone != "" {
+		inUse, perr := h.users.PhoneInUse(r.Context(), normalizedPhone)
+		if perr != nil {
+			log.Printf("auth.Register: phone-in-use check failed email=%s: %v", maskEmail(req.Email), perr)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			return
+		}
+		if inUse {
+			enforced := h.phoneReuse != nil && h.phoneReuse.Enabled(r.Context())
+			switch {
+			case enforced && isPaidPlanIntent(canonicalPlan):
+				phoneReuseState = "paid_pending"
+			case enforced:
+				writeJSON(w, http.StatusConflict, map[string]string{
+					"error": "this phone number already has an account — log in, or choose a paid plan to add another account on the same number",
+				})
+				return
+			default:
+				writeJSON(w, http.StatusConflict, map[string]string{
+					"error": "phone number is already registered — use a different number or log in instead",
+				})
+				return
+			}
+		}
+	}
+
+	userID, err := h.users.Create(r.Context(), req.Email, req.Password, req.FullName, req.Phone, req.StateID, req.District, phoneReuseState)
 	if err != nil {
-		// Phone is unique in the users table (users_phone_key). A second
-		// registration with an already-taken phone used to surface as an
-		// opaque 500 "failed to create user" — indistinguishable from a
-		// real server error and impossible for the user to self-correct.
-		// Translate it to a targeted 409 with an actionable message, same
-		// shape as the duplicate-email path above.
+		// A concurrent free/free signup race can still slip past the pre-check
+		// and hit the partial unique index (users_phone_normalized_free_unique)
+		// or the legacy users_phone_key. Translate that to the same targeted 409
+		// instead of an opaque 500.
 		if errors.Is(err, ErrPhoneTaken) {
 			writeJSON(w, http.StatusConflict, map[string]string{
 				"error": "phone number is already registered — use a different number or log in instead",

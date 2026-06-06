@@ -126,6 +126,9 @@ export function RegisterForm() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
   const [duplicateActivationEmail, setDuplicateActivationEmail] = useState("");
+  // phone-reuse epic: set when a signup is rejected because the phone already
+  // has an account and a paid plan is required to add another on the same number.
+  const [phonePaidRequired, setPhonePaidRequired] = useState(false);
   const [webviewNotice, setWebviewNotice] = useState(false);
   const { enabled: oauthEnabled, loading: oauthAvailabilityLoading } =
     useOAuthAvailability(API_BASE);
@@ -163,6 +166,7 @@ export function RegisterForm() {
     setLoading(true);
     setError("");
     setDuplicateActivationEmail("");
+    setPhonePaidRequired(false);
 
     try {
       const response = await fetch(`${API_BASE}/auth/register`, {
@@ -190,6 +194,14 @@ export function RegisterForm() {
           message.toLowerCase().includes("email already registered")
         ) {
           setDuplicateActivationEmail(email.trim());
+        }
+        // phone-reuse epic: the phone already has an account and a paid plan is
+        // required to add another on the same number — offer the pricing page.
+        if (
+          response.status === 409 &&
+          message.toLowerCase().includes("paid plan")
+        ) {
+          setPhonePaidRequired(true);
         }
         return;
       }
@@ -251,6 +263,15 @@ export function RegisterForm() {
           className="surface-button w-full text-sm font-semibold"
         >
           Activate account
+        </Link>
+      ) : null}
+
+      {phonePaidRequired ? (
+        <Link
+          href="/pricing"
+          className="surface-button w-full text-sm font-semibold"
+        >
+          View paid plans
         </Link>
       ) : null}
 

@@ -33,22 +33,35 @@ type mockUserService struct {
 	// Needed by tests that exercise code parsing the returned id as a UUID
 	// (e.g. registration terms-acceptance capture).
 	createReturnsUUID bool
+	// phone-reuse epic: phonesInUse[normalized]=true makes PhoneInUse report a
+	// duplicate; lastReuseState captures the state passed to the most recent
+	// Create so routing tests can assert free vs paid_pending.
+	phonesInUse    map[string]bool
+	lastReuseState string
 }
 
 func newMockUserService() *mockUserService {
-	return &mockUserService{users: make(map[string]string), verified: make(map[string]bool)}
+	return &mockUserService{users: make(map[string]string), verified: make(map[string]bool), phonesInUse: make(map[string]bool)}
 }
 
-func (m *mockUserService) Create(_ context.Context, email, password, _, _ string, _ *int, _ string) (string, error) {
+func (m *mockUserService) Create(_ context.Context, email, password, _, _ string, _ *int, _, phoneReuseState string) (string, error) {
 	if m.errOnCreate {
 		return "", errors.New("mock create error")
 	}
+	m.lastReuseState = phoneReuseState
 	id := "mock-id-" + email
 	if m.createReturnsUUID {
 		id = uuid.NewString()
 	}
 	m.users[email] = id
 	return id, nil
+}
+
+func (m *mockUserService) PhoneInUse(_ context.Context, normalized string) (bool, error) {
+	if normalized == "" {
+		return false, nil
+	}
+	return m.phonesInUse[normalized], nil
 }
 
 func (m *mockUserService) FindByEmail(_ context.Context, email string) (string, bool, error) {

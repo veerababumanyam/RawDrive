@@ -41,6 +41,11 @@ type User struct {
 	StateID            *int
 	District           *string
 	MustChangePassword bool // set true for admin-created dealer accounts until first password change
+	// PhoneReuseState is the phone-reuse lifecycle state (phone-reuse epic):
+	// free | paid_pending | paid_active | paid_expired. Empty is treated as
+	// "free" by the repo. The DB CHECK (migration 172) and the partial unique
+	// index (migration 173) enforce the invariants.
+	PhoneReuseState string
 }
 
 type CreateUserInput struct {
@@ -50,6 +55,10 @@ type CreateUserInput struct {
 	DisplayName string
 	StateID     *int
 	District    string
+	// PhoneReuseState lets the caller create an account in a non-free reuse
+	// state (e.g. "paid_pending" for a paid signup on an already-used phone).
+	// Empty defaults to "free".
+	PhoneReuseState string
 }
 
 type UpdateUserInput struct {
@@ -69,6 +78,11 @@ type Repository interface {
 	// UpdatePasswordByID replaces the user's password hash and optionally
 	// clears the must_change_password flag. Used by the change-password flow.
 	UpdatePasswordByID(ctx context.Context, id, hashedPassword string, mustChange bool) error
+	// ExistsByNormalizedPhone reports whether ANY account already holds the
+	// given canonical phone identity (any reuse state). Used by registration to
+	// decide free-vs-paid_pending routing before the INSERT. normalized "" is
+	// always (false, nil) — a phoneless lookup matches nobody.
+	ExistsByNormalizedPhone(ctx context.Context, normalized string) (bool, error)
 }
 
 type Service interface {
@@ -78,6 +92,9 @@ type Service interface {
 	Update(ctx context.Context, id string, input UpdateUserInput) (*User, error)
 	MarkEmailVerified(ctx context.Context, id string) error
 	ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error
+	// PhoneInUse reports whether the given canonical phone identity already
+	// belongs to an account (any reuse state).
+	PhoneInUse(ctx context.Context, normalized string) (bool, error)
 }
 
 type service struct {
@@ -96,11 +113,12 @@ func generateID() string {
 
 func (s *service) Create(ctx context.Context, input CreateUserInput) (*User, error) {
 	u := &User{
-		ID:          generateID(),
-		Email:       input.Email,
-		Phone:       input.Phone,
-		DisplayName: input.DisplayName,
-		StateID:     input.StateID,
+		ID:              generateID(),
+		Email:           input.Email,
+		Phone:           input.Phone,
+		DisplayName:     input.DisplayName,
+		StateID:         input.StateID,
+		PhoneReuseState: input.PhoneReuseState,
 	}
 	if input.District != "" {
 		u.District = &input.District
@@ -156,6 +174,15 @@ func (s *service) Update(ctx context.Context, id string, input UpdateUserInput) 
 
 func (s *service) MarkEmailVerified(ctx context.Context, id string) error {
 	return s.repo.MarkEmailVerified(ctx, id)
+}
+
+// PhoneInUse reports whether the canonical phone identity already belongs to an
+// account (any reuse state). Empty normalized matches nobody.
+func (s *service) PhoneInUse(ctx context.Context, normalized string) (bool, error) {
+	if normalized == "" {
+		return false, nil
+	}
+	return s.repo.ExistsByNormalizedPhone(ctx, normalized)
 }
 
 // ChangePassword verifies currentPassword against the stored hash, checks

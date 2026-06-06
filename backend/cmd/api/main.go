@@ -1536,7 +1536,14 @@ func main() {
 	authHandler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, userAuthAdapter).
 		WithWorkspaceLookup(wsLookup).
 		WithPlanTierLookup(wsLookup).
-		WithTerms(termsSvc)
+		WithTerms(termsSvc).
+		// Phone-reuse epic: gates the paid_pending routing for signups on an
+		// already-used phone. Settings row featureflag/phone_reuse.enforcement
+		// overrides the env fallback; default off (one-account-per-phone).
+		WithPhoneReuseEnforcement(featureflag.NewPhoneReuseEnforcementFlag(
+			platformSettingsRepo,
+			os.Getenv("FEATURE_PHONE_REUSE_ENFORCEMENT") == "true",
+		))
 
 	// ──────────────────────── F-007 (M17 wave 2): MFA setup ────────────────────
 	//

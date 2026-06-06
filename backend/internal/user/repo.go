@@ -8,6 +8,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/rawdrive/backend/internal/phone"
 )
 
 // isPhoneUniqueViolation recognizes Postgres 23505 (unique_violation)
@@ -20,7 +22,14 @@ func isPhoneUniqueViolation(err error) bool {
 	if !errors.As(err, &pg) {
 		return false
 	}
-	return pg.Code == "23505" && pg.ConstraintName == "users_phone_key"
+	// Two constraints can guard phone identity depending on which migrations
+	// have applied: the legacy global users_phone_key (migration 002) and the
+	// partial unique index users_phone_normalized_free_unique (migration 173,
+	// "one free account per normalized phone"). Recognize both so a duplicate
+	// surfaces as ErrPhoneTaken in either deployment state.
+	return pg.Code == "23505" &&
+		(pg.ConstraintName == "users_phone_key" ||
+			pg.ConstraintName == "users_phone_normalized_free_unique")
 }
 
 // PgRepo implements Repository using PostgreSQL.
@@ -42,11 +51,17 @@ func (r *PgRepo) Create(ctx context.Context, u *User) (*User, error) {
 	// creates the user row. This closes the gap where state_id was
 	// validated in the register handler but only written during
 	// onboarding — users who skipped onboarding ended up with NULL.
+	// Write-through the canonical phone identity alongside the raw phone so
+	// phone_normalized is correct for every new account from the moment it is
+	// created (the phone-reuse uniqueness rule is enforced on this column, not
+	// the raw input). NULLIF coerces "" -> NULL so phoneless accounts stay NULL.
+	// phone_reuse_state defaults to 'free' when the caller leaves it empty
+	// (COALESCE of NULLIF), matching the column DEFAULT and the CHECK constraint.
 	err := r.pool.QueryRow(ctx,
-		`INSERT INTO users (email, phone, display_name, avatar_url, password_hash, email_verified, platform_role, state_id, district)
-		 VALUES ($1, NULLIF($2, ''), NULLIF($3, ''), NULLIF($4, ''), $5, $6, $7, $8, NULLIF($9, ''))
+		`INSERT INTO users (email, phone, phone_normalized, phone_reuse_state, display_name, avatar_url, password_hash, email_verified, platform_role, state_id, district)
+		 VALUES ($1, NULLIF($2, ''), NULLIF($3, ''), COALESCE(NULLIF($4, ''), 'free'), NULLIF($5, ''), NULLIF($6, ''), $7, $8, $9, $10, NULLIF($11, ''))
 		 RETURNING id`,
-		u.Email, u.Phone, u.DisplayName, u.AvatarURL, u.PasswordHash, u.EmailVerified, u.PlatformRole, u.StateID, nilStrVal(u.District),
+		u.Email, u.Phone, phone.Normalize(u.Phone), u.PhoneReuseState, u.DisplayName, u.AvatarURL, u.PasswordHash, u.EmailVerified, u.PlatformRole, u.StateID, nilStrVal(u.District),
 	).Scan(&u.ID)
 	if err != nil {
 		if isPhoneUniqueViolation(err) {
@@ -55,6 +70,24 @@ func (r *PgRepo) Create(ctx context.Context, u *User) (*User, error) {
 		return nil, fmt.Errorf("user repo create: %w", err)
 	}
 	return u, nil
+}
+
+// ExistsByNormalizedPhone reports whether any account already holds the given
+// canonical phone identity (any reuse state). Backs the registration
+// free-vs-paid_pending routing decision. Uses idx_users_phone_normalized
+// (migration 171) for an index-only lookup.
+func (r *PgRepo) ExistsByNormalizedPhone(ctx context.Context, normalized string) (bool, error) {
+	if normalized == "" {
+		return false, nil
+	}
+	var exists bool
+	err := r.pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM users WHERE phone_normalized = $1)`, normalized,
+	).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("user repo exists by normalized phone: %w", err)
+	}
+	return exists, nil
 }
 
 func (r *PgRepo) GetByID(ctx context.Context, id string) (*User, error) {
@@ -97,9 +130,11 @@ func nilStrVal(s *string) string {
 }
 
 func (r *PgRepo) Update(ctx context.Context, u *User) (*User, error) {
+	// Keep phone_normalized in lockstep with any raw phone change so the
+	// canonical identity never drifts from the displayed number.
 	_, err := r.pool.Exec(ctx,
-		`UPDATE users SET display_name = $1, avatar_url = $2, phone = NULLIF($3, ''), state_id = $4, district = NULLIF($5, ''), updated_at = now() WHERE id = $6`,
-		u.DisplayName, u.AvatarURL, u.Phone, u.StateID, nilStrVal(u.District), u.ID,
+		`UPDATE users SET display_name = $1, avatar_url = $2, phone = NULLIF($3, ''), phone_normalized = NULLIF($4, ''), state_id = $5, district = NULLIF($6, ''), updated_at = now() WHERE id = $7`,
+		u.DisplayName, u.AvatarURL, u.Phone, phone.Normalize(u.Phone), u.StateID, nilStrVal(u.District), u.ID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("user repo update: %w", err)

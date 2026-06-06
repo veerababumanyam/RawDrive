@@ -39,16 +39,32 @@ func TestUsersPhoneUnique(t *testing.T) {
 	pool := setupSchemaTest(t)
 	ctx := context.Background()
 
+	// Phone-reuse epic (migration 173): the byte-exact global users_phone_key is
+	// replaced by a partial unique index on phone_normalized scoped to FREE
+	// accounts (users_phone_normalized_free_unique). Uniqueness is therefore on
+	// the canonical identity AND state-aware. These raw inserts set
+	// phone_normalized explicitly (in the app it is written through by the repo).
+
+	// Two FREE accounts with the same normalized phone -> the second is rejected.
 	_, err := pool.Exec(ctx,
-		`INSERT INTO users (email, phone, state_id) VALUES ('a@test.com', '+919111111111', 1)`)
-	require.NoError(t, err, "first insert should succeed")
+		`INSERT INTO users (email, phone, phone_normalized, phone_reuse_state, state_id)
+		 VALUES ('a@test.com', '+919111111111', '919111111111', 'free', 1)`)
+	require.NoError(t, err, "first free insert should succeed")
 
 	_, err = pool.Exec(ctx,
-		`INSERT INTO users (email, phone, state_id) VALUES ('b@test.com', '+919111111111', 1)`)
-	require.Error(t, err, "duplicate phone should be rejected")
+		`INSERT INTO users (email, phone, phone_normalized, phone_reuse_state, state_id)
+		 VALUES ('b@test.com', '+919111111111', '919111111111', 'free', 1)`)
+	require.Error(t, err, "a second FREE account on the same normalized phone must be rejected")
 	assert.Contains(t, err.Error(), "unique", "error should mention unique constraint")
 
-	_, _ = pool.Exec(ctx, `DELETE FROM users WHERE phone = '+919111111111'`)
+	// A PAID reuse account on the SAME normalized phone is allowed — it sits
+	// outside the partial unique predicate (the rule is "one FREE per phone").
+	_, err = pool.Exec(ctx,
+		`INSERT INTO users (email, phone, phone_normalized, phone_reuse_state, state_id)
+		 VALUES ('c@test.com', '+919111111111', '919111111111', 'paid_active', 1)`)
+	require.NoError(t, err, "a paid_active account may reuse a normalized phone")
+
+	_, _ = pool.Exec(ctx, `DELETE FROM users WHERE phone_normalized = '919111111111'`)
 }
 
 func TestUserStateFK(t *testing.T) {

@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/rawdrive/backend/internal/phone"
 	"github.com/rawdrive/backend/internal/user"
 )
 
@@ -46,6 +47,20 @@ func (m *mockUserRepo) Create(ctx context.Context, u *user.User) (*user.User, er
 		m.byPhone[u.Phone] = u
 	}
 	return u, nil
+}
+
+// ExistsByNormalizedPhone mirrors the real repo by comparing the canonical
+// identity of every stored raw phone.
+func (m *mockUserRepo) ExistsByNormalizedPhone(_ context.Context, normalized string) (bool, error) {
+	if normalized == "" {
+		return false, nil
+	}
+	for _, u := range m.users {
+		if phone.Normalize(u.Phone) == normalized {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (m *mockUserRepo) GetByID(ctx context.Context, id string) (*user.User, error) {
