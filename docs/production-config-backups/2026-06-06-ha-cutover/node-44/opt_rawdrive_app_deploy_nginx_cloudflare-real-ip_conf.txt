@@ -1,0 +1,46 @@
+# Restore the real visitor IP when traffic arrives via Cloudflare.
+#
+# WHY: behind Cloudflare's proxy, nginx's $remote_addr is a CLOUDFLARE IP, not the
+# visitor's. Without this, rate-limiting (limit_req/limit_conn keyed on
+# $binary_remote_addr) and the fail2ban nginx jails would act on Cloudflare's
+# addresses — i.e. throttle/ban Cloudflare itself = throttle/ban EVERYONE. This
+# tells nginx to trust the CF-Connecting-IP header, but ONLY when the connection
+# actually comes from a published Cloudflare range (so a spoofed header from a
+# direct-to-origin attacker is ignored).
+#
+# SAFE TO DEPLOY BEFORE CUTOVER: it's a no-op until requests actually originate
+# from these ranges. Pairs with cf-origin-lock.sh (which makes Cloudflare the ONLY
+# source of 80/443). `include` this from the http{} block in nginx.conf.
+#
+# Ranges are Cloudflare's published lists (cloudflare.com/ips-v4 + ips-v6).
+# Refresh with:  curl -s https://www.cloudflare.com/ips-v4 https://www.cloudflare.com/ips-v6
+
+# --- Cloudflare IPv4 ---
+set_real_ip_from 173.245.48.0/20;
+set_real_ip_from 103.21.244.0/22;
+set_real_ip_from 103.22.200.0/22;
+set_real_ip_from 103.31.4.0/22;
+set_real_ip_from 141.101.64.0/18;
+set_real_ip_from 108.162.192.0/18;
+set_real_ip_from 190.93.240.0/20;
+set_real_ip_from 188.114.96.0/20;
+set_real_ip_from 197.234.240.0/22;
+set_real_ip_from 198.41.128.0/17;
+set_real_ip_from 162.158.0.0/15;
+set_real_ip_from 104.16.0.0/13;
+set_real_ip_from 104.24.0.0/14;
+set_real_ip_from 172.64.0.0/13;
+set_real_ip_from 131.0.72.0/22;
+# --- Cloudflare IPv6 ---
+set_real_ip_from 2400:cb00::/32;
+set_real_ip_from 2606:4700::/32;
+set_real_ip_from 2803:f800::/32;
+set_real_ip_from 2405:b500::/32;
+set_real_ip_from 2405:8100::/32;
+set_real_ip_from 2a06:98c0::/29;
+set_real_ip_from 2c0f:f248::/32;
+
+# Cloudflare puts the true client IP here. (CF-Connecting-IP is single-valued and
+# set by Cloudflare itself, so it's safer than parsing X-Forwarded-For.)
+real_ip_header CF-Connecting-IP;
+real_ip_recursive on;

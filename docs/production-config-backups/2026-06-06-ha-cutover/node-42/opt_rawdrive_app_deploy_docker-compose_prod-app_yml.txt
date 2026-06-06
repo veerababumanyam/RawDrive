@@ -1,0 +1,320 @@
+# Docker Compose for VPS 1 & VPS 2 (App nodes 187.127.142.42 and .44).
+# Runs: pgbouncer, backend, frontend, worker, nginx, NATS cluster member,
+# plus a replica (valkey on .42, postgres on .44).
+#
+# The NODE_NAME env var (set in deploy/.env) distinguishes which node
+# this is running on — used by nats -n and by the optional replica services.
+
+name: rawdrive-app
+
+services:
+  # One-shot migration runner — must exit 0 before backend starts.
+  # Only actually gets invoked on first deploy to a node; Compose handles
+  # the "exit 0 means success" semantics via depends_on condition.
+  migrate:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    image: rawdrive-backend:local
+    container_name: deploy-migrate-1
+    command: ["/usr/local/bin/migrate"]
+    env_file:
+      - path: /opt/rawdrive/app/.env
+        required: false
+    restart: "no"
+    depends_on: []
+    # F-116: one-shot migration runner — small, but capped so a pathological
+    # migration can't balloon memory on first deploy.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 512M
+        reservations:
+          memory: 64M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  pgbouncer:
+    # Pinned (F-082, re-confirmed F-114): never use a floating :latest tag for
+    # the prod connection pooler — a deploy-day `docker compose pull` (the
+    # deploy script even exposes a --pull flag) could otherwise silently swap
+    # in a different (or compromised) image between the backend and prod
+    # Postgres. The concrete 1.22.x tag also matches the pgbouncer.ini syntax
+    # this repo ships. Bump deliberately, matching the pinned
+    # nats/valkey/pgvector/nginx images below.
+    image: edoburu/pgbouncer:1.22.1-p0
+    container_name: deploy-pgbouncer-1
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:6432:6432"
+    volumes:
+      - ./pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./pgbouncer/databases.ini:/etc/pgbouncer/databases.ini:ro
+      - /opt/rawdrive/app/deploy/pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    environment:
+      - DATABASE_URL  # passed through for some edoburu image variants
+    # F-116: bound the connection pooler so a runaway connection storm can't
+    # starve Postgres/Valkey on the shared VPS. pgbouncer is tiny — 128M is
+    # generous for the pool plus per-conn buffers.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 128M
+        reservations:
+          memory: 32M
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 6432 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    image: rawdrive-backend:local
+    container_name: deploy-backend-1
+    restart: unless-stopped
+    command: ["/usr/local/bin/api"]
+    env_file:
+      - path: /opt/rawdrive/app/.env
+        required: false
+    ports:
+      - "8080:8080"  # exposed for peer failover from the OTHER app node
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    # F-116: the API can spike during WebP-derivative generation and JetStream
+    # consumption. Cap it so an in-process pile-up OOM-kills the backend (which
+    # restarts: unless-stopped) instead of the shared Postgres/Valkey, which
+    # would risk in-flight WAL corruption.
+    deploy:
+      resources:
+        limits:
+          cpus: "2.00"
+          memory: 2G
+        reservations:
+          memory: 512M
+    healthcheck:
+      # Readiness checks dependencies, not just process liveness.
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health/deep"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* env vars are read at BUILD time by next build and
+        # baked into the client bundle. Setting this points all
+        # frontend fetch('${API_BASE}/...') calls at the real API
+        # subdomain instead of defaulting to localhost:8080 (which is
+        # the frontend container's own loopback and always fails).
+        NEXT_PUBLIC_API_URL: https://api.rawdrive.in
+    image: rawdrive-frontend:local
+    container_name: deploy-frontend-1
+    restart: unless-stopped
+    # SSR/runtime API base. NEXT_PUBLIC_API_URL above is BUILD-time (client
+    # bundle); these are RUNTIME and are what Next.js server components read
+    # via resolveApiBaseUrl() (frontend/src/lib/api/base-url.ts). Without them
+    # SSR fetches fall through to http://localhost:8080 — the frontend
+    # container's own loopback, which has no backend — so every server-rendered
+    # public page (studio landing, /g/<gallery> share, /g/.../photo) throws and
+    # renders notFound() (404) even though api.rawdrive.in serves 200. Declared
+    # here (not only in the hand-maintained /opt/rawdrive/app/.env) so a missing
+    # or mistyped env line cannot reintroduce the outage — `environment:`
+    # overrides env_file. https://api.rawdrive.in is used (not http://backend:8080)
+    # because getApiBaseUrl() also builds browser-facing <img src>/links, which
+    # must be a host the browser can resolve.
+    environment:
+      INTERNAL_API_BASE_URL: https://api.rawdrive.in
+      NEXT_PUBLIC_API_URL: https://api.rawdrive.in
+    env_file:
+      - path: /opt/rawdrive/app/.env
+        required: false
+    ports:
+      - "3000:3000"  # exposed for peer failover
+    depends_on:
+      backend:
+        condition: service_healthy
+    # F-116: Next.js SSR memory is fairly stable; cap it so a leak can't grow
+    # unbounded and pressure the shared host.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 1G
+        reservations:
+          memory: 256M
+    healthcheck:
+      # Frontend runtime has curl (installed in Dockerfile) not wget.
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  worker:
+    # Worker stub — same image as backend, different command.
+    # IMPORTANT: current backend may not have a separate worker entry
+    # point. If the --mode=worker flag is unsupported, this service
+    # stays inactive behind the 'worker' profile and image processing
+    # runs inline in the api container. No code change required.
+    image: rawdrive-backend:local
+    container_name: deploy-worker-1
+    restart: unless-stopped
+    command: ["/usr/local/bin/api", "--mode=worker"]
+    env_file:
+      - path: /opt/rawdrive/app/.env
+        required: false
+    depends_on:
+      backend:
+        condition: service_healthy
+    profiles:
+      - worker  # optional — start with `docker compose --profile worker up`
+    # F-116: same image as backend, runs the WebP/AI processing loop — cap it
+    # so batch processing can't OOM the shared host.
+    deploy:
+      resources:
+        limits:
+          cpus: "2.00"
+          memory: 2G
+        reservations:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  nats:
+    image: nats:2.11-alpine
+    container_name: deploy-nats-1
+    restart: unless-stopped
+    # nats-server.conf references $NATS_AUTH_TOKEN and $NATS_CLUSTER_SEED via
+    # process-env interpolation at boot, so the container needs those vars in
+    # its environment. Compose-level ${NATS_NODE_NAME} below is interpolated
+    # at parse-time from /opt/rawdrive/app/.env (compose's working dir) and is
+    # a separate mechanism; the env_file below is what propagates the secrets
+    # into the running nats-server process. Without it nats-server fails with
+    # "variable reference for 'NATS_AUTH_TOKEN' can not be found" and
+    # crashloops, leaving every backend NATS publisher dead in the water.
+    env_file:
+      - path: /opt/rawdrive/app/.env
+        required: false
+    command:
+      - -c
+      - /etc/nats/nats-server.conf
+      - -n
+      - ${NATS_NODE_NAME}  # "nats-1" on .42, "nats-2" on .44
+    volumes:
+      - nats_data:/data
+      - ./nats/nats-server.conf:/etc/nats/nats-server.conf:ro
+    ports:
+      # Scope NATS to this node's peer IP so Docker's iptables publishing
+      # does not expose client, cluster, or monitoring ports on every NIC.
+      - "${NATS_BIND_IP}:4222:4222"
+      - "${NATS_BIND_IP}:6222:6222"
+      - "${NATS_BIND_IP}:8222:8222"
+    # F-116: cap JetStream memory so a consumer pile-up can't grow unbounded
+    # and OOM the shared host. NATS also enforces store/memory limits in its
+    # own config; this is the hard backstop.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 1G
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Valkey replica — only started on .42 via profile
+  valkey-replica:
+    image: valkey/valkey:9.0-alpine
+    container_name: deploy-valkey-replica-1
+    restart: unless-stopped
+    command:
+      - valkey-server
+      - /etc/valkey/valkey-replica.conf
+      - --replicaof
+      - 187.127.142.46
+      - "6379"
+      - --masterauth
+      - ${VALKEY_PASSWORD}
+      - --requirepass
+      - ${VALKEY_PASSWORD}
+    volumes:
+      - valkey_replica_data:/data
+      - ./valkey/valkey-replica.conf:/etc/valkey/valkey-replica.conf:ro
+    # F-116: bound the replica's dataset memory. valkey-replica.conf should
+    # also set maxmemory below this hard cap so eviction kicks in before the
+    # OOM killer does.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 1G
+        reservations:
+          memory: 256M
+    profiles:
+      - valkey-replica  # only .42 uses this
+
+  # Postgres replica — only started on .44 via profile. Uses a bind-mount
+  # override in Phase B.5 to point at /var/lib/rawdrive/postgres-replica/
+  # (populated by pg_basebackup from .46).
+  postgres-replica:
+    image: pgvector/pgvector:pg17
+    container_name: deploy-postgres-replica-1
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: <REDACTED>
+    volumes:
+      - postgres_replica_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"  # only peer-open, UFW blocks public
+    # F-116: bound the standby. shared_buffers + work_mem in the replica's
+    # config must stay comfortably under this cap so a heavy read query can't
+    # OOM the standby and break streaming replication.
+    deploy:
+      resources:
+        limits:
+          cpus: "2.00"
+          memory: 2G
+        reservations:
+          memory: 512M
+    profiles:
+      - postgres-replica  # only .44 uses this
+
+  # Python face-detection + ArcFace embedding sidecar. Backend reaches

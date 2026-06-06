@@ -1,0 +1,130 @@
+# Node 44 (187.127.142.44) runtime snapshot
+captured_at_utc=2026-06-06T12:18:16Z
+
+## hostname
+rawdrive-app2
+2026-06-06T12:18:16Z
+Linux rawdrive-app2 6.8.0-111-generic #111-Ubuntu SMP PREEMPT_DYNAMIC Sat Apr 11 23:16:02 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+
+## docker ps
+NAMES                IMAGE                         STATUS                       PORTS
+deploy-haproxy-1     haproxy:3.0.6-alpine          Up About an hour (healthy)   
+deploy-pgbouncer-1   edoburu/pgbouncer:1.22.1-p0   Up About an hour (healthy)   5432/tcp, 127.0.0.1:6432->6432/tcp
+deploy-patroni-1     rawdrive-patroni:local        Up 2 hours (healthy)         
+deploy-etcd-1        quay.io/coreos/etcd:v3.5.17   Up 2 hours (healthy)         187.127.142.44:2379-2380->2379-2380/tcp
+deploy-nginx-1       nginx:1.27-alpine             Up 4 hours (healthy)         0.0.0.0:80->80/tcp, [::]:80->80/tcp, 0.0.0.0:443->443/tcp, [::]:443->443/tcp
+deploy-frontend-1    rawdrive-frontend:local       Up 4 hours (healthy)         0.0.0.0:3000->3000/tcp, [::]:3000->3000/tcp
+deploy-backend-1     rawdrive-backend:local        Up 4 hours (healthy)         0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp
+deploy-face-svc-1    rawdrive-face-svc:local       Up 4 hours (healthy)         8000/tcp
+deploy-nats-1        nats:2.11-alpine              Up 11 hours (healthy)        0.0.0.0:4222->4222/tcp, [::]:4222->4222/tcp, 0.0.0.0:6222->6222/tcp, [::]:6222->6222/tcp, 0.0.0.0:8222->8222/tcp, [::]:8222->8222/tcp
+deploy-worker-1      e6c6b587a996                  Up 19 hours (healthy)        8080/tcp
+
+## listeners
+LISTEN 0      65535         0.0.0.0:3000       0.0.0.0:*    users:(("docker-proxy",pid=1225788,fd=8))                
+LISTEN 0      65535  187.127.142.44:2380       0.0.0.0:*    users:(("docker-proxy",pid=1343784,fd=8))                
+LISTEN 0      65535  187.127.142.44:2379       0.0.0.0:*    users:(("docker-proxy",pid=1343772,fd=8))                
+LISTEN 0      2000       172.17.0.1:5433       0.0.0.0:*    users:(("haproxy",pid=1408252,fd=9))                     
+LISTEN 0      2000       172.17.0.1:5432       0.0.0.0:*    users:(("haproxy",pid=1408252,fd=6))                     
+LISTEN 0      2000       172.18.0.1:5433       0.0.0.0:*    users:(("haproxy",pid=1408252,fd=10))                    
+LISTEN 0      2000       172.18.0.1:5432       0.0.0.0:*    users:(("haproxy",pid=1408252,fd=7))                     
+LISTEN 0      65535         0.0.0.0:443        0.0.0.0:*    users:(("docker-proxy",pid=1226252,fd=8))                
+LISTEN 0      65535         0.0.0.0:8222       0.0.0.0:*    users:(("docker-proxy",pid=919368,fd=8))                 
+LISTEN 0      65535         0.0.0.0:80         0.0.0.0:*    users:(("docker-proxy",pid=1226230,fd=8))                
+LISTEN 0      65535         0.0.0.0:8080       0.0.0.0:*    users:(("docker-proxy",pid=1225564,fd=8))                
+LISTEN 0      5             0.0.0.0:8008       0.0.0.0:*    users:(("patroni",pid=1364411,fd=9))                     
+LISTEN 0      200    187.127.142.44:5432       0.0.0.0:*    users:(("postgres",pid=1424271,fd=6))                    
+LISTEN 0      65535         0.0.0.0:6222       0.0.0.0:*    users:(("docker-proxy",pid=919346,fd=8))                 
+LISTEN 0      2000        127.0.0.1:5432       0.0.0.0:*    users:(("haproxy",pid=1408252,fd=5))                     
+LISTEN 0      2000        127.0.0.1:5433       0.0.0.0:*    users:(("haproxy",pid=1408252,fd=8))                     
+LISTEN 0      2000        127.0.0.1:7000       0.0.0.0:*    users:(("haproxy",pid=1408252,fd=11))                    
+LISTEN 0      65535       127.0.0.1:6432       0.0.0.0:*    users:(("docker-proxy",pid=1406101,fd=8))                
+LISTEN 0      65535         0.0.0.0:4222       0.0.0.0:*    users:(("docker-proxy",pid=919320,fd=8))                 
+LISTEN 0      65535            [::]:3000          [::]:*    users:(("docker-proxy",pid=1225795,fd=8))                
+LISTEN 0      65535            [::]:443           [::]:*    users:(("docker-proxy",pid=1226259,fd=8))                
+LISTEN 0      65535            [::]:8222          [::]:*    users:(("docker-proxy",pid=919375,fd=8))                 
+LISTEN 0      65535            [::]:80            [::]:*    users:(("docker-proxy",pid=1226236,fd=8))                
+LISTEN 0      65535            [::]:8080          [::]:*    users:(("docker-proxy",pid=1225570,fd=8))                
+LISTEN 0      65535            [::]:6222          [::]:*    users:(("docker-proxy",pid=919352,fd=8))                 
+LISTEN 0      65535            [::]:4222          [::]:*    users:(("docker-proxy",pid=919331,fd=8))                 
+
+## ufw status numbered
+Status: active
+
+     To                         Action      From
+     --                         ------      ----
+[ 1] 22/tcp                     ALLOW IN    Anywhere                   # ssh
+[ 2] 80/tcp                     ALLOW IN    Anywhere                   # http
+[ 3] 443/tcp                    ALLOW IN    Anywhere                   # https
+[ 4] 8080/tcp                   ALLOW IN    187.127.142.42             # peer-8080
+[ 5] 8080/tcp                   ALLOW IN    187.127.142.46             # db-8080
+[ 6] 3000/tcp                   ALLOW IN    187.127.142.42             # peer-3000
+[ 7] 3000/tcp                   ALLOW IN    187.127.142.46             # db-3000
+[ 8] 4222/tcp                   ALLOW IN    187.127.142.42             # peer-4222
+[ 9] 4222/tcp                   ALLOW IN    187.127.142.46             # db-4222
+[10] 6222/tcp                   ALLOW IN    187.127.142.42             # peer-6222
+[11] 6222/tcp                   ALLOW IN    187.127.142.46             # db-6222
+[12] 8222/tcp                   ALLOW IN    187.127.142.42             # peer-8222
+[13] 8222/tcp                   ALLOW IN    187.127.142.46             # db-8222
+[14] 2379,2380,5432,8008/tcp    ALLOW IN    187.127.142.46             # patroni-ha peer
+[15] 2379,2380,5432,8008/tcp    ALLOW IN    187.127.142.42             # patroni-ha peer
+[16] 5432,5433/tcp              ALLOW IN    172.18.0.0/16              # docker-bridge-haproxy
+[17] 22/tcp (v6)                ALLOW IN    Anywhere (v6)              # ssh
+[18] 80/tcp (v6)                ALLOW IN    Anywhere (v6)              # http
+[19] 443/tcp (v6)               ALLOW IN    Anywhere (v6)              # https
+
+
+## iptables DOCKER-USER
+-N DOCKER-USER
+-A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+-A DOCKER-USER -s 187.127.142.42/32 -j RETURN
+-A DOCKER-USER -s 187.127.142.44/32 -j RETURN
+-A DOCKER-USER -s 187.127.142.46/32 -j RETURN
+-A DOCKER-USER -s 172.16.0.0/12 -j RETURN
+-A DOCKER-USER -s 127.0.0.0/8 -j RETURN
+-A DOCKER-USER -p tcp -m multiport --dports 5432,6379,4222,6222,8222,9000,9001,1025,8025,2379,2380,8008 -j DROP
+-A DOCKER-USER -p tcp -m multiport --dports 8080,3000 -j DROP
+-A DOCKER-USER -s 173.245.48.0/20 -p tcp -m multiport --dports 80,443 -j RETURN
+-A DOCKER-USER -s 103.21.244.0/22 -p tcp -m multiport --dports 80,443 -j RETURN
+-A DOCKER-USER -s 103.22.200.0/22 -p tcp -m multiport --dports 80,443 -j RETURN
+-A DOCKER-USER -s 103.31.4.0/22 -p tcp -m multiport --dports 80,443 -j RETURN
+-A DOCKER-USER -s 141.101.64.0/18 -p tcp -m multiport --dports 80,443 -j RETURN
+-A DOCKER-USER -s 108.162.192.0/18 -p tcp -m multiport --dports 80,443 -j RETURN
+-A DOCKER-USER -s 190.93.240.0/20 -p tcp -m multiport --dports 80,443 -j RETURN
+-A DOCKER-USER -s 188.114.96.0/20 -p tcp -m multiport --dports 80,443 -j RETURN
+-A DOCKER-USER -s 197.234.240.0/22 -p tcp -m multiport --dports 80,443 -j RETURN
+-A DOCKER-USER -s 198.41.128.0/17 -p tcp -m multiport --dports 80,443 -j RETURN
+-A DOCKER-USER -s 162.158.0.0/15 -p tcp -m multiport --dports 80,443 -j RETURN
+-A DOCKER-USER -s 104.16.0.0/13 -p tcp -m multiport --dports 80,443 -j RETURN
+-A DOCKER-USER -s 104.24.0.0/14 -p tcp -m multiport --dports 80,443 -j RETURN
+-A DOCKER-USER -s 172.64.0.0/13 -p tcp -m multiport --dports 80,443 -j RETURN
+-A DOCKER-USER -s 131.0.72.0/22 -p tcp -m multiport --dports 80,443 -j RETURN
+-A DOCKER-USER -p tcp -m multiport --dports 80,443 -j DROP
+-A DOCKER-USER -j RETURN
+
+## docker networks
+NETWORK ID     NAME                       DRIVER    SCOPE
+16ee30be59e9   bridge                     bridge    local
+89156df79171   deploy_default             bridge    local
+1ec009f9daf8   host                       host      local
+4e99810fb524   none                       null      local
+9276b9fb70ff   rawdrive-app_default       bridge    local
+f732a48647f1   rawdrive-patroni_default   bridge    local
+rawdrive-app_default 172.18.0.0/16 gateway=172.18.0.1
+
+
+
+
+## root crontab
+0 3,15 * * * CERTBOT_MODE=webroot /opt/rawdrive/renew-ssl.sh >> /var/log/certbot-renew.log 2>&1
+37 9 * * * "/root/.acme.sh"/acme.sh --cron --home "/root/.acme.sh" > /dev/null
+
+## systemd rawdrive units
+  UNIT                       LOAD   ACTIVE SUB    DESCRIPTION
+  rawdrive-docker-fw.service loaded active exited RawDrive Docker port hardening (restrict published data-plane ports to the peer mesh)
+
+Legend: LOAD   → Reflects whether the unit definition was properly loaded.
+        ACTIVE → The high-level unit activation state, i.e. generalization of SUB.
+        SUB    → The low-level unit activation state, values depend on unit type.
+
+1 loaded units listed.
+To show all installed unit files use 'systemctl list-unit-files'.

@@ -2,13 +2,25 @@
 
 **Subsystem:** Continuous WAL archiving + incremental physical backups + Point-In-Time-Recovery, on the `.46` Postgres 17 primary, with the repository on Backblaze B2 (S3-compatible API).
 
+> **Status after Patroni cutover (2026-06-06):** production Postgres now runs
+> under Patroni as `deploy-patroni-1`, not the old standalone
+> `deploy-postgres-1`. The scripts in `deploy/scripts/pgbackrest-*.sh` now
+> auto-detect `deploy-(patroni|postgres)-1`. Prefer the scripts over hardcoded
+> container names in this older document. A full restore verification from B2
+> passed on 2026-06-06 after booting a disposable Postgres cluster and verifying
+> 147 public tables.
+
 **Why this exists:** Before this subsystem, RawDrive's only backup was the nightly logical `pg_dump` (`deploy/scripts/backup-db.sh`), giving an **RPO of up to 24 hours** — everything written between the 02:00 IST dump and a failure was permanently lost (see "Write loss accounting" in [`disaster-recovery-from-r2.md`](./disaster-recovery-from-r2.md)). pgBackRest closes that gap: continuous WAL archiving brings the achievable RPO down to **≈60 seconds** (`archive_timeout`-bounded) and lets us recover to *any* point in time, not just the last nightly snapshot.
 
 **Relationship to existing DR docs:**
 - [`disaster-recovery-from-r2.md`](./disaster-recovery-from-r2.md) — full-rebuild-from-the-nightly-logical-dump (title says "R2" but storage is **B2** now). That is the **logical** restore path and remains the belt-and-suspenders secondary. See §(f) below for how the two layers compose.
-- [`postgres-failover.md`](./postgres-failover.md) — promoting the `.44` streaming standby when the primary dies. PITR is the *third* leg: standby = seconds-RPO HA failover; pgBackRest = arbitrary-point recovery + offsite copy; nightly pg_dump = logical safety net.
+- [`patroni-failover.md`](./patroni-failover.md) — current automatic HA path.
+  PITR is the recovery layer for bad data changes, total DB-node loss, or
+  rebuilds from offsite backups.
 
-> **EVERYTHING in this subsystem is INERT until the deliberate activation in §(a).** `archive_mode` ships **off**; no WAL is archived and no pgBackRest command runs until an operator performs the cutover. A half-deployed PITR pipeline never silently changes primary behaviour.
+> **Production note:** archiving is active in production after the 2026-06-06
+> Patroni cutover. Section (a) remains the first-time activation sequence for a
+> fresh environment or rebuild.
 
 ---
 
@@ -47,7 +59,7 @@ Append the archiving block from deliverable **A** to `deploy/postgres/postgresql
 ```bash
 ssh root@187.127.142.46 'cd /opt/rawdrive/app && docker compose -f deploy/docker-compose.prod-db.yml up -d postgres'
 # Confirm archiving is armed (NOT yet that segments are landing):
-ssh root@187.127.142.46 'docker exec deploy-postgres-1 psql -U rawdrive -d rawdrive -c "SHOW archive_mode; SHOW archive_command;"'
+ssh root@187.127.142.46 'docker exec deploy-patroni-1 psql -U postgres -d postgres -c "SHOW archive_mode; SHOW archive_command;"'
 # Expected: archive_mode = on; archive_command = pgbackrest ... archive-push %p
 ```
 
@@ -92,32 +104,58 @@ Activation complete. WAL is now continuously archived and physical backups roll 
 ### Backup set & WAL archive health
 
 ```bash
-ssh root@187.127.142.46 'docker exec deploy-postgres-1 pgbackrest --stanza=rawdrive info'
+ssh root@187.127.142.46 'docker exec deploy-patroni-1 pgbackrest --stanza=rawdrive info'
 ```
 Read: the list of `full`/`diff`/`incr` backups with timestamps + sizes, and the `wal archive min/max` range. A growing gap between "now" and the newest backup, or a stalled `wal archive max`, means archiving has broken.
 
 ### archive_command success/failure (the canonical signal)
 
 ```bash
-ssh root@187.127.142.46 'docker exec deploy-postgres-1 psql -U rawdrive -d rawdrive -x -c \
+ssh root@187.127.142.46 'docker exec deploy-patroni-1 psql -U postgres -d postgres -x -c \
   "SELECT archived_count, last_archived_wal, last_archived_time, failed_count, last_failed_wal, last_failed_time FROM pg_stat_archiver;"'
 ```
 - `failed_count` climbing or `last_failed_time` recent → `archive_command` is erroring (B2 down, bad creds, repo full). Because we run `archive-async=y`, transient failures retry from the spool without blocking writes — but a *persistent* failure will eventually fill the spool and then back-pressure the primary. Treat any sustained `failed_count` growth as a page.
 - Inspect the async spool depth and pgBackRest's own log:
 ```bash
-ssh root@187.127.142.46 'docker exec deploy-postgres-1 sh -c "ls -1 /var/spool/pgbackrest/archive/rawdrive/out 2>/dev/null | wc -l; tail -n 50 /var/log/pgbackrest/rawdrive-archive-push-async.log"'
+ssh root@187.127.142.46 'docker exec deploy-patroni-1 sh -c "ls -1 /var/spool/pgbackrest/archive/rawdrive/out 2>/dev/null | wc -l; tail -n 50 /var/log/pgbackrest/rawdrive-archive-push-async.log"'
 ```
 
 ### Replication lag (the .44 standby — orthogonal but watch together)
 
 ```bash
-ssh root@187.127.142.46 'docker exec deploy-postgres-1 psql -U rawdrive -d rawdrive -x -c \
+ssh root@187.127.142.46 'docker exec deploy-patroni-1 psql -U postgres -d postgres -x -c \
   "SELECT application_name, state, write_lag, flush_lag, replay_lag FROM pg_stat_replication;"'
 ```
 
 ### Weekly restore-drill result
 
 The cron in §(a) Step 6 runs `pgbackrest-restore-verify.sh`; check `/opt/rawdrive/backups/pgbackrest-restore-verify.log` for a trailing `restore-verify PASSED`. A `FAILED` there is a **sev-2**: backups exist but may not restore.
+
+After the Patroni cutover the restore drill has two important production
+requirements:
+
+- It must read pgBackRest/B2 secrets from the live container environment into a
+  temporary `0600` env file and pass that file with `--env-file`. Do not pass
+  secrets with `docker run -e ...`; those values can appear in process listings.
+- It must restore with `--pg1-path=/var/lib/postgresql/data` and mount the temp
+  restore directory at `/var/lib/postgresql/data` for both restore and boot. If
+  pgBackRest writes `restore_command` with `--pg1-path=/restore` but Postgres
+  boots with `/var/lib/postgresql/data`, archive recovery fails with a
+  "working directory is not the same as option pg1-path" error.
+
+Known-good restore-smoke command:
+
+```bash
+ssh root@187.127.142.46 '/opt/rawdrive/app/deploy/scripts/pgbackrest-restore-verify.sh'
+```
+
+Known-good result from 2026-06-06:
+
+- latest B2 full backup restored successfully;
+- disposable Postgres reached readiness;
+- `information_schema` reported 147 public tables;
+- `users`, `galleries`, `assets`, and `schema_migrations` were present;
+- temporary container and restore directory were removed.
 
 ---
 
@@ -162,7 +200,11 @@ ssh root@<TARGET_IP> 'docker exec deploy-postgres-1 psql -U rawdrive -d rawdrive
 
 ### 4. Re-point the app + rebuild the standby
 
-Follow [`postgres-failover.md`](./postgres-failover.md) §3 to flip pgbouncer at the recovered primary, then rebuild the `.44` standby per §(d) below (a PITR rewind diverges the timeline, so the old standby MUST be rebuilt — do not let it re-attach).
+For current production, follow [`production-ha-rebuild.md`](./production-ha-rebuild.md)
+and [`patroni-failover.md`](./patroni-failover.md): route PgBouncer through
+local HAProxy, ensure Patroni owns the recovered primary, then rebuild `.44` as
+a Patroni standby. A PITR rewind diverges the timeline, so the old standby MUST
+be rebuilt - do not let it re-attach.
 
 ---
 
@@ -182,7 +224,7 @@ ssh root@187.127.142.44 'docker exec deploy-postgres-replica-1 pgbackrest --stan
 ```bash
 ssh root@187.127.142.44 'cd /opt/rawdrive/app && docker compose -f deploy/docker-compose.prod-db.yml --profile postgres-replica up -d postgres-replica'
 ssh root@187.127.142.44 'docker exec deploy-postgres-replica-1 psql -U rawdrive -d rawdrive -c "SELECT pg_is_in_recovery();"'   # expect: t
-ssh root@187.127.142.46 'docker exec deploy-postgres-1 psql -U rawdrive -d rawdrive -c "SELECT application_name, state FROM pg_stat_replication;"'   # expect a streaming row
+ssh root@187.127.142.46 'docker exec deploy-patroni-1 psql -U postgres -d postgres -c "SELECT application_name, state FROM pg_stat_replication;"'   # expect a streaming row
 ```
 
 ---
@@ -192,7 +234,7 @@ ssh root@187.127.142.46 'docker exec deploy-postgres-1 psql -U rawdrive -d rawdr
 Retention is declarative in `deploy/pgbackrest/pgbackrest.conf`: `repo1-retention-full=4` (keep 4 fulls ≈ 1 month at weekly cadence) and `repo1-retention-diff=14`. pgBackRest auto-expires when a backup runs, but you can force it:
 
 ```bash
-ssh root@187.127.142.46 'docker exec deploy-postgres-1 pgbackrest --stanza=rawdrive expire'
+ssh root@187.127.142.46 'docker exec deploy-patroni-1 pgbackrest --stanza=rawdrive expire'
 ```
 
 Expiring a full automatically removes the diffs/incrementals that depended on it and the WAL no longer needed to reach the oldest retained full. To change retention, edit the conf and the next backup/expire applies it. **B2 lifecycle rules should NOT independently delete objects under `/pgbackrest`** — let pgBackRest own that path's lifecycle, or you'll orphan a backup set mid-chain.
@@ -205,7 +247,7 @@ Three independent layers, by design — each covers the others' failure modes:
 
 | Layer | Tool | What it protects against | RPO | Restore path |
 |---|---|---|---|---|
-| **Streaming standby** (`.44`) | Postgres physical replication | Primary host/disk death | ≤5s (async lag) | `postgres-failover.md` |
+| **Streaming standby** (`.44`) | Patroni synchronous physical replication | Primary host/disk death | **0 for acknowledged commits** while sync standby is healthy | `patroni-failover.md` |
 | **Physical PITR** (this doc) | pgBackRest → B2 | Logical corruption, bad migration, ransomware, offsite loss; recover to any instant | **≈60s** (`archive_timeout`) | §(c) |
 | **Logical dump** (nightly) | `pg_dump` + `pg-globals-backup.sh` → B2 | pgBackRest repo corruption, catalog/version-mismatch, cross-version/portable restore | ≤24h | `disaster-recovery-from-r2.md` |
 
@@ -217,7 +259,7 @@ Three independent layers, by design — each covers the others' failure modes:
 
 | Scenario | Before PITR | After PITR |
 |---|---|---|
-| **RPO (primary loss, fail to standby)** | ≤5s | ≤5s (unchanged — async replication) |
+| **RPO (primary loss, fail to standby)** | ≤5s | **0 for acknowledged commits** with Patroni synchronous standby healthy |
 | **RPO (both primary+standby lost, restore offsite)** | **≤24h** (last nightly dump) | **≈60s** (`archive_timeout` — last archived WAL) |
 | **RTO (PITR to a point-in-time on a replacement node)** | N/A (not possible) | ~20–45 min (download from B2 + delta restore + WAL replay; scales with DB size & target distance) |
 | **RTO (logical full rebuild)** | 30–60 min | 30–60 min (unchanged — secondary path) |
@@ -229,7 +271,10 @@ Three independent layers, by design — each covers the others' failure modes:
 ## Cross-references
 
 - [`disaster-recovery-from-r2.md`](./disaster-recovery-from-r2.md) — logical full-rebuild from the nightly B2 dump (the secondary path).
-- [`postgres-failover.md`](./postgres-failover.md) — promoting the `.44` standby (the HA path) + the pgbouncer flip.
+- [`postgres-failover.md`](./postgres-failover.md) — historical manual fallback before Patroni.
+- [`patroni-failover.md`](./patroni-failover.md) — current production HA path.
+- [`production-ha-rebuild.md`](./production-ha-rebuild.md) — full rebuild using the sanitized config backup.
+- [`docs/production-config-backups/2026-06-06-ha-cutover/`](../production-config-backups/2026-06-06-ha-cutover/) — sanitized post-cutover config snapshot.
 - `deploy/pgbackrest/pgbackrest.conf` — repo/stanza config (no secrets; env-driven).
 - `deploy/postgres/Dockerfile` — the pgBackRest-enabled Postgres image.
 - `deploy/scripts/pgbackrest-init.sh` / `pgbackrest-backup.sh` / `pgbackrest-restore-verify.sh` / `pg-globals-backup.sh`.

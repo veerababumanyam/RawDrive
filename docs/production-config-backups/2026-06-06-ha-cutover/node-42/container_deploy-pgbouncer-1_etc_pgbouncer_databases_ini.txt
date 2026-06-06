@@ -1,0 +1,10 @@
+; PgBouncer database routing.
+; Patroni cutover is complete: pgbouncer points at the host-local HAProxy write
+; listener through Docker's host-gateway alias. PgBouncer itself runs in the app
+; bridge network, so 127.0.0.1 would point back inside the pgbouncer container;
+; host.docker.internal resolves to the host bridge gateway via prod-app compose.
+; Future PostgreSQL failovers must NOT rewrite this file; use patronictl for a
+; controlled switchover and let HAProxy absorb the leader change.
+
+[databases]
+rawdrive = host=host.docker.internal port=5432 dbname=rawdrive auth_user=rawdrive

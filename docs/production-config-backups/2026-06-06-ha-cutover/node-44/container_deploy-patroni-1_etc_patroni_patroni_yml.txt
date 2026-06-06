@@ -1,0 +1,360 @@
+# =============================================================================
+# RawDrive — Patroni configuration template (deploy/patroni/patroni.yml.template)
+# =============================================================================
+#
+# ⚠️  PLANNED CUTOVER — INERT UNTIL DELIBERATELY ACTIVATED  ⚠️
+#
+# This file configures the Patroni automatic-failover subsystem that REPLACES
+# the manual failover (deploy/scripts/promote-postgres-replica.sh + hand-edited
+# deploy/pgbouncer/databases.ini). It takes effect ONLY after the maintenance-
+# window cutover in docs/runbooks/patroni-failover.md. Converting the live
+# standalone primary on .46 to Patroni control is NOT hot-swappable — Patroni
+# seizes ownership of the Postgres lifecycle and of postgresql.conf/pg_hba.conf.
+# Until cutover, the manual model in docs/runbooks/postgres-failover.md is in
+# force and this config is unused.
+#
+# -----------------------------------------------------------------------------
+# How this template is rendered
+# -----------------------------------------------------------------------------
+# Patroni does NOT do shell-style env substitution on its own config. The
+# patroni service in deploy/docker-compose.patroni.yml renders this template
+# with `envsubst` (only the ${VARS} named here) into /etc/patroni/patroni.yml at
+# container start, then execs `patroni /etc/patroni/patroni.yml`. All secrets
+# (<REDACTED_HEX>, <REDACTED_HEX>) come from
+# /opt/rawdrive/app/.env — NEVER hardcoded here. Per-node identity
+# (pg-44, 187.127.142.44) also comes from that env.
+#
+# Required ${VARS} (documented for .env.example in the integration notes):
+#   PATRONI_NAME                 unique member name: "pg-46", "pg-44"
+#   PATRONI_NODE_IP              this node's public IP (.46 / .44)
+#   PATRONI_SCOPE                cluster scope (default "rawdrive")
+#   ETCD_NODE_42_IP/44_IP/46_IP  the three etcd client endpoints
+#   POSTGRES_USER                superuser role (rawdrive)
+#   POSTGRES_PASSWORD            superuser password
+#   POSTGRES_REPLICATION_PASSWORD  replication role password
+# =============================================================================
+
+# Cluster scope. Every Patroni member in this cluster MUST share this scope and
+# namespace, or they form separate clusters and you get a silent split brain.
+scope: rawdrive
+# Namespace = etcd key prefix. All cluster state lives under /rawdrive/rawdrive/*
+# in etcd. Keeping it explicit (not the default /service/) avoids collisions if
+# etcd is ever shared.
+namespace: /rawdrive
+# Unique member name. MUST differ per node ("pg-46" on .46, "pg-44" on .44).
+# Two members with the same name corrupt the DCS member list.
+name: pg-44
+
+# -----------------------------------------------------------------------------
+# REST API — Patroni's control + health surface.
+# HAProxy health-checks this (GET /primary, GET /replica) to route traffic, and
+# patronictl + patroni-status.sh talk to it. Bind on this node's IP:8008 so the
+# other nodes' HAProxy and patronictl can reach it cross-host; the publish in
+# the compose file scopes it to this host IP (never 0.0.0.0), matching the
+# postgres/valkey/nats publish discipline in docker-compose.prod-db.yml.
+# -----------------------------------------------------------------------------
+restapi:
+  listen: 0.0.0.0:8008
+  # The address other nodes use to reach THIS member's REST API. Must be the
+  # routable host IP, not 127.0.0.1, or HAProxy on the peer node can't check it.
+  connect_address: 187.127.142.44:8008
+  # NOTE: the REST API is reachable only from the three cluster hosts because
+  # UFW + the compose host-IP publish restrict :8008 to the cluster subnet.
+  # If you ever expose it wider, enable authentication here (username/password)
+  # and TLS — an open REST API can trigger failover/restart.
+
+# -----------------------------------------------------------------------------
+# etcd v3 — the Distributed Configuration Store (DCS).
+# This is the source of truth for "who is the leader". The leader holds a
+# time-limited lease (the leader key with TTL below); it must renew the lease
+# within ttl seconds or it loses leadership and an election runs. etcd's own
+# quorum (3 members, tolerate 1 failure — see deploy/etcd/etcd.conf.yml.template)
+# is what prevents two leaders. Patroni points at ALL THREE etcd endpoints so a
+# single etcd member loss does not blind this Postgres node.
+# -----------------------------------------------------------------------------
+etcd3:
+  hosts:
+    - 187.127.142.42:2379
+    - 187.127.142.44:2379
+    - 187.127.142.46:2379
+  # Patroni reconnects across the list if one endpoint is down. Keep all three
+  # so losing the DB node (.46) — the very failure we are protecting against —
+  # still leaves a 2-member etcd quorum on .42 + .44 to run the election.
+  protocol: http
+
+# -----------------------------------------------------------------------------
+# bootstrap — applied ONCE, only when the cluster is first initialized (the very
+# first member to grab the /initialize key). On every subsequent start Patroni
+# reads the LIVE values from the DCS, not from this section. So `bootstrap.dcs`
+# seeds the cluster-wide dynamic configuration; to change it later you edit the
+# DCS via `patronictl edit-config`, NOT by editing this file and restarting.
+# -----------------------------------------------------------------------------
+bootstrap:
+  # ===========================================================================
+  # dcs — cluster-wide dynamic config, stored in etcd, shared by all members.
+  # ===========================================================================
+  dcs:
+    # --- Failover timing knobs -------------------------------------------------
+    # ttl: the leader lease lifetime (seconds). If the leader fails to renew its
+    #   lease within ttl, it is considered dead and an election begins. Larger =
+    #   more tolerant of transient network blips (fewer spurious failovers);
+    #   smaller = faster detection of a truly dead primary. 30s is the Patroni
+    #   default and a sane balance for a 3-node cross-VPS cluster where brief
+    #   network jitter between Hostinger nodes must NOT trigger a needless
+    #   failover.
+    ttl: 30
+    # loop_wait: how often (seconds) each Patroni runs its HA loop (checks DCS,
+    #   renews lease, reconciles Postgres). Must satisfy loop_wait*2 <= ttl so a
+    #   single missed loop doesn't drop the lease. 10s with ttl 30 leaves margin.
+    loop_wait: 10
+    # retry_timeout: how long Patroni keeps retrying a DCS/Postgres operation
+    #   before giving up on that loop iteration. Must be < ttl. 10s.
+    retry_timeout: 10
+
+    # =========================================================================
+    # DATA-SAFETY KNOBS — READ THIS BLOCK CAREFULLY. These two settings decide
+    # whether a failover can LOSE committed-looking writes.
+    # =========================================================================
+    #
+    # maximum_lag_on_failover: the maximum WAL lag (in BYTES) a standby may have
+    #   behind the old leader's last known position and STILL be eligible for
+    #   promotion. 1048576 = 1 MiB. A standby lagging more than this is NOT
+    #   promoted — Patroni would rather refuse an unsafe failover than promote a
+    #   far-behind replica and silently discard the WAL gap. With synchronous
+    #   replication on (below), the synchronous standby is by definition caught
+    #   up, so this is the backstop for the ASYNC candidates / edge cases.
+    maximum_lag_on_failover: 1048576
+
+    # synchronous_mode: ON = zero-data-loss failover (the durability choice the
+    #   user explicitly asked for, "HA at highest priority").
+    #
+    #   DURABILITY TRADEOFF — be honest about this:
+    #     • ON  → the primary will NOT acknowledge a COMMIT to the application
+    #             until at least one standby has the WAL (synchronous_commit +
+    #             synchronous_standby_names, managed by Patroni). On primary
+    #             death, Patroni ONLY promotes a standby that was synchronous, so
+    #             the promoted node has every acknowledged commit. RPO = 0. The
+    #             cost is WRITE LATENCY: every commit now waits for a network
+    #             round-trip to the standby on .44 (cross-VPS), and if NO healthy
+    #             synchronous standby exists, commits BLOCK rather than risk
+    #             silent data loss.
+    #     • OFF → async replication: lower write latency, but a primary crash can
+    #             lose the last few seconds of acknowledged commits (RPO ~ a few
+    #             seconds). This is what the OLD manual model accepted (see
+    #             docs/runbooks/postgres-failover.md "RPO: ≤5 seconds").
+    #
+    #   We choose ON for RawDrive because the platform handles photographer
+    #   payments + gallery-delivery state where a "committed" write must survive
+    #   a node loss.
+    synchronous_mode: true
+    # synchronous_mode_strict: false → if the ONLY synchronous standby dies,
+    #   Patroni temporarily falls back to async on the primary so writes are NOT
+    #   frozen indefinitely (availability over strict durability in that single
+    #   degraded window). Set true ONLY if you would rather HALT writes than ever
+    #   accept an async window — that converts a standby outage into a full write
+    #   outage, so we keep it false and alert on the degraded state instead.
+    synchronous_mode_strict: false
+
+    # check_timeline: refuse to promote a standby whose timeline diverged from
+    #   the leader's — another split-brain guard.
+    check_timeline: true
+
+    # =========================================================================
+    # postgresql — the Postgres config Patroni renders into PGDATA. This MIRRORS
+    # deploy/postgres/postgresql.conf so a Patroni-managed Postgres keeps the
+    # IDENTICAL tuning the standalone primary runs today. Keep these in lock-step:
+    # if you change deploy/postgres/postgresql.conf, change it here too (after
+    # cutover, change it via `patronictl edit-config`, which writes to the DCS).
+    # =========================================================================
+    postgresql:
+      # use_pg_rewind: after a failover, when the OLD primary comes back it has
+      #   diverged WAL. pg_rewind rewinds it to the new timeline so it can rejoin
+      #   as a standby WITHOUT a full base backup. Requires wal_log_hints (set in
+      #   parameters below) or data checksums. Essential for fast fail-back.
+      use_pg_rewind: true
+      # use_slots: use physical replication slots so the primary retains WAL the
+      #   standby still needs (prevents the standby falling off the end of WAL).
+      #   Matches the standalone config's max_replication_slots=5 intent.
+      use_slots: true
+
+      parameters:
+        # --- Connections ------------------------------------------------------
+        max_connections: 100
+
+        # --- Memory (mirrored exactly from postgresql.conf) -------------------
+        shared_buffers: 2GB
+        effective_cache_size: 6GB
+        work_mem: 16MB
+        maintenance_work_mem: 512MB
+        wal_buffers: 64MB
+
+        # --- WAL / replication (mirrored) -------------------------------------
+        wal_level: replica
+        max_wal_senders: 5
+        max_replication_slots: 5
+        wal_keep_size: 1GB
+        synchronous_commit: "on"
+        # wal_log_hints is REQUIRED by use_pg_rewind above (the standalone config
+        # didn't need it; Patroni does, for crash-safe rewind). Patroni would
+        # normally force this on, but we set it explicitly so it's auditable.
+        wal_log_hints: "on"
+        # hot_standby lets the standby serve read traffic (the :5433 read path in
+        # HAProxy). The standalone replica set this in its own override; under
+        # Patroni it must be cluster-wide.
+        hot_standby: "on"
+
+        # --- Archiving via pgBackRest (PITR integration) ----------------------
+        # archive_mode + archive_command ship every completed WAL segment into
+        # the pgBackRest repo (stanza "rawdrive"), which is ALSO the
+        # create_replica_method below. This is what lets a rebuilt standby be
+        # seeded from the PITR repo instead of a slow full pg_basebackup, and is
+        # the same archive the parallel PITR subsystem relies on. archive_mode is
+        # cluster-wide and survives failover (the new leader keeps archiving).
+        archive_mode: "on"
+        archive_command: 'pgbackrest --stanza=rawdrive --config=/etc/pgbackrest/pgbackrest.conf archive-push %p'
+        # If pgbackrest archive-push fails, Postgres retries the same segment; WAL
+        # accumulates rather than being lost. Monitor pg_stat_archiver lag.
+
+        # --- Query planning (mirrored) ----------------------------------------
+        random_page_cost: 1.1
+        effective_io_concurrency: 200
+
+        # --- Logging (mirrored) -----------------------------------------------
+        log_destination: stderr
+        logging_collector: "off"
+        log_min_duration_statement: 500
+        log_line_prefix: '%m [%p] %q%u@%d '
+        log_checkpoints: "on"
+        log_connections: "on"
+        log_disconnections: "on"
+        log_lock_waits: "on"
+        log_statement: ddl
+
+        # --- pg_stat_statements (mirrored) ------------------------------------
+        shared_preload_libraries: pg_stat_statements
+        "pg_stat_statements.max": 10000
+        "pg_stat_statements.track": all
+
+        # --- Timezone (mirrored) ----------------------------------------------
+        timezone: Asia/Kolkata
+        log_timezone: Asia/Kolkata
+
+        # --- Autovacuum (mirrored) --------------------------------------------
+        autovacuum: "on"
+        autovacuum_max_workers: 4
+        autovacuum_naptime: 30s
+        autovacuum_vacuum_scale_factor: 0.1
+        autovacuum_analyze_scale_factor: 0.05
+
+      # pg_hba written into PGDATA by Patroni. Mirrors deploy/postgres/pg_hba.conf
+      # intent (app nodes .42/.44 reach Postgres, replication between DB nodes)
+      # PLUS the entries Patroni itself needs: every cluster member must be able
+      # to make a `replication` connection to every other member, because under
+      # Patroni either node can become the primary and the others stream from it.
+      # NOTE: traffic now arrives via HAProxy on the app nodes, but pg_hba still
+      # keys on the ORIGINAL client IP (HAProxy in tcp mode does not rewrite the
+      # source unless proxy-protocol is enabled, which we do not use here), so the
+      # app-node CIDRs remain correct.
+      # F-077 model — mirrors the standalone deploy/postgres/pg_hba.conf +
+      # pg_ident.conf hardening (PRs #200/#202): NO `trust` anywhere. Patroni
+      # rewrites pg_hba into PGDATA on adoption, so it MUST carry the same peer +
+      # ident model or the cutover would regress F-077. Validated end-to-end
+      # (incl. the docker-exec -U rawdrive ops path, pg_rewind, switchover,
+      # auto-failover) by the isolated rehearsal 2026-06-06
+      # (deploy/patroni/rehearsal/; see docs/runbooks/patroni-cutover-execution.md).
+      # NOTE: pg_hba / pg_ident are defined at the TOP-LEVEL `postgresql:` section
+      # below (Patroni applies those on EVERY start), NOT here under bootstrap.dcs.
+      # bootstrap.dcs is applied ONLY on the FIRST cluster initialization; on an
+      # ADOPT of an existing data directory Patroni skips bootstrap, so a
+      # bootstrap-only pg_hba is never written into the adopted PGDATA -> Patroni's
+      # local-replication timeline fetch FATALs "no pg_hba entry for replication
+      # connection from [local]" and the node never promotes (read-only deadlock).
+      # Putting pg_hba/pg_ident at top-level postgresql fixes the adopt path AND
+      # still seeds a fresh bootstrap. (Validated by the isolated adopt rehearsal,
+      # 2026-06-06: a stale pre-F-077 pg_hba in PGDATA is overwritten with F-077 on
+      # adopt and the node promotes.)
+
+    # --- Replica-creation methods, in PRIORITY ORDER --------------------------
+    # When Patroni needs to (re)build a standby — e.g. the old primary rejoins
+    # and pg_rewind isn't possible, or a fresh node is added — it tries these in
+    # order. pgbackrest FIRST (restore from the PITR repo: fast, off-loads the
+    # primary, reuses the archive we're already shipping), basebackup as the
+    # always-available FALLBACK (streams a fresh copy directly from the leader).
+    initdb:
+      - encoding: UTF8
+      - data-checksums   # belt-and-braces with wal_log_hints for safe pg_rewind
+    # NOTE: create_replica_methods lives under bootstrap.method in newer Patroni;
+    # we declare it under postgresql below (the runtime location Patroni reads on
+    # every standby (re)build, not just bootstrap).
+
+  # bootstrap.method left as the default initdb path for the VERY FIRST cluster
+  # init. In the RawDrive cutover we do NOT initdb a fresh cluster — we adopt the
+  # EXISTING primary data dir (Patroni detects a valid PGDATA and takes it over
+  # as the leader). See patroni-bootstrap.sh, which is why a clean initdb here is
+  # only a safety net for a from-scratch rebuild.
+
+# -----------------------------------------------------------------------------
+# postgresql — this MEMBER's local Postgres settings (not cluster-wide).
+# -----------------------------------------------------------------------------
+postgresql:
+  # Bind ONLY this node's public IP (NOT 0.0.0.0/* and NOT 127.0.0.1). On the app
+  # nodes (.44) HAProxy must own 127.0.0.1:5432 for the local pgbouncer; if Postgres
+  # bound *:5432 it would grab every local 5432 and HAProxy would fail
+  # "address already in use". Patroni reaches its LOCAL Postgres over the Unix
+  # socket (use_unix_socket below), NOT localhost TCP, so it does not need a
+  # loopback listener — this avoids the old bug-#6 localhost(::1) health-probe issue
+  # (which only bit the 0.0.0.0 IPv4-only + TCP-probe combo) while leaving the
+  # loopback free for HAProxy. Cross-host replication + HAProxy routing reach this
+  # node on 187.127.142.44:5432.
+  listen: 187.127.142.44:5432
+  # Patroni connects to its LOCAL Postgres over the Unix socket (not TCP), which
+  # sidesteps the localhost/IPv6 resolution entirely and is authorised by the
+  # `local all postgres peer` line in the pg_hba above (F-077: peer, not trust;
+  # postgres OS user → postgres superuser).
+  use_unix_socket: true
+  use_unix_socket_repl: true
+  # Address other members use to reach THIS node's Postgres for replication.
+  # Must be the routable host IP.
+  connect_address: 187.127.142.44:5432
+  data_dir: /var/lib/postgresql/data
+  bin_dir: /usr/lib/postgresql/17/bin
+  # pgpass file Patroni writes for its own replication/rewind connections.
+  pgpass: /tmp/pgpass
+
+  # create_replica_methods: pgbackrest first, basebackup fallback (see the
+  # priority-order rationale above). Each named method needs a matching block.
+  create_replica_methods:
+    - pgbackrest
+    - basebackup
+  pgbackrest:
+    command: 'pgbackrest --stanza=rawdrive --config=/etc/pgbackrest/pgbackrest.conf --delta restore'
+    keep_data: true
+    no_params: true
+    no_master: 1
+  basebackup:
+    # Streamed directly from the current leader. -X stream keeps WAL during the
+    # copy; max-rate throttles so rebuilding a standby doesn't saturate the link
+    # and starve live traffic.
+    max-rate: 100M
+    checkpoint: fast
+
+  # --- Authentication: ALL from env, NEVER hardcoded ------------------------
+  # superuser = the rawdrive role Patroni uses to manage Postgres.
+  # replication = the replicator role standbys stream with.
+  # rewind reuses the superuser (Patroni needs a superuser-capable role for
+  # pg_rewind on PG11+; we keep it the same role to avoid a third secret).
+  # Patroni connects to its LOCAL Postgres as the `postgres` superuser over the
+  # Unix socket. Under F-077 peer auth the postgres OS user (the image USER, uid
+  # 999, owns PGDATA) maps directly to the postgres role via `local all postgres
+  # peer` — no password, no pg_ident map, no trust. This keeps Patroni's core
+  # lifecycle working independently of the pg_ident map (which only the ops
+  # `-U rawdrive` path needs). The postgres superuser role already exists on the
+  # adopted .46 cluster (init/03-create-postgres-superuser.sh). The app role
+  # `rawdrive` is unchanged and used by clients over TCP (scram). rewind (PG11+
+  # needs a superuser) also uses postgres. password is still supplied (peer
+  # ignores it locally) so any non-socket path remains authenticated.
+  authentication:
+    superuser:
+      username: postgres
+      password: <REDACTED>
+    replication:

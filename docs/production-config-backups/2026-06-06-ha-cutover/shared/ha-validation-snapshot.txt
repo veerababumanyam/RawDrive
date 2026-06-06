@@ -1,0 +1,150 @@
+# Shared HA Validation Snapshot
+captured_at_utc=2026-06-06T12:19:00Z
+
+## Patroni cluster list (.46)
++ Cluster: rawdrive (7627586247693303847) -----------+----+-----------+
+| Member | Host           | Role         | State     | TL | Lag in MB |
++--------+----------------+--------------+-----------+----+-----------+
+| pg-44  | 187.127.142.44 | Sync Standby | streaming |  4 |         0 |
+| pg-46  | 187.127.142.46 | Leader       | running   |  4 |           |
++--------+----------------+--------------+-----------+----+-----------+
+
+## Patroni DCS config (.46, sanitized)
+check_timeline: true
+initdb:
+- encoding: UTF8
+- data-checksums
+loop_wait: 10
+maximum_lag_on_failover: 1048576
+postgresql:
+  parameters:
+    archive_command: pgbackrest --stanza=rawdrive --config=/etc/pgbackrest/pgbackrest.conf archive-push %p
+    archive_mode: 'on'
+    autovacuum: 'on'
+    autovacuum_analyze_scale_factor: 0.05
+    autovacuum_max_workers: 4
+    autovacuum_naptime: 30s
+    autovacuum_vacuum_scale_factor: 0.1
+    effective_cache_size: 6GB
+    effective_io_concurrency: 200
+    hot_standby: 'on'
+    log_checkpoints: 'on'
+    log_connections: 'on'
+    log_destination: stderr
+    log_disconnections: 'on'
+    log_line_prefix: '%m [%p] %q%u@%d '
+    log_lock_waits: 'on'
+    log_min_duration_statement: 500
+    log_statement: ddl
+    log_timezone: Asia/Kolkata
+    logging_collector: 'off'
+    maintenance_work_mem: 512MB
+    max_connections: 100
+    max_replication_slots: 5
+    max_wal_senders: 5
+    pg_stat_statements.max: 10000
+    pg_stat_statements.track: all
+    random_page_cost: 1.1
+    shared_buffers: 2GB
+    shared_preload_libraries: pg_stat_statements
+    synchronous_commit: 'on'
+    timezone: Asia/Kolkata
+    wal_buffers: 64MB
+    wal_keep_size: 1GB
+    wal_level: replica
+    wal_log_hints: 'on'
+    work_mem: 16MB
+  pg_hba:
+  - local   all             postgres                                peer
+  - local   all             rawdrive                                peer            map=rawdrive_ops
+  - local   all             all                                     scram-sha-256
+  - local   replication     all                                     scram-sha-256
+  - host    all             all             127.0.0.1/32            scram-sha-256
+  - host    all             all             ::1/128                 scram-sha-256
+  - host    all             postgres        187.127.142.46/32       scram-sha-256
+  - host    all             postgres        187.127.142.44/32       scram-sha-256
+  - host    rawdrive        rawdrive        187.127.142.42/32       scram-sha-256
+  - host    rawdrive        rawdrive        187.127.142.44/32       scram-sha-256
+  - host    replication     replicator      187.127.142.46/32       scram-sha-256
+  - host    replication     replicator      187.127.142.44/32       scram-sha-256
+  pg_ident:
+  - rawdrive_ops  root      rawdrive
+  - rawdrive_ops  postgres  rawdrive
+  use_pg_rewind: true
+  use_slots: true
+retry_timeout: 10
+synchronous_mode: true
+synchronous_mode_strict: false
+ttl: 30
+
+
+## pgBackRest info (.46)
+stanza: rawdrive
+    status: ok
+    cipher: aes-256-cbc
+
+    db (current)
+        wal archive min/max (17): 000000010000000000000001/000000040000000100000091
+
+        full backup: 20260605-230511F
+            timestamp start/stop: 2026-06-06 04:35:11+05:30 / 2026-06-06 04:44:17+05:30
+            wal start/stop: 00000001000000000000003F / 000000010000000000000049
+            database size: 124MB, database backup size: 124MB
+            repo1: backup set size: 14.4MB, backup size: 14.4MB
+
+        incr backup: 20260605-230511F_20260605-231611I
+            timestamp start/stop: 2026-06-06 04:46:11+05:30 / 2026-06-06 04:46:43+05:30
+            wal start/stop: 00000001000000000000004C / 00000001000000000000004C
+            database size: 124.4MB, database backup size: 80.6MB
+            repo1: backup set size: 14.4MB, backup size: 10MB
+            backup reference total: 1 full
+
+        incr backup: 20260605-230511F_20260606-063527I
+            timestamp start/stop: 2026-06-06 12:05:27+05:30 / 2026-06-06 12:06:13+05:30
+            wal start/stop: 0000000100000000000000BB / 0000000100000000000000BC
+            database size: 125.2MB, database backup size: 85.6MB
+            repo1: backup set size: 14.5MB, backup size: 10.7MB
+            backup reference total: 1 full, 1 incr
+
+        incr backup: 20260605-230511F_20260606-075027I
+            timestamp start/stop: 2026-06-06 13:20:27+05:30 / 2026-06-06 13:21:21+05:30
+            wal start/stop: 000000010000000100000008 / 000000010000000100000008
+            database size: 129.3MB, database backup size: 91.1MB
+            repo1: backup set size: 15.2MB, backup size: 11.5MB
+            backup reference total: 1 full, 2 incr
+
+        full backup: 20260606-090542F
+            timestamp start/stop: 2026-06-06 14:35:42+05:30 / 2026-06-06 14:45:06+05:30
+            wal start/stop: 000000010000000100000052 / 000000010000000100000058
+            database size: 145.5MB, database backup size: 145.5MB
+            repo1: backup set size: 17.8MB, backup size: 17.8MB
+
+## HAProxy backend states
+### 187.127.142.42
+pg_primary_backend pg-46 UP L7OK 
+pg_primary_backend pg-44 DOWN L7STS Service Unavailable
+pg_replica_backend pg-46 DOWN L7STS Service Unavailable
+pg_replica_backend pg-44 UP L7OK 
+### 187.127.142.44
+pg_primary_backend pg-46 UP L7OK 
+pg_primary_backend pg-44 DOWN L7STS Service Unavailable
+pg_replica_backend pg-46 DOWN L7STS Service Unavailable
+pg_replica_backend pg-44 UP L7OK 
+
+## PgBouncer routing smoke
+### 187.127.142.42
+187.127.142.46|f
+### 187.127.142.44
+187.127.142.46|f
+
+## API deep health via each app node local Nginx
+### 187.127.142.42
+{"status":"healthy","components":{"database":{"status":"healthy","latency_ms":0},"migrations":{"status":"ready","latency_ms":0,"detail":"applied 175/175"},"nats":{"status":"disabled","latency_ms":0},"storage":{"status":"healthy","latency_ms":758},"valkey":{"status":"healthy","latency_ms":0}},"timestamp":"2026-06-06T12:19:09Z"}
+
+### 187.127.142.44
+{"status":"healthy","components":{"database":{"status":"healthy","latency_ms":0},"migrations":{"status":"ready","latency_ms":1,"detail":"applied 175/175"},"nats":{"status":"disabled","latency_ms":0},"storage":{"status":"healthy","latency_ms":734},"valkey":{"status":"healthy","latency_ms":0}},"timestamp":"2026-06-06T12:19:10Z"}
+
+
+## Fresh Patroni auth errors since 60s
+### 187.127.142.46
+### 187.127.142.44

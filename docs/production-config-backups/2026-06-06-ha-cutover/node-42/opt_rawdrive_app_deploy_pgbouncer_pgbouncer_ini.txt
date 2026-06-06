@@ -1,0 +1,53 @@
+; PgBouncer 1.23 transaction-mode pooler
+; Runs on each app node (.42 and .44), not on .46.
+; Backend connects to 127.0.0.1:6432 → pgbouncer → wherever databases.ini points.
+
+[pgbouncer]
+listen_addr = 0.0.0.0
+listen_port = 6432
+
+; Authenticated against userlist.txt (SCRAM-SHA-256).
+; pgbouncer 1.23 supports scram-sha-256; MD5 is dead and should never be
+; used for new deployments. userlist.txt format for SCRAM is the literal
+; SCRAM verifier from pg_authid.rolpassword, not an MD5 hash.
+auth_type = scram-sha-256
+auth_file = /etc/pgbouncer/userlist.txt
+
+; Transaction-mode pooling: server connections are returned to the pool
+; at the end of every transaction. Cheap pool rotation. Required to
+; support 200+ client conns against Postgres max_connections=100.
+pool_mode = transaction
+
+; Limits
+max_client_conn = 500
+default_pool_size = 20
+min_pool_size = 5
+reserve_pool_size = 5
+reserve_pool_timeout = 3
+
+; Server connections are dropped if idle > this many seconds
+server_idle_timeout = 600
+
+; Timeouts
+query_timeout = 30
+server_lifetime = 3600
+server_reset_query = DISCARD ALL
+
+; Logging
+log_connections = 0
+log_disconnections = 0
+log_pooler_errors = 1
+
+; Admin (not exposed publicly)
+admin_users = rawdrive
+stats_users = rawdrive
+
+; Prepared statements: transaction pooling doesn't support server-side
+; prepared statements. Backend must either disable them or use
+; pgx's DescribeOnly mode. Already handled in backend pgxpool config
+; (standard pattern — no prepared statement cache in pool).
+
+; Database routing lives in a separate file so failover can rewrite it
+; and SIGHUP-reload without touching the rest of this config. See
+; docs/runbooks/postgres-failover.md for the failover procedure.
+%include /etc/pgbouncer/databases.ini

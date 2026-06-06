@@ -1,17 +1,85 @@
-# Patroni Automatic Failover — Architecture, Cutover & Operations Runbook
+# Patroni Automatic Failover - Architecture, Cutover & Operations Runbook
 
-> ⚠️ **STATUS: PLANNED CUTOVER — INERT UNTIL DELIBERATELY ACTIVATED.**
-> The Patroni subsystem (etcd + Patroni + HAProxy) described here is **not yet
-> live**. Until the cutover in [§4](#4-activation--cutover-procedure-maintenance-window)
-> is performed inside a maintenance window, the **manual** failover model in
-> [`postgres-failover.md`](./postgres-failover.md) remains in force. Once cut
-> over, this runbook **SUPERSEDES** both `postgres-failover.md` and
-> `deploy/scripts/promote-postgres-replica.sh` (see [§9](#9-what-this-supersedes)).
+> **STATUS: LIVE as of 2026-06-06.**
+> The Patroni subsystem (etcd + Patroni + HAProxy + PgBouncer routing) is now
+> the production database HA path. `.46` is the current leader, `.44` is the
+> synchronous standby, and `.42`/`.44` PgBouncer instances route through their
+> local HAProxy. This runbook **supersedes** the manual model in
+> [`postgres-failover.md`](./postgres-failover.md) and
+> `deploy/scripts/promote-postgres-replica.sh` for normal production failover.
+>
+> Rebuild-grade sanitized config backup:
+> [`docs/production-config-backups/2026-06-06-ha-cutover/`](../production-config-backups/2026-06-06-ha-cutover/).
+> Full rebuild procedure: [`production-ha-rebuild.md`](./production-ha-rebuild.md).
 
 **Owner:** Platform / DB on-call.
 **Goal:** Replace the manual "promote replica + hand-edit `pgbouncer/databases.ini`
 + reload" failover with **automatic leader election + failover** so pgbouncer
 always reaches the current primary with **no human in the loop**.
+
+---
+
+## 0. Production Completion Notes (2026-06-06)
+
+Final validated production state:
+
+| Check | Expected / observed |
+|------|---------------------|
+| Patroni | `.46` Leader, `.44` Sync Standby, TL4, lag 0 MB |
+| etcd | 3 members, quorum healthy |
+| HAProxy write path | `pg_primary_backend`: `.46` UP, `.44` DOWN |
+| HAProxy read path | `pg_replica_backend`: `.44` UP, `.46` DOWN |
+| PgBouncer | `.42` and `.44` connect to `host.docker.internal:5432`; both route writes to `.46` |
+| App health | node-local `/health/deep` healthy on `.42` and `.44`, migrations `175/175` |
+| Backup restore drill | `pgbackrest-restore-verify.sh` restored the latest B2 full backup into a disposable cluster and verified 147 public tables |
+| Security | Public DB/Patroni ports time out externally; UFW + DOCKER-USER restrict cluster internals |
+
+Production issues found and fixed during cutover:
+
+1. Patroni adoption must define `pg_hba`/`pg_ident` at top-level
+   `postgresql:`, not only under `bootstrap.dcs`. Bootstrap-only HBA is skipped
+   when adopting an existing PGDATA.
+2. The F-077 auth model is preserved: no `trust`; local ops use peer + ident,
+   TCP clients use scram.
+3. Patroni superuser/rewind uses the `postgres` role over the local Unix socket;
+   cross-node `postgres@postgres` checks require explicit host HBA rules for
+   `.44` and `.46`.
+4. The DCS dynamic config was cleaned after cutover so `patronictl show-config`
+   also carries the F-077 HBA/ident rules. Do not let DCS examples drift back to
+   `local rawdrive trust`.
+5. HAProxy on `.44` cannot run as a bridge container and reach its own host's
+   public Postgres IP reliably. It now runs with `network_mode: host`, binds only
+   loopback plus Docker gateway addresses for DB listener ports, and drops
+   privileges in HAProxy after bind.
+6. PgBouncer is still a bridge container, so it must use
+   `host=host.docker.internal port=5432` plus Compose
+   `host.docker.internal:host-gateway`. `127.0.0.1` from PgBouncer means the
+   PgBouncer container, not the host.
+7. UFW INPUT must allow the app bridge CIDR to private HAProxy gateway listeners
+   on `5432,5433`; DOCKER-USER alone does not cover host-network listeners.
+8. The restore drill must restore with `--pg1-path=/var/lib/postgresql/data`
+   when the disposable Postgres will boot with that same PGDATA path. Restoring
+   to `/restore` and then booting `/var/lib/postgresql/data` breaks
+   pgBackRest's generated `restore_command`.
+9. Patroni templates must not mention secret placeholders as `${VAR}` inside
+   comments, because `envsubst` expands comments too in rendered configs.
+
+After changing Patroni config, verify both active and DCS views:
+
+```bash
+docker exec deploy-patroni-1 patronictl -c /etc/patroni/patroni.yml list
+docker exec deploy-patroni-1 patronictl -c /etc/patroni/patroni.yml show-config | sed -n '/pg_hba:/,/use_pg_rewind/p'
+docker exec deploy-patroni-1 sh -lc 'sed -n "1,80p" "$(printenv PGDATA)/pg_hba.conf"'
+```
+
+To refresh the sanitized rebuild snapshot:
+
+```bash
+deploy/scripts/capture-prod-config-backup.sh docs/production-config-backups/$(date -u +%Y-%m-%d-ha-cutover)
+```
+
+Never commit the real `.env`, PgBouncer password hashes, TLS private keys, B2
+keys, SMTP passwords, or pgBackRest cipher passphrase.
 
 ---
 

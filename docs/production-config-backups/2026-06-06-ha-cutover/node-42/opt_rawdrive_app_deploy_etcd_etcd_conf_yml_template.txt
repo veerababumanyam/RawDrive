@@ -1,0 +1,139 @@
+# =============================================================================
+# RawDrive — etcd member configuration template (deploy/etcd/etcd.conf.yml.template)
+# =============================================================================
+#
+# ⚠️  PLANNED CUTOVER — INERT UNTIL DELIBERATELY ACTIVATED  ⚠️
+#
+# etcd is the Distributed Configuration Store (DCS) for the Patroni automatic-
+# failover subsystem. It is started ONLY during the maintenance-window cutover
+# in docs/runbooks/patroni-failover.md, as part of the loud, deliberate switch
+# away from the manual failover model (deploy/scripts/promote-postgres-replica.sh
+# + hand-edited deploy/pgbouncer/databases.ini). Until cutover, nothing reads or
+# writes this cluster and the manual model in docs/runbooks/postgres-failover.md
+# remains in force.
+#
+# -----------------------------------------------------------------------------
+# Why etcd lives on ALL THREE hosts (.42, .44, .46)
+# -----------------------------------------------------------------------------
+# etcd is a Raft-consensus key/value store. It needs a strict MAJORITY (quorum)
+# of members up to accept writes. With 3 members the quorum is 2, so the cluster
+# survives the loss of ANY ONE member.
+#
+#   members up   quorum (=floor(N/2)+1)   tolerates
+#   ----------   ----------------------   ---------------------------------
+#       3                2                 1 member down  ✅
+#       2                2                 0 members down  (no fault tolerance)
+#       1                1                 0
+#
+# The whole POINT of automatic failover is to survive the DB node (.46) dying.
+# If etcd lived ONLY on .46, losing .46 would also lose the DCS — Patroni would
+# be blind and could not run an election. So etcd MUST live on the app nodes too.
+# Spreading one member to each of .42, .44, .46 means:
+#   • Lose the DB node (.46)  → etcd quorum survives on .42 + .44 → Patroni
+#     elects the standby (which becomes the new primary). THIS is the failure we
+#     are protecting against, and it works precisely because etcd is NOT only on
+#     the DB node.
+#   • Lose an app node (.42 or .44) → etcd quorum survives on the other two.
+#
+# A 3-node etcd CANNOT tolerate losing TWO members at once (quorum lost → etcd
+# goes read-only → Patroni freezes the current topology, NO failover, NO false
+# promotion). That read-only freeze is the correct, safe behavior: with no
+# quorum we must NOT promote anyone, or we risk two leaders (split brain).
+#
+# -----------------------------------------------------------------------------
+# How this template is rendered (one member per host)
+# -----------------------------------------------------------------------------
+# The etcd service in deploy/docker-compose.patroni.yml renders this template
+# with `envsubst` into /etc/etcd/etcd.conf.yml at container start. The per-host
+# identity comes from /opt/rawdrive/app/.env:
+#
+#   ETCD_NAME            this member's unique name: "etcd-42" / "etcd-44" / "etcd-46"
+#   ETCD_NODE_IP         this host's public IP (.42 / .44 / .46)
+#   ETCD_NODE_42_IP      .42's IP  (187.127.142.42)   — used to build the cluster list
+#   ETCD_NODE_44_IP      .44's IP  (187.127.142.44)
+#   ETCD_NODE_46_IP      .46's IP  (187.127.142.46)
+#   ETCD_INITIAL_CLUSTER_TOKEN  shared secret token binding these 3 into ONE cluster
+#                               (rotate per environment; two clusters with the same
+#                                token must never share a network — split risk)
+#
+# Pinned image: quay.io/coreos/etcd:v3.5.17 (see compose). Never :latest — a
+# floating etcd could change DCS semantics under a live failover cluster.
+# =============================================================================
+
+# --- Member identity ---------------------------------------------------------
+# Unique per host. MUST be distinct ("etcd-42" / "etcd-44" / "etcd-46") and MUST
+# match the entry for this host in initial-cluster below.
+name: ${ETCD_NAME}
+
+# --- Data directory (persisted to a named volume in compose) -----------------
+# The Raft log + snapshot DB live here. Losing this on a single member is
+# recoverable (it re-syncs from the quorum); losing it on a majority at once
+# loses the cluster. The named volume keeps it across container recreates.
+data-dir: /var/lib/etcd
+
+# --- Client URLs (Patroni + patronictl + etcdctl talk here, port 2379) -------
+# advertise-client-urls is what we register in the cluster and what Patroni's
+# etcd3.hosts point at, so it MUST be the routable host IP, not 127.0.0.1.
+# listen-client-urls binds 0.0.0.0 inside the container; the compose publish
+# scopes the host-side bind to THIS host's IP (never 0.0.0.0), matching the
+# postgres/valkey/nats publish discipline in docker-compose.prod-db.yml. UFW
+# additionally restricts :2379 to the three cluster hosts.
+listen-client-urls: http://0.0.0.0:2379
+advertise-client-urls: http://${ETCD_NODE_IP}:2379
+
+# --- Peer URLs (etcd-to-etcd Raft traffic, port 2380) ------------------------
+# Same host-IP discipline. Peers reach each other on 2380.
+listen-peer-urls: http://0.0.0.0:2380
+initial-advertise-peer-urls: http://${ETCD_NODE_IP}:2380
+
+# --- Cluster bootstrap (the 3-member roster) ---------------------------------
+# Every member lists ALL THREE peers identically. The names here MUST match each
+# host's `name:` value. This is read ONLY on first cluster formation (state:
+# new); after that the membership lives in the Raft log and this list is ignored
+# on restart. To CHANGE membership later, use `etcdctl member add/remove`, do
+# NOT edit this list on a live cluster.
+initial-cluster: "etcd-42=http://${ETCD_NODE_42_IP}:2380,etcd-44=http://${ETCD_NODE_44_IP}:2380,etcd-46=http://${ETCD_NODE_46_IP}:2380"
+# Shared token binding these three into ONE logical cluster. Two etcd clusters
+# with the same token on the same L2 network can accidentally cross-join — keep
+# it unique per environment and treat it as a secret (from .env).
+initial-cluster-token: <REDACTED>
+# "new" = form a brand-new cluster from the roster above. After the cluster is
+# established this is effectively a no-op on restart (the member rejoins from its
+# data-dir). If you ever ADD a member to a running cluster, that NEW member must
+# be started with state: existing, not new — see the runbook.
+initial-cluster-state: new
+
+# --- Auto-compaction (keep the Raft history / DB from growing unbounded) -----
+# Patroni writes the leader key + cluster config frequently. Without compaction
+# the etcd MVCC history grows forever and eventually the DB hits its quota and
+# goes read-only (which would freeze failover). Retain 1 hour of history and
+# compact periodically; combined with the quota below this keeps etcd healthy
+# for a low-write DCS workload indefinitely.
+auto-compaction-mode: periodic
+auto-compaction-retention: "1h"
+
+# --- Storage quota -----------------------------------------------------------
+# Hard cap on the backend DB size (bytes). 512 MiB is generous for a DCS that
+# only stores Patroni's small leader/config keys; if it is ever approached, that
+# signals runaway writes (investigate) rather than normal growth. Hitting the
+# quota puts etcd in a read-only alarm state — safe (no failover) but needs
+# operator action (compact + defrag + disarm alarm).
+quota-backend-bytes: 536870912
+
+# --- Heartbeat / election timing ---------------------------------------------
+# Cross-VPS links between Hostinger nodes can have higher RTT than same-rack
+# etcd. Raise the defaults (100ms / 1000ms) so normal jitter between .42/.44/.46
+# does NOT trigger needless Raft leader elections. These are etcd's OWN internal
+# elections (who is the etcd Raft leader), separate from Patroni's Postgres
+# leader election, but flapping here would still disrupt the DCS.
+heartbeat-interval: 250    # ms between leader→follower heartbeats
+election-timeout: 2500     # ms a follower waits before starting an etcd election
+                           # (must be >> heartbeat-interval; 10x is the etcd rule)
+
+# --- Logging -----------------------------------------------------------------
+log-level: info
+logger: zap
+
+# --- Snapshots ---------------------------------------------------------------
+# Trigger a Raft snapshot every N applied entries to keep the WAL bounded.
+snapshot-count: 10000

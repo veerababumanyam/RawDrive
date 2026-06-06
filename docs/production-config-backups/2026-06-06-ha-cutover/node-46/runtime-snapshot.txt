@@ -1,0 +1,99 @@
+# Node 46 (187.127.142.46) runtime snapshot
+captured_at_utc=2026-06-06T12:18:39Z
+
+## hostname
+rawdrive-db
+2026-06-06T12:18:39Z
+Linux rawdrive-db 6.8.0-111-generic #111-Ubuntu SMP PREEMPT_DYNAMIC Sat Apr 11 23:16:02 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+
+## docker ps
+NAMES              IMAGE                         STATUS                 PORTS
+deploy-patroni-1   rawdrive-patroni:local        Up 2 hours (healthy)   
+deploy-etcd-1      quay.io/coreos/etcd:v3.5.17   Up 2 hours (healthy)   187.127.142.46:2379-2380->2379-2380/tcp
+deploy-valkey-1    valkey/valkey:9.0-alpine      Up 2 weeks (healthy)   0.0.0.0:6379->6379/tcp, [::]:6379->6379/tcp
+deploy-nats-1      nats:2.11-alpine              Up 2 weeks (healthy)   0.0.0.0:4222->4222/tcp, [::]:4222->4222/tcp, 0.0.0.0:6222->6222/tcp, [::]:6222->6222/tcp, 0.0.0.0:8222->8222/tcp, [::]:8222->8222/tcp
+
+## listeners
+LISTEN 0      65535  187.127.142.46:2380       0.0.0.0:*    users:(("docker-proxy",pid=3938841,fd=8))               
+LISTEN 0      65535  187.127.142.46:2379       0.0.0.0:*    users:(("docker-proxy",pid=3938826,fd=8))               
+LISTEN 0      65535         0.0.0.0:8222       0.0.0.0:*    users:(("docker-proxy",pid=1967,fd=8))                  
+LISTEN 0      65535         0.0.0.0:6222       0.0.0.0:*    users:(("docker-proxy",pid=1939,fd=8))                  
+LISTEN 0      65535         0.0.0.0:6379       0.0.0.0:*    users:(("docker-proxy",pid=1878,fd=8))                  
+LISTEN 0      5             0.0.0.0:8008       0.0.0.0:*    users:(("patroni",pid=3939380,fd=9))                    
+LISTEN 0      65535         0.0.0.0:4222       0.0.0.0:*    users:(("docker-proxy",pid=1906,fd=8))                  
+LISTEN 0      200           0.0.0.0:5432       0.0.0.0:*    users:(("postgres",pid=3973970,fd=6))                   
+LISTEN 0      65535            [::]:8222          [::]:*    users:(("docker-proxy",pid=1973,fd=8))                  
+LISTEN 0      65535            [::]:6222          [::]:*    users:(("docker-proxy",pid=1946,fd=8))                  
+LISTEN 0      65535            [::]:6379          [::]:*    users:(("docker-proxy",pid=1884,fd=8))                  
+LISTEN 0      65535            [::]:4222          [::]:*    users:(("docker-proxy",pid=1913,fd=8))                  
+LISTEN 0      200              [::]:5432          [::]:*    users:(("postgres",pid=3973970,fd=7))                   
+
+## ufw status numbered
+Status: active
+
+     To                         Action      From
+     --                         ------      ----
+[ 1] 22/tcp                     ALLOW IN    Anywhere                   # ssh
+[ 2] 5432/tcp                   ALLOW IN    187.127.142.42             # pg-187.127.142.42
+[ 3] 6379/tcp                   ALLOW IN    187.127.142.42             # valkey-187.127.142.42
+[ 4] 4222/tcp                   ALLOW IN    187.127.142.42             # nats-187.127.142.42-4222
+[ 5] 6222/tcp                   ALLOW IN    187.127.142.42             # nats-187.127.142.42-6222
+[ 6] 8222/tcp                   ALLOW IN    187.127.142.42             # nats-187.127.142.42-8222
+[ 7] 5432/tcp                   ALLOW IN    187.127.142.44             # pg-187.127.142.44
+[ 8] 6379/tcp                   ALLOW IN    187.127.142.44             # valkey-187.127.142.44
+[ 9] 4222/tcp                   ALLOW IN    187.127.142.44             # nats-187.127.142.44-4222
+[10] 6222/tcp                   ALLOW IN    187.127.142.44             # nats-187.127.142.44-6222
+[11] 8222/tcp                   ALLOW IN    187.127.142.44             # nats-187.127.142.44-8222
+[12] 2379,2380,5432,8008/tcp    ALLOW IN    187.127.142.42             # patroni-ha peer
+[13] 2379,2380,5432,8008/tcp    ALLOW IN    187.127.142.44             # patroni-ha peer
+[14] 22/tcp (v6)                ALLOW IN    Anywhere (v6)              # ssh
+
+
+## iptables DOCKER-USER
+-N DOCKER-USER
+-A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+-A DOCKER-USER -s 187.127.142.42/32 -j RETURN
+-A DOCKER-USER -s 187.127.142.44/32 -j RETURN
+-A DOCKER-USER -s 187.127.142.46/32 -j RETURN
+-A DOCKER-USER -s 172.16.0.0/12 -j RETURN
+-A DOCKER-USER -s 127.0.0.0/8 -j RETURN
+-A DOCKER-USER -p tcp -m multiport --dports 5432,6379,4222,6222,8222,9000,9001,1025,8025,2379,2380,8008 -j DROP
+-A DOCKER-USER -p tcp -m multiport --dports 8080,3000 -j DROP
+-A DOCKER-USER -j RETURN
+
+## docker networks
+NETWORK ID     NAME                       DRIVER    SCOPE
+004a5b5e01d7   bridge                     bridge    local
+c7b736b64be3   host                       host      local
+83fedad3af0c   none                       null      local
+8a3b8680f814   rawdrive-db_default        bridge    local
+eab82d13615e   rawdrive-patroni_default   bridge    local
+
+
+
+
+
+## root crontab
+SHELL=/bin/bash
+# Backups run bare: the scripts self-source /opt/rawdrive/app/.env internally.
+# Do NOT re-add a `set -a; source .env` prefix — cron uses dash where `source`
+# is undefined, which is exactly what silently broke these backups before.
+# Nightly LOGICAL dump (portable restore path), GPG-encrypted -> B2 adminfiles:
+0  2 * * *  /opt/rawdrive/app/deploy/scripts/backup-db.sh           >> /var/log/rawdrive-backup.log 2>&1
+# Cluster globals (roles/grants) for the logical restore path:
+5  2 * * *  /opt/rawdrive/app/deploy/scripts/pg-globals-backup.sh   >> /var/log/rawdrive-backup.log 2>&1
+# PHYSICAL pgBackRest backup (continuous WAL archiving gives ~60s RPO):
+30 2 * * *  /opt/rawdrive/app/deploy/scripts/pgbackrest-backup.sh   >> /var/log/pgbackrest-cron.log 2>&1
+# Weekly restore DRILL (proves backups are restorable), Mon 04:00:
+0  4 * * 1  /opt/rawdrive/app/deploy/scripts/pgbackrest-restore-verify.sh >> /var/log/pgbackrest-restore-verify.log 2>&1
+
+## systemd rawdrive units
+  UNIT                       LOAD   ACTIVE SUB    DESCRIPTION
+  rawdrive-docker-fw.service loaded active exited RawDrive Docker port hardening (restrict published data-plane ports to the peer mesh)
+
+Legend: LOAD   → Reflects whether the unit definition was properly loaded.
+        ACTIVE → The high-level unit activation state, i.e. generalization of SUB.
+        SUB    → The low-level unit activation state, values depend on unit type.
+
+1 loaded units listed.
+To show all installed unit files use 'systemctl list-unit-files'.

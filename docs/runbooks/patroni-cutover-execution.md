@@ -1,13 +1,57 @@
-# Patroni Auto-Failover Cutover — Execution Runbook
+# Patroni Auto-Failover Cutover - Execution Runbook
 
-**Status (2026-06-06): PREP DONE + CORE VALIDATED, LIVE CUTOVER HELD.** The Patroni stack was coded
-but had **never been run**; attempting it live surfaced **7 distinct never-tested bugs** (all now
-fixed below). The 3-node etcd cluster and single-node leader **adoption + promotion** are validated
-in an isolated self-test, but the **full multi-node cutover** (`.44` replica rebuild → HAProxy →
-pgbouncer repoint) is **NOT yet validated** and almost certainly hides more issues. Three live
-attempts each briefly degraded the primary (≤90 s outage / read-only) and were **cleanly rolled back
-with zero data loss**. Per "production is sacred," the live cutover is **deferred until a full
-isolated multi-node rehearsal passes** — do NOT run it live before that.
+**Status (2026-06-06): LIVE CUTOVER COMPLETE.** The production Patroni stack is
+now live and validated end-to-end: `.46` leader, `.44` synchronous standby,
+three-member etcd quorum, HAProxy leader routing on `.42`/`.44`, PgBouncer
+pointing at local HAProxy, successful controlled switchover to `.44`, successful
+switch-back to `.46`, and successful pgBackRest restore verification from B2.
+
+This file is now a historical execution log plus a checklist for future rebuilds.
+For day-2 operations use [`patroni-failover.md`](./patroni-failover.md). For a
+full production rebuild use [`production-ha-rebuild.md`](./production-ha-rebuild.md).
+The sanitized rebuild snapshot is stored in
+[`docs/production-config-backups/2026-06-06-ha-cutover/`](../production-config-backups/2026-06-06-ha-cutover/).
+
+## Final production fixes and learnings
+
+The original seven pre-live bugs below remain useful history, but the live
+cutover found additional production-only issues:
+
+1. **Patroni `pg_hba` on adopt:** `pg_hba` under `bootstrap.dcs` is not applied
+   when Patroni adopts an existing PGDATA. Final fix: keep HBA and ident under
+   top-level `postgresql:` so Patroni writes them every start.
+2. **No auth downgrade:** remove the old `local rawdrive trust` model. Final HBA
+   uses `local all postgres peer`, `local all rawdrive peer map=rawdrive_ops`,
+   local replication scram, and TCP scram.
+3. **Cross-node superuser checks:** Patroni can check/rewind peers as
+   `postgres@postgres`; both DB-capable nodes need explicit
+   `host all postgres <.44/.46>/32 scram-sha-256` rules.
+4. **DCS cleanup matters:** after the live fix, `patronictl show-config` still
+   showed the old bootstrap-era HBA. It was replaced with the same F-077 rules
+   so future DCS-driven rebuilds do not copy stale `trust`.
+5. **HAProxy hairpin:** `.44` HAProxy as a bridge container cannot reliably reach
+   `.44:5432` via the host public IP. Final fix: HAProxy is host-networked and
+   binds only loopback plus Docker gateway addresses for `5432/5433`.
+6. **PgBouncer bridge routing:** PgBouncer must connect to
+   `host.docker.internal:5432`, not `127.0.0.1`, and Compose must provide
+   `host.docker.internal:host-gateway`.
+7. **Firewall model:** HAProxy host-network listeners are protected by UFW INPUT,
+   not DOCKER-USER. Allow the app bridge CIDR to `5432,5433`; public probes must
+   still time out.
+8. **Restore verification:** pgBackRest restore verification must use the same
+   `pg1-path` as the disposable Postgres PGDATA. `/restore` for restore plus
+   `/var/lib/postgresql/data` for boot causes archive recovery failure.
+9. **Template comments:** avoid `${SECRET_VAR}` syntax in comments of files that
+   are rendered by `envsubst`; comments are expanded too.
+
+Post-live verification commands:
+
+```bash
+docker exec deploy-patroni-1 patronictl -c /etc/patroni/patroni.yml list
+docker exec deploy-patroni-1 patronictl -c /etc/patroni/patroni.yml show-config | sed -n '/pg_hba:/,/use_pg_rewind/p'
+curl -fsS 'http://127.0.0.1:7000/;csv;norefresh' | awk -F, '$1 ~ /^pg_(primary|replica)_backend$/ && $2 ~ /^pg-/ {print $1, $2, $18, $37, $57}'
+docker exec deploy-pgbouncer-1 sh -lc 'psql "$DATABASE_URL" -tAc "SELECT inet_server_addr(), pg_is_in_recovery()"'
+```
 
 ## Bugs found & fixed (the stack had never executed end-to-end)
 1. **etcd** image is distroless (no `/bin/sh`) — the `sh -c envsubst` entrypoint could never start.
@@ -28,11 +72,12 @@ isolated multi-node rehearsal passes** — do NOT run it live before that.
    loses DCS → read-only. Fixed: `network_mode: host` (matches the working self-test). NOTE: host
    listeners use UFW INPUT — add UFW allows for `8008` (+ existing `5432`) on `.46/.44` before activation.
 
-## Remaining validation before going live (MANDATORY)
-Stand up a **full isolated rehearsal** (real data restored to a throwaway volume via `pgbackrest
-restore`, on non-conflicting ports/scope, all 3 etcd + 2 patroni + 2 haproxy) and prove: leader
-adoption read-write, `.44` replica rebuild + streaming, HAProxy routes write→leader / read→replica,
-pgbouncer→HAProxy, and a `patronictl switchover` failover. Only then schedule the live window.
+## Remaining validation before future rebuilds
+Before rebuilding production from empty hosts, rehearse with restored data on
+throwaway volumes and a non-production Patroni scope. Prove: `.46` restored
+leader read-write, `.44` replica rebuild + synchronous streaming, HAProxy
+write/read routes, PgBouncer through local HAProxy, controlled switchover, and
+switch-back.
 
 ---
 
