@@ -12,7 +12,7 @@ export default function CRMContractsPage() {
       eyebrow="CRM and contracts"
       title="Track leads, lock bookings, send contracts, and keep billing in one studio system."
       description="Run inquiries, packages, contracts, GST-ready invoices, deposits, and follow-ups in the same workspace that handles delivery."
-      previewSrc="/stitch/solution-crm.png"
+      previewSrc="/marketing/rawdrive-crm-contracts.avif"
       previewAlt="RawDrive CRM, contracts, and billing dashboard preview"
       previewLabel="CRM contacts dashboard"
       primaryCta={{ href: "/register", label: "Run your studio on RawDrive" }}

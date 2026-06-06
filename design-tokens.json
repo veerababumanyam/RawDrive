@@ -1196,6 +1196,58 @@
         "ref": "zIndex.sticky"
       }
     },
+    "footer": {
+      "_description": "Compact marketing footer. Values reduce vertical height while preserving tokenized spacing and 44px touch targets.",
+      "maxWidth": {
+        "value": "80rem",
+        "description": "Matches the marketing page content width"
+      },
+      "paddingX": {
+        "ref": "spacing.scale.4"
+      },
+      "paddingXDesktop": {
+        "ref": "spacing.scale.8"
+      },
+      "paddingYMobile": {
+        "ref": "spacing.scale.6"
+      },
+      "paddingYDesktop": {
+        "ref": "spacing.scale.8"
+      },
+      "sectionGap": {
+        "ref": "spacing.scale.6"
+      },
+      "columnGap": {
+        "ref": "spacing.scale.8"
+      },
+      "desktopColumns": {
+        "value": "minmax(0, 4fr) minmax(0, 8fr)",
+        "description": "Gives navigation enough width to wrap long link groups into shorter grids"
+      },
+      "brandLogoSize": {
+        "ref": "spacing.scale.8"
+      },
+      "contactMinWidth": {
+        "value": "10rem",
+        "description": "Minimum contact chip width before wrapping"
+      },
+      "navGroupMinWidth": {
+        "value": "10.5rem",
+        "description": "Minimum footer link-group width before wrapping"
+      },
+      "metaMarginTop": {
+        "ref": "spacing.scale.6"
+      },
+      "metaPaddingTop": {
+        "ref": "spacing.scale.4"
+      },
+      "poweredLogoHeight": {
+        "ref": "spacing.scale.6"
+      },
+      "linkMinHeight": {
+        "ref": "components.touchTarget.minimum"
+      }
+    },
     "card": {
       "background": {
         "ref": "themes.{active}.surface.elevated"

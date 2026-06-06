@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import Image from "next/image";
 import Link from "next/link";
 import { MapPin, SlidersHorizontal, Star } from "@/components/icons";
 import { JsonLd } from "@/components/seo/JsonLd";
@@ -110,9 +111,12 @@ export async function MarketplaceShowcasePage({
           <div className="solution-preview-glow" />
           <div className="glass-card relative overflow-hidden p-3">
             <div className="solution-preview-frame">
-              <img
+              <Image
                 src={previewSrc}
                 alt={previewAlt}
+                width={1600}
+                height={1000}
+                sizes="(min-width: 1024px) 46vw, 100vw"
                 className="h-auto w-full object-cover"
               />
             </div>
@@ -141,11 +145,13 @@ export async function MarketplaceShowcasePage({
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           {cards.map((card) => (
             <article key={card.name} className="surface-panel overflow-hidden">
-              <div className="aspect-[4/3] bg-surface-container-high">
-                <img
+              <div className="relative aspect-[4/3] bg-surface-container-high">
+                <Image
                   src={card.image}
                   alt={card.name}
-                  className="h-full w-full object-cover"
+                  fill
+                  sizes="(min-width: 1280px) 384px, (min-width: 768px) 50vw, 100vw"
+                  className="object-cover"
                 />
               </div>
               <div className="space-y-4 p-6">

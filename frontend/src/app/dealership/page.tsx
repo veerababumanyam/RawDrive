@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import Image from "next/image";
 import { Banknote, BadgeCheck, MapPinned, Sparkles } from "lucide-react";
 import { DealerApplicationButton } from "@/components/DealerApplicationButton";
 import { createPageMetadata } from "@/lib/seo";
@@ -98,9 +99,12 @@ export default function DealershipPage() {
           <div className="absolute inset-x-8 top-10 h-48 rounded-full bg-accent-muted blur-[120px]" />
           <div className="glass-card relative overflow-hidden p-3">
             <div className="overflow-hidden rounded-[1.5rem] bg-surface-container-high">
-              <img
-                src="/stitch/dealer.png"
+              <Image
+                src="/marketing/rawdrive-company-network.avif"
                 alt="RawDrive partner dealership registration preview"
+                width={1600}
+                height={1000}
+                sizes="(min-width: 1024px) 46vw, 100vw"
                 className="h-auto w-full object-cover"
               />
             </div>

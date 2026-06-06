@@ -12,11 +12,17 @@ export default function LiveStreamingPage() {
       eyebrow="Live streaming"
       title="Stream weddings and events without dropping the premium visual language your studio is known for."
       description="Package remote guest access, branded viewing, replay handling, and event context beside the rest of your studio workflow."
-      previewSrc="/stitch/solution-live.png"
+      previewSrc="/marketing/rawdrive-live-streaming.avif"
       previewAlt="RawDrive live-streaming workflow preview"
       previewLabel="Live streaming showcase"
       primaryCta={{ href: "/register", label: "Explore live streaming" }}
       secondaryCta={{ href: "/pricing", label: "Compare plans" }}
+      availabilityNotice={{
+        label: "Coming soon",
+        title: "Live streaming is not enabled yet.",
+        description:
+          "This page previews the upcoming branded streaming workflow. Stream creation, guest links, and replay tools will appear after the rollout is enabled.",
+      }}
       stats={[
         { label: "Guests", value: "Remote friendly" },
         { label: "Branding", value: "On stream" },

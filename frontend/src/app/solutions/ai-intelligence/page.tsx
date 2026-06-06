@@ -12,13 +12,19 @@ export default function AIIngelligencePage() {
       eyebrow="AI Intelligence"
       title="Cull, search, and recognize faces without losing the editorial feel of the product."
       description="Shortlist large wedding and event shoots faster with quality ranking, duplicate detection, semantic search, and face-aware discovery connected to delivery."
-      previewSrc="/stitch/solution-ai.png"
+      previewSrc="/marketing/rawdrive-ai-intelligence.avif"
       previewAlt="RawDrive AI culling and face recognition dashboard preview"
       previewLabel="AI intelligence dashboard"
       primaryCta={{ href: "/register", label: "Try AI workflows" }}
       secondaryCta={{
         href: "/solutions/galleries",
         label: "See gallery delivery",
+      }}
+      availabilityNotice={{
+        label: "Coming soon",
+        title: "AI culling is not enabled yet.",
+        description:
+          "This page previews the planned AI culling workflow. Current public and studio surfaces will not show culling controls until the rollout is enabled.",
       }}
       stats={[
         { label: "Culling", value: "Thousands in one pass" },

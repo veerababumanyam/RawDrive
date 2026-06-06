@@ -17,7 +17,7 @@ export default function ClientGalleriesPage() {
       eyebrow="Client Galleries"
       title="Deliver galleries that feel handcrafted, branded, and ready for client approval."
       description="Give every wedding, event, or portrait client a polished gallery link with proofing, expiry, download control, and studio branding built in."
-      previewSrc="/stitch/solution-galleries.png"
+      previewSrc="/marketing/rawdrive-client-galleries.avif"
       previewAlt="RawDrive gallery management dashboard preview"
       previewLabel="Gallery management dashboard"
       primaryCta={{ href: "/register", label: "Start free trial" }}

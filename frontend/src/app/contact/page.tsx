@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import Image from "next/image";
 import {
   Mail,
   MapPin,
@@ -130,9 +131,12 @@ export default function ContactPage() {
         <div className="space-y-6">
           <div className="glass-card overflow-hidden p-3">
             <div className="overflow-hidden rounded-[1.5rem] bg-surface-container-high">
-              <img
-                src="/stitch/contact.png"
+              <Image
+                src="/marketing/rawdrive-company-network.avif"
                 alt="RawDrive contact page preview for studio support and sales"
+                width={1600}
+                height={1000}
+                sizes="(min-width: 1024px) 46vw, 100vw"
                 className="h-auto w-full object-cover"
               />
             </div>

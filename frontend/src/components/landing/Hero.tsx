@@ -21,14 +21,13 @@ export function Hero() {
       aria-labelledby="hero-heading"
       className="landing-hero relative isolate flex min-h-[100dvh] w-full items-center overflow-hidden"
     >
-      {/* Photograph — absolutely positioned, full-bleed, priority for LCP. */}
+      {/* Photograph — absolutely positioned, full-bleed, preloaded for LCP. */}
       <div className="landing-hero__photo absolute inset-0 -z-10">
         <Image
-          src="/landing/hero-couple.webp"
+          src="/landing/hero-couple.avif"
           alt=""
           fill
-          priority
-          quality={94}
+          preload
           sizes="100vw"
           className="landing-hero__image object-cover"
           aria-hidden="true"

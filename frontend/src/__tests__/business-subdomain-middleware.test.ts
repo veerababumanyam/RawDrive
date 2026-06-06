@@ -33,7 +33,7 @@ describe("business subdomain middleware routing", () => {
     expect(shouldPassThroughBusinessSubdomainPath("/manifest.json")).toBe(true);
     expect(shouldPassThroughBusinessSubdomainPath("/service-worker.js")).toBe(true);
     expect(shouldPassThroughBusinessSubdomainPath("/logo/favicon-32x32.png")).toBe(true);
-    expect(shouldPassThroughBusinessSubdomainPath("/CoBolt/CoBolt%20Logo.png")).toBe(true);
+    expect(shouldPassThroughBusinessSubdomainPath("/CoBolt/CoBolt_Name_Logo.png")).toBe(true);
   });
 
   it("still rewrites normal business-subdomain gallery paths", () => {
@@ -49,7 +49,7 @@ describe("business subdomain middleware routing", () => {
     expect(matcher.test("/manifest.json")).toBe(false);
     expect(matcher.test("/service-worker.js")).toBe(false);
     expect(matcher.test("/logo/favicon-32x32.png")).toBe(false);
-    expect(matcher.test("/CoBolt/CoBolt%20Logo.png")).toBe(false);
+    expect(matcher.test("/CoBolt/CoBolt_Name_Logo.png")).toBe(false);
 
     expect(matcher.test("/")).toBe(true);
     expect(matcher.test("/wedding-veera")).toBe(true);

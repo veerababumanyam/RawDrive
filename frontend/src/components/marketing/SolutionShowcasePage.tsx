@@ -1,6 +1,12 @@
 import { headers } from "next/headers";
+import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, type LucideIcon } from "@/components/icons";
+import {
+  ArrowRight,
+  CheckCircle2,
+  Clock3,
+  type LucideIcon,
+} from "@/components/icons";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { buildBreadcrumbJsonLd } from "@/lib/seo";
 
@@ -25,6 +31,12 @@ type SolutionCta = {
   label: string;
 };
 
+type SolutionAvailabilityNotice = {
+  label: string;
+  title: string;
+  description: string;
+};
+
 type SolutionShowcasePageProps = {
   eyebrow: string;
   title: string;
@@ -40,6 +52,7 @@ type SolutionShowcasePageProps = {
   answer: string;
   quoteTitle: string;
   quoteBody: string;
+  availabilityNotice?: SolutionAvailabilityNotice;
   /** Route path of this page, e.g. "/solutions/galleries" — used for BreadcrumbList JSON-LD. */
   path: string;
   /** Short label for this page in the breadcrumb trail (defaults to the eyebrow). */
@@ -61,6 +74,7 @@ export async function SolutionShowcasePage({
   answer,
   quoteTitle,
   quoteBody,
+  availabilityNotice,
   path,
   breadcrumbName,
 }: SolutionShowcasePageProps) {
@@ -74,6 +88,28 @@ export async function SolutionShowcasePage({
     <div className="bg-surface text-text-primary">
       <JsonLd id="solution-breadcrumb" data={breadcrumb} nonce={nonce} />
       <section className="solution-showcase-grid mx-auto max-w-7xl px-4 py-16 lg:px-8 lg:py-24">
+        {availabilityNotice ? (
+          <div
+            className="solution-availability-banner solution-availability-banner--top"
+            role="status"
+          >
+            <div className="solution-availability-banner__icon">
+              <Clock3 aria-hidden="true" />
+            </div>
+            <div className="solution-availability-banner__content">
+              <p className="solution-availability-banner__label">
+                {availabilityNotice.label}
+              </p>
+              <h2 className="solution-availability-banner__title">
+                {availabilityNotice.title}
+              </h2>
+              <p className="solution-availability-banner__description">
+                {availabilityNotice.description}
+              </p>
+            </div>
+          </div>
+        ) : null}
+
         <div className="space-y-8">
           <span className="eyebrow-pill">{eyebrow}</span>
           <div className="space-y-5">
@@ -118,9 +154,12 @@ export async function SolutionShowcasePage({
           <div className="solution-preview-glow" />
           <div className="glass-card relative overflow-hidden p-3">
             <div className="solution-preview-frame">
-              <img
+              <Image
                 src={previewSrc}
                 alt={previewAlt}
+                width={1600}
+                height={1000}
+                sizes="(min-width: 1024px) 46vw, 100vw"
                 className="h-auto w-full object-cover"
               />
             </div>

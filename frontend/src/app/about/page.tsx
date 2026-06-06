@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { Cpu, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { createPageMetadata } from "@/lib/seo";
 
@@ -67,9 +68,12 @@ export default function AboutPage() {
           <div className="absolute inset-x-10 top-10 h-48 rounded-full bg-accent-muted blur-[120px]" />
           <div className="glass-card relative overflow-hidden p-3">
             <div className="overflow-hidden rounded-[1.5rem] bg-surface-container-high">
-              <img
-                src="/stitch/about.png"
+              <Image
+                src="/marketing/rawdrive-company-network.avif"
                 alt="RawDrive product preview for photography studio operations"
+                width={1600}
+                height={1000}
+                sizes="(min-width: 1024px) 46vw, 100vw"
                 className="h-auto w-full object-cover"
               />
             </div>

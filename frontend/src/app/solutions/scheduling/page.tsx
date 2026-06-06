@@ -12,7 +12,7 @@ export default function SchedulingPage() {
       eyebrow="Scheduling"
       title="Keep shoots, planning, reminders, and client coordination inside one calendar surface."
       description="Coordinate event dates, teams, venues, client milestones, and delivery tasks without separating the calendar from the rest of the studio."
-      previewSrc="/stitch/solution-scheduling.png"
+      previewSrc="/marketing/rawdrive-scheduling.avif"
       previewAlt="RawDrive scheduling and booking dashboard preview"
       previewLabel="Booking management"
       primaryCta={{ href: "/register", label: "Manage studio schedules" }}

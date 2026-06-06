@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import NextImage from "next/image";
 import Link from "next/link";
 import {
   Image,
@@ -212,18 +213,24 @@ export function FeaturesContent() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="glass-card overflow-hidden p-3">
             <div className="overflow-hidden rounded-[1.5rem] bg-surface-container-high">
-              <img
-                src="/stitch/features-a.png"
+              <NextImage
+                src="/marketing/rawdrive-features-overview.avif"
                 alt="RawDrive features showcase for photography studio workflows"
+                width={1600}
+                height={1000}
+                sizes="(min-width: 1024px) 35vw, (min-width: 640px) 50vw, 100vw"
                 className="h-auto w-full object-cover"
               />
             </div>
           </div>
           <div className="glass-card overflow-hidden p-3 sm:translate-y-12">
             <div className="overflow-hidden rounded-[1.5rem] bg-surface-container-high">
-              <img
-                src="/stitch/features-b.png"
+              <NextImage
+                src="/marketing/rawdrive-home-product-os.avif"
                 alt="RawDrive feature details for galleries, CRM, AI, and streaming"
+                width={1600}
+                height={1000}
+                sizes="(min-width: 1024px) 35vw, (min-width: 640px) 50vw, 100vw"
                 className="h-auto w-full object-cover"
               />
             </div>

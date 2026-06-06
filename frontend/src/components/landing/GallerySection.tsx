@@ -16,7 +16,7 @@ export function GallerySection() {
     >
       <div className="landing-gallery-photo">
         <Image
-          src="/landing/gallery-baby.jpg"
+          src="/landing/gallery-baby.avif"
           alt="A baby splashing in ocean waves at a beach birthday shoot — the kind of joyful moment clients star as a favorite in their RawDrive gallery."
           fill
           sizes="(min-width: 1280px) 1280px, 100vw"

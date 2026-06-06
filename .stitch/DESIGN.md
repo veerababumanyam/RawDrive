@@ -405,6 +405,27 @@ AMOLED Liquid Glass aligned to the aperture logo: true-black canvas with the log
 | `shadow` | `{shadows.glass}` | shadows.glass |
 | `zIndex` | `{zIndex.sticky}` | zIndex.sticky |
 
+### footer
+
+Compact marketing footer. Values reduce vertical height while preserving tokenized spacing and 44px touch targets.
+| Token | Value | Notes |
+|-------|-------|-------|
+| `maxWidth` | `80rem` | Matches the marketing page content width |
+| `paddingX` | `{spacing.scale.4}` | spacing.scale.4 |
+| `paddingXDesktop` | `{spacing.scale.8}` | spacing.scale.8 |
+| `paddingYMobile` | `{spacing.scale.6}` | spacing.scale.6 |
+| `paddingYDesktop` | `{spacing.scale.8}` | spacing.scale.8 |
+| `sectionGap` | `{spacing.scale.6}` | spacing.scale.6 |
+| `columnGap` | `{spacing.scale.8}` | spacing.scale.8 |
+| `desktopColumns` | `minmax(0, 4fr) minmax(0, 8fr)` | Gives navigation enough width to wrap long link groups into shorter grids |
+| `brandLogoSize` | `{spacing.scale.8}` | spacing.scale.8 |
+| `contactMinWidth` | `10rem` | Minimum contact chip width before wrapping |
+| `navGroupMinWidth` | `10.5rem` | Minimum footer link-group width before wrapping |
+| `metaMarginTop` | `{spacing.scale.6}` | spacing.scale.6 |
+| `metaPaddingTop` | `{spacing.scale.4}` | spacing.scale.4 |
+| `poweredLogoHeight` | `{spacing.scale.6}` | spacing.scale.6 |
+| `linkMinHeight` | `{components.touchTarget.minimum}` | components.touchTarget.minimum |
+
 ### card
 
 | Token | Value | Notes |

@@ -47,7 +47,7 @@ export function AiMomentSection() {
       <div className="landing-ai relative overflow-hidden rounded-[var(--radius-2xl)]">
         <div className="landing-ai__photo">
           <Image
-            src="/landing/ai-couple.jpg"
+            src="/landing/ai-couple.avif"
             alt=""
             fill
             sizes="(min-width: 1280px) 1280px, 100vw"

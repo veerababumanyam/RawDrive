@@ -58,14 +58,11 @@ const nextConfig: NextConfig = {
   images: {
     // Q9 (landing redesign 2026-04-11): prefer AVIF, then WebP, then the
     // original source format. Next.js image optimizer serves the smallest
-    // format the visitor's browser can decode. This materially improves
-    // LCP on the landing hero (~180 KB AVIF vs ~800 KB source JPEG) while
-    // keeping compatibility with every browser we target.
+    // format the visitor's browser can decode while keeping compatibility
+    // with every browser we target.
     formats: ["image/avif", "image/webp"],
-    // Next.js 16 only allows q=75 unless configured. The landing hero
-    // intentionally requests q=94 for its full-bleed LCP image, so keep both
-    // values allowlisted.
-    qualities: [75, 94],
+    // Keep public-page image variants on the default optimizer quality.
+    qualities: [75],
   },
   async headers() {
     return [

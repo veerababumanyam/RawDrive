@@ -12,7 +12,7 @@ export default function DigitalInvitationsPage() {
       eyebrow="Digital invitations"
       title="Turn invitations into a polished extension of the same brand experience your gallery clients already trust."
       description="Create mobile-first invitation and event touchpoints that connect guest communication, RSVP context, gallery reveal, and studio branding."
-      previewSrc="/stitch/solution-invitations.png"
+      previewSrc="/marketing/rawdrive-digital-invitations.avif"
       previewAlt="RawDrive digital invitation and event microsite preview"
       previewLabel="Invitation showcase"
       primaryCta={{ href: "/register", label: "Launch invitation flows" }}

@@ -8,7 +8,7 @@ export const SITE_TAGLINE = "The Operating System for Professional Photography i
 export const DEFAULT_DESCRIPTION =
   "Run galleries, proofing, AI culling, CRM, scheduling, invoices, live streaming, and marketplace workflows from one platform built for Indian photography studios.";
 export const DEFAULT_OG_IMAGE = {
-  url: "/landing/hero-couple.webp",
+  url: "/landing/hero-couple.avif",
   width: 1600,
   height: 1067,
   alt: "Indian wedding couple photographed outdoors, representing RawDrive's photography studio workflow platform.",
@@ -63,7 +63,12 @@ export const PUBLIC_PAGES = [
       "Explore RawDrive features for Indian studios: branded galleries, client proofing, AI culling, CRM, booking, live streaming, and analytics in one platform.",
     summary:
       "The features page explains RawDrive's core workflows for photography studios that need delivery, client selection, AI-assisted culling, operations, payments, and growth in one platform.",
-    image: { url: "/stitch/features-a.png", width: 330, height: 1600, alt: "RawDrive feature showcase for studio workflows." },
+    image: {
+      url: "/marketing/rawdrive-features-overview.webp",
+      width: 1600,
+      height: 1000,
+      alt: "RawDrive feature showcase for studio workflows.",
+    },
     changeFrequency: "monthly",
     priority: 0.9,
   },
@@ -75,7 +80,12 @@ export const PUBLIC_PAGES = [
       "Compare RawDrive plans for photographers in India. Start free, then scale storage, galleries, AI workflows, CRM, live streaming, and marketplace access.",
     summary:
       "RawDrive pricing includes a free plan and paid studio plans for growing storage, galleries, clients, AI culling, CRM, streaming, and enterprise BYOS needs.",
-    image: { url: "/stitch/pricing.png", width: 1600, height: 1371, alt: "RawDrive pricing page for photography studio plans." },
+    image: {
+      url: "/marketing/rawdrive-home-product-os.webp",
+      width: 1600,
+      height: 1000,
+      alt: "RawDrive pricing page for photography studio plans.",
+    },
     changeFrequency: "weekly",
     priority: 0.95,
   },
@@ -100,7 +110,12 @@ export const PUBLIC_PAGES = [
       "Deliver branded client photo galleries with proofing, download controls, expiry windows, mobile viewing, and studio presentation built for Indian photographers.",
     summary:
       "RawDrive client galleries help studios share polished gallery links, collect selections, protect downloads, and present wedding or event photos as a premium client experience.",
-    image: { url: "/stitch/solution-galleries.png", width: 1600, height: 1205, alt: "RawDrive client gallery management interface." },
+    image: {
+      url: "/marketing/rawdrive-client-galleries.webp",
+      width: 1600,
+      height: 1000,
+      alt: "RawDrive client gallery management interface.",
+    },
     changeFrequency: "monthly",
     priority: 0.86,
   },
@@ -112,7 +127,12 @@ export const PUBLIC_PAGES = [
       "Use AI-assisted culling, duplicate detection, semantic photo search, and face-aware discovery to move large Indian wedding and event shoots faster.",
     summary:
       "RawDrive AI Intelligence helps photographers reduce editing load by surfacing stronger frames, grouping faces, finding moments, and moving selected photos into delivery workflows.",
-    image: { url: "/stitch/solution-ai.png", width: 1600, height: 1205, alt: "RawDrive AI culling and face recognition dashboard." },
+    image: {
+      url: "/marketing/rawdrive-ai-intelligence.webp",
+      width: 1600,
+      height: 1000,
+      alt: "RawDrive AI culling and face recognition dashboard.",
+    },
     changeFrequency: "monthly",
     priority: 0.86,
   },
@@ -124,7 +144,12 @@ export const PUBLIC_PAGES = [
       "Manage inquiries, packages, contracts, GST-ready invoices, payments, and client follow-ups in a CRM designed for Indian photography studios.",
     summary:
       "RawDrive CRM connects leads, contacts, project value, proposals, contracts, billing, and delivery so studios can run the business around every shoot.",
-    image: { url: "/stitch/solution-crm.png", width: 1600, height: 1205, alt: "RawDrive CRM and contracts workspace." },
+    image: {
+      url: "/marketing/rawdrive-crm-contracts.webp",
+      width: 1600,
+      height: 1000,
+      alt: "RawDrive CRM and contracts workspace.",
+    },
     changeFrequency: "monthly",
     priority: 0.84,
   },
@@ -136,7 +161,12 @@ export const PUBLIC_PAGES = [
       "Offer branded live streams, replay access, guest-friendly links, and streaming credit controls from the same RawDrive studio workflow.",
     summary:
       "RawDrive live streaming helps studios package remote guest access for weddings, ceremonies, and events without separating streams from galleries and client delivery.",
-    image: { url: "/stitch/solution-live.png", width: 1600, height: 1205, alt: "RawDrive live streaming management interface." },
+    image: {
+      url: "/marketing/rawdrive-live-streaming.webp",
+      width: 1600,
+      height: 1000,
+      alt: "RawDrive live streaming management interface.",
+    },
     changeFrequency: "monthly",
     priority: 0.82,
   },
@@ -148,7 +178,12 @@ export const PUBLIC_PAGES = [
       "Coordinate wedding shoots, team calendars, follow-ups, bookings, and client milestones without losing track of the studio pipeline.",
     summary:
       "RawDrive scheduling connects inquiry dates, shoot calendars, team availability, booking milestones, and operational follow-ups for photography studios.",
-    image: { url: "/stitch/solution-scheduling.png", width: 1600, height: 1205, alt: "RawDrive scheduling and booking dashboard." },
+    image: {
+      url: "/marketing/rawdrive-scheduling.webp",
+      width: 1600,
+      height: 1000,
+      alt: "RawDrive scheduling and booking dashboard.",
+    },
     changeFrequency: "monthly",
     priority: 0.8,
   },
@@ -160,7 +195,12 @@ export const PUBLIC_PAGES = [
       "Create premium digital invitation and event experiences that connect studio delivery, guests, galleries, and branded client touchpoints.",
     summary:
       "RawDrive digital invitations help studios add premium event touchpoints around wedding and celebration workflows while staying connected to gallery delivery.",
-    image: { url: "/stitch/solution-invitations.png", width: 1600, height: 1205, alt: "RawDrive digital invitation showcase." },
+    image: {
+      url: "/marketing/rawdrive-digital-invitations.webp",
+      width: 1600,
+      height: 1000,
+      alt: "RawDrive digital invitation showcase.",
+    },
     changeFrequency: "monthly",
     priority: 0.76,
   },
@@ -172,7 +212,12 @@ export const PUBLIC_PAGES = [
       "Find second shooters, editors, drone operators, and retouchers for Indian photography projects through the RawDrive freelancer marketplace.",
     summary:
       "The freelancer marketplace helps studios discover specialists by city, role, availability, and project fit without leaving their RawDrive workflow.",
-    image: { url: "/stitch/freelancers.png", width: 1600, height: 1205, alt: "RawDrive freelancer marketplace for photography teams." },
+    image: {
+      url: "/marketing/rawdrive-freelancer-marketplace.webp",
+      width: 1600,
+      height: 1000,
+      alt: "RawDrive freelancer marketplace for photography teams.",
+    },
     changeFrequency: "weekly",
     priority: 0.78,
   },
@@ -184,7 +229,12 @@ export const PUBLIC_PAGES = [
       "Reserve cameras, lenses, lights, and production gear from verified rental partners for Indian wedding, event, and commercial shoots.",
     summary:
       "The RawDrive rental marketplace helps photographers find production gear by city, brand, kit type, and shoot requirement.",
-    image: { url: "/stitch/rentals.png", width: 1600, height: 1205, alt: "RawDrive camera rental marketplace." },
+    image: {
+      url: "/marketing/rawdrive-camera-rentals.webp",
+      width: 1600,
+      height: 1000,
+      alt: "RawDrive camera rental marketplace.",
+    },
     changeFrequency: "weekly",
     priority: 0.78,
   },
@@ -196,7 +246,12 @@ export const PUBLIC_PAGES = [
       "Become a RawDrive regional partner and help photography studios adopt modern gallery, CRM, AI, streaming, and marketplace workflows.",
     summary:
       "RawDrive's partner program is for regional operators who can onboard studios, support local markets, and grow recurring software relationships.",
-    image: { url: "/stitch/dealer.png", width: 1600, height: 1205, alt: "RawDrive partner dealer program interface." },
+    image: {
+      url: "/marketing/rawdrive-company-network.webp",
+      width: 1600,
+      height: 1000,
+      alt: "RawDrive partner dealer program interface.",
+    },
     changeFrequency: "monthly",
     priority: 0.74,
   },
@@ -208,7 +263,12 @@ export const PUBLIC_PAGES = [
       "Learn why RawDrive is built for Indian photography studios that need premium client delivery and serious business operations in one platform.",
     summary:
       "RawDrive is built around the full studio lifecycle: lead capture, shoot planning, gallery delivery, proofing, billing, AI workflows, and marketplace growth.",
-    image: { url: "/stitch/about.png", width: 1600, height: 1205, alt: "RawDrive about page product preview." },
+    image: {
+      url: "/marketing/rawdrive-company-network.webp",
+      width: 1600,
+      height: 1000,
+      alt: "RawDrive about page product preview.",
+    },
     changeFrequency: "monthly",
     priority: 0.68,
   },
@@ -220,7 +280,12 @@ export const PUBLIC_PAGES = [
       "Contact RawDrive for product demos, onboarding, partnerships, billing, and support for photography studios in India.",
     summary:
       "The RawDrive contact page routes studios, partners, and support requests to the right team with official product, support, and general contact email addresses.",
-    image: { url: "/stitch/contact.png", width: 1600, height: 1545, alt: "RawDrive contact and support page." },
+    image: {
+      url: "/marketing/rawdrive-company-network.webp",
+      width: 1600,
+      height: 1000,
+      alt: "RawDrive contact and support page.",
+    },
     changeFrequency: "monthly",
     priority: 0.7,
   },

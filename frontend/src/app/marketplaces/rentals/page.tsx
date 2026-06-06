@@ -12,7 +12,7 @@ export default function RentalsMarketplacePage() {
       eyebrow="Rental Network"
       title="Reserve cameras, lenses, lights, and production gear without leaving your workflow."
       description="Find rental kits by city, brand, shoot type, and availability for wedding, event, portrait, and commercial production days."
-      previewSrc="/stitch/rentals.png"
+      previewSrc="/marketing/rawdrive-camera-rentals.avif"
       previewAlt="RawDrive camera rentals marketplace preview"
       primaryCta={{ href: "/contact", label: "Request a rental" }}
       secondaryCta={{ href: "/register", label: "Join RawDrive" }}
@@ -33,8 +33,7 @@ export default function RentalsMarketplacePage() {
           specialty: "Sony FX3, 24-70 GM II, wireless audio",
           badge: "Popular",
           price: "From Rs. 5k/day",
-          image:
-            "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=900&q=80",
+          image: "/marketing/rawdrive-rentals-card-1.avif",
           note: "Built for fast-moving wedding and brand shoots with premium stabilization support.",
         },
         {
@@ -43,8 +42,7 @@ export default function RentalsMarketplacePage() {
           specialty: "Strobes, modifiers, stands, seamless kit",
           badge: "Studio",
           price: "From Rs. 3.2k/day",
-          image:
-            "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=80",
+          image: "/marketing/rawdrive-rentals-card-2.avif",
           note: "Ideal for clean portrait sessions, headshots, and controlled indoor campaign work.",
         },
         {
@@ -53,8 +51,7 @@ export default function RentalsMarketplacePage() {
           specialty: "Compact camera kit with gimbal and drone",
           badge: "Portable",
           price: "From Rs. 4.4k/day",
-          image:
-            "https://images.unsplash.com/photo-1495707902641-75cac588d2e9?auto=format&fit=crop&w=900&q=80",
+          image: "/marketing/rawdrive-rentals-card-3.avif",
           note: "Optimized for destination shoots and light travel workflows that still need cinematic output.",
         },
       ]}

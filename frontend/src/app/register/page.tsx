@@ -38,11 +38,11 @@ export default function RegisterPage() {
       <div className="surface-panel mx-auto grid w-full max-w-7xl overflow-hidden lg:min-h-[850px] lg:grid-cols-10">
         <section className="relative hidden overflow-hidden lg:col-span-6 lg:block">
           <Image
-            src="/landing/hero-couple.webp"
+            src="/landing/hero-couple.avif"
             alt="Professional Indian wedding photography"
             fill
             sizes="(min-width: 1024px) 60vw, 100vw"
-            priority
+            preload
             className="absolute inset-0 h-full w-full object-cover"
           />
 
