@@ -158,6 +158,14 @@ func (r *AdminRevenueRepo) GetByState(ctx context.Context, from time.Time, to ti
 	// (no such column exists on the M14 commerce payments table).
 	// Signature keeps from/to for stability but this is an active
 	// snapshot, not a time-range query.
+	//
+	// A subscription's state lives on its WORKSPACE, not the subscription row:
+	// subscriptions.state_id is NULL on every real (revenue-bearing) subscription
+	// and is only populated on comped/test rows, so the old `s.state_id = st.id`
+	// join dropped all real revenue and every state reported ₹0. Route attribution
+	// through subscriptions.workspace_id → workspaces.state_id instead. Subscriptions
+	// without a workspace (or whose workspace has no state) are unattributable and
+	// fall out — you can't bill a state you can't identify.
 	_ = from
 	_ = to
 	rows, err := r.pool.Query(ctx, `
@@ -166,7 +174,8 @@ func (r *AdminRevenueRepo) GetByState(ctx context.Context, from time.Time, to ti
 			COALESCE(SUM(s.amount_paisa), 0) AS revenue,
 			COUNT(DISTINCT s.user_id) AS subscriber_count
 		FROM states st
-		LEFT JOIN subscriptions s ON s.state_id = st.id AND s.status = 'active' AND s.tier_slug != 'free'
+		LEFT JOIN workspaces w ON w.state_id = st.id
+		LEFT JOIN subscriptions s ON s.workspace_id = w.id AND s.status = 'active' AND s.tier_slug != 'free'
 		GROUP BY st.id, st.name
 		ORDER BY revenue DESC`)
 	if err != nil {

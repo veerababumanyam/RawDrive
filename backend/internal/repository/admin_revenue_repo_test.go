@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -133,4 +134,90 @@ func TestGetMetrics_FractionalARPU_ScansWithoutError(t *testing.T) {
 	// The bug was a scan failure, not a wrong value; the guarantee is a clean
 	// scan into the int64 (paisa) ARPU field.
 	require.GreaterOrEqual(t, m.ARPU, int64(0))
+}
+
+// TestGetByState_RevenueAttributedByWorkspaceState is the regression for the
+// GET /admin/revenue/states "revenue_paisa: 0 for every state" bug. A
+// subscription's state is NOT on the subscription row — subscriptions.state_id
+// is NULL on every real (revenue-bearing) subscription and is only populated on
+// comped/test rows. The state lives on the subscription's WORKSPACE
+// (subscriptions.workspace_id → workspaces.state_id). GetByState used to join on
+// subscriptions.state_id, so all real revenue fell out and every state showed 0.
+//
+// It creates a workspace carrying a real state_id and an active paid subscription
+// whose OWN state_id is left NULL, then asserts that state's revenue rises by
+// exactly the subscription amount. Pre-fix: the NULL-state_id join drops it →
+// delta 0 → fail. Fixed: attribution routes through the workspace → delta ==
+// amount. Delta-based so it's robust against any pre-existing data.
+//
+// Self-contained (creates its own state-tagged workspace) so it runs in the CI
+// testcontainer, not just a populated dev DB. The workspace name is unique per
+// run, and cleanup is best-effort in FK-safe order: in a fresh testcontainer it
+// removes everything; in a dev DB whose audit_logs→workspaces FK blocks workspace
+// deletes it harmlessly leaves a 0-revenue workspace behind (its subscription is
+// deleted), and the unique name means re-runs never collide.
+//
+// DB-backed: skips when no DATABASE_URL/testcontainer is available.
+func TestGetByState_RevenueAttributedByWorkspaceState(t *testing.T) {
+	pool := getRetryTestPool(t)
+	repo := NewAdminRevenueRepo(pool)
+	ctx := context.Background()
+
+	// A real, seeded state (migration 010 seeds Indian states).
+	var stateID int
+	var stateName string
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT id, name FROM states ORDER BY id LIMIT 1`).Scan(&stateID, &stateName))
+
+	email := fmt.Sprintf("revstate-ws-%d@test.invalid", time.Now().UnixNano())
+	wsName := fmt.Sprintf("rev-state-ws-test-%d", time.Now().UnixNano())
+	const amount = int64(13579)
+	var userID, wsID string
+
+	t.Cleanup(func() {
+		c := context.Background()
+		// FK-safe order; ignore errors (dev-DB audit_logs FK may block the ws delete).
+		_, _ = pool.Exec(c, `DELETE FROM subscriptions WHERE workspace_id = $1`, wsID)
+		_, _ = pool.Exec(c, `DELETE FROM audit_logs WHERE workspace_id = $1`, wsID)
+		_, _ = pool.Exec(c, `DELETE FROM workspaces WHERE id = $1`, wsID)
+		_, _ = pool.Exec(c, `DELETE FROM users WHERE email = $1`, email)
+	})
+
+	// stateRevenue reads the current GetByState revenue for our target state.
+	stateRevenue := func() int64 {
+		rows, err := repo.GetByState(ctx, time.Now().AddDate(0, -1, 0), time.Now())
+		require.NoError(t, err)
+		for _, r := range rows {
+			if r.StateName == stateName {
+				return r.Revenue
+			}
+		}
+		t.Fatalf("state %q absent from GetByState output", stateName)
+		return 0
+	}
+
+	before := stateRevenue()
+
+	require.NoError(t, pool.QueryRow(ctx,
+		`INSERT INTO users (id, email) VALUES (gen_random_uuid(), $1) RETURNING id`,
+		email).Scan(&userID))
+	require.NoError(t, pool.QueryRow(ctx,
+		`INSERT INTO workspaces (owner_id, name, state_id) VALUES ($1, $2, $3) RETURNING id`,
+		userID, wsName, stateID).Scan(&wsID))
+	// state_id deliberately left NULL on the subscription — the pre-fix query
+	// joined on it, which is exactly why real revenue showed 0. workspace_id carries it.
+	_, err := pool.Exec(ctx,
+		`INSERT INTO subscriptions
+		   (id, user_id, workspace_id, amount_paisa, status, tier_slug, billing_interval,
+		    started_at, created_at, updated_at)
+		 VALUES (gen_random_uuid(), $1, $2, $3, 'active', 'starter', 'monthly',
+		         now() - interval '5 days', now() - interval '5 days', now())`,
+		userID, wsID, amount)
+	require.NoError(t, err)
+
+	after := stateRevenue()
+
+	require.Equal(t, before+amount, after,
+		"state %q revenue must include the subscription via its workspace's state "+
+			"(workspace_id → workspaces.state_id), not subscriptions.state_id", stateName)
 }
