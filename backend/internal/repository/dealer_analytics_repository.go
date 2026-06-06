@@ -26,6 +26,23 @@ type DailyRevenueShare struct {
 	SubscriberCount        int     `json:"subscriber_count"`
 }
 
+// AdminDealerStateReport is the super-admin statewide dealer report row.
+// Revenue is state-wide, not attribution-only: it lets platform staff see what
+// a dealer's state would pay at the dealer's configured commission, falling
+// back to the report default for pending/unconfigured dealers.
+type AdminDealerStateReport struct {
+	DealerID               uuid.UUID `json:"dealer_id"`
+	BusinessName           string    `json:"business_name"`
+	StateID                int       `json:"state_id"`
+	StateName              string    `json:"state_name"`
+	TerritoryType          string    `json:"territory_type"`
+	Status                 string    `json:"status"`
+	CommissionRatePct      float64   `json:"commission_rate_pct"`
+	TotalSubscriptionPaisa int64     `json:"total_subscription_paisa"`
+	DealerSharePaisa       int64     `json:"dealer_share_paisa"`
+	SubscriberCount        int64     `json:"subscriber_count"`
+}
+
 type DealerAnalyticsRepo struct {
 	DB *pgxpool.Pool
 }
@@ -128,6 +145,64 @@ func (r *DealerAnalyticsRepo) GetDailyRevenueShares(ctx context.Context, stateID
 		d.CommissionRatePct = commissionRatePct
 		d.RevenueSharePaisa = int64(float64(d.TotalSubscriptionPaisa) * commissionRatePct / 100.0)
 		result = append(result, d)
+	}
+	return result, rows.Err()
+}
+
+// GetAdminStateReports returns one statewide monthly report row per non-deleted
+// dealer. A dealer without an assigned commission uses fallbackCommissionRatePct
+// so pending applications can still be reviewed against the platform default.
+func (r *DealerAnalyticsRepo) GetAdminStateReports(ctx context.Context, from, to time.Time, fallbackCommissionRatePct float64) ([]AdminDealerStateReport, error) {
+	rows, err := r.DB.Query(ctx, `
+		SELECT
+			d.id,
+			d.business_name,
+			d.state_id,
+			st.name AS state_name,
+			d.territory_type,
+			d.status,
+			COALESCE(d.commission_rate_pct, $3::numeric)::float8 AS commission_rate_pct,
+			COALESCE(SUM(s.amount_paisa), 0)::bigint AS total_subscription_paisa,
+			ROUND(
+				COALESCE(SUM(s.amount_paisa), 0)::numeric *
+				COALESCE(d.commission_rate_pct, $3::numeric) / 100
+			)::bigint AS dealer_share_paisa,
+			COUNT(DISTINCT s.user_id)::bigint AS subscriber_count
+		FROM dealers d
+		JOIN states st ON st.id = d.state_id
+		LEFT JOIN workspaces w ON w.state_id = d.state_id
+		LEFT JOIN subscriptions s ON s.workspace_id = w.id
+			AND s.status = 'active'
+			AND s.tier_slug != 'free'
+			AND COALESCE(s.started_at, s.created_at) >= $1
+			AND COALESCE(s.started_at, s.created_at) < $2
+		WHERE d.deleted_at IS NULL
+		GROUP BY d.id, d.business_name, d.state_id, st.name, d.territory_type, d.status, d.commission_rate_pct
+		ORDER BY st.name ASC, d.business_name ASC
+	`, from, to, fallbackCommissionRatePct)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []AdminDealerStateReport
+	for rows.Next() {
+		var row AdminDealerStateReport
+		if err := rows.Scan(
+			&row.DealerID,
+			&row.BusinessName,
+			&row.StateID,
+			&row.StateName,
+			&row.TerritoryType,
+			&row.Status,
+			&row.CommissionRatePct,
+			&row.TotalSubscriptionPaisa,
+			&row.DealerSharePaisa,
+			&row.SubscriberCount,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
 	}
 	return result, rows.Err()
 }

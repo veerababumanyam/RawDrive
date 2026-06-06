@@ -2,7 +2,12 @@ import { authFetch } from "@/lib/api/authFetch";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
-export type DealerStatus = "pending" | "approved" | "suspended" | "terminated";
+export type DealerStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "suspended"
+  | "terminated";
 export type TerritoryType = "primary" | "secondary" | "ambassador";
 
 export interface BankAccount {
@@ -166,6 +171,30 @@ export interface RevenueCalendarResponse {
   days: DailyRevenueShare[];
 }
 
+export interface AdminDealerStateReport {
+  dealer_id: string;
+  business_name: string;
+  state_id: number;
+  state_name: string;
+  territory_type: TerritoryType;
+  status: DealerStatus;
+  commission_rate_pct: number;
+  total_subscription_paisa: number;
+  dealer_share_paisa: number;
+  subscriber_count: number;
+}
+
+export interface AdminDealerStateReportsResponse {
+  year: number;
+  month: number;
+  period_start: string;
+  period_end: string;
+  default_commission_rate_pct: number;
+  total_subscription_paisa: number;
+  total_projected_dealer_share_paisa: number;
+  reports: AdminDealerStateReport[];
+}
+
 export async function getDealerPhotographers(): Promise<StatePhotographer[]> {
   const res = await authFetch(`/api/v1/dealer/photographers`);
   if (!res.ok) throw new Error("Failed to fetch photographers");
@@ -176,6 +205,26 @@ export async function getDealerPhotographers(): Promise<StatePhotographer[]> {
 export async function getDealerRevenueCalendar(year: number, month: number): Promise<RevenueCalendarResponse> {
   const res = await authFetch(`/api/v1/dealer/revenue-calendar?year=${year}&month=${month}`);
   if (!res.ok) throw new Error("Failed to fetch revenue calendar");
+  return res.json();
+}
+
+export async function getAdminDealerStateReports(
+  token: string,
+  params?: { year?: number; month?: number; commission_rate_pct?: number },
+): Promise<AdminDealerStateReportsResponse> {
+  const query = new URLSearchParams();
+  if (params?.year) query.set("year", String(params.year));
+  if (params?.month) query.set("month", String(params.month));
+  if (params?.commission_rate_pct)
+    query.set("commission_rate_pct", String(params.commission_rate_pct));
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const res = await fetch(
+    `${API_BASE}/api/v1/admin/dealers/reports/statewide${suffix}`,
+    {
+      headers: headers(token),
+    },
+  );
+  if (!res.ok) throw new Error("Failed to fetch dealer state reports");
   return res.json();
 }
 

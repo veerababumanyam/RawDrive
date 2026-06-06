@@ -31,6 +31,11 @@ var ErrInvalidPeriod = errors.New("invalid period")
 // ErrInvalidCustomRange is returned when a custom range is missing/reversed.
 var ErrInvalidCustomRange = errors.New("custom period requires from < to")
 
+// DefaultDealerReportCommissionRatePct is the statewide dealer report default
+// used for pending/unconfigured dealers. Approved dealers keep their configured
+// commission.
+const DefaultDealerReportCommissionRatePct = 20.0
+
 // PeriodRange is an inclusive-start / exclusive-end time window.
 type PeriodRange struct {
 	Start time.Time
@@ -120,6 +125,17 @@ type RevenueCalendarResponse struct {
 	Days              []repository.DailyRevenueShare `json:"days"`
 }
 
+type AdminDealerStateReportsResponse struct {
+	Year                           int                                 `json:"year"`
+	Month                          int                                 `json:"month"`
+	PeriodStart                    time.Time                           `json:"period_start"`
+	PeriodEnd                      time.Time                           `json:"period_end"`
+	DefaultCommissionRatePct       float64                             `json:"default_commission_rate_pct"`
+	TotalSubscriptionPaisa         int64                               `json:"total_subscription_paisa"`
+	TotalProjectedDealerSharePaisa int64                               `json:"total_projected_dealer_share_paisa"`
+	Reports                        []repository.AdminDealerStateReport `json:"reports"`
+}
+
 // GetStatePhotographers returns all photographers registered in the same state as the dealer.
 func (s *DealerAnalyticsService) GetStatePhotographers(ctx context.Context, dealerID uuid.UUID) ([]repository.StatePhotographer, error) {
 	dealer, err := s.dealerRepo.GetByID(ctx, dealerID)
@@ -162,6 +178,41 @@ func (s *DealerAnalyticsService) GetRevenueCalendar(ctx context.Context, dealerI
 		TotalRevenuePaisa: totalRevenue,
 		TotalSharePaisa:   totalShare,
 		Days:              days,
+	}, nil
+}
+
+// GetAdminStateReports returns super-admin statewide dealer reports for a
+// calendar month. Missing/zero year or month are defaulted by the handler.
+func (s *DealerAnalyticsService) GetAdminStateReports(ctx context.Context, year, month int, fallbackCommissionRatePct float64) (*AdminDealerStateReportsResponse, error) {
+	if fallbackCommissionRatePct <= 0 {
+		fallbackCommissionRatePct = DefaultDealerReportCommissionRatePct
+	}
+	periodStart := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+	periodEnd := periodStart.AddDate(0, 1, 0)
+
+	reports, err := s.analyticsRepo.GetAdminStateReports(ctx, periodStart, periodEnd, fallbackCommissionRatePct)
+	if err != nil {
+		return nil, err
+	}
+	if reports == nil {
+		reports = []repository.AdminDealerStateReport{}
+	}
+
+	var totalSubscription, totalDealerShare int64
+	for _, report := range reports {
+		totalSubscription += report.TotalSubscriptionPaisa
+		totalDealerShare += report.DealerSharePaisa
+	}
+
+	return &AdminDealerStateReportsResponse{
+		Year:                           year,
+		Month:                          month,
+		PeriodStart:                    periodStart,
+		PeriodEnd:                      periodEnd,
+		DefaultCommissionRatePct:       fallbackCommissionRatePct,
+		TotalSubscriptionPaisa:         totalSubscription,
+		TotalProjectedDealerSharePaisa: totalDealerShare,
+		Reports:                        reports,
 	}, nil
 }
 

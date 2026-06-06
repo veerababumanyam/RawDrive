@@ -132,3 +132,52 @@ func (h *DealerAnalyticsHandler) RevenueCalendar(w http.ResponseWriter, r *http.
 	}
 	respondJSON(w, http.StatusOK, resp)
 }
+
+// AdminStateReports returns statewide monthly dealer reports for platform
+// admins. The route is mounted behind RequirePlatformRole("admin",
+// "super_admin") in routes_m6.go.
+// GET /api/v1/admin/dealers/reports/statewide?year=2026&month=6
+func (h *DealerAnalyticsHandler) AdminStateReports(w http.ResponseWriter, r *http.Request) {
+	if h.svc == nil {
+		http.Error(w, `{"error":"dealer analytics unavailable"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	now := time.Now().UTC()
+	year := now.Year()
+	month := int(now.Month())
+
+	if y := r.URL.Query().Get("year"); y != "" {
+		parsed, err := strconv.Atoi(y)
+		if err != nil || parsed < 2000 {
+			http.Error(w, `{"error":"invalid year"}`, http.StatusBadRequest)
+			return
+		}
+		year = parsed
+	}
+	if m := r.URL.Query().Get("month"); m != "" {
+		parsed, err := strconv.Atoi(m)
+		if err != nil || parsed < 1 || parsed > 12 {
+			http.Error(w, `{"error":"invalid month"}`, http.StatusBadRequest)
+			return
+		}
+		month = parsed
+	}
+
+	fallbackCommission := service.DefaultDealerReportCommissionRatePct
+	if c := r.URL.Query().Get("commission_rate_pct"); c != "" {
+		parsed, err := strconv.ParseFloat(c, 64)
+		if err != nil || parsed <= 0 || parsed > 100 {
+			http.Error(w, `{"error":"invalid commission_rate_pct"}`, http.StatusBadRequest)
+			return
+		}
+		fallbackCommission = parsed
+	}
+
+	resp, err := h.svc.GetAdminStateReports(r.Context(), year, month, fallbackCommission)
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	respondJSON(w, http.StatusOK, resp)
+}

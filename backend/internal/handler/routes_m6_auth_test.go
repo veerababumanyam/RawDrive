@@ -31,6 +31,7 @@ func TestM6AdminRoutes_PlatformRoleGate(t *testing.T) {
 		path   string
 	}{
 		{http.MethodGet, "/api/v1/admin/dealers"},
+		{http.MethodGet, "/api/v1/admin/dealers/reports/statewide"},
 		{http.MethodPost, "/api/v1/admin/dealers"},
 		{http.MethodPut, "/api/v1/admin/dealers/00000000-0000-0000-0000-000000000000/approve"},
 		{http.MethodPut, "/api/v1/admin/dealers/00000000-0000-0000-0000-000000000000/reject"},

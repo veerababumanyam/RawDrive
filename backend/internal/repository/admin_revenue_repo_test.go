@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -57,6 +58,30 @@ func TestStateRevenue_Fields(t *testing.T) {
 	assert.Equal(t, "Karnataka", sr.StateName)
 	assert.Equal(t, int64(2000000), sr.Revenue)
 	assert.Equal(t, int64(150), sr.SubscriberCount)
+}
+
+func TestRevenueRecordAndDealer_Fields(t *testing.T) {
+	dealerID := uuid.New()
+	record := RevenueRecord{
+		StateID:         12,
+		StateName:       "Karnataka",
+		District:        "Bengaluru Urban",
+		Revenue:         2000000,
+		SubscriberCount: 150,
+	}
+	dealer := RevenueReportDealer{
+		DealerID:          dealerID,
+		BusinessName:      "RawDrive Karnataka",
+		Email:             "dealer@example.test",
+		CommissionRatePct: 20,
+	}
+
+	assert.Equal(t, 12, record.StateID)
+	assert.Equal(t, "Bengaluru Urban", record.District)
+	assert.Equal(t, int64(2000000), record.Revenue)
+	assert.Equal(t, dealerID, dealer.DealerID)
+	assert.Equal(t, "dealer@example.test", dealer.Email)
+	assert.Equal(t, float64(20), dealer.CommissionRatePct)
 }
 
 func TestRevenueTimeSeries_GranularityMapping(t *testing.T) {

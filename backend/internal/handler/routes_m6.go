@@ -37,6 +37,7 @@ func RegisterM6Routes(r chi.Router, deps M6Dependencies) {
 	couponValidationSvc := service.NewCouponValidationService(deps.CouponRepo)
 
 	dealerHandler := NewDealerHandler(dealerSvc).WithAuditLog(deps.AuditLogSvc)
+	analyticsHandler := NewDealerAnalyticsHandler(deps.DealerAnalytics, deps.DealerRepo)
 	marginHandler := NewMarginHandler(marginSvc)
 	couponHandler := NewCouponHandler(deps.CouponRepo)
 	couponHandler.dealerRepo = deps.DealerRepo
@@ -49,6 +50,7 @@ func RegisterM6Routes(r chi.Router, deps M6Dependencies) {
 		r.Use(middleware.RequirePlatformRole("admin", "super_admin"))
 		r.Post("/", dealerHandler.Create)
 		r.Get("/", dealerHandler.List)
+		r.Get("/reports/statewide", analyticsHandler.AdminStateReports)
 		r.Put("/{id}/approve", dealerHandler.Approve)
 		r.Put("/{id}/reject", dealerHandler.Reject)
 		r.Put("/{id}/suspend", dealerHandler.Suspend)
@@ -111,7 +113,6 @@ func RegisterM6Routes(r chi.Router, deps M6Dependencies) {
 	// GET /api/v1/dealer/photographers — photographers in dealer's state
 	// GET /api/v1/dealer/revenue-calendar?year=YYYY&month=M
 	if deps.DealerAnalytics != nil {
-		analyticsHandler := NewDealerAnalyticsHandler(deps.DealerAnalytics, deps.DealerRepo)
 		r.Get("/api/v1/dealer/analytics", analyticsHandler.Dashboard)
 		r.Get("/api/v1/dealer/photographers", analyticsHandler.Photographers)
 		r.Get("/api/v1/dealer/revenue-calendar", analyticsHandler.RevenueCalendar)

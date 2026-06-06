@@ -132,3 +132,9 @@ func TestResolvePeriodRange_Invalid(t *testing.T) {
 		t.Fatalf("want ErrInvalidPeriod, got %v", err)
 	}
 }
+
+func TestDefaultDealerReportCommissionRatePct(t *testing.T) {
+	if DefaultDealerReportCommissionRatePct != 20 {
+		t.Fatalf("statewide dealer reports must default to 20%% commission, got %.2f", DefaultDealerReportCommissionRatePct)
+	}
+}

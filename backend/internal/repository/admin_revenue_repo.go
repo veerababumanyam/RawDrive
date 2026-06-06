@@ -49,6 +49,25 @@ type StateRevenue struct {
 	SubscriberCount int64  `db:"subscriber_count" json:"subscriber_count"`
 }
 
+// RevenueRecord is the district-level revenue record shown on the admin
+// dashboard when a super-admin filters revenue by state/district.
+type RevenueRecord struct {
+	StateID         int    `db:"state_id" json:"state_id"`
+	StateName       string `db:"state_name" json:"state_name"`
+	District        string `db:"district" json:"district"`
+	Revenue         int64  `db:"revenue" json:"revenue_paisa"`
+	SubscriberCount int64  `db:"subscriber_count" json:"subscriber_count"`
+}
+
+// RevenueReportDealer is the approved dealer who should receive a shared
+// revenue report for a state.
+type RevenueReportDealer struct {
+	DealerID          uuid.UUID `db:"dealer_id" json:"dealer_id"`
+	BusinessName      string    `db:"business_name" json:"business_name"`
+	Email             string    `db:"email" json:"email"`
+	CommissionRatePct float64   `db:"commission_rate_pct" json:"commission_rate_pct"`
+}
+
 // ---------------------------------------------------------------------------
 // Repo
 // ---------------------------------------------------------------------------
@@ -182,6 +201,92 @@ func (r *AdminRevenueRepo) GetByState(ctx context.Context, from time.Time, to ti
 		return nil, fmt.Errorf("revenue by state: %w", err)
 	}
 	return pgx.CollectRows(rows, pgx.RowToStructByName[StateRevenue])
+}
+
+func (r *AdminRevenueRepo) GetStateName(ctx context.Context, stateID int) (string, error) {
+	var name string
+	if err := r.pool.QueryRow(ctx,
+		`SELECT name FROM states WHERE id = $1`, stateID,
+	).Scan(&name); err != nil {
+		if err == pgx.ErrNoRows {
+			return "", ErrNotFound
+		}
+		return "", fmt.Errorf("revenue state lookup: %w", err)
+	}
+	return name, nil
+}
+
+func (r *AdminRevenueRepo) GetApprovedDealerForState(ctx context.Context, stateID int, defaultCommissionRatePct float64) (*RevenueReportDealer, error) {
+	var dealer RevenueReportDealer
+	err := r.pool.QueryRow(ctx, `
+		SELECT
+			d.id AS dealer_id,
+			d.business_name,
+			COALESCE(u.email, '') AS email,
+			COALESCE(d.commission_rate_pct, $2) AS commission_rate_pct
+		FROM dealers d
+		LEFT JOIN users u ON u.id = d.user_id
+		WHERE d.state_id = $1
+			AND d.status = 'approved'
+			AND d.deleted_at IS NULL
+		ORDER BY
+			CASE d.territory_type
+				WHEN 'primary' THEN 0
+				WHEN 'secondary' THEN 1
+				ELSE 2
+			END,
+			d.approved_at DESC NULLS LAST,
+			d.created_at DESC
+		LIMIT 1`, stateID, defaultCommissionRatePct,
+	).Scan(&dealer.DealerID, &dealer.BusinessName, &dealer.Email, &dealer.CommissionRatePct)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("approved dealer for revenue report: %w", err)
+	}
+	return &dealer, nil
+}
+
+func (r *AdminRevenueRepo) GetRecordsByStateDistrict(ctx context.Context, stateID int, district string) ([]RevenueRecord, error) {
+	// Keep this on the same attribution path as GetByState:
+	// subscription.workspace_id -> workspaces.state_id. District is optional
+	// and comes from the workspace owner first, then the subscription user.
+	rows, err := r.pool.Query(ctx, `
+		WITH attributed AS (
+			SELECT
+				st.id AS state_id,
+				st.name AS state_name,
+				COALESCE(
+					NULLIF(BTRIM(owner_user.district), ''),
+					NULLIF(BTRIM(subscription_user.district), ''),
+					'Unassigned'
+				) AS district,
+				s.amount_paisa,
+				s.user_id
+			FROM subscriptions s
+			JOIN workspaces w ON w.id = s.workspace_id
+			JOIN states st ON st.id = w.state_id
+			LEFT JOIN users owner_user ON owner_user.id = w.owner_id
+			LEFT JOIN users subscription_user ON subscription_user.id = s.user_id
+			WHERE w.state_id = $1
+				AND s.status = 'active'
+				AND s.tier_slug != 'free'
+		)
+		SELECT
+			state_id,
+			state_name,
+			district,
+			COALESCE(SUM(amount_paisa), 0) AS revenue,
+			COUNT(DISTINCT user_id) AS subscriber_count
+		FROM attributed
+		WHERE $2 = '' OR LOWER(district) = LOWER($2)
+		GROUP BY state_id, state_name, district
+		ORDER BY revenue DESC, district ASC`, stateID, district)
+	if err != nil {
+		return nil, fmt.Errorf("revenue records by state/district: %w", err)
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByName[RevenueRecord])
 }
 
 func (r *AdminRevenueRepo) RefreshViews(ctx context.Context) error {

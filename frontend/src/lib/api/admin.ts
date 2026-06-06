@@ -63,6 +63,46 @@ export interface RevenueTimeSeries {
   subscribers: number;
 }
 
+export interface RevenueReportDealer {
+  dealer_id: string;
+  business_name: string;
+  email: string;
+  commission_rate_pct: number;
+}
+
+export interface RevenueRecord {
+  state_id: number;
+  state_name: string;
+  district: string;
+  revenue_paisa: number;
+  subscriber_count: number;
+  dealer_share_paisa: number;
+}
+
+export interface RevenueRecordsResponse {
+  state_id: number;
+  state_name: string;
+  district?: string;
+  generated_at: string;
+  default_commission_rate_pct: number;
+  total_revenue_paisa: number;
+  total_subscribers: number;
+  total_dealer_share_paisa: number;
+  dealer?: RevenueReportDealer;
+  records: RevenueRecord[];
+}
+
+export interface EmailRevenueReportResponse {
+  sent_to: string;
+  dealer_id: string;
+  business_name: string;
+}
+
+export interface RevenueRecordFilter {
+  state_id: number;
+  district?: string;
+}
+
 export interface EngagementMetrics {
   dau: number;
   wau: number;
@@ -376,6 +416,38 @@ export async function getRevenueTimeSeries(token: string, params?: Record<string
 
 export async function getRevenueStateBreakdown(token: string): Promise<RevenueData["state_breakdown"]> {
   return get(token, "/revenue/states");
+}
+
+function revenueRecordParams(params: RevenueRecordFilter): Record<string, string> {
+  const query: Record<string, string> = { state_id: String(params.state_id) };
+  if (params.district) query.district = params.district;
+  return query;
+}
+
+export async function searchRevenueRecords(
+  token: string,
+  params: RevenueRecordFilter,
+): Promise<RevenueRecordsResponse> {
+  return get(token, "/revenue/records", revenueRecordParams(params));
+}
+
+export async function downloadRevenueRecordsPDF(
+  token: string,
+  params: RevenueRecordFilter,
+): Promise<Blob> {
+  const query = new URLSearchParams(revenueRecordParams(params)).toString();
+  const res = await fetch(`${API_BASE}/api/v1/admin/revenue/records/pdf?${query}`, {
+    headers: headers(token),
+  });
+  if (!res.ok) throw new Error("PDF export failed");
+  return res.blob();
+}
+
+export async function emailRevenueRecordsToDealer(
+  token: string,
+  params: RevenueRecordFilter,
+): Promise<EmailRevenueReportResponse> {
+  return post(token, "/revenue/records/email", params);
 }
 
 // ── Analytics ──

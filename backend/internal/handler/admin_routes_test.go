@@ -41,6 +41,9 @@ func TestAdminRoutes_AllEndpointsRegistered(t *testing.T) {
 		"GET /api/v1/admin/revenue",
 		"GET /api/v1/admin/revenue/timeseries",
 		"GET /api/v1/admin/revenue/states",
+		"GET /api/v1/admin/revenue/records",
+		"GET /api/v1/admin/revenue/records/pdf",
+		"POST /api/v1/admin/revenue/records/email",
 		"GET /api/v1/admin/analytics/engagement",
 		"GET /api/v1/admin/analytics/growth",
 		"GET /api/v1/admin/analytics/features",
@@ -73,6 +76,8 @@ func TestAdminRoutes_UnauthenticatedReturns401(t *testing.T) {
 		"/api/v1/admin/moderation",
 		"/api/v1/admin/workspaces",
 		"/api/v1/admin/revenue",
+		"/api/v1/admin/revenue/records",
+		"/api/v1/admin/revenue/records/pdf",
 		"/api/v1/admin/analytics/engagement",
 		"/api/v1/admin/system/metrics",
 		"/api/v1/admin/audit-logs",
@@ -96,6 +101,7 @@ func TestAdminRoutes_NonSuperAdminReturns403(t *testing.T) {
 		"/api/v1/admin/users",
 		"/api/v1/admin/moderation",
 		"/api/v1/admin/revenue",
+		"/api/v1/admin/revenue/records",
 		"/api/v1/admin/audit-logs",
 	}
 
@@ -108,6 +114,14 @@ func TestAdminRoutes_NonSuperAdminReturns403(t *testing.T) {
 			assert.Equal(t, http.StatusForbidden, rr.Code)
 		})
 	}
+}
+
+func TestAdminRoutes_RevenueReportEmailUnauthenticatedReturns401(t *testing.T) {
+	r := setupFullAdminRouter()
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/admin/revenue/records/email", strings.NewReader(`{"state_id":1}`)))
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
 
 func TestAdminRoutes_DealerRoleReturns403(t *testing.T) {
@@ -324,6 +338,30 @@ func TestAdminAuditLogsHandler_GetDetail_InvalidUUID(t *testing.T) {
 	r.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 	assert.Contains(t, rr.Body.String(), "invalid id")
+}
+
+func TestAdminRevenueHandler_GetRecords_MissingStateID(t *testing.T) {
+	h := NewAdminRevenueHandler(nil)
+	rr := httptest.NewRecorder()
+	h.GetRecords(rr, httptest.NewRequest(http.MethodGet, "/api/v1/admin/revenue/records", nil))
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Contains(t, rr.Body.String(), "state_id is required")
+}
+
+func TestAdminRevenueHandler_DownloadRecordsPDF_InvalidStateID(t *testing.T) {
+	h := NewAdminRevenueHandler(nil)
+	rr := httptest.NewRecorder()
+	h.DownloadRecordsPDF(rr, httptest.NewRequest(http.MethodGet, "/api/v1/admin/revenue/records/pdf?state_id=abc", nil))
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Contains(t, rr.Body.String(), "state_id is required")
+}
+
+func TestAdminRevenueHandler_EmailRecordsToDealer_MissingStateID(t *testing.T) {
+	h := NewAdminRevenueHandler(nil)
+	rr := httptest.NewRecorder()
+	h.EmailRecordsToDealer(rr, httptest.NewRequest(http.MethodPost, "/api/v1/admin/revenue/records/email", strings.NewReader(`{}`)))
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Contains(t, rr.Body.String(), "state_id is required")
 }
 
 // ──────────────────────── respondJSON utility ────────────────────────

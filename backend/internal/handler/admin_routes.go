@@ -99,6 +99,9 @@ func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
 		r.Get("/revenue", revenue.GetDashboard)
 		r.Get("/revenue/timeseries", revenue.GetTimeSeries)
 		r.Get("/revenue/states", revenue.GetStateBreakdown)
+		r.Get("/revenue/records", revenue.GetRecords)
+		r.Get("/revenue/records/pdf", revenue.DownloadRecordsPDF)
+		r.Post("/revenue/records/email", revenue.EmailRecordsToDealer)
 
 		r.Get("/analytics/engagement", analytics.GetEngagement)
 		r.Get("/analytics/growth", analytics.GetGrowth)

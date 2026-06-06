@@ -293,6 +293,21 @@ func TestComposeMessages_SanitizeHeadersAndEscapeGalleryHTML(t *testing.T) {
 	))
 	assert.NotContains(t, notificationMsg, "\r\nBcc:", "notification headers must not allow CRLF injection")
 	assert.Contains(t, notificationMsg, "Subject: Lead update Bcc: injected@example.com\r\n")
+
+	attachmentMsg := string(composeNotificationAttachmentMessage(
+		cfg,
+		"dealer@example.com\r\nBcc: injected@example.com",
+		"Revenue report\r\nBcc: injected@example.com",
+		"Attached report",
+		"",
+		"revenue-report.pdf\r\nBcc: injected@example.com",
+		"application/pdf",
+		[]byte("%PDF-1.4"),
+	))
+	assert.NotContains(t, attachmentMsg, "\r\nBcc:", "attachment notification headers must not allow CRLF injection")
+	assert.Contains(t, attachmentMsg, "Content-Type: multipart/mixed;")
+	assert.Contains(t, attachmentMsg, "Content-Disposition: attachment; filename=\"revenue-report.pdf Bcc: injected@example.com\"")
+	assert.Contains(t, attachmentMsg, "JVBERi0xLjQ=")
 }
 
 type capturedMail struct {

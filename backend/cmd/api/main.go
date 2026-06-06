@@ -2811,6 +2811,10 @@ func main() {
 		workspacePolicySvc.WithAuditLog(auditLogSvc)
 
 		adminUserSvc := service.NewAdminUserService(adminUserRepo, auditLogSvc, jwtSecret)
+		adminRevenueSvc := service.NewAdminRevenueService(adminRevenueRepo).WithPDFService(pdfSvc)
+		if notificationEmailSender != nil {
+			adminRevenueSvc.WithReportEmailSender(notificationEmailSender)
+		}
 		// Issue #4: wire platform-role invitation email. The concrete
 		// *email.InvitationSender satisfies both teamPkg.EmailSender and
 		// service.AdminInviteSender, so we type-assert to reuse the same
@@ -2830,7 +2834,7 @@ func main() {
 			// SOC2/DPDPA reconstruction of who suspended/deleted a workspace
 			// is lost. Mirrors workspacePolicySvc.WithAuditLog above.
 			WorkspaceSvc: newAdminWorkspaceService(adminWorkspaceRepo, auditLogSvc),
-			RevenueSvc:   service.NewAdminRevenueService(adminRevenueRepo),
+			RevenueSvc:   adminRevenueSvc,
 			AnalyticsSvc: service.NewAdminAnalyticsService(adminAnalyticsRepo),
 			ExportSvc:    service.NewAdminExportService(adminUserRepo, adminRevenueRepo),
 			HealthSvc:    service.NewAdminHealthService(adminHealthRepo).WithDataplane(dbPool, valkeyCacheStatSource(valkeyClient)),
