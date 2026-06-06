@@ -56,6 +56,9 @@ describe("next.config CSP (F-098)", () => {
     expect(script).not.toContain("'unsafe-inline'");
     expect(script).toContain(`'nonce-${nonce}'`);
     expect(script).toContain("'strict-dynamic'");
+    // The WebP upload fallback is WebAssembly-based; allow WASM compilation
+    // without enabling broad JavaScript eval in production.
+    expect(script).toContain("'wasm-unsafe-eval'");
     // The Razorpay allowance and 'self' must survive the nonce switch.
     expect(script).toContain("'self'");
     expect(script).toContain("https://checkout.razorpay.com");
@@ -77,6 +80,7 @@ describe("next.config CSP (F-098)", () => {
     const script = scriptSrc(csp);
     expect(script).toContain("'self'");
     expect(script).toContain("https://checkout.razorpay.com");
+    expect(script).toContain("'wasm-unsafe-eval'");
     // No nonce supplied -> the static header cannot carry one, so this path
     // still falls back to 'unsafe-inline'. (Removing it for real is the
     // middleware nonce follow-up — see manualActionNeeded in the fix report.)

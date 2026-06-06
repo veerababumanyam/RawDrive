@@ -28,10 +28,12 @@ export interface CspOptions {
  * hydration/bootstrap scripts that would otherwise be blocked, white-screening
  * the app) is a per-request nonce. This builder makes that a one-flag switch:
  *
- *   - nonce present  → `script-src 'self' 'nonce-<n>' 'strict-dynamic' blob:
- *                       https://checkout.razorpay.com`  (NO 'unsafe-inline')
- *   - nonce absent   → `script-src 'self' 'unsafe-inline' blob:
- *                       https://checkout.razorpay.com`  (static-header fallback)
+ *   - nonce present  → `script-src 'self' 'nonce-<n>' 'strict-dynamic'
+ *                       'wasm-unsafe-eval' blob: https://checkout.razorpay.com`
+ *                       (NO 'unsafe-inline')
+ *   - nonce absent   → `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'
+ *                       blob: https://checkout.razorpay.com`
+ *                       (static-header fallback)
  *
  * 'strict-dynamic' lets a nonced script load further scripts (Razorpay's SDK
  * pulls additional bundles) without enumerating every origin, while ignoring
@@ -41,6 +43,9 @@ export interface CspOptions {
  * Other directives keep their existing, separately-justified sources:
  *   - checkout.razorpay.com (script + frame): Razorpay Checkout SDK + modal.
  *   - youtube / youtube-nocookie / vimeo (frame): embedded-videos panel.
+ *   - script-src 'wasm-unsafe-eval': required by the approved @jsquash/webp
+ *     upload fallback so Safari/iOS can generate source-side WebP derivatives;
+ *     production still forbids broad JavaScript 'unsafe-eval'.
  *   - style-src 'unsafe-inline': required by Tailwind v4 + inline styles; NOT
  *     in scope for F-098 (the finding is script-src only) and styles cannot
  *     execute, so it is a far weaker concern.
@@ -55,6 +60,10 @@ export function buildCsp({ isDev, nonce, apiOrigin }: CspOptions): string {
     // when no per-request nonce is available.
     scriptSrcTokens.push("'unsafe-inline'");
   }
+  // Narrow WebAssembly compilation allowance for the upload WebP encoder
+  // fallback. This is not broad JavaScript eval; production keeps
+  // 'unsafe-eval' forbidden below.
+  scriptSrcTokens.push("'wasm-unsafe-eval'");
   scriptSrcTokens.push("blob:");
   if (isDev) {
     // unsafe-eval is dev-only (turbopack/react-refresh). 'strict-dynamic'
