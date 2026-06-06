@@ -226,6 +226,19 @@ push_code() {
   local ip="$1"
   log "Pushing code to $ip..."
   cd "$REPO_ROOT"
+  # Delete-aware source sync. The `tar -xf` below OVERWRITES files but NEVER
+  # deletes files that were removed from main, so a file deleted in a refactor
+  # lingers on the node and poisons the Docker build context. This broke a prod
+  # deploy on 2026-06-07: a stale frontend/src/app/studio/StudioGalleryGrid.tsx
+  # (importing a since-removed export) survived on both nodes and failed the
+  # frontend image build even though `main` was clean (CI was quota-dead, so
+  # nothing built pure main first). Clear the repo-OWNED, image-rebuilt-each-deploy
+  # source trees before extract so the node tree mirrors main EXACTLY. These dirs
+  # hold only tracked source (fully re-created by the tarball below) and NO
+  # node-side secrets (.env / deploy/.env live at the app root and are tar-excluded),
+  # so this is safe even if extract is interrupted (a failed deploy never swaps
+  # the running containers, which keep serving the previous image).
+  $SSH "root@$ip" 'rm -rf /opt/rawdrive/app/frontend/src /opt/rawdrive/app/backend/cmd /opt/rawdrive/app/backend/internal'
   tar "${tar_excludes[@]}" -cf - . \
     | $SSH "root@$ip" 'tar -xf - -C /opt/rawdrive/app'
   cleanup_excluded_source_paths "$ip"
