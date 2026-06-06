@@ -76,13 +76,14 @@ func TestF080_DeployProdPushUsesHardenedSSH(t *testing.T) {
 // TestPreMigrationPgBackRestRunsAsPostgresOSUser guards the F-077 interaction
 // between pg_hba.conf and deploy-time backup. The postgres DB role uses peer
 // auth, so pgBackRest commands that connect as pg1-user=postgres must run as the
-// postgres OS user inside the container, not as docker exec's default root user.
+// postgres OS user inside the active primary container, not as docker exec's
+// default root user.
 func TestPreMigrationPgBackRestRunsAsPostgresOSUser(t *testing.T) {
 	script := readDeployProdScript(t)
 
 	required := []string{
-		`docker exec -u postgres deploy-postgres-1 pgbackrest --stanza=rawdrive info`,
-		`docker exec -u postgres deploy-postgres-1 pgbackrest --stanza=rawdrive --type=incr backup`,
+		`docker exec -u postgres $(pg_primary_container) pgbackrest --stanza=rawdrive info`,
+		`docker exec -u postgres $(pg_primary_container) pgbackrest --stanza=rawdrive --type=incr backup`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
@@ -90,7 +91,13 @@ func TestPreMigrationPgBackRestRunsAsPostgresOSUser(t *testing.T) {
 		}
 	}
 
-	if strings.Contains(script, `docker exec deploy-postgres-1 pgbackrest`) {
-		t.Fatal("deploy-prod.sh still has a root-run pgBackRest command; peer auth will fail for pg1-user=postgres")
+	forbidden := []string{
+		`docker exec deploy-postgres-1 pgbackrest`,
+		`docker exec $(pg_primary_container) pgbackrest`,
+	}
+	for _, needle := range forbidden {
+		if strings.Contains(script, needle) {
+			t.Fatalf("deploy-prod.sh still has root-run pgBackRest command %q; peer auth will fail for pg1-user=postgres", needle)
+		}
 	}
 }
