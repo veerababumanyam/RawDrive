@@ -7,12 +7,14 @@ const { test, expect } = require('@playwright/test');
 
 const API_BASE = process.env.PLAYWRIGHT_API_URL || 'http://host.docker.internal:8080';
 const GALLERY_ID = 'c5c73f5a-c252-45fe-87d7-2b496f411f58';
+const SEED_EMAIL = process.env.E2E_TEST_EMAIL || 'super@rawdrive.test';
+const SEED_PASSWORD = process.env.E2E_TEST_PASSWORD || 'UatPho@2026';
 
 async function getAuthToken() {
   const resp = await fetch(`${API_BASE}/api/v1/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'superadmin@rawdrive.test', password: 'SuperAdmin123!' }),
+    body: JSON.stringify({ email: SEED_EMAIL, password: SEED_PASSWORD }),
   });
   if (!resp.ok) return null;
   const data = await resp.json();

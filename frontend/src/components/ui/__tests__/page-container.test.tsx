@@ -15,7 +15,8 @@ describe("PageContainer", () => {
     // Centered + consistent gutter/rhythm — the established dashboard pattern.
     expect(shell.className).toContain("mx-auto");
     expect(shell.className).toContain("px-4");
-    expect(shell.className).toContain("py-8");
+    expect(shell.className).toContain("pt-4");
+    expect(shell.className).toContain("pb-8");
     expect(shell.className).toContain("space-y-6");
     // Default width.
     expect(shell.className).toContain("max-w-6xl");

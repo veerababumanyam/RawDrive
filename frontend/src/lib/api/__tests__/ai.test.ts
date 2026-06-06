@@ -7,12 +7,14 @@ global.fetch = mockFetch;
 // We need to import after setting up the mock
 import {
   getFaceClusters,
+  getClusterFaces,
   searchAssets,
   getAIConfig,
   getCredits,
   triggerFaceDetect,
   getAssetTags,
   getDuplicates,
+  splitCluster,
   setSpendCap,
   validateAIKey,
   uploadAssetFaceEmbeddings,
@@ -42,7 +44,10 @@ describe("AI API Client", () => {
   it("getFaceClusters calls correct endpoint", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve([{ cluster_label: "abc", cluster_name: "Bride", face_count: 10 }]),
+      json: () =>
+        Promise.resolve([
+          { cluster_label: "abc", cluster_name: "Bride", face_count: 10 },
+        ]),
     });
 
     const result = await getFaceClusters(token);
@@ -51,17 +56,77 @@ describe("AI API Client", () => {
     const [calledUrl, init] = mockFetch.mock.calls[0];
     expect(String(calledUrl)).toContain("/api/v1/ai/clusters");
     expect(init.credentials).toBe("include");
-    expect(new Headers(init.headers).get("Authorization")).toBe("Bearer test-token");
+    expect(new Headers(init.headers).get("Authorization")).toBe(
+      "Bearer test-token",
+    );
   });
 
   it("getFaceClusters with gallery filter", async () => {
-    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve([]),
+    });
 
     await getFaceClusters(token, "gallery-123");
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining("?gallery_id=gallery-123"),
-      expect.any(Object)
+      expect.any(Object),
     );
+  });
+
+  it("getClusterFaces uses the gallery-scoped review endpoint", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          cluster_label: "person-1",
+          faces: [
+            {
+              id: "face-1",
+              asset_id: "asset-1",
+              face_index: 0,
+              bounding_box: { x: 0.1, y: 0.2, w: 0.3, h: 0.4 },
+              cluster_label: "person-1",
+              cluster_name: "Bride",
+              confidence: 0.92,
+              source: "client",
+            },
+          ],
+          count: 1,
+        }),
+    });
+
+    const result = await getClusterFaces(token, "person-1", "gallery-123");
+    expect(result.faces).toHaveLength(1);
+    expect(result.faces[0].id).toBe("face-1");
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "/api/v1/ai/clusters/person-1/faces?gallery_id=gallery-123",
+      ),
+      expect.any(Object),
+    );
+  });
+
+  it("splitCluster posts selected face IDs to the source cluster", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ new_cluster_label: "person-new" }),
+    });
+
+    const result = await splitCluster(
+      token,
+      "person-1",
+      ["face-1", "face-2"],
+      "Groom",
+    );
+    expect(result.new_cluster_label).toBe("person-new");
+
+    const [calledUrl, init] = mockFetch.mock.calls[0];
+    expect(String(calledUrl)).toContain("/api/v1/ai/clusters/person-1/split");
+    expect(init.method).toBe("POST");
+    const body = JSON.parse(init.body);
+    expect(body.face_ids).toEqual(["face-1", "face-2"]);
+    expect(body.new_cluster_name).toBe("Groom");
   });
 
   it("searchAssets sends POST with query", async () => {
@@ -74,14 +139,19 @@ describe("AI API Client", () => {
     expect(result.total).toBe(0);
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining("/api/v1/ai/search"),
-      expect.objectContaining({ method: "POST" })
+      expect.objectContaining({ method: "POST" }),
     );
   });
 
   it("getAIConfig returns config", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ configured: true, provider: "gemini", key_masked: "AIza...xxxx" }),
+      json: () =>
+        Promise.resolve({
+          configured: true,
+          provider: "gemini",
+          key_masked: "AIza...xxxx",
+        }),
     });
 
     const config = await getAIConfig(token);
@@ -92,7 +162,11 @@ describe("AI API Client", () => {
   it("getCredits returns credit summary", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ monthly_cap_paisa: 500000, spent_this_month_paisa: 125000 }),
+      json: () =>
+        Promise.resolve({
+          monthly_cap_paisa: 500000,
+          spent_this_month_paisa: 125000,
+        }),
     });
 
     const credits = await getCredits(token);
@@ -139,12 +213,15 @@ describe("AI API Client", () => {
   });
 
   it("setSpendCap sends PUT with cap value", async () => {
-    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({}),
+    });
 
     await setSpendCap(token, 500000);
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining("/api/v1/ai/spend/cap"),
-      expect.objectContaining({ method: "PUT" })
+      expect.objectContaining({ method: "PUT" }),
     );
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.monthly_cap_paisa).toBe(500000);
@@ -181,14 +258,19 @@ describe("Public face/people API client (gallery-session credential)", () => {
   const RELATIVE_PREFIX = "/api/v1/public/galleries/";
 
   it("listPublicPeople is same-origin relative + sends credentials", async () => {
-    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve([]),
+    });
 
     await listPublicPeople("wedding-abcd1234");
 
     const [url, init] = mockFetch.mock.calls[0];
     const calledUrl = String(url);
     expect(calledUrl).not.toMatch(/^https?:\/\//); // not absolute cross-origin
-    expect(calledUrl.startsWith(`${RELATIVE_PREFIX}wedding-abcd1234/people`)).toBe(true);
+    expect(
+      calledUrl.startsWith(`${RELATIVE_PREFIX}wedding-abcd1234/people`),
+    ).toBe(true);
     expect(init.credentials).toBe("include");
   });
 
@@ -204,7 +286,9 @@ describe("Public face/people API client (gallery-session credential)", () => {
     const calledUrl = String(url);
     expect(calledUrl).not.toMatch(/^https?:\/\//);
     expect(
-      calledUrl.startsWith(`${RELATIVE_PREFIX}wedding-abcd1234/people/person-1/photos`),
+      calledUrl.startsWith(
+        `${RELATIVE_PREFIX}wedding-abcd1234/people/person-1/photos`,
+      ),
     ).toBe(true);
     expect(init.credentials).toBe("include");
   });
@@ -213,7 +297,10 @@ describe("Public face/people API client (gallery-session credential)", () => {
   // as photo-search. A no-PIN share visitor has no gallery_session cookie, so the
   // share token (+ws) must be forwarded or the People GETs 403.
   it("listPublicPeople forwards the share token + ws scope (#175)", async () => {
-    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve([]),
+    });
 
     await listPublicPeople("wedding-abcd1234", {
       shareToken: "share-tok-123",
@@ -248,7 +335,13 @@ describe("Public face/people API client (gallery-session credential)", () => {
   it("searchPublicFaceInGallery POSTs same-origin relative + sends credentials + multipart body", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ found: false, faces_detected: 0, asset_ids: [], count: 0 }),
+      json: () =>
+        Promise.resolve({
+          found: false,
+          faces_detected: 0,
+          asset_ids: [],
+          count: 0,
+        }),
     });
 
     const blob = new Blob([new Uint8Array([1, 2, 3])], { type: "image/jpeg" });
@@ -257,7 +350,9 @@ describe("Public face/people API client (gallery-session credential)", () => {
     const [url, init] = mockFetch.mock.calls[0];
     const calledUrl = String(url);
     expect(calledUrl).not.toMatch(/^https?:\/\//);
-    expect(calledUrl.startsWith(`${RELATIVE_PREFIX}wedding-abcd1234/photo-search`)).toBe(true);
+    expect(
+      calledUrl.startsWith(`${RELATIVE_PREFIX}wedding-abcd1234/photo-search`),
+    ).toBe(true);
     expect(init.method).toBe("POST");
     expect(init.credentials).toBe("include");
     expect(init.body).toBeInstanceOf(FormData);
@@ -271,7 +366,13 @@ describe("Public face/people API client (gallery-session credential)", () => {
   it("searchPublicFaceInGallery forwards the share token + ws scope (#175)", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ found: false, faces_detected: 0, asset_ids: [], count: 0 }),
+      json: () =>
+        Promise.resolve({
+          found: false,
+          faces_detected: 0,
+          asset_ids: [],
+          count: 0,
+        }),
     });
 
     const blob = new Blob([new Uint8Array([1, 2, 3])], { type: "image/jpeg" });
@@ -300,20 +401,34 @@ describe("Public face/people API client (gallery-session credential)", () => {
 // (the photographer), so it goes through authFetch (Authorization + include).
 describe("uploadAssetFaceEmbeddings (client face-index ingest)", () => {
   it("POSTs embeddings to the asset face-embeddings endpoint", async () => {
-    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ stored: 2 }) });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ stored: 2 }),
+    });
 
     const faces = [
-      { face_index: 0, bounding_box: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 }, embedding: new Array(512).fill(0), det_score: 0.99 },
+      {
+        face_index: 0,
+        bounding_box: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 },
+        embedding: new Array(512).fill(0),
+        det_score: 0.99,
+      },
       { face_index: 1, embedding: new Array(512).fill(0.01), det_score: 0.8 },
     ];
-    const result = await uploadAssetFaceEmbeddings("asset-1", faces, { galleryId: "g-1" });
+    const result = await uploadAssetFaceEmbeddings("asset-1", faces, {
+      galleryId: "g-1",
+    });
     expect(result.stored).toBe(2);
 
     const [calledUrl, init] = mockFetch.mock.calls[0];
-    expect(String(calledUrl)).toContain("/api/v1/assets/asset-1/face-embeddings");
+    expect(String(calledUrl)).toContain(
+      "/api/v1/assets/asset-1/face-embeddings",
+    );
     expect(init.method).toBe("POST");
     expect(init.credentials).toBe("include"); // authFetch attaches credentials
-    expect(new Headers(init.headers).get("Authorization")).toBe("Bearer test-token");
+    expect(new Headers(init.headers).get("Authorization")).toBe(
+      "Bearer test-token",
+    );
     const body = JSON.parse(init.body);
     expect(body.gallery_id).toBe("g-1");
     expect(body.faces).toHaveLength(2);
@@ -321,16 +436,25 @@ describe("uploadAssetFaceEmbeddings (client face-index ingest)", () => {
   });
 
   it("throws on a non-ok response", async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false, status: 403, text: () => Promise.resolve("face recognition disabled") });
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      text: () => Promise.resolve("face recognition disabled"),
+    });
     await expect(
-      uploadAssetFaceEmbeddings("asset-1", [{ embedding: new Array(512).fill(0) }]),
+      uploadAssetFaceEmbeddings("asset-1", [
+        { embedding: new Array(512).fill(0) },
+      ]),
     ).rejects.toThrow(/disabled|403/);
   });
 });
 
 describe("uploadAssetFaceIndexImage (server-assisted encrypted face index)", () => {
   it("POSTs a downscaled image frame to the asset face-index-image endpoint", async () => {
-    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ stored: 1 }) });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ stored: 1 }),
+    });
 
     const result = await uploadAssetFaceIndexImage(
       "asset-1",
@@ -340,10 +464,14 @@ describe("uploadAssetFaceIndexImage (server-assisted encrypted face index)", () 
     expect(result.stored).toBe(1);
 
     const [calledUrl, init] = mockFetch.mock.calls[0];
-    expect(String(calledUrl)).toContain("/api/v1/assets/asset-1/face-index-image");
+    expect(String(calledUrl)).toContain(
+      "/api/v1/assets/asset-1/face-index-image",
+    );
     expect(init.method).toBe("POST");
     expect(init.credentials).toBe("include");
-    expect(new Headers(init.headers).get("Authorization")).toBe("Bearer test-token");
+    expect(new Headers(init.headers).get("Authorization")).toBe(
+      "Bearer test-token",
+    );
     expect(init.body).toBeInstanceOf(FormData);
     const body = init.body as FormData;
     expect(body.get("gallery_id")).toBe("g-1");
@@ -351,9 +479,16 @@ describe("uploadAssetFaceIndexImage (server-assisted encrypted face index)", () 
   });
 
   it("throws on a non-ok response", async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false, status: 502, text: () => Promise.resolve("failed to index faces") });
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 502,
+      text: () => Promise.resolve("failed to index faces"),
+    });
     await expect(
-      uploadAssetFaceIndexImage("asset-1", new Blob(["webp"], { type: "image/webp" })),
+      uploadAssetFaceIndexImage(
+        "asset-1",
+        new Blob(["webp"], { type: "image/webp" }),
+      ),
     ).rejects.toThrow(/failed to index|502/);
   });
 });

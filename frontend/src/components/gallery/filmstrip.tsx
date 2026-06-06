@@ -19,6 +19,7 @@ import {
   LIGHTBOX_VARIANTS,
 } from "@/lib/media-encryption/asset-media";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
+import { LockedMediaFallback } from "./media-key-recovery";
 
 interface Props {
   assets: Asset[];
@@ -78,7 +79,14 @@ function FilmstripThumb({
           onError={handleImageError}
         />
       ) : (
-        <div className="h-full w-full bg-surface-overlay/5" />
+        <LockedMediaFallback
+          asset={asset}
+          error={media.error}
+          message={media.error || "Preview unavailable"}
+          mode="compact"
+          allowRecovery={false}
+          className="bg-surface-overlay/5"
+        />
       )}
     </button>
   );

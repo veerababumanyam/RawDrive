@@ -176,6 +176,19 @@ describe("PreviewChrome", () => {
     expect(screen.getByTestId("share-qr-toggle")).toBeDisabled();
   });
 
+  it("disables copy and QR for unpublished galleries even when a canonical URL exists", () => {
+    render(
+      <PreviewChrome
+        gallery={buildGallery({ is_published: false })}
+        publicUrl="https://studio.rawdrive.in/wedding-2026"
+      />,
+    );
+
+    expect(screen.getByTestId("preview-share-button")).toBeDisabled();
+    expect(screen.getByTestId("share-qr-toggle")).toBeDisabled();
+    expect(screen.getByText(/clients can't access this link yet/i)).toBeInTheDocument();
+  });
+
   it("falls back to error feedback when clipboard write throws", async () => {
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },

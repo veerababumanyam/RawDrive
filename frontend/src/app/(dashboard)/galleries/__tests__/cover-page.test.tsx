@@ -4,15 +4,20 @@ import {
   fireEvent,
   render,
   screen,
+  within,
   waitFor,
 } from "@testing-library/react";
 import CoverDesignPage from "../[id]/cover/page";
-import { updateGalleryDesign } from "@/lib/api/galleries";
+import { listGalleryAssets, updateGalleryDesign } from "@/lib/api/galleries";
 import type { Asset } from "@/lib/api/assets";
 import type { PublicAsset } from "@/lib/api/galleries";
 
 const mocks = vi.hoisted(() => ({
   updateGalleryDesign: vi.fn(async () => ({})),
+  useUpload: vi.fn(),
+  uploadAddFiles: vi.fn(),
+  uploadCancel: vi.fn(),
+  uploadRetry: vi.fn(),
 }));
 
 vi.mock("next/link", () => ({
@@ -47,21 +52,40 @@ vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: vi.fn(() => "token-1"),
 }));
 
-const asset: Asset = {
-  id: "asset-cover",
-  workspace_id: "workspace-1",
-  filename: "Wedding (42).jpg",
-  content_type: "image/jpeg",
-  size_bytes: 1234,
-  storage_key: "tests/photos/Wedding (42).jpg",
-  exif_data: {},
-  thumbnail_urls: {
-    thumb_lg_webp: "/tests/photos/Wedding (42).jpg",
-    thumb_md_webp: "/tests/photos/Wedding (42).jpg",
-  },
-  status: "ready",
-  created_at: "2026-04-01T00:00:00Z",
-};
+vi.mock("@/hooks/use-upload", () => ({
+  useUpload: mocks.useUpload,
+}));
+
+vi.mock("@/lib/media-encryption/media-key-store", () => ({
+  getOrCreateGalleryMediaKey: vi.fn(async () => ({
+    key: new Uint8Array(32),
+    keyId: "gallery-key-1",
+  })),
+}));
+
+function makeAsset(id: string, filename: string): Asset {
+  return {
+    id,
+    workspace_id: "workspace-1",
+    filename,
+    content_type: "image/jpeg",
+    size_bytes: 1234,
+    storage_key: `tests/photos/${filename}`,
+    exif_data: {},
+    thumbnail_urls: {
+      thumb_lg_webp: `/tests/photos/${filename}`,
+      thumb_md_webp: `/tests/photos/${filename}`,
+    },
+    status: "ready",
+    created_at: "2026-04-01T00:00:00Z",
+  };
+}
+
+const asset = makeAsset("asset-cover", "Wedding (42).jpg");
+const secondAsset = makeAsset("asset-2", "Wedding (43).jpg");
+const thirdAsset = makeAsset("asset-3", "Wedding (44).jpg");
+const fourthAsset = makeAsset("asset-4", "Wedding (45).jpg");
+const galleryAssets = [asset, secondAsset, thirdAsset, fourthAsset];
 
 vi.mock("@/lib/api/galleries", () => ({
   getGallery: vi.fn(async () => ({
@@ -79,20 +103,25 @@ vi.mock("@/lib/api/galleries", () => ({
     updated_at: "2026-04-01T00:00:00Z",
     settings: {},
   })),
-  listGalleryAssets: vi.fn(async () => [
-    {
-      id: "ga-1",
+  listGalleryAssets: vi.fn(async () =>
+    galleryAssets.map((mediaAsset, index) => ({
+      id: `ga-${index + 1}`,
       gallery_id: "gallery-1",
-      asset_id: "asset-cover",
-      sort_order: 0,
-      is_hero: true,
-    },
-  ]),
+      asset_id: mediaAsset.id,
+      sort_order: index,
+      is_hero: index === 0,
+      asset: mediaAsset,
+    })),
+  ),
   updateGalleryDesign: mocks.updateGalleryDesign,
 }));
 
 vi.mock("@/lib/api/assets", () => ({
-  getAsset: vi.fn(async () => asset),
+  getAsset: vi.fn(async (_token: string, assetId: string) => {
+    return (
+      galleryAssets.find((mediaAsset) => mediaAsset.id === assetId) || asset
+    );
+  }),
 }));
 
 vi.mock("@/lib/media-encryption/use-decrypted-asset-url", () => ({
@@ -120,6 +149,13 @@ async function renderPage() {
 describe("CoverDesignPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.useUpload.mockReturnValue({
+      items: [],
+      addFiles: mocks.uploadAddFiles,
+      cancel: mocks.uploadCancel,
+      retry: mocks.uploadRetry,
+      isPaused: false,
+    });
   });
 
   it("applies cover presets and saves the expanded experience config", async () => {
@@ -155,6 +191,18 @@ describe("CoverDesignPage", () => {
       target: { value: "AR" },
     });
     fireEvent.click(screen.getByRole("button", { name: /top right/i }));
+    fireEvent.change(screen.getByLabelText("Watermark text"), {
+      target: { value: "Asha Ravi Studio" },
+    });
+    fireEvent.change(screen.getByLabelText("Logo size"), {
+      target: { value: "56" },
+    });
+    fireEvent.change(screen.getByLabelText("Logo opacity"), {
+      target: { value: "82" },
+    });
+    fireEvent.change(screen.getByLabelText("Watermark opacity"), {
+      target: { value: "45" },
+    });
 
     fireEvent.click(
       screen.getByRole("button", { name: /save cover and design/i }),
@@ -169,13 +217,27 @@ describe("CoverDesignPage", () => {
     expect(savedConfig).toMatchObject({
       cover: {
         layoutPreset: "haldi-warm",
-        mediaMode: "photo-grid",
+        mediaMode: "single-photo",
         scrimStyle: "warm-vignette",
         textBackdrop: "glass",
+        deviceProfiles: {
+          desktop: expect.objectContaining({
+            layoutPreset: "haldi-warm",
+            mediaMode: "single-photo",
+          }),
+          phone: expect.objectContaining({
+            layoutPreset: "haldi-warm",
+            mediaMode: "photo-grid",
+          }),
+        },
       },
       branding: {
         logoPlacement: "top-right",
         monogram: "AR",
+        logoSize: 56,
+        logoOpacity: 82,
+        watermarkText: "Asha Ravi Studio",
+        watermarkOpacity: 45,
       },
     });
     expect(savedConfig.sceneHeaders).toEqual(
@@ -183,5 +245,377 @@ describe("CoverDesignPage", () => {
         expect.objectContaining({ id: "haldi", label: "Haldi", enabled: true }),
       ]),
     );
+  }, 10000);
+
+  it("always shows drag/drop and browse upload in the Cover photo picker", async () => {
+    await renderPage();
+
+    const title = await screen.findByRole("heading", { name: "Cover photo" });
+    const section = title.closest("section");
+    expect(section).not.toBeNull();
+
+    expect(
+      within(section as HTMLElement).getByText(
+        /Drag & drop files, or click to browse/i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(section as HTMLElement).getByRole("group", {
+        name: "Cover photo choices",
+      }),
+    ).toBeInTheDocument();
+    expect(mocks.useUpload).toHaveBeenCalledWith(
+      expect.any(String),
+      "token-1",
+      expect.objectContaining({
+        destination: { galleryId: "gallery-1" },
+      }),
+    );
+
+    const file = new File([new Uint8Array([1, 2, 3])], "Wedding (42).jpg", {
+      type: "image/jpeg",
+    });
+    const fileInputs = (section as HTMLElement).querySelectorAll(
+      'input[type="file"]',
+    );
+    expect(fileInputs.length).toBeGreaterThan(0);
+
+    fireEvent.change(fileInputs[0], {
+      target: { files: [file] },
+    });
+
+    await waitFor(() =>
+      expect(mocks.uploadAddFiles).toHaveBeenCalledWith([file]),
+    );
+  });
+
+  it("saves Indian language font and style choices for title and subtitle", async () => {
+    await renderPage();
+
+    fireEvent.change(screen.getByLabelText("Editor section"), {
+      target: { value: "text" },
+    });
+
+    fireEvent.change(await screen.findByLabelText("Title language"), {
+      target: { value: "telugu" },
+    });
+    fireEvent.change(screen.getByLabelText("Subtitle language"), {
+      target: { value: "tamil" },
+    });
+    fireEvent.change(screen.getByLabelText("Title font weight"), {
+      target: { value: "700" },
+    });
+    fireEvent.change(screen.getByLabelText("Subtitle font weight"), {
+      target: { value: "500" },
+    });
+    fireEvent.click(screen.getByRole("switch", { name: /italic title/i }));
+
+    fireEvent.change(screen.getByPlaceholderText("Your gallery title"), {
+      target: { value: "ఆశా & రవి" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Optional subtitle"), {
+      target: { value: "தமிழ் வரவேற்பு" },
+    });
+    fireEvent.change(screen.getByLabelText("Title horizontal position"), {
+      target: { value: "27" },
+    });
+    fireEvent.change(screen.getByLabelText("Title vertical position"), {
+      target: { value: "41" },
+    });
+    fireEvent.change(screen.getByLabelText("Subtitle horizontal position"), {
+      target: { value: "72" },
+    });
+    fireEvent.change(screen.getByLabelText("Subtitle vertical position"), {
+      target: { value: "63" },
+    });
+    fireEvent.change(screen.getByLabelText("Title font size"), {
+      target: { value: "64" },
+    });
+    fireEvent.change(screen.getByLabelText("Subtitle font size"), {
+      target: { value: "24" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /phone preview/i }));
+    fireEvent.change(screen.getByLabelText("Title horizontal position"), {
+      target: { value: "44" },
+    });
+    fireEvent.change(screen.getByLabelText("Title vertical position"), {
+      target: { value: "48" },
+    });
+    fireEvent.change(screen.getByLabelText("Subtitle horizontal position"), {
+      target: { value: "46" },
+    });
+    fireEvent.change(screen.getByLabelText("Subtitle vertical position"), {
+      target: { value: "62" },
+    });
+    fireEvent.change(screen.getByLabelText("Title font size"), {
+      target: { value: "42" },
+    });
+    fireEvent.change(screen.getByLabelText("Subtitle font size"), {
+      target: { value: "18" },
+    });
+    fireEvent.change(screen.getByLabelText("Title color picker"), {
+      target: { value: "#f6d77a" },
+    });
+    fireEvent.change(screen.getByLabelText("Subtitle color picker"), {
+      target: { value: "#9be7ff" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Title font" }));
+    fireEvent.click(screen.getByRole("option", { name: /Anek Telugu/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Subtitle font" }));
+    fireEvent.click(screen.getByRole("option", { name: /Noto Serif Tamil/i }));
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /save cover and design/i }),
+    );
+
+    await waitFor(() => {
+      expect(updateGalleryDesign).toHaveBeenCalled();
+    });
+
+    const savedConfig = vi.mocked(updateGalleryDesign).mock
+      .calls[0]?.[2] as Record<string, unknown>;
+    expect(savedConfig).toMatchObject({
+      cover: {
+        title: "ఆశా & రవి",
+        subtitle: "தமிழ் வரவேற்பு",
+        titlePosition: { x: 27, y: 41 },
+        subtitlePosition: { x: 72, y: 63 },
+        mobileTitlePosition: { x: 44, y: 48 },
+        mobileSubtitlePosition: { x: 46, y: 62 },
+        titleColor: "#f6d77a",
+        subtitleColor: "#9be7ff",
+        deviceProfiles: {
+          desktop: expect.objectContaining({
+            title: "ఆశా & రవి",
+            subtitle: "தமிழ் வரவேற்பு",
+            titlePosition: { x: 27, y: 41 },
+            subtitlePosition: { x: 72, y: 63 },
+            typography: expect.objectContaining({
+              titleSize: 64,
+              subtitleSize: 24,
+            }),
+          }),
+          phone: expect.objectContaining({
+            title: "ఆశా & రవి",
+            subtitle: "தமிழ் வரவேற்பு",
+            titlePosition: { x: 44, y: 48 },
+            subtitlePosition: { x: 46, y: 62 },
+            typography: expect.objectContaining({
+              titleSize: 42,
+              subtitleSize: 18,
+            }),
+          }),
+        },
+      },
+      typography: {
+        titleLanguage: "telugu",
+        subtitleLanguage: "tamil",
+        headingFont: "Anek Telugu",
+        bodyFont: "Noto Serif Tamil",
+        titleWeight: 700,
+        subtitleWeight: 500,
+        titleItalic: true,
+        subtitleItalic: false,
+        titleSize: 64,
+        subtitleSize: 24,
+        mobileTitleSize: 42,
+        mobileSubtitleSize: 18,
+      },
+    });
+  }, 15_000);
+
+  it("shows layer controls, quality checklist, undo, and expanded Indian presets", async () => {
+    await renderPage();
+
+    expect(
+      await screen.findByRole("button", { name: /mehendi green/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /sangeet night/i }),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Editor section"), {
+      target: { value: "text" },
+    });
+
+    expect(screen.getByText("Cover quality checklist")).toBeInTheDocument();
+    expect(
+      screen.getByRole("switch", { name: /show title layer/i }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("switch", { name: /show subtitle layer/i }),
+    );
+    expect(
+      screen.getByRole("button", { name: /undo cover design change/i }),
+    ).toBeEnabled();
+    fireEvent.click(
+      screen.getByRole("button", { name: /undo cover design change/i }),
+    );
+    expect(
+      screen.getByRole("button", { name: /redo cover design change/i }),
+    ).toBeEnabled();
+  });
+
+  it("can restore editable cover copy from the album title and description", async () => {
+    await renderPage();
+
+    fireEvent.change(screen.getByLabelText("Editor section"), {
+      target: { value: "text" },
+    });
+    fireEvent.change(await screen.findByPlaceholderText("Your gallery title"), {
+      target: { value: "Custom reception cover" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Optional subtitle"), {
+      target: { value: "Custom client line" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Use album name" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use description" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /save cover and design/i }),
+    );
+
+    await waitFor(() => {
+      expect(updateGalleryDesign).toHaveBeenCalled();
+    });
+
+    const savedConfig = vi.mocked(updateGalleryDesign).mock
+      .calls[0]?.[2] as Record<string, unknown>;
+    expect(savedConfig).toMatchObject({
+      cover: {
+        title: "Asha & Ravi",
+        subtitle: "Wedding highlights",
+      },
+    });
+  });
+
+  it("saves multi-photo template slots and per-slot focal points", async () => {
+    await renderPage();
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /use four grid cover template/i,
+      }),
+    );
+
+    const slotHeading = screen.getByRole("heading", {
+      name: "Template photo slots",
+    });
+    const slotSection = slotHeading.closest("section");
+    expect(slotSection).not.toBeNull();
+
+    fireEvent.click(
+      within(slotSection as HTMLElement).getByRole("button", {
+        name: "Photo 2",
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /use Wedding \(43\)\.jpg as template photo 2/i,
+      }),
+    );
+
+    fireEvent.change(screen.getByLabelText("Horizontal focal"), {
+      target: { value: "64" },
+    });
+    fireEvent.change(screen.getByLabelText("Vertical focal"), {
+      target: { value: "31" },
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /save cover and design/i }),
+    );
+
+    await waitFor(() => {
+      expect(updateGalleryDesign).toHaveBeenCalled();
+    });
+
+    const savedConfig = vi.mocked(updateGalleryDesign).mock
+      .calls[0]?.[2] as Record<string, unknown>;
+    const savedCover = savedConfig.cover as {
+      styleId?: string;
+      mediaMode?: string;
+      assetSlots?: Array<string | null>;
+      slotFocalPoints?: Array<{ x: number; y: number }>;
+    };
+    expect(savedCover.styleId).toBe("modern-grid");
+    expect(savedCover.mediaMode).toBe("photo-grid");
+    expect(savedCover.assetSlots?.slice(0, 4)).toEqual([
+      "asset-cover",
+      "asset-2",
+      "asset-3",
+      "asset-4",
+    ]);
+    expect(savedCover.slotFocalPoints?.[1]).toEqual({ x: 64, y: 31 });
+  });
+
+  it("pushes the selected gallery photo into the active cover template slot preview", async () => {
+    await renderPage();
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /use four grid cover template/i,
+      }),
+    );
+
+    const slotSection = screen
+      .getByRole("heading", { name: "Template photo slots" })
+      .closest("section");
+    expect(slotSection).not.toBeNull();
+
+    fireEvent.click(
+      within(slotSection as HTMLElement).getByRole("button", {
+        name: "Photo 2",
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /use Wedding \(44\)\.jpg as template photo 2/i,
+      }),
+    );
+
+    const stage = screen.getByLabelText(/Cover preview/i);
+    const secondTemplateSlot = within(stage).getByRole("button", {
+      name: "Cover template photo 2",
+    });
+
+    expect(
+      within(secondTemplateSlot).getByAltText("Wedding (44).jpg"),
+    ).toBeInTheDocument();
+  });
+
+  it("labels picker tiles with the template photo slots that already use them", async () => {
+    await renderPage();
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /use four grid cover template/i,
+      }),
+    );
+
+    const secondTile = screen.getByRole("button", {
+      name: /use Wedding \(43\)\.jpg as template photo 1/i,
+    });
+
+    expect(within(secondTile).getByText("Photo 2")).toBeInTheDocument();
+    expect(secondTile).toHaveTextContent("Used in Photo 2");
+  });
+
+  it("explains that an empty picker means this gallery has no linked ready photos", async () => {
+    vi.mocked(listGalleryAssets).mockResolvedValueOnce([]);
+
+    await renderPage();
+
+    expect(
+      await screen.findByText(
+        /No ready photos are linked to this gallery yet/i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/before choosing Photo 1 for the cover/i),
+    ).toBeInTheDocument();
   });
 });

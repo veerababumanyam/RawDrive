@@ -3,9 +3,10 @@ package handler
 import (
 	"testing"
 
-	"github.com/rawdrive/backend/internal/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/repository"
 )
 
 // TestCompletedPartsFromETags_SortsByPartNumber is the regression for the prod

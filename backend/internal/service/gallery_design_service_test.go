@@ -1,11 +1,15 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/repository"
 )
 
 func TestNewGalleryDesignService(t *testing.T) {
@@ -119,4 +123,140 @@ func TestGalleryDesignConfig_CamelCaseRoundTrip(t *testing.T) {
 	} {
 		assert.Contains(t, s, key, "missing expected camelCase key: %s", key)
 	}
+}
+
+func TestUpdateDesignConfigRawRejectsCoverAssetOutsideGallery(t *testing.T) {
+	ctx := context.Background()
+	galleryID := uuid.New()
+	allowedID := uuid.New()
+	foreignID := uuid.New()
+	repo := &fakeGalleryDesignRepo{
+		gallery: &repository.Gallery{ID: galleryID, Settings: map[string]interface{}{}},
+	}
+	svc := &GalleryDesignService{
+		galleryRepo: repo,
+		galleryAssetRepo: fakeGalleryDesignAssetLister{
+			items: []repository.GalleryAsset{{GalleryID: galleryID, AssetID: allowedID}},
+		},
+	}
+
+	err := svc.UpdateDesignConfigRaw(ctx, galleryID, map[string]interface{}{
+		"version": float64(2),
+		"cover": map[string]interface{}{
+			"assetId":    allowedID.String(),
+			"assetSlots": []interface{}{allowedID.String(), foreignID.String()},
+		},
+	})
+
+	require.ErrorIs(t, err, ErrDesignCoverAssetNotInGallery)
+	assert.False(t, repo.updated)
+}
+
+func TestUpdateDesignConfigRawRejectsDeviceProfileCoverAssetOutsideGallery(t *testing.T) {
+	ctx := context.Background()
+	galleryID := uuid.New()
+	allowedID := uuid.New()
+	foreignID := uuid.New()
+	repo := &fakeGalleryDesignRepo{
+		gallery: &repository.Gallery{ID: galleryID, Settings: map[string]interface{}{}},
+	}
+	svc := &GalleryDesignService{
+		galleryRepo: repo,
+		galleryAssetRepo: fakeGalleryDesignAssetLister{
+			items: []repository.GalleryAsset{{GalleryID: galleryID, AssetID: allowedID}},
+		},
+	}
+
+	err := svc.UpdateDesignConfigRaw(ctx, galleryID, map[string]interface{}{
+		"version": float64(2),
+		"cover": map[string]interface{}{
+			"assetId": allowedID.String(),
+			"deviceProfiles": map[string]interface{}{
+				"desktop": map[string]interface{}{
+					"assetId":    allowedID.String(),
+					"assetSlots": []interface{}{allowedID.String()},
+				},
+				"phone": map[string]interface{}{
+					"assetId": foreignID.String(),
+				},
+			},
+		},
+	})
+
+	require.ErrorIs(t, err, ErrDesignCoverAssetNotInGallery)
+	assert.False(t, repo.updated)
+}
+
+func TestUpdateDesignConfigRawPersistsGalleryCoverSlots(t *testing.T) {
+	ctx := context.Background()
+	galleryID := uuid.New()
+	coverID := uuid.New()
+	secondID := uuid.New()
+	repo := &fakeGalleryDesignRepo{
+		gallery: &repository.Gallery{ID: galleryID, Settings: map[string]interface{}{}},
+	}
+	svc := &GalleryDesignService{
+		galleryRepo: repo,
+		galleryAssetRepo: fakeGalleryDesignAssetLister{
+			items: []repository.GalleryAsset{
+				{GalleryID: galleryID, AssetID: coverID},
+				{GalleryID: galleryID, AssetID: secondID},
+			},
+		},
+	}
+
+	err := svc.UpdateDesignConfigRaw(ctx, galleryID, map[string]interface{}{
+		"version": float64(2),
+		"cover": map[string]interface{}{
+			"assetId":    coverID.String(),
+			"assetSlots": []interface{}{coverID.String(), secondID.String()},
+		},
+	})
+
+	require.NoError(t, err)
+	require.True(t, repo.updated)
+	require.NotNil(t, repo.gallery.CoverAssetID)
+	assert.Equal(t, coverID, *repo.gallery.CoverAssetID)
+	saved := repo.gallery.Settings["design_config"].(map[string]interface{})
+	assert.Equal(t, float64(3), saved["version"])
+}
+
+func TestUpdateDesignConfigRawFailsClosedWhenCoverValidationUnavailable(t *testing.T) {
+	ctx := context.Background()
+	galleryID := uuid.New()
+	coverID := uuid.New()
+	repo := &fakeGalleryDesignRepo{
+		gallery: &repository.Gallery{ID: galleryID, Settings: map[string]interface{}{}},
+	}
+	svc := &GalleryDesignService{galleryRepo: repo}
+
+	err := svc.UpdateDesignConfigRaw(ctx, galleryID, map[string]interface{}{
+		"cover": map[string]interface{}{"assetId": coverID.String()},
+	})
+
+	require.ErrorIs(t, err, ErrDesignCoverValidationUnavailable)
+	assert.False(t, repo.updated)
+}
+
+type fakeGalleryDesignRepo struct {
+	gallery *repository.Gallery
+	updated bool
+}
+
+func (f *fakeGalleryDesignRepo) GetByID(context.Context, uuid.UUID) (*repository.Gallery, error) {
+	return f.gallery, nil
+}
+
+func (f *fakeGalleryDesignRepo) Update(_ context.Context, gallery *repository.Gallery) error {
+	f.gallery = gallery
+	f.updated = true
+	return nil
+}
+
+type fakeGalleryDesignAssetLister struct {
+	items []repository.GalleryAsset
+}
+
+func (f fakeGalleryDesignAssetLister) ListByGallery(context.Context, uuid.UUID) ([]repository.GalleryAsset, error) {
+	return f.items, nil
 }

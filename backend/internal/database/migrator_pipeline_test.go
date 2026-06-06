@@ -43,7 +43,7 @@ func TestManagesOwnTransaction(t *testing.T) {
 // that the per-migration transaction wrap depends on.
 func TestManagesOwnTransactionRealFiles(t *testing.T) {
 	selfManaged := []string{
-		"050_dsr_eraser_redaction.up.sql",          // BEGIN; ... COMMIT; + PL/pgSQL blocks
+		"050_dsr_eraser_redaction.up.sql",           // BEGIN; ... COMMIT; + PL/pgSQL blocks
 		"153_gallery_asset_hot_path_indexes.up.sql", // BEGIN; ... COMMIT;
 	}
 	for _, f := range selfManaged {

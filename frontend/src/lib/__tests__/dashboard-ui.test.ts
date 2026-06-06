@@ -97,6 +97,14 @@ describe("dashboard UI asset URLs", () => {
     ).toBe("http://localhost:8080/storage/thumbnails/abc/thumb.webp");
   });
 
+  it("rewrites Docker-internal absolute storage URLs for the browser", () => {
+    expect(
+      getStorageBackedUrl(
+        "http://backend:8080/storage/thumbnails/abc/thumb_lg_webp.webp",
+      ),
+    ).toBe("http://localhost:8080/storage/thumbnails/abc/thumb_lg_webp.webp");
+  });
+
   it("does not rewrite app-relative non-storage URLs", () => {
     expect(
       getStorageBackedUrl(

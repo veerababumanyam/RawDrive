@@ -23,6 +23,9 @@ import (
 // GalleryHandler handles gallery HTTP requests.
 type GalleryHandler struct {
 	gallerySvc *service.GalleryService
+	albumSvc   *service.AlbumService
+	bannerSvc  *service.BannerService
+	productSvc *service.ProductService
 
 	// M21: optional AI face scan dependencies (nil-safe — handlers degrade
 	// gracefully so existing callers that construct GalleryHandler without
@@ -36,7 +39,8 @@ type GalleryHandler struct {
 	// Optional: when nil, enrichGalleryAssets falls back to the pool, and when
 	// neither is wired it degrades to nil-embedded rows. Tests inject a counting
 	// fake via WithAssetBatchSource — the same seam the public path uses (F-029).
-	assetBatch publicAssetBatchSource
+	assetBatch    publicAssetBatchSource
+	publicBaseURL string
 }
 
 // NewGalleryHandler creates a new GalleryHandler.
@@ -58,6 +62,17 @@ func (h *GalleryHandler) WithAIDeps(faceSvc *ai.FaceService, assetSvc *service.A
 // summary hydration. Gallery CRUD still goes through GalleryService.
 func (h *GalleryHandler) WithPool(pool *pgxpool.Pool) *GalleryHandler {
 	h.pool = pool
+	return h
+}
+
+// WithClientPreviewDeps injects the read-only services needed by the
+// authenticated owner "Preview as client" payload. All dependencies are
+// optional so route registration remains nil-safe in older test harnesses.
+func (h *GalleryHandler) WithClientPreviewDeps(albumSvc *service.AlbumService, bannerSvc *service.BannerService, productSvc *service.ProductService, publicBaseURL string) *GalleryHandler {
+	h.albumSvc = albumSvc
+	h.bannerSvc = bannerSvc
+	h.productSvc = productSvc
+	h.publicBaseURL = publicBaseURL
 	return h
 }
 

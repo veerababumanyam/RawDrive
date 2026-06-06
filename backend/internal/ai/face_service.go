@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/rawdrive/backend/internal/face"
 	"github.com/rawdrive/backend/internal/storage"
@@ -171,14 +172,26 @@ func (s *FaceService) DetectImageAndStoreFaces(ctx context.Context, assetID, wor
 	if !enabled {
 		return 0, fmt.Errorf("face service: face recognition disabled for this workspace")
 	}
-	if s.faceClient == nil {
-		return 0, fmt.Errorf("face service: face-svc client not configured for asset %s", assetID)
-	}
 	if len(imageData) == 0 {
 		return 0, fmt.Errorf("face service: empty index image for asset %s", assetID)
 	}
 	if source == "" {
 		source = "client"
+	}
+	if galleryID != nil {
+		galleryEnabled, err := s.isGalleryFaceDetectionEnabled(ctx, *galleryID)
+		if err != nil {
+			return 0, fmt.Errorf("face service: gallery gate check: %w", err)
+		}
+		if !galleryEnabled {
+			if err := s.faceRepo.DeleteFacesByAssetAndSource(ctx, assetID, source); err != nil {
+				return 0, fmt.Errorf("face service: clear disabled gallery faces: %w", err)
+			}
+			return 0, nil
+		}
+	}
+	if s.faceClient == nil {
+		return 0, fmt.Errorf("face service: face-svc client not configured for asset %s", assetID)
 	}
 
 	resp, err := s.faceClient.DetectAndEmbed(ctx, imageData, filename)
@@ -215,6 +228,25 @@ func (s *FaceService) DetectImageAndStoreFaces(ctx context.Context, assetID, wor
 		return 0, fmt.Errorf("face service: store faces: %w", err)
 	}
 	return len(clusters), s.ClusterFaces(ctx, clusters, workspaceID)
+}
+
+func (s *FaceService) isGalleryFaceDetectionEnabled(ctx context.Context, galleryID uuid.UUID) (bool, error) {
+	var enabled bool
+	err := s.faceRepo.pool.QueryRow(ctx,
+		`SELECT face_detection_enabled FROM galleries WHERE id = $1 AND deleted_at IS NULL`,
+		galleryID,
+	).Scan(&enabled)
+	if err == pgx.ErrNoRows {
+		return false, nil
+	}
+	return enabled, err
+}
+
+// IsGalleryFaceDetectionEnabled is the exported view of the per-gallery
+// biometric opt-out gate. Client ingest handlers use it to skip and clear
+// gallery-scoped client faces when Find Me is disabled for that gallery.
+func (s *FaceService) IsGalleryFaceDetectionEnabled(ctx context.Context, galleryID uuid.UUID) (bool, error) {
+	return s.isGalleryFaceDetectionEnabled(ctx, galleryID)
 }
 
 // isFaceRecognitionEnabled reads workspaces.face_recognition_enabled (migration
@@ -267,6 +299,11 @@ func (s *FaceService) ClusterFaces(ctx context.Context, faces []*FaceCluster, wo
 		var name string
 		if len(similar) > 0 && similar[0].ClusterLabel != nil {
 			label = *similar[0].ClusterLabel
+			if resolved, err := s.faceRepo.ResolveClusterLabel(ctx, workspaceID, label); err != nil {
+				log.Printf("face service: resolve cluster alias failed for %s: %v", label, err)
+			} else {
+				label = resolved
+			}
 			name = similar[0].ClusterName
 		} else {
 			label = uuid.New()
@@ -283,7 +320,11 @@ func (s *FaceService) ClusterFaces(ctx context.Context, faces []*FaceCluster, wo
 // (M3 E8-S3 FaceID filter). The caller uses these IDs to further filter
 // gallery listings or to populate a smart album.
 func (s *FaceService) FilterByCluster(ctx context.Context, workspaceID, clusterLabel uuid.UUID) ([]uuid.UUID, error) {
-	return s.faceRepo.ListClusterAssetIDs(ctx, workspaceID, clusterLabel)
+	canonical, err := s.faceRepo.ResolveClusterLabel(ctx, workspaceID, clusterLabel)
+	if err != nil {
+		return nil, err
+	}
+	return s.faceRepo.ListClusterAssetIDs(ctx, workspaceID, canonical)
 }
 
 // FilterByClusterInGallery is the gallery-scoped variant — see
@@ -292,8 +333,12 @@ func (s *FaceService) FilterByCluster(ctx context.Context, workspaceID, clusterL
 // view so a click on a face stays inside the current gallery rather
 // than enumerating every gallery in the workspace that contains the
 // same person.
-func (s *FaceService) FilterByClusterInGallery(ctx context.Context, galleryID, clusterLabel uuid.UUID) ([]uuid.UUID, error) {
-	return s.faceRepo.ListClusterAssetIDsInGallery(ctx, galleryID, clusterLabel)
+func (s *FaceService) FilterByClusterInGallery(ctx context.Context, workspaceID, galleryID, clusterLabel uuid.UUID) ([]uuid.UUID, error) {
+	canonical, err := s.faceRepo.ResolveClusterLabel(ctx, workspaceID, clusterLabel)
+	if err != nil {
+		return nil, err
+	}
+	return s.faceRepo.ListClusterAssetIDsInGallery(ctx, workspaceID, galleryID, canonical)
 }
 
 // FaceSearchResult is the outcome of SearchByFace — a "find me in this
@@ -480,7 +525,12 @@ func (s *FaceService) SearchByFace(ctx context.Context, workspaceID, galleryID u
 	}
 
 	matchedLabel := winner.label
-	assetIDs, err := s.faceRepo.ListClusterAssetIDsInGallery(ctx, galleryID, matchedLabel)
+	if resolved, err := s.faceRepo.ResolveClusterLabel(ctx, workspaceID, matchedLabel); err != nil {
+		log.Printf("face search: resolve cluster alias failed for %s: %v", matchedLabel, err)
+	} else {
+		matchedLabel = resolved
+	}
+	assetIDs, err := s.faceRepo.ListClusterAssetIDsInGallery(ctx, workspaceID, galleryID, matchedLabel)
 	if err != nil {
 		return nil, fmt.Errorf("face service: list cluster assets in gallery: %w", err)
 	}
@@ -500,17 +550,76 @@ func (s *FaceService) GetClusters(ctx context.Context, workspaceID uuid.UUID, ga
 	return s.faceRepo.ListClusters(ctx, workspaceID, galleryID)
 }
 
+// GetClusterFaces returns the face rows behind one identity for photographer
+// review. The optional gallery scope keeps review actions inside the opened
+// gallery.
+func (s *FaceService) GetClusterFaces(ctx context.Context, workspaceID, clusterLabel uuid.UUID, galleryID *uuid.UUID) ([]*FaceReviewRow, error) {
+	canonical, err := s.faceRepo.ResolveClusterLabel(ctx, workspaceID, clusterLabel)
+	if err != nil {
+		return nil, err
+	}
+	faces, err := s.faceRepo.ListClusterFaces(ctx, workspaceID, canonical, galleryID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*FaceReviewRow, 0, len(faces))
+	for _, face := range faces {
+		if face.ClusterLabel == nil {
+			continue
+		}
+		out = append(out, &FaceReviewRow{
+			ID:           face.ID,
+			AssetID:      face.AssetID,
+			GalleryID:    face.GalleryID,
+			FaceIndex:    face.FaceIndex,
+			BoundingBox:  face.BoundingBox,
+			ClusterLabel: *face.ClusterLabel,
+			ClusterName:  face.ClusterName,
+			Confidence:   face.Confidence,
+			Source:       face.Source,
+		})
+	}
+	return out, nil
+}
+
 // NameCluster assigns a name to a face cluster.
 func (s *FaceService) NameCluster(ctx context.Context, workspaceID, clusterLabel uuid.UUID, name string) error {
-	_, err := s.faceRepo.pool.Exec(ctx,
+	canonical, err := s.faceRepo.ResolveClusterLabel(ctx, workspaceID, clusterLabel)
+	if err != nil {
+		return err
+	}
+	labels, err := s.faceRepo.clusterLabelsForCanonical(ctx, workspaceID, canonical)
+	if err != nil {
+		return err
+	}
+	tag, err := s.faceRepo.pool.Exec(ctx,
 		`UPDATE face_clusters SET cluster_name = $3, updated_at = now()
-		 WHERE workspace_id = $1 AND cluster_label = $2`,
-		workspaceID, clusterLabel, name)
-	return err
+		 WHERE workspace_id = $1 AND cluster_label = ANY($2)`,
+		workspaceID, labels, name)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrClusterNotFound
+	}
+	return nil
 }
 
 // MergeClusters merges source cluster into target.
 func (s *FaceService) MergeClusters(ctx context.Context, workspaceID, srcLabel, dstLabel uuid.UUID) (int, error) {
+	if srcLabel == dstLabel {
+		return 0, ErrSameCluster
+	}
+	canonicalSrc, err := s.faceRepo.ResolveClusterLabel(ctx, workspaceID, srcLabel)
+	if err != nil {
+		return 0, err
+	}
+	canonicalDst, err := s.faceRepo.ResolveClusterLabel(ctx, workspaceID, dstLabel)
+	if err != nil {
+		return 0, err
+	}
+	srcLabel = canonicalSrc
+	dstLabel = canonicalDst
 	if srcLabel == dstLabel {
 		return 0, ErrSameCluster
 	}
@@ -521,25 +630,33 @@ func (s *FaceService) MergeClusters(ctx context.Context, workspaceID, srcLabel, 
 		return 0, err
 	}
 
+	srcFound := false
 	dstName := ""
+	dstFound := false
 	for _, c := range clusters {
+		if c.ClusterLabel == srcLabel {
+			srcFound = true
+		}
 		if c.ClusterLabel == dstLabel {
 			dstName = c.ClusterName
-			break
+			dstFound = true
 		}
+	}
+	if !srcFound || !dstFound {
+		return 0, ErrClusterNotFound
 	}
 
 	return s.faceRepo.MergeClusters(ctx, workspaceID, srcLabel, dstLabel, dstName)
 }
 
 // SplitCluster creates a new cluster from selected faces.
-func (s *FaceService) SplitCluster(ctx context.Context, workspaceID uuid.UUID, faceIDs []uuid.UUID, newName string) (uuid.UUID, error) {
+func (s *FaceService) SplitCluster(ctx context.Context, workspaceID, sourceLabel uuid.UUID, faceIDs []uuid.UUID, newName string) (uuid.UUID, error) {
 	if len(faceIDs) == 0 {
 		return uuid.Nil, fmt.Errorf("face service: no faces to split")
 	}
 
 	newLabel := uuid.New()
-	if err := s.faceRepo.SplitCluster(ctx, faceIDs, newLabel, newName); err != nil {
+	if err := s.faceRepo.SplitCluster(ctx, workspaceID, sourceLabel, faceIDs, newLabel, newName); err != nil {
 		return uuid.Nil, err
 	}
 	return newLabel, nil

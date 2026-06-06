@@ -24,6 +24,7 @@ interface PublicGalleryBannersProps {
   gallerySessionToken?: string | null;
   /** Optional server-fetched banners so SSR skips the client round trip. */
   initialBanners?: GalleryBanner[];
+  previewMode?: boolean;
 }
 
 // isSafeUrl gates the studio-controlled banner CTA URL before it lands in
@@ -59,6 +60,7 @@ export function PublicGalleryBanners({
   shareToken,
   gallerySessionToken,
   initialBanners,
+  previewMode = false,
 }: PublicGalleryBannersProps) {
   const [banners, setBanners] = useState<GalleryBanner[]>(initialBanners ?? []);
   const [loaded, setLoaded] = useState<boolean>(Boolean(initialBanners));
@@ -98,6 +100,7 @@ export function PublicGalleryBanners({
           shareToken={shareToken}
           gallerySessionToken={gallerySessionToken}
           banner={banner}
+          previewMode={previewMode}
         />
       ))}
     </div>
@@ -115,14 +118,17 @@ function BannerCard({
   shareToken,
   gallerySessionToken,
   banner,
+  previewMode,
 }: {
   slug: string;
   ws?: string | null;
   shareToken?: string | null;
   gallerySessionToken?: string | null;
   banner: GalleryBanner;
+  previewMode?: boolean;
 }) {
   useEffect(() => {
+    if (previewMode) return;
     // Fire-and-forget impression. We intentionally don't await; a
     // failed tracking POST cannot block the render, and React's
     // strict mode double-invocation in dev is acceptable here since
@@ -142,9 +148,10 @@ function BannerCard({
         banner_id: banner.id,
       });
     }
-  }, [slug, ws, shareToken, gallerySessionToken, banner.id]);
+  }, [slug, ws, shareToken, gallerySessionToken, banner.id, previewMode]);
 
   const handleClick = () => {
+    if (previewMode) return;
     if (ws || shareToken || gallerySessionToken) {
       void trackGalleryEvent(
         slug,

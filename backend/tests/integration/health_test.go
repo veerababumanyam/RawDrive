@@ -130,9 +130,6 @@ func TestHealthEndpoint(t *testing.T) {
 //  2. The canonical Migrator (internal/database) ran end-to-end.
 //  3. The pgvector extension is installed and queryable.
 func TestPostgresConnectivity(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
 	// Skip cleanly when the testcontainer backend is unavailable (rootless
 	// Docker on Windows, Docker daemon stopped, CI without a Docker socket).
 	// Matches the skip-on-unreachable convention in tests/brownfield/*.
@@ -141,6 +138,9 @@ func TestPostgresConnectivity(t *testing.T) {
 	}
 
 	pool := testsupport.PgvectorPool(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	// Basic liveness: plain SQL.
 	var one int

@@ -41,6 +41,7 @@ interface PublicGalleryProductsProps {
   shareToken?: string | null;
   gallerySessionToken?: string | null;
   products: GalleryProduct[];
+  previewMode?: boolean;
 }
 
 export function PublicGalleryProducts({
@@ -49,6 +50,7 @@ export function PublicGalleryProducts({
   shareToken,
   gallerySessionToken,
   products,
+  previewMode = false,
 }: PublicGalleryProductsProps) {
   const [clientEmail, setClientEmail] = useState("");
 
@@ -100,6 +102,7 @@ export function PublicGalleryProducts({
             shareToken={shareToken}
             gallerySessionToken={gallerySessionToken}
             clientEmail={clientEmail || undefined}
+            previewMode={previewMode}
           />
         ))}
       </div>

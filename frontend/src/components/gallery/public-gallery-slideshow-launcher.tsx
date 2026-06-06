@@ -4,6 +4,8 @@ import { type PublicAsset } from "@/lib/api/galleries";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { LIGHTBOX_VARIANTS } from "@/lib/media-encryption/asset-media";
 import { publicMediaErrorMessage } from "@/lib/media-encryption/public-media-error";
+import { LockedMediaFallback } from "@/components/gallery/media-key-recovery";
+import { SlideshowImageFrame } from "@/components/gallery/gallery-slideshow";
 
 /**
  * Renders one slideshow slide through the SAME client-side media-encryption
@@ -35,20 +37,24 @@ export function SlideshowSlide({
   );
 
   if (!media.src) {
+    if (media.loading) {
+      return <div className="gallery-slideshow__status">Loading photo...</div>;
+    }
     return (
-      <div className="gallery-slideshow__status">
-        {media.loading
-          ? "Loading photo..."
-          : publicMediaErrorMessage(media.error) || "Image unavailable"}
-      </div>
+      <LockedMediaFallback
+        asset={asset}
+        error={media.error}
+        message={publicMediaErrorMessage(media.error) || "Image unavailable"}
+        mode="viewer"
+        className="gallery-slideshow__status"
+      />
     );
   }
 
   return (
-    <img
+    <SlideshowImageFrame
       src={media.src}
       alt={asset.filename || `Slide ${position} of ${total}`}
-      className="gallery-slideshow__image"
     />
   );
 }

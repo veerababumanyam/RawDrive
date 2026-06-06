@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -110,6 +111,12 @@ func TestGalleryListAssets_IncludeAssets_RealDB_Returns200WithEnrichedAssets(t *
 
 	// The bug symptom was HTTP 500. Assert the real path returns 200.
 	require.Equal(t, 200, rec.Code, "include_assets=true must return 200, not 500; body=%s", rec.Body.String())
+	require.True(
+		t,
+		strings.HasPrefix(strings.TrimSpace(rec.Body.String()), "["),
+		"include_assets=true response must stay a bare array so cover/photo pickers hydrate directly; body=%s",
+		rec.Body.String(),
+	)
 
 	var out []galleryAssetWithAsset
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &out))

@@ -91,6 +91,43 @@ func TestHandler_GetClusterAssets_MissingWorkspace(t *testing.T) {
 	}
 }
 
+func TestHandler_ListClusters_MissingWorkspace(t *testing.T) {
+	h := &Handler{}
+	req := httptest.NewRequest("GET", "/api/v1/ai/clusters", nil)
+	w := httptest.NewRecorder()
+
+	h.ListClusters(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 without workspace, got %d", w.Code)
+	}
+}
+
+func TestHandler_UpdateCluster_MissingWorkspace(t *testing.T) {
+	h := &Handler{}
+	r := chi.NewRouter()
+	r.Patch("/api/v1/ai/clusters/{id}", h.UpdateCluster)
+
+	req := httptest.NewRequest("PATCH", "/api/v1/ai/clusters/"+uuid.New().String(), bytes.NewBufferString(`{"name":"Bride"}`))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 without workspace, got %d", w.Code)
+	}
+}
+
+func TestHandler_MergeClusters_MissingWorkspace(t *testing.T) {
+	h := &Handler{}
+	body := `{"source_cluster_id":"` + uuid.New().String() + `","target_cluster_id":"` + uuid.New().String() + `"}`
+	req := httptest.NewRequest("POST", "/api/v1/ai/clusters/merge", bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+
+	h.MergeClusters(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 without workspace, got %d", w.Code)
+	}
+}
+
 // TestHandler_GetClusterAssets_InvalidClusterID verifies 400 on bad UUID.
 func TestHandler_GetClusterAssets_InvalidClusterID(t *testing.T) {
 	h := &Handler{}
@@ -98,6 +135,35 @@ func TestHandler_GetClusterAssets_InvalidClusterID(t *testing.T) {
 	r.Get("/api/v1/ai/clusters/{id}/assets", h.GetClusterAssets)
 
 	req := httptest.NewRequest("GET", "/api/v1/ai/clusters/not-a-uuid/assets", nil)
+	req = withWorkspaceCtx(req, uuid.New())
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for bad cluster id, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetClusterFaces_MissingWorkspace(t *testing.T) {
+	h := &Handler{}
+	r := chi.NewRouter()
+	r.Get("/api/v1/ai/clusters/{id}/faces", h.GetClusterFaces)
+
+	req := httptest.NewRequest("GET", "/api/v1/ai/clusters/"+uuid.New().String()+"/faces", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 without workspace, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetClusterFaces_InvalidClusterID(t *testing.T) {
+	h := &Handler{}
+	r := chi.NewRouter()
+	r.Get("/api/v1/ai/clusters/{id}/faces", h.GetClusterFaces)
+
+	req := httptest.NewRequest("GET", "/api/v1/ai/clusters/not-a-uuid/faces", nil)
 	req = withWorkspaceCtx(req, uuid.New())
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)

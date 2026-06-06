@@ -10,11 +10,23 @@ import {
 const KEY_PREFIX = "rawdrive:media-key:";
 const ACTIVE_KEY_PREFIX = "rawdrive:media-key-active:";
 const VERSION_FINGERPRINT_BYTES = 8;
+const MEDIA_KEY_STORE_CHANGE_EVENT = "rawdrive:media-key-store-changed";
 export const MEDIA_KEY_UNAVAILABLE_MESSAGE = "Photo key unavailable. Reopen with the gallery key or reupload this photo.";
 export const MEDIA_KEY_MISMATCH_MESSAGE = "Photo key does not match this encrypted file.";
+export const MEDIA_KEY_IMPORT_EMPTY_MESSAGE = "Paste a secure gallery link or gallery key.";
+export const MEDIA_KEY_IMPORT_INVALID_MESSAGE = "That gallery key could not be read.";
+export const MEDIA_KEY_IMPORT_WRONG_GALLERY_MESSAGE = "That gallery key does not match these encrypted photos.";
 
 const memoryKeys = new Map<string, string>();
 const memoryActiveKeys = new Map<string, string>();
+
+export type MediaKeyStoreChangeReason = "generated" | "imported" | "storage";
+
+export type MediaKeyStoreChangeDetail = {
+  galleryId?: string;
+  keyId?: string;
+  reason: MediaKeyStoreChangeReason;
+};
 
 export type GalleryMediaKey = {
   keyId: string;
@@ -48,6 +60,7 @@ export async function getOrCreateGalleryMediaKey(galleryId: string): Promise<Gal
   const keyId = await versionedGalleryKeyId(galleryId, exportedKey);
   writeStoredKey(keyId, exportedKey);
   writeActiveKeyId(baseKeyId, keyId);
+  notifyMediaKeyStoreChanged({ galleryId, keyId, reason: "generated" });
   return { keyId, key, exportedKey };
 }
 
@@ -105,6 +118,103 @@ export async function rememberGalleryMediaKey(
   writeStoredKey(keyId, exportedKey);
   writeActiveKeyId(baseKeyId, keyId);
   return { keyId, key: await importRawMediaKey(exportedKey), exportedKey };
+}
+
+export type ImportGalleryMediaKeyOptions = {
+  galleryId: string;
+  input: string;
+  expectedKeyIds?: readonly string[];
+};
+
+export function parseGalleryMediaKeyInput(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  const fromHash = readGalleryKeyFromHash(trimmed);
+  if (fromHash) return fromHash;
+
+  try {
+    const parsed = new URL(trimmed);
+    const fromUrlHash = readGalleryKeyFromHash(parsed.hash);
+    if (fromUrlHash) return fromUrlHash;
+    const fromSearch = parsed.searchParams.get("rd_key");
+    if (fromSearch) return fromSearch;
+  } catch {
+    // Not a full URL; continue with fragment/query/raw parsing below.
+  }
+
+  const normalized = trimmed.startsWith("?") || trimmed.includes("=")
+    ? trimmed.replace(/^#/, "")
+    : "";
+  if (normalized) {
+    try {
+      const fromParams = new URLSearchParams(normalized).get("rd_key");
+      if (fromParams) return fromParams;
+    } catch {
+      // Fall through to raw key handling.
+    }
+  }
+
+  return trimmed;
+}
+
+export async function importGalleryMediaKeyFromInput({
+  galleryId,
+  input,
+  expectedKeyIds = [],
+}: ImportGalleryMediaKeyOptions): Promise<GalleryMediaKey> {
+  const exportedKey = parseGalleryMediaKeyInput(input);
+  if (!exportedKey) throw new Error(MEDIA_KEY_IMPORT_EMPTY_MESSAGE);
+
+  let key: CryptoKey;
+  try {
+    key = await importRawMediaKey(exportedKey);
+  } catch {
+    throw new Error(MEDIA_KEY_IMPORT_INVALID_MESSAGE);
+  }
+
+  const keyId = await versionedGalleryKeyId(galleryId, exportedKey);
+  const expectedVersionedKeys = expectedKeyIds.filter(
+    (candidate) =>
+      isVersionedGalleryKeyId(candidate) &&
+      galleryIdFromKeyId(candidate) === galleryId,
+  );
+  if (expectedVersionedKeys.length > 0 && !expectedVersionedKeys.includes(keyId)) {
+    throw new Error(MEDIA_KEY_IMPORT_WRONG_GALLERY_MESSAGE);
+  }
+
+  const baseKeyId = galleryKeyId(galleryId);
+  writeStoredKey(keyId, exportedKey);
+  writeActiveKeyId(baseKeyId, keyId);
+  notifyMediaKeyStoreChanged({ galleryId, keyId, reason: "imported" });
+  return { keyId, key, exportedKey };
+}
+
+export function isMediaKeyRecoveryError(error: string | null | undefined): boolean {
+  return (
+    error === MEDIA_KEY_UNAVAILABLE_MESSAGE ||
+    error === MEDIA_KEY_MISMATCH_MESSAGE ||
+    error === MEDIA_KEY_IMPORT_WRONG_GALLERY_MESSAGE
+  );
+}
+
+export function subscribeMediaKeyStoreChanges(
+  callback: (detail: MediaKeyStoreChangeDetail) => void,
+): () => void {
+  if (typeof window === "undefined") return () => undefined;
+  const listener = (event: Event) => {
+    const detail = event instanceof CustomEvent
+      ? (event.detail as MediaKeyStoreChangeDetail | undefined)
+      : undefined;
+    callback(detail ?? { reason: "storage" });
+  };
+  const storageListener = () => callback({ reason: "storage" });
+  window.addEventListener(MEDIA_KEY_STORE_CHANGE_EVENT, listener);
+  window.addEventListener("storage", storageListener);
+  return () => {
+    window.removeEventListener(MEDIA_KEY_STORE_CHANGE_EVENT, listener);
+    window.removeEventListener("storage", storageListener);
+  };
 }
 
 async function getExportedKeysForKeyId(keyId: string): Promise<string[]> {
@@ -166,6 +276,10 @@ export function galleryKeyId(galleryId: string): string {
   return `gallery:${galleryId}`;
 }
 
+export function galleryIdFromMediaKeyId(keyId: string): string | null {
+  return galleryIdFromKeyId(keyId);
+}
+
 export async function versionedGalleryKeyId(galleryId: string, exportedKey: string): Promise<string> {
   const fingerprint = await keyFingerprint(exportedKey);
   return `${galleryKeyId(galleryId)}:${fingerprint}`;
@@ -224,6 +338,16 @@ function writeActiveKeyId(baseKeyId: string, keyId: string): void {
   } catch {
     // In-memory active key is enough for the current browser session.
   }
+}
+
+function notifyMediaKeyStoreChanged(detail: MediaKeyStoreChangeDetail): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<MediaKeyStoreChangeDetail>(
+      MEDIA_KEY_STORE_CHANGE_EVENT,
+      { detail },
+    ),
+  );
 }
 
 function storedMediaKeyIds(): string[] {

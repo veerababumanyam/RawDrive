@@ -78,6 +78,10 @@ func (h *Handler) TriggerFaceDetect(w http.ResponseWriter, r *http.Request) {
 // ListClusters handles GET /api/v1/ai/clusters.
 func (h *Handler) ListClusters(w http.ResponseWriter, r *http.Request) {
 	wsID := getWorkspaceID(r)
+	if wsID == uuid.Nil {
+		respondError(w, http.StatusBadRequest, "workspace_id required")
+		return
+	}
 
 	var galleryID *uuid.UUID
 	if gid := r.URL.Query().Get("gallery_id"); gid != "" {
@@ -104,6 +108,10 @@ func (h *Handler) ListClusters(w http.ResponseWriter, r *http.Request) {
 // UpdateCluster handles PATCH /api/v1/ai/clusters/{id}.
 func (h *Handler) UpdateCluster(w http.ResponseWriter, r *http.Request) {
 	wsID := getWorkspaceID(r)
+	if wsID == uuid.Nil {
+		respondError(w, http.StatusBadRequest, "workspace_id required")
+		return
+	}
 	clusterID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid cluster id")
@@ -129,6 +137,10 @@ func (h *Handler) UpdateCluster(w http.ResponseWriter, r *http.Request) {
 // MergeClusters handles POST /api/v1/ai/clusters/merge.
 func (h *Handler) MergeClusters(w http.ResponseWriter, r *http.Request) {
 	wsID := getWorkspaceID(r)
+	if wsID == uuid.Nil {
+		respondError(w, http.StatusBadRequest, "workspace_id required")
+		return
+	}
 
 	var body struct {
 		SourceClusterID uuid.UUID `json:"source_cluster_id"`
@@ -151,7 +163,15 @@ func (h *Handler) MergeClusters(w http.ResponseWriter, r *http.Request) {
 // SplitCluster handles POST /api/v1/ai/clusters/{id}/split.
 func (h *Handler) SplitCluster(w http.ResponseWriter, r *http.Request) {
 	wsID := getWorkspaceID(r)
-	_ = wsID
+	if wsID == uuid.Nil {
+		respondError(w, http.StatusBadRequest, "workspace_id required")
+		return
+	}
+	clusterID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid cluster id")
+		return
+	}
 
 	var body struct {
 		FaceIDs        []uuid.UUID `json:"face_ids"`
@@ -162,13 +182,53 @@ func (h *Handler) SplitCluster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newLabel, err := h.faceSvc.SplitCluster(r.Context(), wsID, body.FaceIDs, body.NewClusterName)
+	newLabel, err := h.faceSvc.SplitCluster(r.Context(), wsID, clusterID, body.FaceIDs, body.NewClusterName)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	respondJSON(w, http.StatusOK, map[string]any{"new_cluster_label": newLabel})
+}
+
+// GetClusterFaces handles GET /api/v1/ai/clusters/{id}/faces.
+// It returns face row IDs, asset IDs, and bounding boxes for photographer
+// identity review. Embeddings are never serialized.
+func (h *Handler) GetClusterFaces(w http.ResponseWriter, r *http.Request) {
+	wsID := getWorkspaceID(r)
+	if wsID == uuid.Nil {
+		respondError(w, http.StatusBadRequest, "workspace_id required")
+		return
+	}
+	clusterID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid cluster id")
+		return
+	}
+
+	var galleryID *uuid.UUID
+	if g := r.URL.Query().Get("gallery_id"); g != "" {
+		parsed, perr := uuid.Parse(g)
+		if perr != nil {
+			respondError(w, http.StatusBadRequest, "invalid gallery_id")
+			return
+		}
+		galleryID = &parsed
+	}
+
+	faces, err := h.faceSvc.GetClusterFaces(r.Context(), wsID, clusterID, galleryID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if faces == nil {
+		faces = []*FaceReviewRow{}
+	}
+	respondJSON(w, http.StatusOK, map[string]any{
+		"cluster_label": clusterID,
+		"faces":         faces,
+		"count":         len(faces),
+	})
 }
 
 // GetClusterAssets handles GET /api/v1/ai/clusters/{id}/assets (M3 E8-S3).
@@ -202,7 +262,7 @@ func (h *Handler) GetClusterAssets(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusBadRequest, "invalid gallery_id")
 			return
 		}
-		assetIDs, err = h.faceSvc.FilterByClusterInGallery(r.Context(), galleryID, clusterID)
+		assetIDs, err = h.faceSvc.FilterByClusterInGallery(r.Context(), wsID, galleryID, clusterID)
 	} else {
 		assetIDs, err = h.faceSvc.FilterByCluster(r.Context(), wsID, clusterID)
 	}

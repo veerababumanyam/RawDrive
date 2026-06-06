@@ -12,16 +12,16 @@ function readPreviewPage() {
 }
 
 describe("gallery owner preview E2EE contracts", () => {
-  it("keeps encryption metadata when mapping owner assets into public preview assets", () => {
+  it("loads public-compatible assets from the authenticated client-preview endpoint", () => {
     const source = readPreviewPage();
 
-    expect(source).toContain("is_encrypted: a.is_encrypted");
-    expect(source).toContain("media_encryption: a.media_encryption");
-    expect(source).toContain("resolvedCoverAsset");
-    expect(source).toContain("designCoverAsset={resolvedCoverAsset}");
+    expect(source).toContain("getGalleryClientPreview");
+    expect(source).toContain("result.assets");
+    expect(source).toContain("designCoverAsset={designCoverAsset}");
+    expect(source).not.toContain("media_encryption: a.media_encryption");
   });
 
-  it("threads the owner access token into the public Hero + Grid so E2EE photos decrypt in the preview", () => {
+  it("threads the owner access token into the shared public body so E2EE photos decrypt in the preview", () => {
     const source = readPreviewPage();
 
     // The owner token must be captured at render and forwarded as the decrypt
@@ -30,7 +30,8 @@ describe("gallery owner preview E2EE contracts", () => {
     // the byte serve 401/403s — leaving the photographer's own preview with
     // blank "Image unavailable" tiles for an unpublished/private E2EE gallery.
     expect(source).toContain("getStoredAccessToken()");
-    const viewerTokenProps = source.match(/viewerToken=\{viewerToken\}/g) ?? [];
-    expect(viewerTokenProps.length).toBeGreaterThanOrEqual(2);
+    expect(source).toContain("<PublicGalleryBody");
+    expect(source).toContain("viewerToken={viewerToken}");
+    expect(source).toContain("previewMode");
   });
 });

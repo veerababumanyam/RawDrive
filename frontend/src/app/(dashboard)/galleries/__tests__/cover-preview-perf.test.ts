@@ -32,21 +32,16 @@ describe("gallery cover & preview — batch hydration (PERF-23)", () => {
     expect(source).toMatch(/entry\.asset !== undefined/);
   });
 
-  it("preview page requests server-embedded assets for the gallery path", () => {
+  it("preview page delegates gallery assets to the client-preview endpoint", () => {
     const source = read(previewPagePath);
-    expect(source).toContain("includeAssets: true");
-    // Both the gallery and album paths consume the embedded asset; getAsset()
-    // remains only the fallback for degraded includes (older server).
-    expect(source).toMatch(/row\.asset !== undefined/);
+    expect(source).toContain("getGalleryClientPreview");
+    expect(source).not.toContain("listGalleryAssets");
+    expect(source).not.toContain("getAsset(");
   });
 
-  it("preview page album branch requests server-embedded assets (Q-2b)", () => {
+  it("preview page forwards album scope to the client-preview endpoint", () => {
     const source = read(previewPagePath);
-    // Q-2b: the album branch must opt into ?include_assets=true so it no longer
-    // loops getAsset() per asset. Assert the listAlbumAssets call passes the
-    // includeAssets flag — proving the album path is one list request, not N.
-    expect(source).toMatch(
-      /listAlbumAssets\(\s*token,\s*albumId,\s*\{\s*includeAssets:\s*true\s*\}\s*\)/,
-    );
+    expect(source).toContain("getGalleryClientPreview(token, id, { albumId })");
+    expect(source).not.toContain("listAlbumAssets");
   });
 });

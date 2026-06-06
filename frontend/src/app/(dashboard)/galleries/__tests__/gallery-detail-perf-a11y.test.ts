@@ -147,6 +147,20 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("if (e.currentTarget !== e.target) return;");
   });
 
+  it("uses the shared media-key recovery fallback for locked encrypted tiles", () => {
+    const source = readDetailPage();
+
+    expect(source).toMatch(
+      /import\s*{[^}]*\bLockedMediaFallback\b[^}]*\bMediaKeyRecoveryBanner\b[^}]*\buseLockedMediaRecoverySummary\b[^}]*}\s*from\s*"@\/components\/gallery\/media-key-recovery"/s,
+    );
+    expect(source).toContain("<LockedMediaFallback");
+    expect(source).toContain("useLockedMediaRecoverySummary(");
+    expect(source).toContain("<MediaKeyRecoveryBanner");
+    expect(source).not.toContain(
+      '"Photo key unavailable. Reopen with the gallery key or reupload this photo."',
+    );
+  });
+
   it("uses a gallery-scoped YouTube-style upload dialog instead of an inline-only uploader", () => {
     const source = readDetailPage();
 

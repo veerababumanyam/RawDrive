@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { readGalleryCoverAssetId, readPublicCoverThumbnails, readPublicDesignConfig } from "../gallery-design-config";
+import {
+  readGalleryCoverAssetId,
+  readPublicCoverProfileThumbnails,
+  readPublicCoverThumbnails,
+  readPublicDesignConfig,
+  resolveCoverDeviceProfile,
+} from "../gallery-design-config";
 
 describe("readPublicDesignConfig", () => {
   it("returns null when settings has no design_config", () => {
@@ -15,27 +21,57 @@ describe("readPublicDesignConfig", () => {
         theme: { id: "liquid-glass", variant: "dark", accentColor: "#6366f1" },
         cover: {
           assetId: "asset-uuid",
+          assetSlots: ["asset-uuid", "asset-second", null, "asset-fourth"],
           styleId: "hero-overlay",
           layoutPreset: "haldi-warm",
           mediaMode: "photo-grid",
           focalPoint: { x: 25, y: 75 },
           mobileFocalPoint: { x: 40, y: 35 },
+          slotFocalPoints: [
+            { x: 50, y: 50 },
+            { x: 62, y: 31 },
+          ],
+          mobileSlotFocalPoints: [
+            { x: 50, y: 50 },
+            { x: 44, y: 48 },
+          ],
           mobileAspectRatio: "4/5",
           title: "Anaya & Vihaan",
           subtitle: "Goa, Feb 2026",
+          titleVisible: true,
+          subtitleVisible: false,
+          titlePosition: { x: 34, y: 45 },
+          subtitlePosition: { x: 66, y: 58 },
+          mobileTitlePosition: { x: 44, y: 48 },
+          mobileSubtitlePosition: { x: 46, y: 62 },
+          titleColor: "#f6d77a",
+          subtitleColor: "#9be7ff",
           scrimStyle: "warm-vignette",
           textBackdrop: "glass",
         },
         typography: {
           pairingId: "elegant",
-          headingFont: "Playfair Display",
-          bodyFont: "Inter",
+          headingFont: "Anek Telugu",
+          bodyFont: "Noto Serif Tamil",
+          titleLanguage: "telugu",
+          subtitleLanguage: "tamil",
+          titleWeight: 700,
+          subtitleWeight: 500,
+          titleItalic: true,
+          subtitleItalic: false,
           titleSize: 64,
           subtitleSize: 20,
+          mobileTitleSize: 42,
+          mobileSubtitleSize: 18,
         },
         grid: { layout: "grid", columns: 4, gap: 12, showInfo: true },
         sceneHeaders: [
-          { id: "haldi", label: "Haldi", enabled: true, assetId: "asset-haldi" },
+          {
+            id: "haldi",
+            label: "Haldi",
+            enabled: true,
+            assetId: "asset-haldi",
+          },
           { id: "broken", label: "", enabled: true },
           "not-a-scene",
         ],
@@ -44,6 +80,10 @@ describe("readPublicDesignConfig", () => {
           monogram: "AV",
           brandColor: "#B7791F",
           watermarkStyle: "subtle-corner",
+          logoSize: 56,
+          logoOpacity: 82,
+          watermarkText: "Asha Ravi Studio",
+          watermarkOpacity: 45,
         },
         version: 7,
       },
@@ -55,14 +95,47 @@ describe("readPublicDesignConfig", () => {
     expect(config!.cover?.styleId).toBe("hero-overlay");
     expect(config!.cover?.layoutPreset).toBe("haldi-warm");
     expect(config!.cover?.mediaMode).toBe("photo-grid");
+    expect(config!.cover?.assetSlots).toEqual([
+      "asset-uuid",
+      "asset-second",
+      null,
+      "asset-fourth",
+    ]);
     expect(config!.cover?.focalPoint).toEqual({ x: 25, y: 75 });
     expect(config!.cover?.mobileFocalPoint).toEqual({ x: 40, y: 35 });
+    expect(config!.cover?.slotFocalPoints).toEqual([
+      { x: 50, y: 50 },
+      { x: 62, y: 31 },
+    ]);
+    expect(config!.cover?.mobileSlotFocalPoints).toEqual([
+      { x: 50, y: 50 },
+      { x: 44, y: 48 },
+    ]);
     expect(config!.cover?.mobileAspectRatio).toBe("4/5");
     expect(config!.cover?.scrimStyle).toBe("warm-vignette");
     expect(config!.cover?.textBackdrop).toBe("glass");
     expect(config!.cover?.title).toBe("Anaya & Vihaan");
+    expect(config!.cover?.subtitle).toBe("Goa, Feb 2026");
+    expect(config!.cover?.titleVisible).toBe(true);
+    expect(config!.cover?.subtitleVisible).toBe(false);
+    expect(config!.cover?.titlePosition).toEqual({ x: 34, y: 45 });
+    expect(config!.cover?.subtitlePosition).toEqual({ x: 66, y: 58 });
+    expect(config!.cover?.mobileTitlePosition).toEqual({ x: 44, y: 48 });
+    expect(config!.cover?.mobileSubtitlePosition).toEqual({ x: 46, y: 62 });
+    expect(config!.cover?.titleColor).toBe("#f6d77a");
+    expect(config!.cover?.subtitleColor).toBe("#9be7ff");
+    expect(config!.typography?.headingFont).toBe("Anek Telugu");
+    expect(config!.typography?.bodyFont).toBe("Noto Serif Tamil");
+    expect(config!.typography?.titleLanguage).toBe("telugu");
+    expect(config!.typography?.subtitleLanguage).toBe("tamil");
+    expect(config!.typography?.titleWeight).toBe(700);
+    expect(config!.typography?.subtitleWeight).toBe(500);
+    expect(config!.typography?.titleItalic).toBe(true);
+    expect(config!.typography?.subtitleItalic).toBe(false);
     expect(config!.typography?.titleSize).toBe(64);
     expect(config!.typography?.subtitleSize).toBe(20);
+    expect(config!.typography?.mobileTitleSize).toBe(42);
+    expect(config!.typography?.mobileSubtitleSize).toBe(18);
     expect(config!.grid?.layout).toBe("grid");
     expect(config!.grid?.columns).toBe(4);
     expect(config!.grid?.showInfo).toBe(true);
@@ -74,6 +147,10 @@ describe("readPublicDesignConfig", () => {
       monogram: "AV",
       brandColor: "#B7791F",
       watermarkStyle: "subtle-corner",
+      logoSize: 56,
+      logoOpacity: 82,
+      watermarkText: "Asha Ravi Studio",
+      watermarkOpacity: 45,
     });
   });
 
@@ -124,6 +201,64 @@ describe("readPublicDesignConfig", () => {
     expect(config!.branding?.watermarkStyle).toBeUndefined();
     expect(config!.branding?.monogram).toBeUndefined();
   });
+
+  it("parses and resolves desktop and phone cover device profiles", () => {
+    const config = readPublicDesignConfig({
+      design_config: {
+        cover: {
+          assetId: "legacy-cover",
+          styleId: "classic-full",
+          focalPoint: { x: 20, y: 30 },
+          mobileFocalPoint: { x: 40, y: 50 },
+          titlePosition: { x: 50, y: 70 },
+          mobileTitlePosition: { x: 48, y: 58 },
+          aspectRatio: "16/9",
+          mobileAspectRatio: "4/5",
+          deviceProfiles: {
+            desktop: {
+              assetId: "desktop-cover",
+              styleId: "modern-grid",
+              title: "Desktop title",
+              focalPoint: { x: 12, y: 34 },
+              aspectRatio: "21/9",
+              typography: { titleSize: 62 },
+            },
+            phone: {
+              assetId: "phone-cover",
+              title: "Phone title",
+              titlePosition: { x: 44, y: 52 },
+              typography: { titleSize: 38 },
+            },
+          },
+        },
+        typography: { titleSize: 56, mobileTitleSize: 36 },
+      },
+    });
+
+    expect(config!.cover?.deviceProfiles?.desktop?.assetId).toBe(
+      "desktop-cover",
+    );
+    const desktop = resolveCoverDeviceProfile(config, "desktop");
+    const phone = resolveCoverDeviceProfile(config, "phone");
+
+    expect(desktop.cover).toMatchObject({
+      assetId: "desktop-cover",
+      styleId: "modern-grid",
+      title: "Desktop title",
+      focalPoint: { x: 12, y: 34 },
+      aspectRatio: "21/9",
+    });
+    expect(desktop.typography.titleSize).toBe(62);
+    expect(phone.cover).toMatchObject({
+      assetId: "phone-cover",
+      styleId: "modern-grid",
+      title: "Phone title",
+      focalPoint: { x: 40, y: 50 },
+      titlePosition: { x: 44, y: 52 },
+      aspectRatio: "4/5",
+    });
+    expect(phone.typography.titleSize).toBe(38);
+  });
 });
 
 describe("readPublicCoverThumbnails", () => {
@@ -149,6 +284,23 @@ describe("readPublicCoverThumbnails", () => {
   });
 });
 
+describe("readPublicCoverProfileThumbnails", () => {
+  it("filters profile thumbnail maps by device", () => {
+    expect(
+      readPublicCoverProfileThumbnails({
+        cover_profile_thumbnails: {
+          desktop: { thumb_lg_webp: "/desktop.webp", broken: 2 },
+          phone: { thumb_lg_webp: "/phone.webp", empty: "" },
+          tablet: { thumb_lg_webp: "/tablet.webp" },
+        },
+      }),
+    ).toEqual({
+      desktop: { thumb_lg_webp: "/desktop.webp" },
+      phone: { thumb_lg_webp: "/phone.webp" },
+    });
+  });
+});
+
 describe("readGalleryCoverAssetId", () => {
   it("prefers the Design Studio cover asset over the legacy gallery cover column", () => {
     expect(
@@ -161,6 +313,25 @@ describe("readGalleryCoverAssetId", () => {
         "legacy-cover",
       ),
     ).toBe("design-cover");
+  });
+
+  it("prefers the desktop device profile over legacy flat cover fields", () => {
+    expect(
+      readGalleryCoverAssetId(
+        {
+          design_config: {
+            cover: {
+              assetId: "legacy-design-cover",
+              deviceProfiles: {
+                desktop: { assetId: "desktop-cover" },
+                phone: { assetId: "phone-cover" },
+              },
+            },
+          },
+        },
+        "legacy-cover",
+      ),
+    ).toBe("desktop-cover");
   });
 
   it("falls back to cover_asset_id when no design cover is saved", () => {

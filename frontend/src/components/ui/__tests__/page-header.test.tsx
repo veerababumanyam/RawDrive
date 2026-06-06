@@ -10,7 +10,10 @@ vi.mock("next/navigation", () => ({
 describe("PageHeader", () => {
   it("renders the title as a single h1 with the token type scale", () => {
     render(<PageHeader title="Gallery Settings" />);
-    const heading = screen.getByRole("heading", { level: 1, name: "Gallery Settings" });
+    const heading = screen.getByRole("heading", {
+      level: 1,
+      name: "Gallery Settings",
+    });
     expect(heading.className).toContain("text-2xl");
     expect(heading.className).toContain("text-text-primary");
   });
@@ -24,16 +27,27 @@ describe("PageHeader", () => {
         titleId="page-title"
       />,
     );
-    expect(screen.getByText("Track downloads and continuity.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Track downloads and continuity."),
+    ).toBeInTheDocument();
     // Eyebrow uses a built-in tracking token, never an arbitrary tracking-[...] value.
     const eyebrow = screen.getByText("Delivery", { selector: "p" });
     expect(eyebrow.className).toContain("uppercase");
     expect(eyebrow.className).not.toMatch(/tracking-\[[^\]]+\]/);
-    expect(screen.getByRole("heading", { level: 1 })).toHaveAttribute("id", "page-title");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveAttribute(
+      "id",
+      "page-title",
+    );
   });
 
   it("renders a back link via the shared BackButton when backHref is set", () => {
-    render(<PageHeader title="Cover & Design" backHref="/galleries/abc" backLabel="Back to gallery" />);
+    render(
+      <PageHeader
+        title="Cover & Design"
+        backHref="/galleries/abc"
+        backLabel="Back to gallery"
+      />,
+    );
     const back = screen.getByRole("link", { name: /back to gallery/i });
     expect(back).toHaveAttribute("href", "/galleries/abc");
   });
@@ -51,5 +65,19 @@ describe("PageHeader", () => {
       />,
     );
     expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
+  });
+
+  it("renders compact metadata beside the title", () => {
+    render(
+      <PageHeader
+        title="Galleries"
+        titleAccessory={<span>2 galleries</span>}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Galleries" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("2 galleries")).toBeInTheDocument();
   });
 });

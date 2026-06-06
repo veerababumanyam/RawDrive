@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { listGalleryAlbums } from "../galleries";
+import { listGalleryAlbums, listGalleryAssets } from "../galleries";
 
 const fetchMock = vi.fn();
 const getStoredAccessTokenMock = vi.fn();
@@ -50,5 +50,38 @@ describe("gallery album API", () => {
       expect.any(Object),
     );
     expect(fetchMock.mock.calls[0][0]).not.toContain("include_asset_ids");
+  });
+});
+
+describe("gallery asset API", () => {
+  it("accepts the data envelope for gallery asset rows", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            id: "ga-1",
+            gallery_id: "gallery-1",
+            asset_id: "asset-1",
+            sort_order: 0,
+            is_hero: true,
+          },
+        ],
+      }),
+    });
+
+    const assets = await listGalleryAssets("token", "gallery-1", {
+      includeAssets: true,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "/api/v1/galleries/gallery-1/assets?include_assets=true",
+      ),
+      expect.any(Object),
+    );
+    expect(assets).toEqual([
+      expect.objectContaining({ id: "ga-1", asset_id: "asset-1" }),
+    ]);
   });
 });

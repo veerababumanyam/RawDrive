@@ -42,6 +42,24 @@ export function assetUsesClientMediaEncryption(asset: EncryptedAssetLike | null 
   return Boolean(asset?.is_encrypted && asset.media_encryption?.scheme === "rawdrive-e2ee-v1");
 }
 
+export function mediaKeyIdsForAsset(asset: EncryptedAssetLike | null | undefined): string[] {
+  if (!asset?.media_encryption) return [];
+  const ids = new Set<string>();
+  const add = (manifest: unknown) => {
+    if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) return;
+    const keyId = (manifest as Record<string, unknown>).key_id;
+    if (typeof keyId === "string" && keyId) ids.add(keyId);
+  };
+
+  add(asset.media_encryption);
+  const variants = asset.media_encryption.variants;
+  if (variants && typeof variants === "object" && !Array.isArray(variants)) {
+    for (const manifest of Object.values(variants)) add(manifest);
+  }
+
+  return Array.from(ids);
+}
+
 export function pickAssetMedia(
   asset: EncryptedAssetLike | null | undefined,
   variants: readonly string[],

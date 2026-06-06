@@ -28,6 +28,18 @@ export interface ClusterSummary {
   sample_bounding_box?: SampleBoundingBox;
 }
 
+export interface FaceReviewRow {
+  id: string;
+  asset_id: string;
+  gallery_id?: string;
+  face_index: number;
+  bounding_box: SampleBoundingBox;
+  cluster_label: string;
+  cluster_name: string;
+  confidence: number;
+  source: string;
+}
+
 export interface AIJob {
   id: string;
   type: string;
@@ -114,7 +126,11 @@ export interface AIConfig {
 // httpOnly refresh cookie. authFetch handles that race + auto-retries
 // on 401. The `_token` parameter is kept for backward-compatible call
 // sites; the actual token comes from authFetch via getStoredAccessToken.
-export async function triggerFaceDetect(_token: string, assetIds: string[], galleryId?: string): Promise<{ job_id: string; status: string }> {
+export async function triggerFaceDetect(
+  _token: string,
+  assetIds: string[],
+  galleryId?: string,
+): Promise<{ job_id: string; status: string }> {
   const res = await authFetch(`/api/v1/ai/face-detect`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -124,8 +140,13 @@ export async function triggerFaceDetect(_token: string, assetIds: string[], gall
   return res.json();
 }
 
-export async function getFaceClusters(_token: string, galleryId?: string): Promise<ClusterSummary[]> {
-  const params = galleryId ? `?gallery_id=${galleryId}` : "";
+export async function getFaceClusters(
+  _token: string,
+  galleryId?: string,
+): Promise<ClusterSummary[]> {
+  const params = galleryId
+    ? `?gallery_id=${encodeURIComponent(galleryId)}`
+    : "";
   const res = await authFetch(`/api/v1/ai/clusters${params}`);
   if (!res.ok) throw new Error(`List clusters failed: ${res.status}`);
   const body = await res.json();
@@ -134,7 +155,11 @@ export async function getFaceClusters(_token: string, galleryId?: string): Promi
   return [];
 }
 
-export async function renameCluster(_token: string, clusterId: string, name: string): Promise<void> {
+export async function renameCluster(
+  _token: string,
+  clusterId: string,
+  name: string,
+): Promise<void> {
   const res = await authFetch(`/api/v1/ai/clusters/${clusterId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -143,13 +168,38 @@ export async function renameCluster(_token: string, clusterId: string, name: str
   if (!res.ok) throw new Error(`Rename cluster failed: ${res.status}`);
 }
 
-export async function mergeClusters(_token: string, sourceId: string, targetId: string): Promise<void> {
+export async function mergeClusters(
+  _token: string,
+  sourceId: string,
+  targetId: string,
+): Promise<void> {
   const res = await authFetch(`/api/v1/ai/clusters/merge`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ source_cluster_id: sourceId, target_cluster_id: targetId }),
+    body: JSON.stringify({
+      source_cluster_id: sourceId,
+      target_cluster_id: targetId,
+    }),
   });
   if (!res.ok) throw new Error(`Merge clusters failed: ${res.status}`);
+}
+
+export async function splitCluster(
+  _token: string,
+  clusterId: string,
+  faceIds: string[],
+  newClusterName: string,
+): Promise<{ new_cluster_label: string }> {
+  const res = await authFetch(`/api/v1/ai/clusters/${clusterId}/split`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      face_ids: faceIds,
+      new_cluster_name: newClusterName,
+    }),
+  });
+  if (!res.ok) throw new Error(`Split cluster failed: ${res.status}`);
+  return res.json();
 }
 
 // ClusterAssets is the response shape of GET /api/v1/ai/clusters/{id}/assets.
@@ -180,6 +230,30 @@ export async function getClusterAssets(
   const res = await authFetch(url);
   if (!res.ok) throw new Error(`Get cluster assets failed: ${res.status}`);
   return res.json();
+}
+
+export interface ClusterFacesResponse {
+  cluster_label: string;
+  faces: FaceReviewRow[];
+  count: number;
+}
+
+export async function getClusterFaces(
+  _token: string,
+  clusterId: string,
+  galleryId?: string,
+): Promise<ClusterFacesResponse> {
+  const url = galleryId
+    ? `/api/v1/ai/clusters/${clusterId}/faces?gallery_id=${encodeURIComponent(galleryId)}`
+    : `/api/v1/ai/clusters/${clusterId}/faces`;
+  const res = await authFetch(url);
+  if (!res.ok) throw new Error(`Get cluster faces failed: ${res.status}`);
+  const body = await res.json();
+  return {
+    cluster_label: body?.cluster_label ?? clusterId,
+    faces: Array.isArray(body?.faces) ? body.faces : [],
+    count: typeof body?.count === "number" ? body.count : 0,
+  };
 }
 
 // ---- Photo Search (webcam-driven find-this-person) ----
@@ -297,7 +371,8 @@ export async function listPublicPersonPhotos(
     ),
     { credentials: "include" },
   );
-  if (!res.ok) throw new Error(`List public person photos failed: ${res.status}`);
+  if (!res.ok)
+    throw new Error(`List public person photos failed: ${res.status}`);
   return res.json();
 }
 
@@ -346,7 +421,10 @@ export interface PublicGalleryScope {
 // gallery_session cookie continues to travel via the /api/v1 rewrite when
 // present. Exported so the public Find Me / People route links preserve the
 // scope across navigation (#175) instead of stripping it.
-export function withPublicScope(path: string, scope?: PublicGalleryScope): string {
+export function withPublicScope(
+  path: string,
+  scope?: PublicGalleryScope,
+): string {
   if (!scope) return path;
   const params = new URLSearchParams();
   if (scope.ws) params.set("ws", scope.ws);
@@ -453,10 +531,18 @@ export async function uploadAssetFaceIndexImage(
 
 // ---- Semantic Search ----
 
-export async function searchAssets(token: string, query: string, galleryId?: string, limit?: number): Promise<{ results: SearchResult[]; total: number }> {
+export async function searchAssets(
+  token: string,
+  query: string,
+  galleryId?: string,
+  limit?: number,
+): Promise<{ results: SearchResult[]; total: number }> {
   const res = await fetch(apiUrl("/api/v1/ai/search"), {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({ query, gallery_id: galleryId, limit: limit || 20 }),
   });
   if (!res.ok) throw new Error(`Search failed: ${res.status}`);
@@ -465,7 +551,10 @@ export async function searchAssets(token: string, query: string, galleryId?: str
 
 // ---- Tags ----
 
-export async function getAssetTags(token: string, assetId: string): Promise<{ ai_tags: AITag[]; ai_caption: string; ai_tag_status: string }> {
+export async function getAssetTags(
+  token: string,
+  assetId: string,
+): Promise<{ ai_tags: AITag[]; ai_caption: string; ai_tag_status: string }> {
   const res = await fetch(apiUrl(`/api/v1/ai/tags/${assetId}`), {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -475,17 +564,26 @@ export async function getAssetTags(token: string, assetId: string): Promise<{ ai
 
 // ---- Duplicates ----
 
-export async function scanDuplicates(token: string, galleryId?: string): Promise<{ job_id: string; status: string }> {
+export async function scanDuplicates(
+  token: string,
+  galleryId?: string,
+): Promise<{ job_id: string; status: string }> {
   const res = await fetch(apiUrl("/api/v1/ai/duplicates/scan"), {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({ gallery_id: galleryId }),
   });
   if (!res.ok) throw new Error(`Scan duplicates failed: ${res.status}`);
   return res.json();
 }
 
-export async function getDuplicates(token: string, status?: string): Promise<{ groups: DuplicateGroup[]; total: number }> {
+export async function getDuplicates(
+  token: string,
+  status?: string,
+): Promise<{ groups: DuplicateGroup[]; total: number }> {
   const params = status ? `?status=${status}` : "";
   const res = await fetch(apiUrl(`/api/v1/ai/duplicates${params}`), {
     headers: { Authorization: `Bearer ${token}` },
@@ -494,7 +592,10 @@ export async function getDuplicates(token: string, status?: string): Promise<{ g
   return res.json();
 }
 
-export async function getDuplicateGroup(token: string, groupId: string): Promise<DuplicateGroup> {
+export async function getDuplicateGroup(
+  token: string,
+  groupId: string,
+): Promise<DuplicateGroup> {
   const res = await fetch(apiUrl(`/api/v1/ai/duplicates/${groupId}`), {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -512,16 +613,25 @@ export async function getAIConfig(token: string): Promise<AIConfig> {
   return res.json();
 }
 
-export async function saveAIConfig(token: string, apiKey: string, model?: string): Promise<void> {
+export async function saveAIConfig(
+  token: string,
+  apiKey: string,
+  model?: string,
+): Promise<void> {
   const res = await fetch(apiUrl("/api/v1/ai/config"), {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({ api_key: apiKey, model_preference: model }),
   });
   if (!res.ok) throw new Error(`Save AI config failed: ${res.status}`);
 }
 
-export async function validateAIKey(token: string): Promise<{ valid: boolean; error?: string }> {
+export async function validateAIKey(
+  token: string,
+): Promise<{ valid: boolean; error?: string }> {
   const res = await fetch(apiUrl("/api/v1/ai/config/validate"), {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
@@ -548,10 +658,16 @@ export async function getCredits(token: string): Promise<CreditSummary> {
   return res.json();
 }
 
-export async function setSpendCap(token: string, capPaisa: number): Promise<void> {
+export async function setSpendCap(
+  token: string,
+  capPaisa: number,
+): Promise<void> {
   const res = await fetch(apiUrl("/api/v1/ai/spend/cap"), {
     method: "PUT",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({ monthly_cap_paisa: capPaisa }),
   });
   if (!res.ok) throw new Error(`Set spend cap failed: ${res.status}`);
@@ -583,7 +699,10 @@ export async function triggerCulling(
 ): Promise<AIJob> {
   const res = await fetch(apiUrl("/api/v1/ai/cull"), {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({ gallery_id: galleryId, top_percent: topPercent }),
   });
   if (!res.ok) throw new Error(`Trigger culling failed: ${res.status}`);

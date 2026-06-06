@@ -1,17 +1,17 @@
 "use client";
 
 // Embedded-video manager for the gallery detail page. Photographers
-// paste YouTube / Vimeo URLs; the panel parses them, persists the
+// paste YouTube / Vimeo / Instagram URLs; the panel parses them, persists the
 // array via PUT /api/v1/galleries/{id}/embedded-videos, and renders
-// the live iframe grid below. Each tile has a delete affordance.
+// the live embed grid below. Each tile has a delete affordance.
 //
 // The public viewer (frontend/src/app/g/[slug]/...) reads the same
 // settings.embedded_videos field and renders the iframe grid via the
 // `read-only` mode of this same component, so guests see exactly
 // what the photographer added — same providers, same embed URLs,
-// same aspect ratio.
+// same fallback links.
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   buildEmbeddedVideo,
   embedUrlFor,
@@ -19,8 +19,107 @@ import {
   updateEmbeddedVideos,
   watchUrlFor,
   type EmbeddedVideo,
+  type EmbeddedVideoProvider,
+  type InstagramEmbedDisplayMode,
 } from "@/lib/embedded-videos";
-import { Trash } from "@/components/icons";
+import {
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  InstagramMark,
+  Trash,
+  Video,
+  YouTubeMark,
+} from "@/components/icons";
+import { GlassIconButton } from "@/components/ui/glass-icon-button";
+
+declare global {
+  interface Window {
+    instgrm?: {
+      Embeds?: {
+        process?: () => void;
+      };
+    };
+  }
+}
+
+const INSTAGRAM_EMBED_SCRIPT_ID = "rawdrive-instagram-embed-script";
+const INSTAGRAM_EMBED_SCRIPT_SRC = "https://www.instagram.com/embed.js";
+const INSTAGRAM_DISPLAY_MODES: InstagramEmbedDisplayMode[] = ["compact", "full"];
+const PROVIDER_HINTS: EmbeddedVideoProvider[] = ["youtube", "vimeo", "instagram"];
+
+let instagramScriptLoadPromise: Promise<void> | null = null;
+
+function providerLabel(provider: EmbeddedVideoProvider): string {
+  switch (provider) {
+    case "youtube":
+      return "YouTube";
+    case "vimeo":
+      return "Vimeo";
+    case "instagram":
+      return "Instagram";
+  }
+}
+
+function providerIcon(provider: EmbeddedVideoProvider, className = "h-4 w-4") {
+  switch (provider) {
+    case "youtube":
+      return <YouTubeMark className={className} />;
+    case "vimeo":
+      return <Video className={className} />;
+    case "instagram":
+      return <InstagramMark className={className} />;
+  }
+}
+
+function instagramDisplayMode(video: EmbeddedVideo): InstagramEmbedDisplayMode {
+  return video.instagram_display_mode === "full" ? "full" : "compact";
+}
+
+function loadInstagramEmbedScript(): Promise<void> {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return Promise.resolve();
+  }
+  if (window.instgrm?.Embeds?.process) {
+    return Promise.resolve();
+  }
+
+  const existing = document.getElementById(INSTAGRAM_EMBED_SCRIPT_ID);
+  if (instagramScriptLoadPromise && existing) {
+    return instagramScriptLoadPromise;
+  }
+
+  instagramScriptLoadPromise = new Promise<void>((resolve, reject) => {
+    const script =
+      existing instanceof HTMLScriptElement
+        ? existing
+        : document.createElement("script");
+    script.id = INSTAGRAM_EMBED_SCRIPT_ID;
+    script.src = INSTAGRAM_EMBED_SCRIPT_SRC;
+    script.async = true;
+
+    const cleanup = () => {
+      script.removeEventListener("load", onLoad);
+      script.removeEventListener("error", onError);
+    };
+    const onLoad = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = () => {
+      cleanup();
+      reject(new Error("Instagram embed script failed to load"));
+    };
+
+    script.addEventListener("load", onLoad, { once: true });
+    script.addEventListener("error", onError, { once: true });
+    if (!existing) {
+      document.head.appendChild(script);
+    }
+  });
+
+  return instagramScriptLoadPromise;
+}
 
 interface EmbeddedVideosPanelProps {
   galleryId: string;
@@ -68,8 +167,26 @@ export function EmbeddedVideosPanel({
     urlInput.trim() === ""
       ? null
       : preview
-        ? `${preview.provider === "youtube" ? "YouTube" : "Vimeo"} · ${preview.videoId}`
-        : "Unrecognized URL — paste a YouTube or Vimeo link";
+        ? `${providerLabel(preview.provider)} · ${preview.videoId}`
+        : "Unrecognized URL — paste a YouTube, Vimeo, or Instagram link";
+
+  useEffect(() => {
+    if (!videos.some((v) => v.provider === "instagram")) return;
+    let cancelled = false;
+    void loadInstagramEmbedScript()
+      .then(() => {
+        if (!cancelled) {
+          window.instgrm?.Embeds?.process?.();
+        }
+      })
+      .catch(() => {
+        // The direct Instagram link remains visible on every tile, so a blocked
+        // provider script still leaves the gallery navigable.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [videos]);
 
   const persist = useCallback(
     async (next: EmbeddedVideo[]) => {
@@ -96,13 +213,16 @@ export function EmbeddedVideosPanel({
   const handleAdd = useCallback(async () => {
     const parsed = parseVideoUrl(urlInput);
     if (!parsed) {
-      setError("Paste a YouTube or Vimeo link.");
+      setError("Paste a YouTube, Vimeo, or Instagram link.");
       return;
     }
     // Prevent dupes by (provider, video_id). Pasting the same URL
     // twice should be a no-op + a hint, not a silent second card.
     const duplicate = videos.some(
-      (v) => v.provider === parsed.provider && v.video_id === parsed.videoId,
+      (v) =>
+        v.provider === parsed.provider &&
+        v.video_id === parsed.videoId &&
+        (parsed.provider !== "instagram" || v.instagram_kind === parsed.instagramKind),
     );
     if (duplicate) {
       setError("That video is already in this gallery.");
@@ -122,6 +242,30 @@ export function EmbeddedVideosPanel({
     [videos, persist],
   );
 
+  const handleMove = useCallback(
+    async (id: string, direction: -1 | 1) => {
+      const index = videos.findIndex((v) => v.id === id);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= videos.length) return;
+      const next = [...videos];
+      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+      await persist(next);
+    },
+    [videos, persist],
+  );
+
+  const handleInstagramDisplayMode = useCallback(
+    async (id: string, mode: InstagramEmbedDisplayMode) => {
+      const next = videos.map((v) =>
+        v.id === id && v.provider === "instagram"
+          ? { ...v, instagram_display_mode: mode }
+          : v,
+      );
+      await persist(next);
+    },
+    [videos, persist],
+  );
+
   // Empty + read-only = nothing to show on the public viewer. The
   // dashboard always renders so the photographer can add the first one.
   if (readOnly && videos.length === 0) return null;
@@ -133,15 +277,26 @@ export function EmbeddedVideosPanel({
     >
       <header className="flex items-end justify-between gap-4">
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-text-primary">Videos</h2>
+          <h2 className="text-lg font-semibold text-text-primary">
+            Videos & Reels
+          </h2>
           <p className="mt-0.5 text-sm text-text-secondary">
             {readOnly
               ? videos.length === 1
-                ? "1 video"
-                : `${videos.length} videos`
-              : "Embed YouTube or Vimeo links. Guests on the share link can play them."}
+                ? "1 item"
+                : `${videos.length} items`
+              : "Embed YouTube, Vimeo, or Instagram links. Guests on the share link can play them."}
           </p>
         </div>
+        {!readOnly && videos.length > 0 && (
+          <a
+            href={`/galleries/${galleryId}/preview`}
+            className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-accent-primary hover:underline"
+          >
+            Preview as client
+            <ArrowRight className="h-4 w-4" />
+          </a>
+        )}
       </header>
 
       {/* Add form — dashboard only. */}
@@ -169,7 +324,7 @@ export function EmbeddedVideosPanel({
                   setUrlInput(e.target.value);
                   if (error) setError(null);
                 }}
-                placeholder="https://youtube.com/watch?v=… or https://vimeo.com/…"
+                placeholder="https://youtube.com/watch?v=… or https://instagram.com/reel/…"
                 className="mt-1 w-full rounded-xl border border-border-default bg-surface-raised px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-accent-primary focus:outline-none touch-min"
                 autoComplete="off"
                 spellCheck={false}
@@ -183,6 +338,20 @@ export function EmbeddedVideosPanel({
                   {previewLabel}
                 </p>
               )}
+              <ul
+                className="mt-2 flex flex-wrap gap-2"
+                aria-label="Supported video providers"
+              >
+                {PROVIDER_HINTS.map((provider) => (
+                  <li
+                    key={provider}
+                    className="inline-flex items-center gap-1 rounded-full border border-border-default bg-surface-raised px-2 py-1 text-xs text-text-secondary"
+                  >
+                    {providerIcon(provider)}
+                    {provider === "instagram" ? "Instagram Reels" : providerLabel(provider)}
+                  </li>
+                ))}
+              </ul>
             </div>
             <div className="sm:w-56">
               <label
@@ -225,57 +394,111 @@ export function EmbeddedVideosPanel({
         </form>
       )}
 
-      {/* Iframe grid. The aspect-video utility (16:9) is fine for both
-          YouTube and Vimeo standard players. Tile width tracks the
+      {/* Embed grid. The 16:9 frame is used for YouTube/Vimeo standard
+          players; Instagram uses its official responsive blockquote. Tile width tracks the
           available column; on mobile we stack 1-up, tablet 2-up,
           desktop 3-up. */}
       {videos.length === 0 ? (
         readOnly ? null : (
           <p className="rounded-xl border border-dashed border-border-default bg-surface-sunken px-4 py-8 text-center text-sm text-text-tertiary">
-            No videos yet. Paste a link above to embed one.
+            No videos or reels yet. Paste a link above to embed one.
           </p>
         )
       ) : (
         <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {videos.map((v) => (
+          {videos.map((v, index) => (
             <li
               key={v.id}
               className="overflow-hidden rounded-xl border border-border-default bg-surface-raised"
             >
-              <div className="relative aspect-video w-full bg-surface-scrim-strong">
-                {/* Loading shimmer behind the iframe — visible until the
-                    provider paints its player, then covered by it. */}
-                <div
-                  aria-hidden="true"
-                  className="absolute inset-0 animate-pulse bg-surface-sunken"
-                />
-                <iframe
-                  src={embedUrlFor(v)}
-                  title={
-                    v.title || `Embedded ${v.provider} video ${v.video_id}`
-                  }
-                  loading="lazy"
-                  // YouTube/Vimeo require these specific allow tokens to
-                  // play. Without `encrypted-media` Chromium throws on
-                  // first play for DRM-detected content; without
-                  // `picture-in-picture` the YouTube PiP control is grey.
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                  // referrerPolicy=strict-origin-when-cross-origin keeps
-                  // YouTube's "Watch on YouTube" link working while not
-                  // leaking the gallery URL path to provider analytics.
-                  referrerPolicy="strict-origin-when-cross-origin"
-                  className="absolute inset-0 h-full w-full"
-                />
-              </div>
+              {v.provider === "instagram" ? (
+                <div className="w-full bg-surface-scrim-strong p-3">
+                  <blockquote
+                    className="instagram-media bg-surface-raised"
+                    {...(instagramDisplayMode(v) === "full"
+                      ? { "data-instgrm-captioned": "" }
+                      : {})}
+                    data-instgrm-permalink={watchUrlFor(v)}
+                    data-instgrm-version="14"
+                  >
+                    <a
+                      href={watchUrlFor(v)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-accent-primary hover:underline"
+                    >
+                      View this post on Instagram
+                    </a>
+                  </blockquote>
+                </div>
+              ) : (
+                <div className="relative aspect-video w-full bg-surface-scrim-strong">
+                  {/* Loading shimmer behind the iframe — visible until the
+                      provider paints its player, then covered by it. */}
+                  <div
+                    aria-hidden="true"
+                    className="absolute inset-0 animate-pulse bg-surface-sunken"
+                  />
+                  <iframe
+                    src={embedUrlFor(v)}
+                    title={v.title || `Embedded ${v.provider} video ${v.video_id}`}
+                    loading="lazy"
+                    // YouTube/Vimeo require these specific allow tokens to
+                    // play. Without `encrypted-media` Chromium throws on
+                    // first play for DRM-detected content; without
+                    // `picture-in-picture` the YouTube PiP control is grey.
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    // referrerPolicy=strict-origin-when-cross-origin keeps
+                    // YouTube's "Watch on YouTube" link working while not
+                    // leaking the gallery URL path to provider analytics.
+                    referrerPolicy="strict-origin-when-cross-origin"
+                    className="absolute inset-0 h-full w-full"
+                  />
+                </div>
+              )}
               <div className="flex items-center justify-between gap-3 px-4 py-3">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-text-primary">
-                    {v.title ||
-                      (v.provider === "youtube"
-                        ? "YouTube video"
-                        : "Vimeo video")}
-                  </p>
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border-default bg-surface-sunken px-2 py-1 text-xs text-text-secondary">
+                      {providerIcon(v.provider)}
+                      {providerLabel(v.provider)}
+                    </span>
+                    <p className="truncate text-sm font-medium text-text-primary">
+                      {v.title || `${providerLabel(v.provider)} video`}
+                    </p>
+                  </div>
+                  {v.provider === "instagram" && !readOnly && (
+                    <div
+                      className="mt-2 inline-flex rounded-xl border border-border-default bg-surface-sunken p-1"
+                      aria-label={`Instagram display mode for ${v.title || "this reel"}`}
+                    >
+                      {INSTAGRAM_DISPLAY_MODES.map((mode) => {
+                        const active = instagramDisplayMode(v) === mode;
+                        return (
+                          <button
+                            key={mode}
+                            type="button"
+                            aria-pressed={active}
+                            disabled={saving || active}
+                            onClick={() => void handleInstagramDisplayMode(v.id, mode)}
+                            className={`rounded-lg px-2 py-1 text-xs font-medium transition-colors ${
+                              active
+                                ? "bg-accent-primary text-text-inverse"
+                                : "text-text-secondary hover:bg-surface-raised"
+                            } disabled:cursor-not-allowed disabled:opacity-80`}
+                          >
+                            {mode === "compact" ? "Compact" : "Full post"}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {v.provider === "instagram" && (
+                    <p className="mt-1 text-xs text-text-tertiary">
+                      Private or restricted Instagram posts may only open on Instagram.
+                    </p>
+                  )}
                   {/* Always-present click-through link. Cross-origin
                       iframe failure (uploader-disabled embedding, region
                       restriction, third-party-cookie block, browser
@@ -292,34 +515,40 @@ export function EmbeddedVideosPanel({
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 text-xs text-accent-primary hover:underline"
                   >
-                    Open on {v.provider === "youtube" ? "YouTube" : "Vimeo"}
-                    <svg
-                      className="h-3 w-3"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      aria-hidden
-                    >
-                      <path
-                        d="M14 5l7 7-7 7M21 12H3"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
+                    Open on {providerLabel(v.provider)}
+                    <ArrowRight className="h-3 w-3" />
                   </a>
                 </div>
                 {!readOnly && (
-                  <button
-                    type="button"
-                    aria-label={`Remove ${v.title || "this video"}`}
-                    title="Remove video"
-                    onClick={() => void handleDelete(v.id)}
-                    disabled={saving}
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-feedback-error/10 text-feedback-error transition-colors hover:bg-feedback-error/20 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Trash className="h-4 w-4" />
-                  </button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <GlassIconButton
+                      type="button"
+                      label={`Move ${v.title || providerLabel(v.provider)} up`}
+                      onClick={() => void handleMove(v.id, -1)}
+                      disabled={saving || index === 0}
+                      variant="ghost"
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </GlassIconButton>
+                    <GlassIconButton
+                      type="button"
+                      label={`Move ${v.title || providerLabel(v.provider)} down`}
+                      onClick={() => void handleMove(v.id, 1)}
+                      disabled={saving || index === videos.length - 1}
+                      variant="ghost"
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </GlassIconButton>
+                    <GlassIconButton
+                      type="button"
+                      label={`Remove ${v.title || "this video"}`}
+                      onClick={() => void handleDelete(v.id)}
+                      disabled={saving}
+                      variant="danger"
+                    >
+                      <Trash className="h-4 w-4" />
+                    </GlassIconButton>
+                  </div>
                 )}
               </div>
             </li>

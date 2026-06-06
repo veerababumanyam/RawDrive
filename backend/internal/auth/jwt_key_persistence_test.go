@@ -101,8 +101,8 @@ func TestLoadPersistedSigningKey_TokensSurviveRestart(t *testing.T) {
 	// The whole point of F-006 Part A: a token signed before a "restart"
 	// must still validate after the restart. This test simulates the
 	// restart by constructing two JWTService instances against the same
-	// store — the second one has a different ephemeral key internally
-	// until LoadPersistedSigningKey swaps it for the persisted one.
+	// store. The second starts with the process fallback key until
+	// LoadPersistedSigningKey swaps it for the persisted one.
 	ctx := context.Background()
 	store := &fakeJWTKeyStore{}
 

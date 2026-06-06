@@ -28,6 +28,7 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 	if deps.Pool != nil {
 		galleryHandler.WithPool(deps.Pool)
 	}
+	galleryHandler.WithClientPreviewDeps(deps.AlbumService, deps.BannerService, deps.ProductService, deps.PublicBaseURL)
 	// M21: wire face scan deps when available
 	if deps.FaceSvc != nil && deps.AssetService != nil && deps.JobRepo != nil {
 		galleryHandler.WithAIDeps(deps.FaceSvc, deps.AssetService, deps.JobRepo)
@@ -121,6 +122,7 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 		r.Get("/", galleryHandler.List)
 		r.Post("/", galleryHandler.Create)
 		r.Get("/{id}", galleryHandler.GetByID)
+		r.Get("/{id}/client-preview", galleryHandler.ClientPreview)
 		r.Put("/{id}", galleryHandler.Update)
 		r.Delete("/{id}", galleryHandler.SoftDelete)
 		r.Get("/{id}/workspace-summary", galleryHandler.WorkspaceSummary)

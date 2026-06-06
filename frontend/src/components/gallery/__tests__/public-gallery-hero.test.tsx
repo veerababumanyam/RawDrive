@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PublicGalleryHero } from "../public-gallery-hero";
 import type {
@@ -73,9 +73,26 @@ const branding: GalleryBranding = {
   public_branding_enabled: true,
 };
 
+function setMobileViewport(matches: boolean) {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
 describe("PublicGalleryHero", () => {
   beforeEach(() => {
     mocks.useDecryptedAssetUrl.mockClear();
+    setMobileViewport(false);
     // jsdom media stubs — the hosted slideshow's audio-sync effect calls
     // play()/pause() on the <audio> element when music is wired.
     window.HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
@@ -113,6 +130,9 @@ describe("PublicGalleryHero", () => {
       expect.arrayContaining(["thumb_lg_webp", "display_webp"]),
       // Owner "View as client" bearer token (3rd arg). null on the public
       // route — anonymous visitors have no bearer (see viewerToken prop).
+      null,
+      // Short-lived asset-access token (4th arg). Also null for open,
+      // non-encrypted public gallery payloads.
       null,
     );
   });
@@ -174,30 +194,51 @@ describe("PublicGalleryHero", () => {
       theme: { variant: "dark", accentColor: "#B7791F" },
       cover: {
         assetId: "asset-cover",
-        styleId: "classic-full",
+        assetSlots: ["asset-cover", "asset-2"],
+        styleId: "modern-grid",
         layoutPreset: "haldi-warm",
         mediaMode: "photo-grid",
         focalPoint: { x: 50, y: 50 },
         mobileFocalPoint: { x: 40, y: 35 },
+        slotFocalPoints: [
+          { x: 50, y: 50 },
+          { x: 63, y: 32 },
+        ],
         title: "Asha & Ravi",
         subtitle: "Haldi to reception",
         titlePosition: { x: 50, y: 58 },
         subtitlePosition: { x: 50, y: 68 },
+        mobileTitlePosition: { x: 44, y: 48 },
+        mobileSubtitlePosition: { x: 46, y: 62 },
+        titleColor: "#f6d77a",
+        subtitleColor: "#9be7ff",
         scrimStyle: "warm-vignette",
         textBackdrop: "glass",
         textShadow: true,
       },
       typography: {
-        headingFont: "Lora",
-        bodyFont: "Manrope",
+        headingFont: "Anek Telugu",
+        bodyFont: "Noto Serif Tamil",
+        titleLanguage: "telugu",
+        subtitleLanguage: "tamil",
+        titleWeight: 700,
+        subtitleWeight: 500,
+        titleItalic: true,
+        subtitleItalic: false,
         titleSize: 54,
         subtitleSize: 18,
+        mobileTitleSize: 42,
+        mobileSubtitleSize: 15,
       },
       branding: {
         logoPlacement: "top-right",
         monogram: "AR",
         brandColor: "#B7791F",
         watermarkStyle: "subtle-corner",
+        logoSize: 56,
+        logoOpacity: 82,
+        watermarkText: "Asha Ravi Studio",
+        watermarkOpacity: 45,
       },
       sceneHeaders: [
         { id: "haldi", label: "Haldi", enabled: true, assetId: "asset-2" },
@@ -216,14 +257,49 @@ describe("PublicGalleryHero", () => {
     );
 
     expect(screen.getByTestId("gallery-cover-photo-grid")).toBeInTheDocument();
+    expect(screen.getByTestId("gallery-cover-photo-grid")).toHaveAttribute(
+      "data-cover-template",
+      "modern-grid",
+    );
+    const secondSlot = screen.getByTestId("gallery-cover-template-slot-1");
+    expect(secondSlot.querySelector("img")).toHaveAttribute(
+      "src",
+      "/tests/photos/Wedding (43).jpg",
+    );
+    expect(secondSlot.querySelector("img")).toHaveStyle({
+      objectPosition: "63% 32%",
+    });
     expect(screen.getByTestId("gallery-cover-scrim")).toHaveStyle({
       background:
         "radial-gradient(circle at 50% 45%, var(--cover-scrim-warm), var(--cover-scrim-soft-end) 72%)",
     });
     expect(screen.getByTestId("gallery-cover-title")).toHaveStyle({
       background: "var(--cover-text-backdrop-glass-bg)",
+      fontFamily: "'Anek Telugu', 'Noto Sans Telugu', sans-serif",
+      fontSize: "54px",
+      fontWeight: "700",
+      fontStyle: "italic",
+      color: "#f6d77a",
+      left: "50%",
+      top: "58%",
+    });
+    expect(screen.getByTestId("gallery-cover-subtitle")).toHaveStyle({
+      fontFamily: "'Noto Serif Tamil', 'Noto Sans Tamil', serif",
+      fontSize: "18px",
+      fontWeight: "500",
+      fontStyle: "normal",
+      color: "#9be7ff",
+      left: "50%",
+      top: "68%",
     });
     expect(screen.getAllByText("AR").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("AR")[0]).toHaveStyle({
+      height: "56px",
+      opacity: "0.82",
+    });
+    expect(screen.getByText("Asha Ravi Studio")).toHaveStyle({
+      opacity: "0.45",
+    });
     expect(screen.getByTestId("gallery-scene-headers")).toBeInTheDocument();
     expect(screen.getByTestId("gallery-scene-header-haldi")).toHaveTextContent(
       "Haldi",
@@ -232,6 +308,148 @@ describe("PublicGalleryHero", () => {
       screen.getByRole("img", { name: "Haldi scene cover" }),
     ).toHaveAttribute("src", "/tests/photos/Wedding (43).jpg");
     expect(screen.queryByText("Mehendi")).not.toBeInTheDocument();
+  });
+
+  it("keeps saved design_config asset slots authoritative over the legacy cover asset", () => {
+    const design: PublicDesignConfig = {
+      cover: {
+        assetId: "asset-2",
+        assetSlots: ["asset-2", "asset-cover"],
+        styleId: "classic-split",
+        mediaMode: "single-photo",
+      },
+    };
+
+    render(
+      <PublicGalleryHero
+        gallery={gallery}
+        assets={[coverAsset, secondaryAsset]}
+        branding={branding}
+        design={design}
+      />,
+    );
+
+    const firstSlot = screen.getByTestId("gallery-cover-template-slot-0");
+    const secondSlot = screen.getByTestId("gallery-cover-template-slot-1");
+
+    expect(firstSlot.querySelector("img")).toHaveAttribute(
+      "src",
+      "/tests/photos/Wedding (43).jpg",
+    );
+    expect(secondSlot.querySelector("img")).toHaveAttribute(
+      "src",
+      weddingPhoto,
+    );
+  });
+
+  it("uses the desktop cover profile for desktop viewport", async () => {
+    const design: PublicDesignConfig = {
+      cover: {
+        assetId: "legacy-cover",
+        styleId: "classic-full",
+        deviceProfiles: {
+          desktop: {
+            assetId: "asset-desktop",
+            styleId: "classic-full",
+            title: "Desktop cover",
+            titlePosition: { x: 51, y: 61 },
+            typography: { titleSize: 58 },
+          },
+          phone: {
+            assetId: "asset-phone",
+            title: "Phone cover",
+            titlePosition: { x: 45, y: 54 },
+            typography: { titleSize: 36 },
+          },
+        },
+      },
+    };
+
+    render(
+      <PublicGalleryHero
+        gallery={gallery}
+        assets={[coverAsset]}
+        branding={branding}
+        design={design}
+        designCoverProfileThumbnails={{
+          desktop: { thumb_lg_webp: "/storage/thumbnails/desktop.webp" },
+          phone: { thumb_lg_webp: "/storage/thumbnails/phone.webp" },
+        }}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("gallery-cover-title")).toHaveTextContent(
+        "Desktop cover",
+      ),
+    );
+    expect(screen.getByTestId("gallery-cover-title")).toHaveStyle({
+      left: "51%",
+      top: "61%",
+      fontSize: "58px",
+    });
+    expect(screen.getByRole("img", { name: "Desktop cover" })).toHaveAttribute(
+      "src",
+      expect.stringContaining("/storage/thumbnails/desktop.webp"),
+    );
+  });
+
+  it("uses the phone cover profile for phone viewport on the same URL", async () => {
+    setMobileViewport(true);
+    const design: PublicDesignConfig = {
+      cover: {
+        assetId: "legacy-cover",
+        styleId: "classic-full",
+        mobileTitlePosition: { x: 50, y: 70 },
+        deviceProfiles: {
+          desktop: {
+            assetId: "asset-desktop",
+            styleId: "classic-full",
+            title: "Desktop cover",
+            titlePosition: { x: 51, y: 61 },
+            typography: { titleSize: 58 },
+          },
+          phone: {
+            assetId: "asset-phone",
+            title: "Phone cover",
+            titlePosition: { x: 45, y: 54 },
+            aspectRatio: "4/5",
+            typography: { titleSize: 36 },
+          },
+        },
+      },
+    };
+
+    render(
+      <PublicGalleryHero
+        gallery={gallery}
+        assets={[coverAsset]}
+        branding={branding}
+        design={design}
+        designCoverProfileThumbnails={{
+          desktop: { thumb_lg_webp: "/storage/thumbnails/desktop.webp" },
+          phone: { thumb_lg_webp: "/storage/thumbnails/phone.webp" },
+        }}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("gallery-cover-title")).toHaveTextContent(
+        "Phone cover",
+      ),
+    );
+    expect(screen.getByTestId("gallery-cover-title")).toHaveStyle({
+      left: "45%",
+      top: "54%",
+      fontSize: "36px",
+    });
+    expect(screen.getByTestId("gallery-cover-title")).not.toHaveTextContent(
+      "Desktop cover",
+    );
+    expect(screen.getByRole("img", { name: "Phone cover" })).toHaveAttribute(
+      "src",
+      expect.stringContaining("/storage/thumbnails/phone.webp"),
+    );
   });
 
   it("pairs the View Gallery and Find Me photo-search CTAs as central glass-button controls", () => {
@@ -378,6 +596,58 @@ describe("PublicGalleryHero", () => {
     );
   });
 
+  it("still opens from Play when the browser fullscreen request throws", () => {
+    const fullscreenEnabledDescriptor = Object.getOwnPropertyDescriptor(
+      document,
+      "fullscreenEnabled",
+    );
+    const originalRequestFullscreen =
+      document.documentElement.requestFullscreen;
+
+    Object.defineProperty(document, "fullscreenEnabled", {
+      configurable: true,
+      get: () => true,
+    });
+    Object.defineProperty(document.documentElement, "requestFullscreen", {
+      configurable: true,
+      value: vi.fn(() => {
+        throw new Error("fullscreen denied");
+      }),
+    });
+
+    try {
+      render(
+        <PublicGalleryHero
+          gallery={gallery}
+          assets={[coverAsset, secondaryAsset]}
+          branding={branding}
+          slug="asha-ravi"
+          hasMusic={false}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Play slideshow" }));
+
+      expect(
+        screen.getByRole("dialog", { name: "Gallery slideshow" }),
+      ).toBeInTheDocument();
+    } finally {
+      if (fullscreenEnabledDescriptor) {
+        Object.defineProperty(
+          document,
+          "fullscreenEnabled",
+          fullscreenEnabledDescriptor,
+        );
+      } else {
+        Reflect.deleteProperty(document, "fullscreenEnabled");
+      }
+      Object.defineProperty(document.documentElement, "requestFullscreen", {
+        configurable: true,
+        value: originalRequestFullscreen,
+      });
+    }
+  });
+
   it("keeps Play visible in the no-cover public header fallback", () => {
     render(
       <PublicGalleryHero
@@ -401,8 +671,7 @@ describe("PublicGalleryHero", () => {
     expect(play).toHaveTextContent("Play");
     expect(findMe).toHaveTextContent("Find me");
     expect(
-      play.compareDocumentPosition(findMe) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      play.compareDocumentPosition(findMe) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
 
     fireEvent.click(play);

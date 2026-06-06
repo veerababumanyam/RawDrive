@@ -66,6 +66,20 @@ type ClusterSummary struct {
 	SampleBBox    BoundingBox `json:"sample_bounding_box"`
 }
 
+// FaceReviewRow is a single face row exposed to authenticated photographers
+// for manual identity review. Embeddings are intentionally omitted.
+type FaceReviewRow struct {
+	ID           uuid.UUID   `json:"id"`
+	AssetID      uuid.UUID   `json:"asset_id"`
+	GalleryID    *uuid.UUID  `json:"gallery_id,omitempty"`
+	FaceIndex    int         `json:"face_index"`
+	BoundingBox  BoundingBox `json:"bounding_box"`
+	ClusterLabel uuid.UUID   `json:"cluster_label"`
+	ClusterName  string      `json:"cluster_name"`
+	Confidence   float64     `json:"confidence"`
+	Source       string      `json:"source"`
+}
+
 // AIJob represents an async AI processing job.
 type AIJob struct {
 	ID             uuid.UUID              `json:"id"`

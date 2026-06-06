@@ -97,14 +97,14 @@ describe("Studio CRM overview", () => {
   it("renders a business overview rather than the old lead-only pipeline", async () => {
     render(<CRMPage />);
 
-    await waitFor(() => {
-      expect(
-        screen.getByRole("heading", { name: /studio crm/i }),
-      ).toBeInTheDocument();
-    });
+    expect(
+      screen.getByRole("heading", { name: /studio crm/i }),
+    ).toBeInTheDocument();
 
     expect(screen.getByText(/today in your studio/i)).toBeInTheDocument();
-    expect(screen.getByText(/hot inquiries/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/hot inquiries/i)).toBeInTheDocument();
+    });
     expect(screen.getByText(/upcoming shoots/i)).toBeInTheDocument();
     expect(screen.getByText(/overdue invoices/i)).toBeInTheDocument();
     expect(

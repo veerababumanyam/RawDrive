@@ -37,6 +37,7 @@ import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { Dialog } from "@/components/ui/dialog";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { ChevronLeft, ChevronRight, Photo } from "@/components/icons";
+import { LockedMediaFallback } from "@/components/gallery/media-key-recovery";
 
 const ACCESS_WINDOW_PRESETS = [30, 60, 90] as const;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -1780,9 +1781,13 @@ function WatermarkPreviewPhoto({
   }
   if (!media.src) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-text-media">
-        {media.error || "Preview unavailable"}
-      </div>
+      <LockedMediaFallback
+        asset={asset}
+        error={media.error}
+        message={media.error || "Preview unavailable"}
+        mode="viewer"
+        className="absolute inset-0 px-6"
+      />
     );
   }
   return (

@@ -65,6 +65,7 @@ type faceEmbeddingStore interface {
 // needs. Satisfied by *ai.FaceService.
 type faceClusterIndexer interface {
 	IsFaceRecognitionEnabled(ctx context.Context, workspaceID uuid.UUID) (bool, error)
+	IsGalleryFaceDetectionEnabled(ctx context.Context, galleryID uuid.UUID) (bool, error)
 	ClusterFaces(ctx context.Context, faces []*ai.FaceCluster, workspaceID uuid.UUID) error
 }
 
@@ -184,6 +185,30 @@ func (h *FaceEmbeddingHandler) StoreEmbeddings(w http.ResponseWriter, r *http.Re
 			http.Error(w, `{"error":"invalid gallery_id"}`, http.StatusBadRequest)
 			return
 		}
+		if h.membership != nil {
+			ok, merr := h.membership.AssetBelongsToGallery(r.Context(), assetID, gid, workspaceID)
+			if merr != nil {
+				http.Error(w, `{"error":"gallery membership check failed"}`, http.StatusInternalServerError)
+				return
+			}
+			if !ok {
+				http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
+				return
+			}
+		}
+		galleryEnabled, gerr := h.indexer.IsGalleryFaceDetectionEnabled(r.Context(), gid)
+		if gerr != nil {
+			http.Error(w, `{"error":"face detection status check failed"}`, http.StatusInternalServerError)
+			return
+		}
+		if !galleryEnabled {
+			if err := h.store.DeleteFacesByAssetAndSource(r.Context(), assetID, clientFaceSource); err != nil {
+				http.Error(w, `{"error":"failed to replace existing faces"}`, http.StatusInternalServerError)
+				return
+			}
+			respondJSON(w, http.StatusOK, storeFaceEmbeddingsResponse{Stored: 0})
+			return
+		}
 		galleryID = &gid
 	}
 
@@ -291,6 +316,19 @@ func (h *FaceEmbeddingHandler) StoreIndexImage(w http.ResponseWriter, r *http.Re
 				http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
 				return
 			}
+		}
+		galleryEnabled, gerr := h.indexer.IsGalleryFaceDetectionEnabled(r.Context(), gid)
+		if gerr != nil {
+			http.Error(w, `{"error":"face detection status check failed"}`, http.StatusInternalServerError)
+			return
+		}
+		if !galleryEnabled {
+			if err := h.store.DeleteFacesByAssetAndSource(r.Context(), assetID, clientFaceSource); err != nil {
+				http.Error(w, `{"error":"failed to replace existing faces"}`, http.StatusInternalServerError)
+				return
+			}
+			respondJSON(w, http.StatusOK, storeFaceEmbeddingsResponse{Stored: 0})
+			return
 		}
 		galleryID = &gid
 	}

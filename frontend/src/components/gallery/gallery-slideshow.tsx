@@ -10,8 +10,17 @@ import {
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import {
+  addFullscreenListeners,
+  exitFullscreenDocument,
+  getFullscreenElement,
+  isFullscreenSupportedForElement,
+  requestElementFullscreen,
+} from "@/lib/browser-fullscreen";
+import {
   ChevronLeft,
   ChevronRight,
+  Compress,
+  Expand,
   Pause,
   Play,
   Volume,
@@ -39,6 +48,35 @@ interface GallerySlideshowProps {
   startIndex?: number;
   /** Close handler — the parent unmounts this component (mounted = open). */
   onClose: () => void;
+}
+
+const FULLSCREEN_CHROME_IDLE_MS = 3000;
+
+export function SlideshowImageFrame({
+  src,
+  alt,
+}: {
+  src: string;
+  alt: string;
+}) {
+  return (
+    <div className="gallery-slideshow__media-frame">
+      <img
+        src={src}
+        alt=""
+        aria-hidden="true"
+        className="gallery-slideshow__ambient-image"
+        decoding="async"
+      />
+      <div className="gallery-slideshow__ambient-scrim" aria-hidden="true" />
+      <img
+        src={src}
+        alt={alt}
+        className="gallery-slideshow__image"
+        decoding="async"
+      />
+    </div>
+  );
 }
 
 /**
@@ -69,7 +107,11 @@ export function GallerySlideshow({
   );
   const [playing, setPlaying] = useState(true);
   const [muted, setMuted] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [chromeVisible, setChromeVisible] = useState(true);
+  const [fullscreenUnavailable, setFullscreenUnavailable] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const chromeTimerRef = useRef<number | null>(null);
   // a11y: fullscreen modal dialog (aria-modal) — move focus in on open, trap
   // Tab within it, restore focus to the launcher on close. Mounted == open, so
   // the trap is engaged for the whole lifetime.
@@ -85,6 +127,93 @@ export function GallerySlideshow({
     [count],
   );
 
+  const clearChromeTimer = useCallback(() => {
+    if (!chromeTimerRef.current) return;
+    window.clearTimeout(chromeTimerRef.current);
+    chromeTimerRef.current = null;
+  }, []);
+
+  const startChromeTimer = useCallback(() => {
+    clearChromeTimer();
+    if (!isFullscreen) return;
+    chromeTimerRef.current = window.setTimeout(() => {
+      setChromeVisible(false);
+      chromeTimerRef.current = null;
+    }, FULLSCREEN_CHROME_IDLE_MS);
+  }, [clearChromeTimer, isFullscreen]);
+
+  const resetChromeTimer = useCallback(() => {
+    setChromeVisible(true);
+    startChromeTimer();
+  }, [startChromeTimer]);
+
+  const exitFullscreen = useCallback(() => {
+    if (!getFullscreenElement(document)) return;
+    const request = exitFullscreenDocument(document);
+    if (request && typeof request.catch === "function") request.catch(() => {});
+  }, []);
+
+  const closeSlideshow = useCallback(() => {
+    exitFullscreen();
+    onClose();
+  }, [exitFullscreen, onClose]);
+
+  const toggleFullscreen = useCallback(() => {
+    if (getFullscreenElement(document)) {
+      const request = exitFullscreenDocument(document);
+      if (request && typeof request.catch === "function") {
+        request.catch(() => setFullscreenUnavailable(true));
+      }
+      return;
+    }
+
+    const target = containerRef.current;
+    if (!isFullscreenSupportedForElement(target, document)) {
+      setFullscreenUnavailable(true);
+      return;
+    }
+
+    try {
+      const request = requestElementFullscreen(target, {
+        navigationUI: "hide",
+      });
+      if (request && typeof request.catch === "function") {
+        request.catch(() => setFullscreenUnavailable(true));
+      }
+    } catch {
+      setFullscreenUnavailable(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    const syncFullscreenState = () => {
+      const activeFullscreenElement = getFullscreenElement(document);
+      setIsFullscreen(Boolean(activeFullscreenElement));
+      if (activeFullscreenElement) setFullscreenUnavailable(false);
+    };
+    const onFullscreenError = () => setFullscreenUnavailable(true);
+    const settleFullscreenTimer = window.setTimeout(syncFullscreenState, 0);
+    const lateFullscreenTimer = window.setTimeout(syncFullscreenState, 250);
+
+    syncFullscreenState();
+    const removeFullscreenListeners = addFullscreenListeners(
+      document,
+      syncFullscreenState,
+      onFullscreenError,
+    );
+    return () => {
+      window.clearTimeout(settleFullscreenTimer);
+      window.clearTimeout(lateFullscreenTimer);
+      removeFullscreenListeners();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isFullscreen) return clearChromeTimer;
+    startChromeTimer();
+    return clearChromeTimer;
+  }, [clearChromeTimer, isFullscreen, startChromeTimer]);
+
   // Auto-advance. The setState lives in the interval callback (async), not the
   // effect body, so it does not trigger cascading-render lint.
   useEffect(() => {
@@ -99,8 +228,19 @@ export function GallerySlideshow({
   // Keyboard controls.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-      else if (e.key === "ArrowRight") next();
+      resetChromeTimer();
+      if (e.key === "Escape") {
+        if (getFullscreenElement(document)) {
+          e.preventDefault();
+          exitFullscreen();
+          return;
+        }
+        onClose();
+      } else if (e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        toggleFullscreen();
+        return;
+      } else if (e.key === "ArrowRight") next();
       else if (e.key === "ArrowLeft") prev();
       else if (e.key === " " || e.key === "Spacebar") {
         e.preventDefault();
@@ -111,7 +251,7 @@ export function GallerySlideshow({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [next, prev, onClose]);
+  }, [exitFullscreen, next, prev, onClose, resetChromeTimer, toggleFullscreen]);
 
   // Sync the <audio> element with play/mute state and start the music WITH
   // SOUND as early as the browser permits.
@@ -193,6 +333,11 @@ export function GallerySlideshow({
 
   if (count === 0) return null;
 
+  const fullscreenChromeHidden = isFullscreen && !chromeVisible;
+  const chromeClass = fullscreenChromeHidden
+    ? " gallery-slideshow__chrome--hidden"
+    : "";
+
   return (
     <div
       ref={containerRef}
@@ -201,16 +346,21 @@ export function GallerySlideshow({
       aria-label="Gallery slideshow"
       tabIndex={-1}
       data-glass-surface="media"
+      data-fullscreen={isFullscreen ? "true" : "false"}
+      data-fullscreen-unavailable={fullscreenUnavailable ? "true" : "false"}
+      data-chrome-hidden={fullscreenChromeHidden ? "true" : "false"}
       className="gallery-slideshow"
+      onFocusCapture={resetChromeTimer}
+      onMouseMove={resetChromeTimer}
+      onPointerDown={resetChromeTimer}
     >
       <div className="gallery-slideshow__stage">
         {renderSlide ? (
           renderSlide(index)
         ) : (
-          <img
+          <SlideshowImageFrame
             src={images ? images[index] : ""}
             alt={`Slide ${index + 1} of ${count}`}
-            className="gallery-slideshow__image"
           />
         )}
       </div>
@@ -224,14 +374,18 @@ export function GallerySlideshow({
         />
       ) : null}
 
-      <div className="gallery-slideshow__counter">
+      <div
+        className={`gallery-slideshow__counter gallery-slideshow__chrome${chromeClass}`}
+      >
         {index + 1} / {count}
       </div>
 
-      <div className="gallery-slideshow__close">
+      <div
+        className={`gallery-slideshow__close gallery-slideshow__chrome${chromeClass}`}
+      >
         <GlassIconButton
           label="Close slideshow"
-          onClick={onClose}
+          onClick={closeSlideshow}
           size="md"
           variant="glass"
         >
@@ -239,7 +393,9 @@ export function GallerySlideshow({
         </GlassIconButton>
       </div>
 
-      <div className="gallery-slideshow__controls">
+      <div
+        className={`gallery-slideshow__controls gallery-slideshow__chrome${chromeClass}`}
+      >
         <GlassIconButton
           label="Previous slide"
           onClick={prev}
@@ -265,6 +421,15 @@ export function GallerySlideshow({
           variant="glass"
         >
           <ChevronRight />
+        </GlassIconButton>
+        <GlassIconButton
+          label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+          onClick={toggleFullscreen}
+          size="md"
+          variant="glass"
+          active={isFullscreen}
+        >
+          {isFullscreen ? <Compress /> : <Expand />}
         </GlassIconButton>
         {musicUrl ? (
           <GlassIconButton

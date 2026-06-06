@@ -37,6 +37,26 @@ function apiUrlPointsAtLocalhost(value: string): boolean {
   }
 }
 
+function apiUrlPointsAtPrivateServiceName(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return !isLocalHostname(parsed.hostname) && !parsed.hostname.includes(".");
+  } catch {
+    return false;
+  }
+}
+
+function browserCannotResolveConfiguredApi(
+  value: string,
+  browserHostname: string,
+): boolean {
+  return (
+    !!browserHostname &&
+    !isLocalHostname(browserHostname) &&
+    (apiUrlPointsAtLocalhost(value) || apiUrlPointsAtPrivateServiceName(value))
+  );
+}
+
 export function resolveApiBaseUrl({
   isServer = typeof window === "undefined",
   env = process.env,
@@ -44,19 +64,13 @@ export function resolveApiBaseUrl({
 }: ResolveApiBaseUrlOptions = {}): string {
   if (isServer) {
     return (
-      env.INTERNAL_API_BASE_URL ||
-      env.NEXT_PUBLIC_API_URL ||
-      LOCAL_API_BASE_URL
+      env.INTERNAL_API_BASE_URL || env.NEXT_PUBLIC_API_URL || LOCAL_API_BASE_URL
     );
   }
 
   const hostname = locationHostname || currentBrowserHostname();
   if (env.NEXT_PUBLIC_API_URL) {
-    if (
-      hostname &&
-      !isLocalHostname(hostname) &&
-      apiUrlPointsAtLocalhost(env.NEXT_PUBLIC_API_URL)
-    ) {
+    if (browserCannotResolveConfiguredApi(env.NEXT_PUBLIC_API_URL, hostname)) {
       return PRODUCTION_API_BASE_URL;
     }
     return env.NEXT_PUBLIC_API_URL;
@@ -68,6 +82,36 @@ export function resolveApiBaseUrl({
   return LOCAL_API_BASE_URL;
 }
 
+export function resolveBrowserApiBaseUrl({
+  env = process.env,
+  locationHostname,
+}: Omit<ResolveApiBaseUrlOptions, "isServer"> = {}): string {
+  const hostname = locationHostname || currentBrowserHostname();
+  if (env.NEXT_PUBLIC_API_URL) {
+    if (browserCannotResolveConfiguredApi(env.NEXT_PUBLIC_API_URL, hostname)) {
+      return PRODUCTION_API_BASE_URL;
+    }
+    return env.NEXT_PUBLIC_API_URL;
+  }
+
+  if (
+    env.INTERNAL_API_BASE_URL &&
+    !apiUrlPointsAtLocalhost(env.INTERNAL_API_BASE_URL) &&
+    !apiUrlPointsAtPrivateServiceName(env.INTERNAL_API_BASE_URL)
+  ) {
+    return env.INTERNAL_API_BASE_URL;
+  }
+
+  if (hostname && !isLocalHostname(hostname)) {
+    return PRODUCTION_API_BASE_URL;
+  }
+  return LOCAL_API_BASE_URL;
+}
+
 export function getApiBaseUrl(): string {
   return resolveApiBaseUrl();
+}
+
+export function getBrowserApiBaseUrl(): string {
+  return resolveBrowserApiBaseUrl();
 }

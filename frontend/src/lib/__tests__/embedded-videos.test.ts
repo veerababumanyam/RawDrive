@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildEmbeddedVideo,
   embedUrlFor,
   parseVideoUrl,
   readEmbeddedVideos,
@@ -57,6 +58,24 @@ describe("parseVideoUrl", () => {
     });
   });
 
+  it("extracts Instagram post, Reel, and TV shortcodes", () => {
+    expect(parseVideoUrl("https://www.instagram.com/p/Cabc123xyz_/")).toEqual({
+      provider: "instagram",
+      videoId: "Cabc123xyz_",
+      instagramKind: "p",
+    });
+    expect(parseVideoUrl("https://instagram.com/reel/DLHx_WNoXoY/?igsh=abc123")).toEqual({
+      provider: "instagram",
+      videoId: "DLHx_WNoXoY",
+      instagramKind: "reel",
+    });
+    expect(parseVideoUrl("https://m.instagram.com/tv/CTVabc_1234/")).toEqual({
+      provider: "instagram",
+      videoId: "CTVabc_1234",
+      instagramKind: "tv",
+    });
+  });
+
   it("handles vimeo URLs with a private-link hash by discarding it", () => {
     // Vimeo's "Only people with the private link" URLs include a
     // /hash/ suffix. The iframe doesn't need the hash; Vimeo enforces
@@ -75,6 +94,14 @@ describe("parseVideoUrl", () => {
     expect(parseVideoUrl("")).toBeNull();
     expect(parseVideoUrl("not a url")).toBeNull();
     expect(parseVideoUrl("https://youtube.com/watch?v=tooshortID")).toBeNull();
+  });
+
+  it("rejects Instagram profiles, stories, and malformed post paths", () => {
+    expect(parseVideoUrl("https://www.instagram.com/rawdrive/")).toBeNull();
+    expect(parseVideoUrl("https://www.instagram.com/stories/rawdrive/123456789/")).toBeNull();
+    expect(parseVideoUrl("https://www.instagram.com/explore/tags/wedding/")).toBeNull();
+    expect(parseVideoUrl("https://www.instagram.com/reel/bad!/")).toBeNull();
+    expect(parseVideoUrl("https://www.instagram.com/reel/abc/")).toBeNull();
   });
 });
 
@@ -107,6 +134,16 @@ describe("watchUrlFor", () => {
       "https://vimeo.com/123456789",
     );
   });
+
+  it("returns the normalized Instagram permalink", () => {
+    expect(
+      watchUrlFor({
+        provider: "instagram",
+        video_id: "DLHx_WNoXoY",
+        instagram_kind: "reel",
+      }),
+    ).toBe("https://www.instagram.com/reel/DLHx_WNoXoY/");
+  });
 });
 
 describe("thumbnailUrlFor", () => {
@@ -118,6 +155,34 @@ describe("thumbnailUrlFor", () => {
 
   it("returns null for vimeo (no deterministic thumbnail URL)", () => {
     expect(thumbnailUrlFor({ provider: "vimeo", video_id: "123456789" })).toBeNull();
+  });
+
+  it("returns null for instagram (no deterministic thumbnail URL)", () => {
+    expect(thumbnailUrlFor({ provider: "instagram", video_id: "DLHx_WNoXoY" })).toBeNull();
+  });
+});
+
+describe("buildEmbeddedVideo", () => {
+  it("persists instagram_kind for Instagram links", () => {
+    const built = buildEmbeddedVideo({
+      provider: "instagram",
+      videoId: "DLHx_WNoXoY",
+      instagramKind: "reel",
+    });
+
+    expect(built.provider).toBe("instagram");
+    expect(built.video_id).toBe("DLHx_WNoXoY");
+    expect(built.instagram_kind).toBe("reel");
+    expect(built.instagram_display_mode).toBe("compact");
+  });
+
+  it("does not add instagram_kind to YouTube or Vimeo links", () => {
+    const built = buildEmbeddedVideo({
+      provider: "youtube",
+      videoId: "dQw4w9WgXcQ",
+    });
+
+    expect(built.instagram_kind).toBeUndefined();
   });
 });
 
@@ -136,6 +201,8 @@ describe("readEmbeddedVideos", () => {
         { id: "a", provider: "youtube", video_id: "dQw4w9WgXcQ", added_at: "2026-01-01" },
         { id: "b", provider: "unknown", video_id: "bad" }, // bad provider
         { provider: "youtube", video_id: "missing-id" }, // missing id
+        { id: "c", provider: "instagram", video_id: "DLHx_WNoXoY" }, // missing kind
+        { id: "d", provider: "instagram", video_id: "DLHx_WNoXoY", instagram_kind: "story" },
         null,
         "not an object",
       ],
@@ -157,5 +224,49 @@ describe("readEmbeddedVideos", () => {
       ],
     });
     expect(result[0]?.title).toBe("Highlights reel");
+  });
+
+  it("passes through valid Instagram entries", () => {
+    const result = readEmbeddedVideos({
+      embedded_videos: [
+        {
+          id: "ig",
+          provider: "instagram",
+          video_id: "DLHx_WNoXoY",
+          instagram_kind: "reel",
+          instagram_display_mode: "full",
+          title: "Instagram reel",
+          added_at: "2026-01-01",
+        },
+      ],
+    });
+
+    expect(result).toEqual([
+      {
+        id: "ig",
+        provider: "instagram",
+        video_id: "DLHx_WNoXoY",
+        instagram_kind: "reel",
+        instagram_display_mode: "full",
+        title: "Instagram reel",
+        added_at: "2026-01-01",
+      },
+    ]);
+  });
+
+  it("defaults legacy Instagram entries to compact display mode", () => {
+    const result = readEmbeddedVideos({
+      embedded_videos: [
+        {
+          id: "ig",
+          provider: "instagram",
+          video_id: "DLHx_WNoXoY",
+          instagram_kind: "reel",
+          added_at: "2026-01-01",
+        },
+      ],
+    });
+
+    expect(result[0]?.instagram_display_mode).toBe("compact");
   });
 });

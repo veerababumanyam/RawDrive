@@ -56,6 +56,7 @@ import {
   setUrlSearchParamBeforeFragment,
 } from "@/lib/media-encryption/share-url";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { LockedMediaFallback } from "@/components/gallery/media-key-recovery";
 import {
   ChevronLeft,
   ChevronRight,
@@ -262,9 +263,12 @@ function PublicAssetTileImage({
     );
   }
   return (
-    <div className="flex aspect-[4/3] w-full items-center justify-center bg-surface-sunken text-xs text-text-tertiary">
-      {publicMediaErrorMessage(media.error) || "Image unavailable"}
-    </div>
+    <LockedMediaFallback
+      asset={asset}
+      error={media.error}
+      message={publicMediaErrorMessage(media.error) || "Image unavailable"}
+      className="aspect-[4/3] w-full"
+    />
   );
 }
 
@@ -294,9 +298,12 @@ function PublicLightboxImage({
   }
   if (!media.src) {
     return (
-      <p className="text-sm text-text-media/40">
-        {publicMediaErrorMessage(media.error) || "Image unavailable"}
-      </p>
+      <LockedMediaFallback
+        asset={photo}
+        error={media.error}
+        message={publicMediaErrorMessage(media.error) || "Image unavailable"}
+        mode="viewer"
+      />
     );
   }
   return (
@@ -404,7 +411,14 @@ function PublicFilmstripThumb({
           onError={handleImageError}
         />
       ) : (
-        <div className="h-full w-full bg-surface-overlay/5" />
+        <LockedMediaFallback
+          asset={asset}
+          error={media.error}
+          message={publicMediaErrorMessage(media.error) || "Image unavailable"}
+          mode="compact"
+          allowRecovery={false}
+          className="bg-surface-overlay/5"
+        />
       )}
     </button>
   );
@@ -488,11 +502,13 @@ function useGalleryFavorites(
   slug: string,
   gallerySessionToken?: string | null,
   workspaceScope?: string | null,
+  disabled = false,
 ) {
   const storageKey = `rawdrive-favorites-${slug}`;
   const [favorites, setFavorites] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
+    if (disabled) return;
     if (typeof window === "undefined") return;
     let cancelled = false;
 
@@ -547,10 +563,11 @@ function useGalleryFavorites(
     return () => {
       cancelled = true;
     };
-  }, [gallerySessionToken, slug, storageKey, workspaceScope]);
+  }, [disabled, gallerySessionToken, slug, storageKey, workspaceScope]);
 
   const toggle = useCallback(
     (assetId: string) => {
+      if (disabled) return;
       const sessionId = getOrCreateGuestSessionId();
       // Read the current state at the call site rather than smuggling
       // it out of a setFavorites callback via a mutable closure var.
@@ -606,7 +623,14 @@ function useGalleryFavorites(
         /* sync failed; local state retained */
       });
     },
-    [favorites, gallerySessionToken, slug, storageKey, workspaceScope],
+    [
+      disabled,
+      favorites,
+      gallerySessionToken,
+      slug,
+      storageKey,
+      workspaceScope,
+    ],
   );
 
   return { favorites, toggle };
@@ -699,6 +723,7 @@ interface Props {
   downloadEnabled?: boolean;
   downloadQuality?: string | null;
   favoritesDisabledReason?: string;
+  publicActionsDisabledReason?: string;
   // Optional design config from the Gallery Design Studio. Drives the
   // grid layout (masonry vs uniform grid vs justified vs carousel), the
   // column count, the gap between thumbnails, and whether to show the
@@ -992,6 +1017,7 @@ export function PublicGalleryGrid({
   downloadEnabled = true,
   downloadQuality = "webp",
   favoritesDisabledReason,
+  publicActionsDisabledReason,
   design = null,
   watermark = null,
   watermarkLogoUrl = null,
@@ -1090,6 +1116,7 @@ export function PublicGalleryGrid({
     slug,
     gallerySessionToken,
     workspaceScope,
+    Boolean(favoritesDisabledReason),
   );
   const [favoriteNotice, setFavoriteNotice] = useState("");
   const [shareCopied, setShareCopied] = useState(false);
@@ -1198,6 +1225,10 @@ export function PublicGalleryGrid({
   );
 
   const handleSubmitSelections = async () => {
+    if (publicActionsDisabledReason) {
+      setSubmitError(publicActionsDisabledReason);
+      return;
+    }
     const clientName = submitName.trim();
     const clientEmail = submitEmail.trim();
     if (selectedIds.size === 0 || !clientName || !clientEmail) return;
@@ -1694,8 +1725,11 @@ export function PublicGalleryGrid({
                           key={format}
                           type="button"
                           role="menuitem"
-                          onClick={(e) => {
-                            e.stopPropagation();
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (publicActionsDisabledReason) {
+                            setFavoriteNotice(publicActionsDisabledReason);
+                          } else {
                             void downloadPublicAsset(
                               slug,
                               asset,
@@ -1703,8 +1737,9 @@ export function PublicGalleryGrid({
                               assetAccessToken,
                               workspaceScope,
                             );
-                            setTileMenuOpenId(null);
-                          }}
+                          }
+                          setTileMenuOpenId(null);
+                        }}
                           className="flex w-full items-center gap-3 px-4 py-3 text-sm text-text-primary transition-colors hover:bg-surface-container-low"
                         >
                           <Download className="h-4 w-4" />
@@ -1800,7 +1835,9 @@ export function PublicGalleryGrid({
               <button
                 type="button"
                 onClick={() => setShowSubmit(true)}
-                className="px-4 py-1.5 text-sm font-medium rounded-lg bg-accent-primary text-text-inverse hover:opacity-90 transition-opacity"
+                disabled={Boolean(publicActionsDisabledReason)}
+                title={publicActionsDisabledReason || "Submit selections"}
+                className="px-4 py-1.5 text-sm font-medium rounded-lg bg-accent-primary text-text-inverse hover:opacity-90 transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Submit Selections
               </button>
@@ -1883,7 +1920,10 @@ export function PublicGalleryGrid({
                 type="button"
                 onClick={handleSubmitSelections}
                 disabled={
-                  !submitName.trim() || !submitEmail.trim() || submitting
+                  !submitName.trim() ||
+                  !submitEmail.trim() ||
+                  submitting ||
+                  Boolean(publicActionsDisabledReason)
                 }
                 className="flex-1 px-4 py-2 text-sm font-medium rounded-lg bg-accent-primary text-text-inverse hover:opacity-90 transition-opacity disabled:opacity-50"
               >
@@ -1977,6 +2017,10 @@ export function PublicGalleryGrid({
                       size="sm"
                       label={publicDownloadLabel(format)}
                       onClick={() => {
+                        if (publicActionsDisabledReason) {
+                          setFavoriteNotice(publicActionsDisabledReason);
+                          return;
+                        }
                         void downloadPublicAsset(
                           slug,
                           photo,

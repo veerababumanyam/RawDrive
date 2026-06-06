@@ -24,6 +24,7 @@ import type { Asset } from "@/lib/api/assets";
 import { getStoredAccessToken } from "@/lib/auth";
 import { LIGHTBOX_VARIANTS } from "@/lib/media-encryption/asset-media";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
+import { LockedMediaFallback } from "./media-key-recovery";
 
 interface Props {
   left: Asset;
@@ -66,6 +67,7 @@ export function CompareMode({ left, right, onExit }: Props) {
   const showCompareImages = Boolean(leftMedia.src && rightMedia.src);
   const unavailable =
     leftMedia.error || rightMedia.error || "Preview unavailable";
+  const unavailableAsset = leftMedia.error ? left : right;
 
   return (
     <div
@@ -93,7 +95,12 @@ export function CompareMode({ left, right, onExit }: Props) {
           />
         </>
       ) : (
-        <div className="text-sm text-text-media/60">{unavailable}</div>
+        <LockedMediaFallback
+          asset={unavailableAsset}
+          error={leftMedia.error || rightMedia.error}
+          message={unavailable}
+          mode="viewer"
+        />
       )}
 
       {/* Draggable divider — absolute line with a circular grab handle */}

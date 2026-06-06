@@ -6,8 +6,12 @@ import {
   getMediaKeysForKeyId,
   getOrCreateGalleryMediaKey,
   getStoredExportedMediaKey,
+  importGalleryMediaKeyFromInput,
   MEDIA_KEY_MISMATCH_MESSAGE,
+  MEDIA_KEY_IMPORT_INVALID_MESSAGE,
+  MEDIA_KEY_IMPORT_WRONG_GALLERY_MESSAGE,
   MEDIA_KEY_UNAVAILABLE_MESSAGE,
+  parseGalleryMediaKeyInput,
   versionedGalleryKeyId,
 } from "../media-key-store";
 
@@ -136,5 +140,68 @@ describe("media key store", () => {
     await expect(
       decryptBlobWithAvailableMediaKeys(encrypted.ciphertext, encrypted.manifest),
     ).rejects.toThrow(MEDIA_KEY_MISMATCH_MESSAGE);
+  });
+
+  it("parses gallery keys from secure links, fragments, query text, and raw input", () => {
+    expect(
+      parseGalleryMediaKeyInput("https://app.rawdrive.test/g/wedding#rd_key=abc123"),
+    ).toBe("abc123");
+    expect(parseGalleryMediaKeyInput("#rd_key=frag-key")).toBe("frag-key");
+    expect(parseGalleryMediaKeyInput("rd_key=query-key")).toBe("query-key");
+    expect(parseGalleryMediaKeyInput("raw-key")).toBe("raw-key");
+    expect(parseGalleryMediaKeyInput("   ")).toBeNull();
+  });
+
+  it("imports a pasted gallery key, persists it, and emits a key-store change event", async () => {
+    const galleryId = "gallery-import-test";
+    const baseKeyId = galleryKeyId(galleryId);
+    const key = await generateRawMediaKey();
+    const exported = await exportRawMediaKey(key);
+    const expectedVersionedKeyId = await versionedGalleryKeyId(galleryId, exported);
+    const changeEvents: unknown[] = [];
+    window.addEventListener("rawdrive:media-key-store-changed", (event) => {
+      changeEvents.push(event instanceof CustomEvent ? event.detail : null);
+    });
+
+    const imported = await importGalleryMediaKeyFromInput({
+      galleryId,
+      input: `https://app.rawdrive.test/g/wedding#rd_key=${exported}`,
+      expectedKeyIds: [expectedVersionedKeyId],
+    });
+
+    expect(imported.keyId).toBe(expectedVersionedKeyId);
+    expect(getStoredExportedMediaKey(baseKeyId)).toBe(exported);
+    expect(window.localStorage.getItem(`${KEY_PREFIX}${expectedVersionedKeyId}`)).toBe(exported);
+    expect(window.localStorage.getItem(`${ACTIVE_PREFIX}${baseKeyId}`)).toBe(expectedVersionedKeyId);
+    expect(changeEvents).toContainEqual({
+      galleryId,
+      keyId: expectedVersionedKeyId,
+      reason: "imported",
+    });
+  });
+
+  it("rejects invalid or wrong versioned gallery keys during recovery import", async () => {
+    const galleryId = "gallery-import-mismatch-test";
+    const correctKey = await generateRawMediaKey();
+    const wrongKey = await generateRawMediaKey();
+    const correctExport = await exportRawMediaKey(correctKey);
+    const wrongExport = await exportRawMediaKey(wrongKey);
+    const expectedVersionedKeyId = await versionedGalleryKeyId(galleryId, correctExport);
+
+    await expect(
+      importGalleryMediaKeyFromInput({
+        galleryId,
+        input: "not-a-valid-raw-key",
+        expectedKeyIds: [expectedVersionedKeyId],
+      }),
+    ).rejects.toThrow(MEDIA_KEY_IMPORT_INVALID_MESSAGE);
+
+    await expect(
+      importGalleryMediaKeyFromInput({
+        galleryId,
+        input: wrongExport,
+        expectedKeyIds: [expectedVersionedKeyId],
+      }),
+    ).rejects.toThrow(MEDIA_KEY_IMPORT_WRONG_GALLERY_MESSAGE);
   });
 });

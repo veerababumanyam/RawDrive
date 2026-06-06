@@ -92,6 +92,11 @@ import {
 import { GalleryPageShell } from "@/components/gallery/gallery-page-shell";
 import { ShareQrPopover } from "@/components/gallery/share-qr-popover";
 import { galleryShareExpiryDays } from "@/lib/gallery-share-expiry";
+import {
+  LockedMediaFallback,
+  MediaKeyRecoveryBanner,
+  useLockedMediaRecoverySummary,
+} from "@/components/gallery/media-key-recovery";
 
 // PhotoLightbox (~1090 lines) only mounts when a tile is opened, so load it in
 // an async chunk instead of the gallery-detail route's first-load JS (PERF-24,
@@ -105,7 +110,7 @@ const PhotoLightbox = dynamic(
 
 // PERF-SPLIT: the embedded-videos manager is a self-contained panel that
 // only renders once the gallery has loaded and sits below the grid. It
-// pulls in the YouTube/Vimeo URL parser + iframe grid, so load it in an
+// pulls in the YouTube/Vimeo/Instagram URL parser + embed grid, so load it in an
 // async chunk instead of the gallery-detail route's first-load JS. ssr:false
 // is safe — this is a "use client" editor panel that never renders on the
 // server.
@@ -250,6 +255,7 @@ function GalleryAssetTileImage({
   token,
   isProcessing,
   aspectRatio,
+  galleryId,
 }: {
   asset: Asset | null;
   token: string | null;
@@ -258,6 +264,7 @@ function GalleryAssetTileImage({
   // aspect ratio instead of the uniform 4/3 grid cell. Driven by Asset
   // width/height so the layout reflects the real photos.
   aspectRatio?: number | null;
+  galleryId?: string | null;
 }) {
   const media = useDecryptedAssetUrl(asset, GRID_VARIANTS, token);
   const aspectClass = aspectRatio ? "" : "aspect-[4/3]";
@@ -300,15 +307,14 @@ function GalleryAssetTileImage({
     );
   }
   return (
-    <div
-      className={cn(
-        "flex w-full items-center justify-center bg-surface-sunken text-xs text-text-tertiary",
-        aspectClass,
-      )}
+    <LockedMediaFallback
+      asset={asset}
+      galleryId={galleryId}
+      error={media.error}
+      message={media.error || "Preview unavailable"}
+      className={cn("w-full", aspectClass)}
       style={aspectStyle}
-    >
-      {media.error || "Preview unavailable"}
-    </div>
+    />
   );
 }
 
@@ -481,6 +487,14 @@ export default function GalleryDetailPage({
   const { id } = use(params);
   const [gallery, setGallery] = useState<Gallery | null>(null);
   const [assets, setAssets] = useState<GalleryAssetRecord[]>([]);
+  const galleryMediaAssets = useMemo(
+    () => assets.map((entry) => entry.asset),
+    [assets],
+  );
+  const lockedMediaRecoverySummary = useLockedMediaRecoverySummary(
+    galleryMediaAssets,
+    id,
+  );
   const assetRowsSignatureRef = useRef("");
   const [selections, setSelections] = useState<ProofingSelection[]>([]);
   // M41/105: aggregated guest favorites for this gallery. Null while
@@ -3372,6 +3386,11 @@ export default function GalleryDetailPage({
               </div>
             )}
 
+            <MediaKeyRecoveryBanner
+              summary={lockedMediaRecoverySummary}
+              className="mb-4"
+            />
+
             {assets.length === 0 && upload.items.length === 0 ? (
               <p className="text-center text-xs text-text-tertiary py-4">
                 Upload your first photos to get started with this gallery.
@@ -3506,6 +3525,7 @@ export default function GalleryDetailPage({
                           asset={entry.asset}
                           token={token}
                           isProcessing={isProcessing}
+                          galleryId={id}
                           aspectRatio={
                             (photoViewMode === "masonry" ||
                               photoViewMode === "justified") &&

@@ -18,6 +18,7 @@ import type { EncryptedAssetLike } from "@/lib/media-encryption/asset-media";
 import { GRID_VARIANTS } from "@/lib/media-encryption/asset-media";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { publicMediaErrorMessage } from "@/lib/media-encryption/public-media-error";
+import { LockedMediaFallback } from "@/components/gallery/media-key-recovery";
 
 export function DecryptedThumb({
   asset,
@@ -57,10 +58,11 @@ export function DecryptedThumb({
   }
 
   return (
-    <div
-      className={`${className ?? ""} flex items-center justify-center bg-surface-sunken text-xs text-text-tertiary`.trim()}
-    >
-      {publicMediaErrorMessage(media.error) || "Image unavailable"}
-    </div>
+    <LockedMediaFallback
+      asset={asset ?? null}
+      error={media.error}
+      message={publicMediaErrorMessage(media.error) || "Image unavailable"}
+      className={className}
+    />
   );
 }

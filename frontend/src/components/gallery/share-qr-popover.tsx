@@ -8,9 +8,10 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { QrCode, Download, X } from "lucide-react";
 import QRCodeLib from "qrcode";
 import { cn } from "@/lib/utils";
+import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { Download, QrCode, XMark } from "@/components/icons";
 
 // Inline "Show QR code" toggle that lives next to a copy-link button in
 // the photographer's share UIs. Click renders the QR into a canvas inside
@@ -271,14 +272,15 @@ export function ShareQrPopover({
     >
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-semibold text-text-primary">Scan to open</p>
-        <button
+        <GlassIconButton
           type="button"
           onClick={() => setOpen(false)}
-          aria-label="Close QR code"
-          className="text-text-tertiary transition-colors hover:text-text-primary"
+          label="Close QR code"
+          size="sm"
+          variant="ghost"
         >
-          <X className="h-3.5 w-3.5" />
-        </button>
+          <XMark className="h-4 w-4" aria-hidden="true" />
+        </GlassIconButton>
       </div>
       <div className="mt-2 flex justify-center rounded-xl bg-white p-2">
         <canvas
@@ -299,9 +301,9 @@ export function ShareQrPopover({
         type="button"
         onClick={handleDownload}
         data-testid="share-qr-download"
-        className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-xs font-semibold text-text-inverse transition-colors hover:bg-accent-hover"
+        className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full bg-accent px-3 py-2 text-xs font-semibold text-text-inverse transition-colors hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <Download className="h-3.5 w-3.5" /> Download PNG
+        <Download className="h-4 w-4" aria-hidden="true" /> Download PNG
       </button>
       {error && (
         <p role="alert" className="mt-2 text-[10px] text-error">
@@ -313,7 +315,7 @@ export function ShareQrPopover({
 
   return (
     <span className={cn("inline-flex", className)}>
-      <button
+      <GlassIconButton
         ref={buttonRef}
         type="button"
         onClick={handleToggle}
@@ -323,20 +325,16 @@ export function ShareQrPopover({
         aria-haspopup="dialog"
         aria-label={label}
         data-testid="share-qr-toggle"
-        title={
-          currentUrl || getShareUrl
-            ? label
-            : "Publish to generate a share QR"
-        }
+        label={label}
+        size="md"
+        variant="glass"
+        active={open}
         className={cn(
-          "inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
-          unavailable || loadingUrl
-            ? "bg-surface-container-high text-text-tertiary cursor-not-allowed"
-            : "bg-surface-container-high text-text-primary hover:bg-surface-container-highest",
+          unavailable || loadingUrl ? "cursor-not-allowed opacity-50" : null,
         )}
       >
-        <QrCode className="h-3.5 w-3.5" /> {loadingUrl ? "QR..." : "QR"}
-      </button>
+        <QrCode className="h-5 w-5" aria-hidden="true" />
+      </GlassIconButton>
       {panel && portalTarget ? createPortal(panel, portalTarget) : null}
     </span>
   );

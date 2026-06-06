@@ -15,7 +15,10 @@ async function getAuthHeaders(request) {
     return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
   }
   const loginRes = await request.post(`${API_BASE}/auth/login`, {
-    data: { email: 'admin@rawdrive.test', password: 'TestPass123!' },
+    data: {
+      email: process.env.E2E_TEST_EMAIL || 'admin@rawdrive.test',
+      password: process.env.E2E_TEST_PASSWORD || 'UatPho@2026',
+    },
   });
   if (loginRes.ok()) {
     const body = await loginRes.json();

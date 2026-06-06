@@ -492,6 +492,30 @@ BEGIN
     VALUES (uid_dealer, state_ka, 'Test Dealer Agency', 'AABPD9012E', 'pending');
   END IF;
 
+  UPDATE users
+  SET must_change_password = false
+  WHERE email IN (
+    'superadmin@rawdrive.test',
+    'super@rawdrive.test',
+    'admin@rawdrive.test',
+    'mod@rawdrive.test',
+    'ops@rawdrive.test',
+    'pho.pro@rawdrive.test',
+    'pho.starter@rawdrive.test',
+    'pho.biz@rawdrive.test',
+    'pho.trial@rawdrive.test',
+    'pho.hold@rawdrive.test',
+    'team.lead@rawdrive.test',
+    'team.editor@rawdrive.test',
+    'team.viewer@rawdrive.test',
+    'photographer@rawdrive.test',
+    'uat.new.pho.002@rawdrive.test',
+    'dealer.tg@rawdrive.test',
+    'dealer.mh@rawdrive.test',
+    'dealer@rawdrive.test',
+    'client.wed@rawdrive.test'
+  );
+
   RAISE NOTICE '✓ Super Admins  : superadmin@rawdrive.test, super@rawdrive.test';
   RAISE NOTICE '✓ Admins        : admin@rawdrive.test, mod@rawdrive.test, ops@rawdrive.test';
   RAISE NOTICE '✓ Photographers : pho.pro, pho.starter, pho.biz, pho.trial, pho.hold, photographer, uat.new.pho.002 (@rawdrive.test)';

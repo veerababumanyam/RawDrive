@@ -14,6 +14,8 @@ import { BackButton } from "@/components/ui/back-button";
  */
 interface PageHeaderProps {
   title: string;
+  /** Compact metadata rendered beside the title, e.g. a count badge. */
+  titleAccessory?: ReactNode;
   eyebrow?: string;
   description?: string;
   /** When set, renders the shared BackButton above the title. */
@@ -28,6 +30,7 @@ interface PageHeaderProps {
 
 export function PageHeader({
   title,
+  titleAccessory,
   eyebrow,
   description,
   backHref,
@@ -46,12 +49,19 @@ export function PageHeader({
               {eyebrow}
             </p>
           ) : null}
-          <h1
-            id={titleId}
-            className="text-2xl font-semibold text-text-primary"
-          >
-            {title}
-          </h1>
+          <div className="page-header-title-row">
+            <h1
+              id={titleId}
+              className="text-2xl font-semibold text-text-primary"
+            >
+              {title}
+            </h1>
+            {titleAccessory ? (
+              <div className="page-header-title-accessory">
+                {titleAccessory}
+              </div>
+            ) : null}
+          </div>
           {description ? (
             <p className="max-w-2xl text-sm leading-relaxed text-text-secondary">
               {description}

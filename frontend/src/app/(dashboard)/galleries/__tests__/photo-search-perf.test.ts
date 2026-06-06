@@ -15,6 +15,10 @@ const photoSearchPath = path.join(
   repoRoot,
   "src/app/(dashboard)/galleries/[id]/photo-search/page.tsx",
 );
+const faceReviewPanelPath = path.join(
+  repoRoot,
+  "src/components/ai/FaceIdentityReviewPanel.tsx",
+);
 
 const read = (p: string): string => fs.readFileSync(p, "utf8");
 
@@ -25,5 +29,14 @@ describe("gallery photo-search — batch hydration (PERF-23)", () => {
     expect(source).toContain("includeAssets: true");
     // Matched asset_ids are resolved from the embedded-asset map by id.
     expect(source).toMatch(/\.get\(aid\)/);
+    expect(source).not.toContain("getAsset(");
+    expect(source).not.toContain("Promise.allSettled");
+  });
+
+  it("windows photographer face-review thumbnails for large people clusters", () => {
+    const source = read(faceReviewPanelPath);
+    expect(source).toContain("FACE_REVIEW_PAGE_SIZE");
+    expect(source).toContain("visibleFaces.map");
+    expect(source).not.toContain("faces.map((face)");
   });
 });

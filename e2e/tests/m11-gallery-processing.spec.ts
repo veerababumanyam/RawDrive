@@ -27,9 +27,12 @@ async function getAuthHeaders(request: any): Promise<Record<string, string>> {
     return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
   }
 
-  // Try to login with test user credentials
+  // Try to login with UAT seed credentials.
   const loginRes = await request.post(`${API_BASE}/auth/login`, {
-    data: { email: 'admin@rawdrive.test', password: 'TestPass123!' },
+    data: {
+      email: process.env.E2E_TEST_EMAIL || 'admin@rawdrive.test',
+      password: process.env.E2E_TEST_PASSWORD || 'UatPho@2026',
+    },
   });
   if (loginRes.ok()) {
     const body = await loginRes.json();

@@ -52,6 +52,12 @@ services:
       - "4222:4222"
       - "8222:8222"
     command: -js -m 8222
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
   mailpit:
     image: axllent/mailpit:v1.30.1
@@ -113,6 +119,7 @@ services:
     environment:
       DATABASE_URL: postgresql://rawdrive:rawdrive_dev@postgres:5432/rawdrive?sslmode=disable
       VALKEY_URL: redis://valkey:6379
+      EVENT_BROKER: nats
       NATS_URL: nats://nats:4222
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"
@@ -132,6 +139,8 @@ services:
       postgres:
         condition: service_healthy
       valkey:
+        condition: service_healthy
+      nats:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]

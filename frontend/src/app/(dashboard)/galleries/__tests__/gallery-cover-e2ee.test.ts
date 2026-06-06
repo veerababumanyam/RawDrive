@@ -39,9 +39,8 @@ describe("gallery cover editor E2EE preview contracts", () => {
       "src/app/(dashboard)/dashboard/page.tsx",
     ].map((sourcePath) => join(process.cwd(), sourcePath))) {
       const source = readFileSync(path, "utf8");
-      expect(source).toContain("MEDIA_KEY_UNAVAILABLE_MESSAGE");
-      expect(source).toContain("Encrypted cover key unavailable");
-      expect(source).toContain("<Lock");
+      expect(source).toContain("LockedMediaFallback");
+      expect(source).toContain("media.error");
     }
   });
 });

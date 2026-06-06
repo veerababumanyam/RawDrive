@@ -184,6 +184,16 @@ describe("DashboardLayout header", () => {
     });
   });
 
+  it("uses the shared dashboard content offset below the fixed header", async () => {
+    renderDashboardLayout();
+
+    const content = await screen.findByText("Dashboard content");
+    const main = content.closest("main");
+
+    expect(main?.className).toContain("dashboard-main");
+    expect(main?.className).not.toContain("pt-24");
+  });
+
   it("notification bell has aria-label for screen readers", async () => {
     renderDashboardLayout();
     const bell = await screen.findByRole("link", { name: "Notifications" });

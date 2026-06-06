@@ -1,13 +1,15 @@
 // Shared types + URL parser + API helpers for the per-gallery embedded
-// video feature (YouTube / Vimeo links rendered as iframes inside the
+// video feature (YouTube / Vimeo / Instagram links rendered inside the
 // gallery, visible to both the photographer in the dashboard and to
 // guests on the public share link).
 //
 // Storage shape (under gallery.settings.embedded_videos[]):
 //   {
 //     id: string         // client-generated uuid; primary key for delete
-//     provider: "youtube" | "vimeo"
-//     video_id: string   // YouTube 11-char ID or Vimeo numeric ID
+//     provider: "youtube" | "vimeo" | "instagram"
+//     video_id: string   // YouTube 11-char ID, Vimeo numeric ID, or Instagram shortcode
+//     instagram_kind?: "p" | "reel" | "tv"
+//     instagram_display_mode?: "compact" | "full"
 //     title?: string     // optional user-supplied title (oEmbed lookup is future work)
 //     added_at: string   // ISO timestamp
 //   }
@@ -19,12 +21,16 @@
 
 import { authFetch } from "@/lib/api/authFetch";
 
-export type EmbeddedVideoProvider = "youtube" | "vimeo";
+export type EmbeddedVideoProvider = "youtube" | "vimeo" | "instagram";
+export type InstagramEmbedKind = "p" | "reel" | "tv";
+export type InstagramEmbedDisplayMode = "compact" | "full";
 
 export interface EmbeddedVideo {
   id: string;
   provider: EmbeddedVideoProvider;
   video_id: string;
+  instagram_kind?: InstagramEmbedKind;
+  instagram_display_mode?: InstagramEmbedDisplayMode;
   title?: string;
   added_at: string;
 }
@@ -39,9 +45,12 @@ export interface EmbeddedVideo {
 //   Vimeo:          https://vimeo.com/123456789
 //   Vimeo with hash: https://vimeo.com/123456789/abcdef (private link hash discarded;
 //                    embed authorization is server-controlled by the Vimeo owner)
+//   Instagram post: https://www.instagram.com/p/Cabc123xyz_/
+//   Instagram Reel: https://www.instagram.com/reel/Cabc123xyz_/?igsh=...
+//   Instagram TV:   https://www.instagram.com/tv/Cabc123xyz_/
 //
 // Returns null when the URL is unrecognized — callers surface that
-// as a "Please paste a YouTube or Vimeo link" hint.
+// as a "Please paste a YouTube, Vimeo, or Instagram link" hint.
 
 // YouTube IDs are an opaque 11-char base64url-ish string; Vimeo IDs
 // are 1-12 digits (real ones are 8-10 today, but the regex bounds at
@@ -52,6 +61,7 @@ export interface EmbeddedVideo {
 export interface ParsedVideoUrl {
   provider: EmbeddedVideoProvider;
   videoId: string;
+  instagramKind?: InstagramEmbedKind;
 }
 
 export function parseVideoUrl(input: string): ParsedVideoUrl | null {
@@ -102,6 +112,19 @@ export function parseVideoUrl(input: string): ParsedVideoUrl | null {
     if (m) return { provider: "vimeo", videoId: m[1] };
   }
 
+  // Instagram cases — only public post/Reel/TV permalinks are embeddable.
+  // Profiles, Stories, Explore pages, direct/media IDs, and feeds are not.
+  if (host === "instagram.com" || host === "m.instagram.com") {
+    const m = path.match(/^(p|reel|tv)\/([A-Za-z0-9_-]{5,64})(?:\/|$)/);
+    if (m) {
+      return {
+        provider: "instagram",
+        videoId: m[2],
+        instagramKind: m[1] as InstagramEmbedKind,
+      };
+    }
+  }
+
   return null;
 }
 
@@ -120,6 +143,9 @@ export function embedUrlFor(video: Pick<EmbeddedVideo, "provider" | "video_id">)
   if (video.provider === "youtube") {
     return `https://www.youtube.com/embed/${encodeURIComponent(video.video_id)}?rel=0`;
   }
+  if (video.provider === "instagram") {
+    return `${watchUrlFor(video)}embed/`;
+  }
   // Vimeo — title/byline/portrait hidden to keep the embed
   // visually clean inside the gallery grid; the user can click
   // through to vimeo.com for the full chrome if they want it.
@@ -133,9 +159,15 @@ export function embedUrlFor(video: Pick<EmbeddedVideo, "provider" | "video_id">)
 // extension interference) is hard to detect programmatically, so the
 // pragmatic UX is to ALWAYS surface a click-through so the user can
 // reach the video regardless of whether the embed actually played.
-export function watchUrlFor(video: Pick<EmbeddedVideo, "provider" | "video_id">): string {
+export function watchUrlFor(
+  video: Pick<EmbeddedVideo, "provider" | "video_id" | "instagram_kind">,
+): string {
   if (video.provider === "youtube") {
     return `https://www.youtube.com/watch?v=${encodeURIComponent(video.video_id)}`;
+  }
+  if (video.provider === "instagram") {
+    const kind = video.instagram_kind ?? "p";
+    return `https://www.instagram.com/${kind}/${encodeURIComponent(video.video_id)}/`;
   }
   return `https://vimeo.com/${encodeURIComponent(video.video_id)}`;
 }
@@ -170,6 +202,8 @@ export function buildEmbeddedVideo(parsed: ParsedVideoUrl, opts?: { title?: stri
     id: newId(),
     provider: parsed.provider,
     video_id: parsed.videoId,
+    instagram_kind: parsed.provider === "instagram" ? parsed.instagramKind : undefined,
+    instagram_display_mode: parsed.provider === "instagram" ? "compact" : undefined,
     title: opts?.title?.trim() || undefined,
     added_at: new Date().toISOString(),
   };
@@ -192,8 +226,13 @@ export function readEmbeddedVideos(
     const provider = obj.provider;
     const videoId = obj.video_id;
     const id = obj.id;
+    const instagramKind = obj.instagram_kind;
+    const instagramDisplayMode = obj.instagram_display_mode;
     if (
-      (provider === "youtube" || provider === "vimeo") &&
+      (provider === "youtube" ||
+        provider === "vimeo" ||
+        (provider === "instagram" &&
+          (instagramKind === "p" || instagramKind === "reel" || instagramKind === "tv"))) &&
       typeof videoId === "string" &&
       typeof id === "string"
     ) {
@@ -201,6 +240,14 @@ export function readEmbeddedVideos(
         id,
         provider,
         video_id: videoId,
+        instagram_kind:
+          provider === "instagram" ? (instagramKind as InstagramEmbedKind) : undefined,
+        instagram_display_mode:
+          provider === "instagram" && instagramDisplayMode === "full"
+            ? "full"
+            : provider === "instagram"
+              ? "compact"
+              : undefined,
         title: typeof obj.title === "string" ? obj.title : undefined,
         added_at: typeof obj.added_at === "string" ? obj.added_at : new Date().toISOString(),
       });

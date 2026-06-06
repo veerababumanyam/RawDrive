@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
  * PageContainer — the shared dashboard page shell.
  *
  * Centralises the one composition pattern the dashboard already uses
- * informally everywhere (`mx-auto w-full max-w-* px-4 py-8 space-y-6`) so
+ * informally everywhere (`mx-auto w-full max-w-* px-4 pt-4 pb-8 space-y-6`) so
  * gallery pages stop each inventing their own width / padding / rhythm.
  * The dashboard <main> supplies the outer gutter; this adds the centred
  * max-width column + consistent vertical rhythm on top of it.
@@ -41,7 +41,7 @@ export function PageContainer({
   return (
     <div
       className={cn(
-        "mx-auto w-full px-4 py-8 space-y-6",
+        "mx-auto w-full px-4 pb-8 pt-4 space-y-6",
         widthClasses[width],
         className,
       )}

@@ -119,4 +119,19 @@ describe("GalleriesPage search query (BUG-4)", () => {
     await waitFor(() => expect(screen.getByText("Beach Wedding")).toBeTruthy());
     expect(screen.getByText("Mountain Trek")).toBeTruthy();
   });
+
+  it("renders the shared page header with a compact gallery count", async () => {
+    nav.search = new URLSearchParams();
+    render(<GalleriesPage />);
+
+    await waitFor(() => expect(screen.getByText("Beach Wedding")).toBeTruthy());
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Galleries" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("2 galleries")).toBeInTheDocument();
+    expect(
+      screen.getByRole("searchbox", { name: "Filter galleries" }),
+    ).toHaveAttribute("placeholder", "Filter galleries...");
+  });
 });

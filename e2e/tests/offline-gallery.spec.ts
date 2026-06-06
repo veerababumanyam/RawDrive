@@ -56,9 +56,9 @@ const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:8229";
 // Docker playwright service; falls back to localhost:8080 on the host.
 const API_BASE = process.env.PLAYWRIGHT_API_URL || "http://host.docker.internal:8080";
 
-// Seeded superadmin (backend/seeds). Mirrors m13-gallery-viewer-proofing.spec.js.
-const SEED_EMAIL = process.env.E2E_TEST_EMAIL || "superadmin@rawdrive.test";
-const SEED_PASSWORD = process.env.E2E_TEST_PASSWORD || "SuperAdmin123!";
+// UAT superadmin seeded by backend/internal/database/seeds/uat_accounts.sql.
+const SEED_EMAIL = process.env.E2E_TEST_EMAIL || "super@rawdrive.test";
+const SEED_PASSWORD = process.env.E2E_TEST_PASSWORD || "UatPho@2026";
 
 // Canonical wedding fixtures. The filename WITH spaces+parens is intentional —
 // tests must handle it (project rule). tests/photos/ is gitignored, so it is

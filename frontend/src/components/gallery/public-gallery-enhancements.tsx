@@ -38,6 +38,8 @@ interface Props {
    * misleading match. See FaceIDGate.
    */
   encrypted?: boolean;
+  initialBranding?: GalleryBranding | null;
+  previewMode?: boolean;
 }
 
 // GAL-FR-102 (RegistrationPrompt) removed 2026-05-18: the "Keep these
@@ -49,6 +51,8 @@ export function PublicGalleryEnhancements({
   slug,
   faceIdEnabled = false,
   encrypted = false,
+  initialBranding = null,
+  previewMode = false,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -61,26 +65,31 @@ export function PublicGalleryEnhancements({
   // gallery_session cookie is absent.
   const shareParam = searchParams?.get("share") ?? "";
   const wsParam = searchParams?.get("ws") ?? "";
-  const [branding, setBranding] = useState<GalleryBranding | null>(null);
+  const [branding, setBranding] = useState<GalleryBranding | null>(
+    initialBranding,
+  );
   const [faceIdDismissed, setFaceIdDismissed] = useState(false);
   const [facePinnedAssetIds, setFacePinnedAssetIds] = useState<string[] | null>(
     null,
   );
-  const faceIdOpen = faceIdParam === "1" && faceIdEnabled && !faceIdDismissed;
+  const faceIdOpen =
+    !previewMode && faceIdParam === "1" && faceIdEnabled && !faceIdDismissed;
 
   // GAL-FR-118: View-as-Client mode — applies a body class the CSS can hook
   // into (`.view-as-client` selector) so the same component tree reads as
   // a client view without a separate page.
   useEffect(() => {
+    if (previewMode) return;
     if (modeParam === "client") {
       document.body.classList.add("view-as-client");
       return () => document.body.classList.remove("view-as-client");
     }
-  }, [modeParam]);
+  }, [modeParam, previewMode]);
 
   // GAL-FR-115: fetch branding and cascade accent color into CSS custom
   // properties so the public shell picks it up without a refresh.
   useEffect(() => {
+    if (previewMode || initialBranding) return;
     let cancelled = false;
     getPublicGalleryBranding(slug)
       .then((b) => {
@@ -102,7 +111,7 @@ export function PublicGalleryEnhancements({
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, initialBranding, previewMode]);
 
   const onFaceMatched = (assetIds: string[]) => {
     // Dispatch a window event that PublicGalleryGrid listens to. The grid
@@ -118,6 +127,7 @@ export function PublicGalleryEnhancements({
   };
 
   const onFaceFallback = () => {
+    if (previewMode) return;
     // GAL-FR-109: full browsing fallback — close the gate, clear the grid
     // filter via the clear event, strip ?faceid=1 from the URL so reloads
     // don't reopen the modal.

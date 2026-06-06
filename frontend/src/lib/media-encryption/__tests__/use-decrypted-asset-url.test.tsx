@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, renderHook, screen, waitFor } from "@testing-library/react";
+import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { useDecryptedAssetUrl } from "../use-decrypted-asset-url";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import {
@@ -8,6 +8,7 @@ import {
   generateRawMediaKey,
   type MediaEncryptionManifest,
 } from "../media-crypto";
+import { importGalleryMediaKeyFromInput, versionedGalleryKeyId } from "../media-key-store";
 import type { EncryptedAssetLike } from "../asset-media";
 
 // Non-encrypted asset used by the non-encrypted-branch tests below: it must paint
@@ -49,6 +50,7 @@ function Probe({
 
 describe("useDecryptedAssetUrl", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     window.history.replaceState(null, "", "/g/wedding");
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:decrypted-webp");
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
@@ -132,8 +134,10 @@ describe("useDecryptedAssetUrl", () => {
     const ciphertextBytes = await encrypted.ciphertext.arrayBuffer();
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(
-        new Response(ciphertextBytes.slice(0), { status: 200 }),
+      .mockImplementation(() =>
+        Promise.resolve(
+          new Response(ciphertextBytes.slice(0), { status: 200 }),
+        ),
       );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -188,8 +192,10 @@ describe("useDecryptedAssetUrl", () => {
     const ciphertextBytes = await encrypted.ciphertext.arrayBuffer();
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(
-        new Response(ciphertextBytes.slice(0), { status: 200 }),
+      .mockImplementation(() =>
+        Promise.resolve(
+          new Response(ciphertextBytes.slice(0), { status: 200 }),
+        ),
       );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -294,8 +300,10 @@ describe("useDecryptedAssetUrl", () => {
     const ciphertextBytes = await encrypted.ciphertext.arrayBuffer();
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(
-        new Response(ciphertextBytes.slice(0), { status: 200 }),
+      .mockImplementation(() =>
+        Promise.resolve(
+          new Response(ciphertextBytes.slice(0), { status: 200 }),
+        ),
       );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -328,6 +336,158 @@ describe("useDecryptedAssetUrl", () => {
       "http://localhost:8080/storage/gallery/asset-1/thumb_md.webp.enc?at=gallery-session",
       { credentials: "include" },
     );
+  });
+
+  it("retries locked encrypted media after a gallery key is imported without remounting", async () => {
+    const galleryId = "hook-retry-import-test";
+    const key = await generateRawMediaKey();
+    const exported = await exportRawMediaKey(key);
+    const keyId = await versionedGalleryKeyId(galleryId, exported);
+
+    const encrypted = await encryptBlob(
+      new Blob(["webp-bytes"], { type: "image/webp" }),
+      {
+        key,
+        keyId,
+        objectType: "thumb_md_webp",
+        contentType: "image/webp",
+      },
+    );
+    const ciphertextBytes = await encrypted.ciphertext.arrayBuffer();
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(
+          new Response(ciphertextBytes.slice(0), { status: 200 }),
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <Probe
+        asset={{
+          id: "asset-1",
+          filename: "photo.webp",
+          is_encrypted: true,
+          thumbnail_urls: {
+            thumb_md_webp: "gallery/asset-1/thumb_md.webp.enc",
+          },
+          media_encryption: {
+            scheme: "rawdrive-e2ee-v1",
+            variants: {
+              thumb_md_webp: encrypted.manifest as MediaEncryptionManifest,
+            },
+          },
+        }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("error")).toHaveTextContent(
+        "Photo key unavailable",
+      );
+    });
+
+    await act(async () => {
+      await importGalleryMediaKeyFromInput({
+        galleryId,
+        input: exported,
+        expectedKeyIds: [keyId],
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("src")).toHaveTextContent(
+        "blob:decrypted-webp",
+      );
+    });
+    expect(screen.getByTestId("loading")).toHaveTextContent("false");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry locked media when an unrelated gallery key is imported", async () => {
+    const galleryId = "hook-scoped-import-test";
+    const unrelatedGalleryId = "hook-unrelated-import-test";
+    const key = await generateRawMediaKey();
+    const unrelatedKey = await generateRawMediaKey();
+    const exported = await exportRawMediaKey(key);
+    const unrelatedExported = await exportRawMediaKey(unrelatedKey);
+    const keyId = await versionedGalleryKeyId(galleryId, exported);
+    const unrelatedKeyId = await versionedGalleryKeyId(
+      unrelatedGalleryId,
+      unrelatedExported,
+    );
+
+    const encrypted = await encryptBlob(
+      new Blob(["webp-bytes"], { type: "image/webp" }),
+      {
+        key,
+        keyId,
+        objectType: "thumb_md_webp",
+        contentType: "image/webp",
+      },
+    );
+    const ciphertextBytes = await encrypted.ciphertext.arrayBuffer();
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(
+          new Response(ciphertextBytes.slice(0), { status: 200 }),
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <Probe
+        asset={{
+          id: "asset-1",
+          filename: "photo.webp",
+          is_encrypted: true,
+          thumbnail_urls: {
+            thumb_md_webp: "gallery/asset-1/thumb_md.webp.enc",
+          },
+          media_encryption: {
+            scheme: "rawdrive-e2ee-v1",
+            variants: {
+              thumb_md_webp: encrypted.manifest as MediaEncryptionManifest,
+            },
+          },
+        }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("error")).toHaveTextContent(
+        "Photo key unavailable",
+      );
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await importGalleryMediaKeyFromInput({
+        galleryId: unrelatedGalleryId,
+        input: unrelatedExported,
+        expectedKeyIds: [unrelatedKeyId],
+      });
+    });
+
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await importGalleryMediaKeyFromInput({
+        galleryId,
+        input: exported,
+        expectedKeyIds: [keyId],
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("src")).toHaveTextContent(
+        "blob:decrypted-webp",
+      );
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
 

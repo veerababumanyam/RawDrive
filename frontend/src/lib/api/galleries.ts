@@ -1,6 +1,7 @@
 import { authFetch } from "@/lib/api/authFetch";
 import { getApiBaseUrl } from "@/lib/api/base-url";
 import type { Asset } from "@/lib/api/assets";
+import type { GalleryBanner, GalleryProduct } from "@/lib/api/commerce";
 
 const apiUrl = (path: string) => `${getApiBaseUrl()}${path}`;
 
@@ -919,6 +920,7 @@ export async function listGalleryAssets(
   const body = await res.json();
   if (Array.isArray(body)) return body;
   if (body && Array.isArray(body.assets)) return body.assets;
+  if (body && Array.isArray(body.data)) return body.data;
   return [];
 }
 
@@ -1090,6 +1092,41 @@ export interface PublicAsset {
   is_encrypted?: boolean;
   media_encryption?: Record<string, unknown>;
   sort_order: number;
+}
+
+export interface GalleryClientPreview {
+  gallery: Gallery;
+  assets: PublicAsset[];
+  albums: PublicGalleryAlbum[];
+  total_asset_count: number;
+  branding?: GalleryBranding | null;
+  banners: GalleryBanner[];
+  products: GalleryProduct[];
+  public_url: string;
+  is_published: boolean;
+}
+
+export async function getGalleryClientPreview(
+  _token: string,
+  galleryId: string,
+  options?: { albumId?: string },
+): Promise<GalleryClientPreview> {
+  const albumId = options?.albumId;
+  const qs = albumId ? `?album=${encodeURIComponent(albumId)}` : "";
+  const res = await authFetch(
+    `/api/v1/galleries/${galleryId}/client-preview${qs}`,
+  );
+  if (!res.ok) {
+    throw new Error(`Failed to load client preview: ${res.status}`);
+  }
+  const body = (await res.json()) as GalleryClientPreview;
+  return {
+    ...body,
+    assets: Array.isArray(body.assets) ? body.assets : [],
+    albums: Array.isArray(body.albums) ? body.albums : [],
+    banners: Array.isArray(body.banners) ? body.banners : [],
+    products: Array.isArray(body.products) ? body.products : [],
+  };
 }
 
 // ── Gallery Settings ──────────────────────────────────────────────

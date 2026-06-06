@@ -4,12 +4,11 @@
 -- This script creates test users for all RBAC roles (Owner, Admin, Editor, Viewer)
 -- with associated workspaces and role assignments.
 --
--- Auth method: OTP-based (passwordless). To log in:
---   1. POST /auth/login  with {"email": "<email>"}
---   2. Copy the OTP code from backend logs (stdout)
---   3. POST /auth/verify-otp  with {"email": "<email>", "code": "<otp>"}
---
--- Since this is an OTP system, there is no password hashing.
+-- This legacy workspace/RBAC fixture does not create loginable passwords.
+-- Email OTP is registration-only; do not use this seed for login tests.
+-- For browser/API UAT accounts, run:
+--   psql $DATABASE_URL -f backend/internal/database/seeds/uat_accounts.sql
+-- Those accounts use the documented UAT password in that seed file.
 -- ============================================================================
 
 -- Step 1: Ensure we have a state to reference (Karnataka = IN-KA)

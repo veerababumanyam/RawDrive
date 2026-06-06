@@ -170,3 +170,56 @@ func TestF029_ResolveAssetsByID_BulkErrorDoesNotEmptyGallery(t *testing.T) {
 		t.Fatalf("with bulk error and no fallback svc, expected empty map, got %d", len(got))
 	}
 }
+
+func TestPublicGalleryCoverProfilesResolveDesktopAndPhoneAssetIDs(t *testing.T) {
+	legacy := uuid.New()
+	desktop := uuid.New()
+	phone := uuid.New()
+
+	got := resolveDesignCoverProfileAssetIDs(map[string]interface{}{
+		"design_config": map[string]interface{}{
+			"cover": map[string]interface{}{
+				"assetId": legacy.String(),
+				"deviceProfiles": map[string]interface{}{
+					"desktop": map[string]interface{}{"assetId": desktop.String()},
+					"phone":   map[string]interface{}{"assetId": phone.String()},
+				},
+			},
+		},
+	}, nil)
+
+	if got["desktop"] != desktop {
+		t.Fatalf("desktop profile asset mismatch: got %s want %s", got["desktop"], desktop)
+	}
+	if got["phone"] != phone {
+		t.Fatalf("phone profile asset mismatch: got %s want %s", got["phone"], phone)
+	}
+}
+
+func TestPublicGalleryCoverProfilesFallbackToDesktopAndLegacy(t *testing.T) {
+	legacy := uuid.New()
+	flatDesign := uuid.New()
+
+	got := resolveDesignCoverProfileAssetIDs(map[string]interface{}{
+		"design_config": map[string]interface{}{
+			"cover": map[string]interface{}{
+				"assetId": flatDesign.String(),
+				"deviceProfiles": map[string]interface{}{
+					"phone": map[string]interface{}{},
+				},
+			},
+		},
+	}, &legacy)
+
+	if got["desktop"] != flatDesign {
+		t.Fatalf("desktop should prefer flat design cover: got %s want %s", got["desktop"], flatDesign)
+	}
+	if got["phone"] != flatDesign {
+		t.Fatalf("phone should fall back to desktop design cover: got %s want %s", got["phone"], flatDesign)
+	}
+
+	got = resolveDesignCoverProfileAssetIDs(nil, &legacy)
+	if got["desktop"] != legacy || got["phone"] != legacy {
+		t.Fatalf("missing design config should mirror legacy fallback to both profiles")
+	}
+}

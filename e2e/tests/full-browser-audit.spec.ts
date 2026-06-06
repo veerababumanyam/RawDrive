@@ -3,15 +3,15 @@ import { test, expect } from '@playwright/test'
 const FRONTEND_URL = 'http://host.docker.internal:3000'
 const API_URL = 'http://host.docker.internal:8080'
 
-// Seeded test user from migration 036
+// UAT users seeded by backend/internal/database/seeds/uat_accounts.sql.
 const SUPER_ADMIN = {
-  email: 'superadmin@rawdrive.test',
-  password: 'SuperAdmin123!',
+  email: process.env.E2E_SUPER_ADMIN_EMAIL || 'super@rawdrive.test',
+  password: process.env.E2E_SUPER_ADMIN_PASSWORD || 'UatPho@2026',
 }
 
 const DEALER = {
-  email: 'dealer@rawdrive.test',
-  password: 'Dealer123!',
+  email: process.env.E2E_DEALER_EMAIL || 'dealer.tg@rawdrive.test',
+  password: process.env.E2E_DEALER_PASSWORD || 'UatPho@2026',
 }
 
 async function loginAndGetToken(email: string, password: string): Promise<{ access_token: string; refresh_token: string }> {

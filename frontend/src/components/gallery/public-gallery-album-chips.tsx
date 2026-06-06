@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { PublicGalleryAlbum } from "@/lib/api/galleries";
@@ -18,6 +20,7 @@ interface PublicGalleryAlbumChipsProps {
   albums: PublicGalleryAlbum[];
   totalAssetCount: number;
   activeAlbumId?: string;
+  baseHref?: string;
 }
 
 export function PublicGalleryAlbumChips({
@@ -25,6 +28,7 @@ export function PublicGalleryAlbumChips({
   albums,
   totalAssetCount,
   activeAlbumId,
+  baseHref,
 }: PublicGalleryAlbumChipsProps) {
   // No albums to show → no chip strip. The "All Photos" chip alone
   // would be a no-op affordance, so we hide the strip entirely.
@@ -34,7 +38,8 @@ export function PublicGalleryAlbumChips({
   // the photographer's intentional ordering survives the round trip.
   const sorted = [...albums].sort((a, b) => a.position - b.position);
 
-  const allPhotosHref = `/g/${slug}`;
+  const rootHref = baseHref || `/g/${slug}`;
+  const allPhotosHref = rootHref;
   const isAllActive = !activeAlbumId;
 
   return (
@@ -59,7 +64,7 @@ export function PublicGalleryAlbumChips({
         </Link>
 
         {sorted.map((album) => {
-          const href = `/g/${slug}?album=${encodeURIComponent(album.id)}`;
+          const href = `${rootHref}?album=${encodeURIComponent(album.id)}`;
           const isActive = album.id === activeAlbumId;
           return (
             <Link

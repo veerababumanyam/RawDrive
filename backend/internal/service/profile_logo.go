@@ -8,8 +8,9 @@ import (
 	"io"
 	"math"
 
-	"github.com/rawdrive/backend/internal/imageops"
 	xdraw "golang.org/x/image/draw"
+
+	"github.com/rawdrive/backend/internal/imageops"
 )
 
 // LogoCropPosition is the persisted crop contract for the PUBLIC business logo.

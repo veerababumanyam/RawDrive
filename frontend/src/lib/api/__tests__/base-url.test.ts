@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { resolveApiBaseUrl } from "../base-url";
+import { resolveApiBaseUrl, resolveBrowserApiBaseUrl } from "../base-url";
 
 function sourceFiles(dir: string): string[] {
   const entries = readdirSync(dir);
@@ -45,6 +45,28 @@ describe("resolveApiBaseUrl", () => {
     ).toBe("http://localhost:8080");
   });
 
+  it("keeps server-rendered storage URLs on a browser-resolvable local API URL", () => {
+    expect(
+      resolveBrowserApiBaseUrl({
+        env: {
+          INTERNAL_API_BASE_URL: "http://backend:8080",
+        },
+        locationHostname: "localhost",
+      }),
+    ).toBe("http://localhost:8080");
+  });
+
+  it("uses public production API URLs for server-rendered storage URLs", () => {
+    expect(
+      resolveBrowserApiBaseUrl({
+        env: {
+          INTERNAL_API_BASE_URL: "https://api.rawdrive.in",
+        },
+        locationHostname: "studio-cobolt-bf998927.rawdrive.in",
+      }),
+    ).toBe("https://api.rawdrive.in");
+  });
+
   it("does not leak a localhost public API URL into production browser hosts", () => {
     expect(
       resolveApiBaseUrl({
@@ -57,12 +79,35 @@ describe("resolveApiBaseUrl", () => {
     ).toBe("https://api.rawdrive.in");
   });
 
+  it("does not leak a private service-name API URL into production browser hosts", () => {
+    expect(
+      resolveApiBaseUrl({
+        isServer: false,
+        env: {
+          NEXT_PUBLIC_API_URL: "http://backend:8080",
+        },
+        locationHostname: "studio-cobolt-bf998927.rawdrive.in",
+      }),
+    ).toBe("https://api.rawdrive.in");
+  });
+
   it("keeps explicit non-local public API URLs on production browser hosts", () => {
     expect(
       resolveApiBaseUrl({
         isServer: false,
         env: {
           NEXT_PUBLIC_API_URL: "https://api.rawdrive.in",
+        },
+        locationHostname: "studio-cobolt-bf998927.rawdrive.in",
+      }),
+    ).toBe("https://api.rawdrive.in");
+  });
+
+  it("uses production API for server-rendered storage URLs when env only has a private service name", () => {
+    expect(
+      resolveBrowserApiBaseUrl({
+        env: {
+          NEXT_PUBLIC_API_URL: "http://backend:8080",
         },
         locationHostname: "studio-cobolt-bf998927.rawdrive.in",
       }),
@@ -99,7 +144,9 @@ describe("resolveApiBaseUrl", () => {
     for (const clientPath of publicGalleryClientPaths) {
       const source = readFileSync(join(process.cwd(), clientPath), "utf8");
       expect(source).toContain("getApiBaseUrl");
-      expect(source).not.toContain('const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"');
+      expect(source).not.toContain(
+        'const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"',
+      );
     }
   });
 

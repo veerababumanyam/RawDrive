@@ -30,19 +30,20 @@ import {
   appendStoredGalleryKeyFragment,
   setUrlSearchParamBeforeFragment,
 } from "@/lib/media-encryption/share-url";
-import { MEDIA_KEY_UNAVAILABLE_MESSAGE } from "@/lib/media-encryption/media-key-store";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { readGalleryCoverAssetId } from "@/lib/gallery-design-config";
 import { galleryShareExpiryDays } from "@/lib/gallery-share-expiry";
+import { LockedMediaFallback } from "@/components/gallery/media-key-recovery";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { GlassButton } from "@/components/ui/glass-button";
 import { InlineAlert } from "@/components/ui/inline-alert";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   ClipboardList,
   Envelope,
   Grid,
   ListBullet,
-  Lock,
   Phone,
   Photo,
   Plus,
@@ -113,15 +114,15 @@ function GalleryCoverPreview({
     );
   }
 
-  if (media.error === MEDIA_KEY_UNAVAILABLE_MESSAGE) {
+  if (media.error) {
     return (
-      <div
-        className="flex h-full w-full items-center justify-center bg-surface-container-low text-text-tertiary"
-        title="Encrypted cover key unavailable"
-      >
-        <Lock className="h-8 w-8" aria-hidden="true" />
-        <span className="sr-only">Encrypted cover key unavailable</span>
-      </div>
+      <LockedMediaFallback
+        asset={fallbackAsset}
+        galleryId={gallery.id}
+        error={media.error}
+        message={media.error}
+        className="bg-surface-container-low"
+      />
     );
   }
 
@@ -994,7 +995,7 @@ export default function GalleriesPage() {
 
   if (loading) {
     return (
-      <div className="py-8">
+      <PageContainer width="full" className="px-0">
         <div className="animate-pulse space-y-4">
           <div className="h-8 w-48 bg-surface-sunken rounded" />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1003,12 +1004,12 @@ export default function GalleriesPage() {
             ))}
           </div>
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="space-y-6 py-8">
+    <PageContainer width="full" className="px-0">
       {error && (
         <InlineAlert variant="error" className="mb-4">
           {error}
@@ -1024,67 +1025,53 @@ export default function GalleriesPage() {
           onDismiss={dismissShareFallback}
         />
       )}
-      {/* Header — stacks vertically on mobile, side-by-side on sm+.
-          Before 2026-05-18 this was a single horizontal row that
-          crammed title + search + "+ New Gallery" + grid/list toggles
-          into a ~390px mobile viewport, which made the New Gallery
-          button wrap to two lines ("+ New" / "Gallery") and the
-          grid/list toggles spill off the right edge. New layout:
-            - Mobile: title row, then a full-width action row where
-              search flexes to fill remaining space after the button
-              and toggles claim their natural width.
-            - sm+: title block left, actions block right (legacy
-              layout, unchanged).
-          whitespace-nowrap on the "+ New Gallery" button is what
-          actually fixes the wrapping symptom — without it any width
-          shortfall splits the label. */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold text-text-primary">
-            Galleries
-          </h1>
-          <p className="text-sm text-text-secondary mt-1">
+      <PageHeader
+        title="Galleries"
+        titleAccessory={
+          <span className="page-header-count-badge">
             {filteredGalleries.length === galleries.length
               ? `${galleries.length} ${galleries.length === 1 ? "gallery" : "galleries"}`
               : `${filteredGalleries.length} of ${galleries.length} galleries`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search galleries…"
-            className="input-base min-w-0 flex-1 text-sm sm:w-48 sm:flex-none lg:w-64"
-            aria-label="Search galleries"
-          />
-          <GlassButton
-            onClick={openCreateForm}
-            variant="primary"
-            className="shrink-0 whitespace-nowrap"
-            aria-label="Create new gallery"
-            icon={<Plus className="h-4 w-4" aria-hidden="true" />}
-          >
-            <span className="sm:inline">New Gallery</span>
-          </GlassButton>
-          <GlassIconButton
-            onClick={() => setViewMode("grid")}
-            variant="accent"
-            active={viewMode === "grid"}
-            label="Grid view"
-          >
-            <Grid />
-          </GlassIconButton>
-          <GlassIconButton
-            onClick={() => setViewMode("list")}
-            variant="accent"
-            active={viewMode === "list"}
-            label="List view"
-          >
-            <ListBullet />
-          </GlassIconButton>
-        </div>
-      </div>
+          </span>
+        }
+        actions={
+          <div className="galleries-header-actions">
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Filter galleries..."
+              className="input-base galleries-header-actions__search text-sm"
+              aria-label="Filter galleries"
+            />
+            <GlassButton
+              onClick={openCreateForm}
+              variant="primary"
+              className="shrink-0 whitespace-nowrap"
+              aria-label="Create new gallery"
+              icon={<Plus className="h-4 w-4" aria-hidden="true" />}
+            >
+              <span className="sm:inline">New Gallery</span>
+            </GlassButton>
+            <GlassIconButton
+              onClick={() => setViewMode("grid")}
+              variant="accent"
+              active={viewMode === "grid"}
+              label="Grid view"
+            >
+              <Grid />
+            </GlassIconButton>
+            <GlassIconButton
+              onClick={() => setViewMode("list")}
+              variant="accent"
+              active={viewMode === "list"}
+              label="List view"
+            >
+              <ListBullet />
+            </GlassIconButton>
+          </div>
+        }
+      />
 
       {/* Active filter chips */}
       {(filterType || filterStatus || searchQuery.trim()) && (
@@ -1486,6 +1473,6 @@ export default function GalleriesPage() {
           )}
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

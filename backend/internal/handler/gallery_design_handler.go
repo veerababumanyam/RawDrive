@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 
@@ -104,6 +105,10 @@ func (h *GalleryDesignHandler) UpdateDesign(w http.ResponseWriter, r *http.Reque
 	}
 
 	if err := h.designSvc.UpdateDesignConfigRaw(r.Context(), id, raw); err != nil {
+		if errors.Is(err, service.ErrDesignCoverAssetNotInGallery) || errors.Is(err, service.ErrDesignCoverValidationUnavailable) {
+			http.Error(w, `{"error":"cover assets must belong to this gallery"}`, http.StatusBadRequest)
+			return
+		}
 		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
 		return
 	}
@@ -114,7 +119,7 @@ func (h *GalleryDesignHandler) UpdateDesign(w http.ResponseWriter, r *http.Reque
 
 // UpdateEmbeddedVideos handles PUT /api/v1/galleries/{id}/embedded-videos.
 //
-// 2026-05-18: New endpoint for the YouTube/Vimeo embed feature. Stores
+// 2026-05-18: New endpoint for the YouTube/Vimeo/Instagram embed feature. Stores
 // an array of {id, provider, video_id, title?, added_at} objects on
 // gallery.settings.embedded_videos. Reuses the raw-map-passthrough
 // pattern from UpdateDesign — the frontend owns the schema, the
@@ -123,7 +128,7 @@ func (h *GalleryDesignHandler) UpdateDesign(w http.ResponseWriter, r *http.Reque
 //
 // Body shape:
 //
-//	{ "videos": [{ "id": "uuid", "provider": "youtube"|"vimeo",
+//	{ "videos": [{ "id": "uuid", "provider": "youtube"|"vimeo"|"instagram",
 //	               "video_id": "...", "title": "...", "added_at": "..." }] }
 //
 // Anything else inside each item is preserved verbatim.

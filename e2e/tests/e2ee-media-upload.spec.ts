@@ -287,6 +287,53 @@ test.describe("E2EE media upload", () => {
     expect(stored.activeKeyId).toBe(createSessionPayload?.media_encryption?.key_id);
     expect(stored.activeKey).toBeTruthy();
     expect(stored.legacyKey).toBeNull();
+
+    const exportedGalleryKey = stored.activeKey;
+    expect(exportedGalleryKey).toBeTruthy();
+    await page.evaluate(
+      ({ galleryId, activeKeyId }) => {
+        const baseKeyId = `gallery:${galleryId}`;
+        localStorage.removeItem(`rawdrive:media-key-active:${baseKeyId}`);
+        if (activeKeyId) {
+          localStorage.removeItem(`rawdrive:media-key:${activeKeyId}`);
+        }
+        localStorage.removeItem(`rawdrive:media-key:${baseKeyId}`);
+      },
+      { galleryId: GALLERY_ID, activeKeyId: stored.activeKeyId },
+    );
+
+    await page.reload();
+    await expect(page.getByText("2 encrypted photos need the gallery key")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("Encrypted photo locked").first()).toBeVisible();
+
+    await page.evaluate(() => {
+      (window as any).__rawdriveKeyRecoveryTelemetry = [];
+      window.addEventListener("rawdrive:media-key-recovery-telemetry", (event) => {
+        (window as any).__rawdriveKeyRecoveryTelemetry.push((event as CustomEvent).detail);
+      });
+    });
+
+    await page.getByRole("button", { name: "Restore key" }).first().click();
+    const keyField = page.getByLabel("Secure gallery link or key");
+    await keyField.fill(crypto.randomBytes(32).toString("base64url"));
+    await page.getByRole("button", { name: "Restore previews" }).click();
+    await expect(page.getByRole("alert")).toContainText("does not match");
+
+    await keyField.fill(`https://app.rawdrive.test/g/e2ee-gallery#rd_key=${exportedGalleryKey}`);
+    await page.getByRole("button", { name: "Restore previews" }).click();
+    await expect(page.getByText("Encrypted photo locked").first()).toBeHidden({ timeout: 30_000 });
+    await expect(page.locator(`img[alt="${photoName}"]`).first()).toBeVisible({ timeout: 30_000 });
+    await expect.poll(async () => page.locator(`img[alt="${photoName}"]`).first().evaluate((img) => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+    expect(await page.locator(`img[alt="${photoName}"]`).first().getAttribute("src")).toContain("blob:");
+
+    const telemetry = await page.evaluate(() => (window as any).__rawdriveKeyRecoveryTelemetry);
+    expect(JSON.stringify(telemetry)).not.toContain(exportedGalleryKey);
+    expect(telemetry.map((event) => event.name)).toEqual(expect.arrayContaining([
+      "key_recovery_opened",
+      "key_recovery_import_attempt",
+      "key_recovery_import_mismatch",
+      "key_recovery_import_success",
+    ]));
   });
 });
 

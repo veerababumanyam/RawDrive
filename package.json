@@ -16,9 +16,10 @@
     "test:frontend": "cd frontend && pnpm test",
     "test:backend": "cd backend && go test ./... -count=1 -timeout 120s",
     "lint": "cd frontend && pnpm lint",
-    "lint:backend": "cd backend && golangci-lint run ./...",
+    "lint:backend": "cd backend && if command -v golangci-lint >/dev/null 2>&1; then golangci-lint run --config ../.golangci.yml ./...; else go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2 run --config ../.golangci.yml ./...; fi",
     "ship": "node scripts/rawdrive-ship.mjs",
     "deploy:prod": "bash deploy/scripts/deploy-from-main.sh",
+    "smoke:cover-design": "node scripts/smoke-cover-design-readonly.mjs",
     "uat": "NODE_PATH=./node_modules node tools/cobolt-uat.js run --milestone M39 --mode build --base-url http://localhost:3000 --json",
     "version:check": "node -e \"console.log(require('./package.json').version)\"",
     "prepare": "node scripts/install-git-hooks.mjs"

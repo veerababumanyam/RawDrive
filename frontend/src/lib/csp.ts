@@ -42,7 +42,8 @@ export interface CspOptions {
  *
  * Other directives keep their existing, separately-justified sources:
  *   - checkout.razorpay.com (script + frame): Razorpay Checkout SDK + modal.
- *   - youtube / youtube-nocookie / vimeo (frame): embedded-videos panel.
+ *   - youtube / youtube-nocookie / vimeo / instagram (frame): embedded-videos panel.
+ *   - www.instagram.com (script): Instagram's official embed.js processor.
  *   - script-src 'wasm-unsafe-eval': required by the approved @jsquash/webp
  *     upload fallback so Safari/iOS can generate source-side WebP derivatives;
  *     production still forbids broad JavaScript 'unsafe-eval'.
@@ -72,6 +73,11 @@ export function buildCsp({ isDev, nonce, apiOrigin }: CspOptions): string {
     scriptSrcTokens.push("'unsafe-eval'");
   }
   scriptSrcTokens.push("https://checkout.razorpay.com");
+  // Instagram embeds render from controlled blockquote markup plus the official
+  // embed processor. The nonce path still excludes 'unsafe-inline'; this host
+  // source primarily covers the documented no-nonce fallback and older CSP
+  // behavior, while strict-dynamic trusts the app bundle's script insertion.
+  scriptSrcTokens.push("https://www.instagram.com");
 
   const apiSource = normalizeHttpOrigin(apiOrigin);
   const apiExtra = apiSource ? ` ${apiSource}` : "";
@@ -96,11 +102,12 @@ export function buildCsp({ isDev, nonce, apiOrigin }: CspOptions): string {
     "media-src 'self' blob: https:" + apiExtra + devMediaExtras,
     // Razorpay Checkout opens its payment UI in iframes pointing to
     // api.razorpay.com / checkout.razorpay.com. www.youtube.com /
-    // youtube-nocookie.com / player.vimeo.com — the per-gallery embedded
-    // videos panel (frontend/src/components/gallery/embedded-videos-panel.tsx)
-    // renders YouTube and Vimeo iframes. Without these origins the browser
+    // youtube-nocookie.com / player.vimeo.com / www.instagram.com — the
+    // per-gallery embedded videos panel
+    // (frontend/src/components/gallery/embedded-videos-panel.tsx) renders
+    // YouTube, Vimeo, and Instagram embeds. Without these origins the browser
     // blocks the iframes silently.
-    "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com",
+    "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.instagram.com",
     "object-src 'none'",
     "frame-ancestors 'none'",
     "base-uri 'self'",

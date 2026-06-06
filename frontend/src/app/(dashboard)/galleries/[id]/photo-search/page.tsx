@@ -35,11 +35,13 @@ import { Camera, RefreshCw, Search } from "lucide-react";
 import { GalleryPageShell } from "@/components/gallery/gallery-page-shell";
 import { GalleryPageHeader } from "@/components/gallery/gallery-page-header";
 import { searchFaceInGallery, type FaceSearchResponse } from "@/lib/api/ai";
-import { getAsset, type Asset } from "@/lib/api/assets";
+import type { Asset } from "@/lib/api/assets";
 import { listGalleryAssets } from "@/lib/api/galleries";
 import { getStoredAccessToken } from "@/lib/auth";
 import { GRID_VARIANTS } from "@/lib/media-encryption/asset-media";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
+import { LockedMediaFallback } from "@/components/gallery/media-key-recovery";
+import { FaceIdentityReviewPanel } from "@/components/ai/FaceIdentityReviewPanel";
 
 type Stage =
   | "idle" // before camera grant
@@ -103,9 +105,12 @@ function MatchedAssetPreview({
   }
 
   return (
-    <div className="flex h-full items-center justify-center px-2 text-center text-xs text-text-tertiary">
-      {media.error || "No preview"}
-    </div>
+    <LockedMediaFallback
+      asset={asset}
+      error={media.error}
+      message={media.error || "No preview"}
+      className="px-2"
+    />
   );
 }
 
@@ -381,34 +386,23 @@ export default function PhotoSearchPage({
       }
 
       // PERF-23: resolve the matched assets from ONE bulk gallery-assets fetch
-      // (?include_assets=true) instead of one getAsset() per match. The cluster
+      // (?include_assets=true) instead of a per-match asset lookup. The cluster
       // is gallery-scoped, so every matched asset_id belongs to this gallery and
       // resolves from its embedded-asset list. Order follows asset_ids (match
       // order); missing/soft-deleted assets are simply skipped, so one absent
-      // tile never blanks the grid. The per-asset fetch stays as the fallback
-      // for an older server that doesn't embed assets.
+      // tile never blanks the grid.
       const galleryAssets = await listGalleryAssets(token, id, {
         includeAssets: true,
       });
-      let ok: Asset[];
-      if (galleryAssets.every((entry) => entry.asset !== undefined)) {
-        const byId = new Map<string, Asset>();
-        for (const entry of galleryAssets) {
-          if (entry.asset) byId.set(entry.asset_id, entry.asset);
+      const byId = new Map<string, Asset>();
+      for (const entry of galleryAssets) {
+        if (entry.asset) {
+          byId.set(entry.asset_id, entry.asset);
         }
-        ok = result.asset_ids
-          .map((aid) => byId.get(aid))
-          .filter((a): a is Asset => Boolean(a));
-      } else {
-        const settled = await Promise.allSettled(
-          result.asset_ids.map((aid) => getAsset(token, aid)),
-        );
-        ok = settled
-          .filter(
-            (r): r is PromiseFulfilledResult<Asset> => r.status === "fulfilled",
-          )
-          .map((r) => r.value);
       }
+      const ok = result.asset_ids
+        .map((aid) => byId.get(aid))
+        .filter((a): a is Asset => Boolean(a));
       setMatchedAssets(ok);
       stopCamera();
       setStage("result-found");
@@ -455,6 +449,8 @@ export default function PhotoSearchPage({
         title="Find a person in this gallery"
         subtitle="Point your camera at someone's face and tap Capture. We'll match it against the people already detected in this gallery and show every photo they appear in."
       />
+
+      <FaceIdentityReviewPanel galleryId={id} token={token} />
 
       {/* Camera + capture area. The preview shape is a vertical 4:3 so
           it works well for a single face — wider 16:9 makes the face

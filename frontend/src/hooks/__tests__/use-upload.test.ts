@@ -18,7 +18,10 @@ describe("useUpload", () => {
   });
 
   it("exposes pause controls for all and per-photo upload flow", async () => {
-    const source = await readFile(join(process.cwd(), "src/hooks/use-upload.ts"), "utf8");
+    const source = await readFile(
+      join(process.cwd(), "src/hooks/use-upload.ts"),
+      "utf8",
+    );
     expect(source).toContain("pauseAll");
     expect(source).toContain("resumeAll");
     expect(source).toContain("const pause = useCallback");
@@ -31,7 +34,8 @@ describe("useUpload", () => {
   });
 
   it("retries transient upload failures for slow/mobile networks", async () => {
-    const { MAX_CHUNK_UPLOAD_ATTEMPTS, isRetryableUploadStatus } = await import("../use-upload");
+    const { MAX_CHUNK_UPLOAD_ATTEMPTS, isRetryableUploadStatus } =
+      await import("../use-upload");
     expect(MAX_CHUNK_UPLOAD_ATTEMPTS).toBeGreaterThanOrEqual(6);
     expect(isRetryableUploadStatus(408)).toBe(true);
     expect(isRetryableUploadStatus(429)).toBe(true);
@@ -51,10 +55,14 @@ describe("useUpload", () => {
   });
 
   it("has an explicit face indexing phase for encrypted uploads", async () => {
-    const source = await readFile(join(process.cwd(), "src/hooks/use-upload.ts"), "utf8");
+    const source = await readFile(
+      join(process.cwd(), "src/hooks/use-upload.ts"),
+      "utf8",
+    );
     expect(source).toContain("uploadAssetFaceIndexImage");
     expect(source).toContain('status: "indexing_faces"');
     expect(source).toContain("faceIndexImage");
+    expect(source).toContain("FaceID indexing failed after upload completion");
   });
 
   it("parses server upload offsets for resumable recovery", async () => {
@@ -69,7 +77,10 @@ describe("useUpload", () => {
     // CD5b: the screener disambiguates TIFF-based RAW by extension, so
     // runScreener must forward file.name as declaredName on the direct-screen
     // fallback path (the worker path carries it on the File itself).
-    const source = await readFile(join(process.cwd(), "src/hooks/use-upload.ts"), "utf8");
+    const source = await readFile(
+      join(process.cwd(), "src/hooks/use-upload.ts"),
+      "utf8",
+    );
     expect(source).toContain("declaredName: file.name");
   });
 });

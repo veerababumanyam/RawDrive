@@ -7,7 +7,10 @@ import { screen } from "@/lib/upload-screening/screen";
 import { sha256HexChunked } from "@/lib/upload-screening/hash";
 import { buildManifest } from "@/lib/upload-screening/manifest";
 import { activePolicyVersion } from "@/lib/upload-screening/policy";
-import { canUseScreeningWorker, runScreeningWorker } from "@/lib/upload-screening/worker-client";
+import {
+  canUseScreeningWorker,
+  runScreeningWorker,
+} from "@/lib/upload-screening/worker-client";
 import { authFetch } from "@/lib/api/authFetch";
 import { encryptBlob } from "@/lib/media-encryption/media-crypto";
 import {
@@ -61,7 +64,12 @@ async function runScreener(
 ): Promise<ScanManifest> {
   const policyVersion = await activePolicyVersion(apiUrl);
   if (canUseScreeningWorker()) {
-    return runScreeningWorker(file, policyVersion, DEFAULT_METADATA_BUDGET, fileId);
+    return runScreeningWorker(
+      file,
+      policyVersion,
+      DEFAULT_METADATA_BUDGET,
+      fileId,
+    );
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -89,28 +97,48 @@ async function uploadEncryptedDerivative(
   form.set("file", derivative.ciphertext, `${derivative.variant}.webp.enc`);
 
   const res = await retryUploadRequest(
-    () => authFetch(`/api/v1/assets/${assetId}/derivatives`, {
-      method: "POST",
-      body: form,
-      signal,
-    }),
+    () =>
+      authFetch(`/api/v1/assets/${assetId}/derivatives`, {
+        method: "POST",
+        body: form,
+        signal,
+      }),
     signal,
   );
-  if (!res.ok) throw new Error(`Encrypted derivative upload failed: ${res.status}`);
+  if (!res.ok)
+    throw new Error(`Encrypted derivative upload failed: ${res.status}`);
 }
 
 function isActiveUploadStatus(status: UploadItem["status"]): boolean {
-  return status === "uploading" || status === "pending" || status === "screening" || status === "encrypting" || status === "indexing_faces" || status === "paused";
+  return (
+    status === "uploading" ||
+    status === "pending" ||
+    status === "screening" ||
+    status === "encrypting" ||
+    status === "indexing_faces" ||
+    status === "paused"
+  );
 }
 
 export function isRetryableUploadStatus(status: number): boolean {
-  return status === 408 || status === 425 || status === 429 || (status >= 500 && status <= 599);
+  return (
+    status === 408 ||
+    status === 425 ||
+    status === 429 ||
+    (status >= 500 && status <= 599)
+  );
 }
 
-export function uploadRetryDelayMs(attempt: number, retryAfterHeader?: string | null): number {
+export function uploadRetryDelayMs(
+  attempt: number,
+  retryAfterHeader?: string | null,
+): number {
   const retryAfter = parseRetryAfterMs(retryAfterHeader);
   if (retryAfter !== null) return Math.min(retryAfter, MAX_RETRY_DELAY_MS);
-  return Math.min(MAX_RETRY_DELAY_MS, INITIAL_RETRY_DELAY_MS * 2 ** Math.max(0, attempt - 1));
+  return Math.min(
+    MAX_RETRY_DELAY_MS,
+    INITIAL_RETRY_DELAY_MS * 2 ** Math.max(0, attempt - 1),
+  );
 }
 
 export function parseUploadOffsetHeader(value: string | null): number | null {
@@ -183,10 +211,16 @@ async function retryUploadRequest(
     await waitForOnline(signal);
     try {
       const res = await run();
-      if (!isRetryableUploadStatus(res.status) || attempt === MAX_CHUNK_UPLOAD_ATTEMPTS) {
+      if (
+        !isRetryableUploadStatus(res.status) ||
+        attempt === MAX_CHUNK_UPLOAD_ATTEMPTS
+      ) {
         return res;
       }
-      await sleepWithAbort(uploadRetryDelayMs(attempt, res.headers.get("Retry-After")), signal);
+      await sleepWithAbort(
+        uploadRetryDelayMs(attempt, res.headers.get("Retry-After")),
+        signal,
+      );
     } catch (err) {
       if (isAbortError(err)) throw err;
       if (browserIsOffline()) {
@@ -199,10 +233,15 @@ async function retryUploadRequest(
       await sleepWithAbort(uploadRetryDelayMs(attempt), signal);
     }
   }
-  throw lastError instanceof Error ? lastError : new Error("Upload request failed");
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Upload request failed");
 }
 
-async function fetchUploadOffset(uploadId: string, signal: AbortSignal): Promise<number | null> {
+async function fetchUploadOffset(
+  uploadId: string,
+  signal: AbortSignal,
+): Promise<number | null> {
   const res = await retryUploadRequest(
     () => authFetch(`/api/v1/uploads/${uploadId}`, { method: "HEAD", signal }),
     signal,
@@ -249,20 +288,34 @@ async function uploadChunkWithResume(params: {
 
     if (res.status === 409) {
       const remoteOffset = await fetchUploadOffset(uploadId, signal);
-      if (remoteOffset !== null && remoteOffset > offset && remoteOffset <= totalSize) {
+      if (
+        remoteOffset !== null &&
+        remoteOffset > offset &&
+        remoteOffset <= totalSize
+      ) {
         return { nextOffset: remoteOffset, response: res };
       }
     }
 
-    if (!isRetryableUploadStatus(res.status) || attempt === MAX_CHUNK_UPLOAD_ATTEMPTS) {
+    if (
+      !isRetryableUploadStatus(res.status) ||
+      attempt === MAX_CHUNK_UPLOAD_ATTEMPTS
+    ) {
       throw new Error(`Chunk upload failed: ${res.status}`);
     }
-    await sleepWithAbort(uploadRetryDelayMs(attempt, res.headers.get("Retry-After")), signal);
+    await sleepWithAbort(
+      uploadRetryDelayMs(attempt, res.headers.get("Retry-After")),
+      signal,
+    );
   }
   throw new Error("Chunk upload failed after retries");
 }
 
-export function useUpload(apiUrl: string, token: string | null, options?: UseUploadOptions) {
+export function useUpload(
+  apiUrl: string,
+  token: string | null,
+  options?: UseUploadOptions,
+) {
   const encryption = options?.encryption;
   const destination = options?.destination;
   const [items, setItems] = useState<UploadItem[]>([]);
@@ -282,7 +335,9 @@ export function useUpload(apiUrl: string, token: string | null, options?: UseUpl
 
   // Latest onTermsRequired callback in a ref so the stable chunkedUpload
   // callback can invoke it without re-creating (and tearing the queue).
-  const onTermsRequiredRef = useRef<UseUploadOptions["onTermsRequired"]>(options?.onTermsRequired);
+  const onTermsRequiredRef = useRef<UseUploadOptions["onTermsRequired"]>(
+    options?.onTermsRequired,
+  );
 
   // Sync both "latest value" refs after each commit. Writing a ref during
   // render is impure under the React Compiler; the stable callbacks read
@@ -299,283 +354,331 @@ export function useUpload(apiUrl: string, token: string | null, options?: UseUpl
     );
   }, []);
 
-  const chunkedUpload = useCallback(async (item: UploadItem) => {
-    const controller = new AbortController();
-    abortControllers.current.set(item.id, controller);
+  const chunkedUpload = useCallback(
+    async (item: UploadItem) => {
+      const controller = new AbortController();
+      abortControllers.current.set(item.id, controller);
 
-    // QA #16 (historic): refresh the token fresh at request time so
-    // Authorization reflects the latest cached value. authFetch now
-    // owns this — it reads getStoredAccessToken() internally AND
-    // auto-refreshes via /auth/refresh on 401, so the upload survives
-    // tokens that expire mid-session instead of stalling with a
-    // permanent 401 on every subsequent chunk PATCH.
-    void token; // kept in the signature for caller compatibility
+      // QA #16 (historic): refresh the token fresh at request time so
+      // Authorization reflects the latest cached value. authFetch now
+      // owns this — it reads getStoredAccessToken() internally AND
+      // auto-refreshes via /auth/refresh on 401, so the upload survives
+      // tokens that expire mid-session instead of stalling with a
+      // permanent 401 on every subsequent chunk PATCH.
+      void token; // kept in the signature for caller compatibility
 
-    try {
-      if (encryption) {
-        const blockReason = getBrowserE2EEUploadBlockReason(item.file);
-        if (blockReason) {
+      try {
+        if (encryption) {
+          const blockReason = getBrowserE2EEUploadBlockReason(item.file);
+          if (blockReason) {
+            updateItem(item.id, {
+              status: "needs_desktop",
+              error: blockReason,
+            });
+            return;
+          }
+        }
+
+        updateItem(item.id, { status: "screening" });
+        let manifest: ScanManifest;
+        try {
+          manifest = await runScreener(item.file, apiUrl, item.id);
+        } catch (err) {
           updateItem(item.id, {
-            status: "needs_desktop",
-            error: blockReason,
+            status: "error",
+            error: `screening failed: ${(err as Error).message}`,
           });
           return;
         }
-      }
 
-      updateItem(item.id, { status: "screening" });
-      let manifest: ScanManifest;
-      try {
-        manifest = await runScreener(item.file, apiUrl, item.id);
-      } catch (err) {
-        updateItem(item.id, {
-          status: "error",
-          error: `screening failed: ${(err as Error).message}`,
-        });
-        return;
-      }
-
-      if (manifest.decision === "block") {
-        updateItem(item.id, {
-          status: "blocked",
-          error:
-            manifest.findings[0]?.message ?? "local screening rejected the file",
-          scanManifest: manifest,
-        });
-        return;
-      }
-      if (manifest.decision === "needs_desktop_scan") {
-        updateItem(item.id, {
-          status: "needs_desktop",
-          error:
-            manifest.findings[0]?.message ??
-            "this format requires RawDrive Desktop for source-side encryption",
-          scanManifest: manifest,
-        });
-        return;
-      }
-
-      let uploadBlob: Blob = item.file;
-      let mediaEncryption: Record<string, unknown> | undefined;
-      let sourceMetadata: Record<string, unknown> | undefined;
-      let encryptedDerivatives: EncryptedDerivative[] = [];
-      let faceIndexImage: Blob | undefined;
-
-      if (encryption) {
-        updateItem(item.id, { status: "encrypting", scanManifest: manifest });
-        const mediaKey = await encryption.getKey();
-        const encryptedOriginal = await encryptBlob(item.file, {
-          key: mediaKey.key,
-          keyId: mediaKey.keyId,
-          objectType: "original",
-          contentType: item.file.type || "application/octet-stream",
-        });
-        let sourceDimensions: { width: number; height: number } | undefined;
-        try {
-          const derivativeSet = await createEncryptedWebPDerivativeSet(item.file, mediaKey.key, mediaKey.keyId);
-          encryptedDerivatives = derivativeSet.derivatives;
-          faceIndexImage = derivativeSet.faceIndexImage?.blob;
-          sourceDimensions = derivativeSet.source;
-        } catch (err) {
-          // CD4: a NeedsDesktopDecodeError means the in-browser decoder could
-          // not handle this file (CR3/exotic RAW, corrupt input, unsupported
-          // engine) — surface its detail directly. Any other failure keeps the
-          // generic source-side-encryption message. Both land on needs_desktop.
-          const error =
-            err instanceof NeedsDesktopDecodeError
-              ? `RawDrive Desktop is required for this file: ${err.message}`
-              : `RawDrive Desktop is required because source-side WebP generation failed: ${(err as Error).message}`;
+        if (manifest.decision === "block") {
           updateItem(item.id, {
-            status: "needs_desktop",
-            error,
+            status: "blocked",
+            error:
+              manifest.findings[0]?.message ??
+              "local screening rejected the file",
             scanManifest: manifest,
           });
           return;
         }
-        uploadBlob = encryptedOriginal.ciphertext;
-        mediaEncryption = encryptedOriginal.manifest;
-        sourceMetadata = await extractSourceImageMetadata(item.file, sourceDimensions);
-        sourceMetadata = {
-          ...sourceMetadata,
-          derivative_variants: encryptedDerivatives.map((d) => d.variant),
+        if (manifest.decision === "needs_desktop_scan") {
+          updateItem(item.id, {
+            status: "needs_desktop",
+            error:
+              manifest.findings[0]?.message ??
+              "this format requires RawDrive Desktop for source-side encryption",
+            scanManifest: manifest,
+          });
+          return;
+        }
+
+        let uploadBlob: Blob = item.file;
+        let mediaEncryption: Record<string, unknown> | undefined;
+        let sourceMetadata: Record<string, unknown> | undefined;
+        let encryptedDerivatives: EncryptedDerivative[] = [];
+        let faceIndexImage: Blob | undefined;
+
+        if (encryption) {
+          updateItem(item.id, { status: "encrypting", scanManifest: manifest });
+          const mediaKey = await encryption.getKey();
+          const encryptedOriginal = await encryptBlob(item.file, {
+            key: mediaKey.key,
+            keyId: mediaKey.keyId,
+            objectType: "original",
+            contentType: item.file.type || "application/octet-stream",
+          });
+          let sourceDimensions: { width: number; height: number } | undefined;
+          try {
+            const derivativeSet = await createEncryptedWebPDerivativeSet(
+              item.file,
+              mediaKey.key,
+              mediaKey.keyId,
+            );
+            encryptedDerivatives = derivativeSet.derivatives;
+            faceIndexImage = derivativeSet.faceIndexImage?.blob;
+            sourceDimensions = derivativeSet.source;
+          } catch (err) {
+            // CD4: a NeedsDesktopDecodeError means the in-browser decoder could
+            // not handle this file (CR3/exotic RAW, corrupt input, unsupported
+            // engine) — surface its detail directly. Any other failure keeps the
+            // generic source-side-encryption message. Both land on needs_desktop.
+            const error =
+              err instanceof NeedsDesktopDecodeError
+                ? `RawDrive Desktop is required for this file: ${err.message}`
+                : `RawDrive Desktop is required because source-side WebP generation failed: ${(err as Error).message}`;
+            updateItem(item.id, {
+              status: "needs_desktop",
+              error,
+              scanManifest: manifest,
+            });
+            return;
+          }
+          uploadBlob = encryptedOriginal.ciphertext;
+          mediaEncryption = encryptedOriginal.manifest;
+          sourceMetadata = await extractSourceImageMetadata(
+            item.file,
+            sourceDimensions,
+          );
+          sourceMetadata = {
+            ...sourceMetadata,
+            derivative_variants: encryptedDerivatives.map((d) => d.variant),
+          };
+        }
+
+        updateItem(item.id, { status: "uploading", scanManifest: manifest });
+
+        // S3-G4 / S3-G5: bind the session to its destination gallery (and
+        // sub-album, when one is the active upload target) so the backend links
+        // the finalized asset server-side. Read from the ref at request time so
+        // a mid-batch album switch routes subsequent uploads correctly. Omitted
+        // keys leave the session as a plain workspace upload (legacy behaviour).
+        const dest = destinationRef.current;
+        // total_size MUST be the size of what we actually chunk and PATCH. In the
+        // E2EE path that is the encrypted ciphertext (uploadBlob), not the
+        // plaintext source; the chunk loop below iterates uploadBlob.size.
+        const createBody: Record<string, unknown> = {
+          filename: item.file.name,
+          content_type: item.file.type || "application/octet-stream",
+          total_size: uploadBlob.size,
+          chunk_size: CHUNK_SIZE,
+          scan_manifest: manifest,
         };
-      }
-
-      updateItem(item.id, { status: "uploading", scanManifest: manifest });
-
-      // S3-G4 / S3-G5: bind the session to its destination gallery (and
-      // sub-album, when one is the active upload target) so the backend links
-      // the finalized asset server-side. Read from the ref at request time so
-      // a mid-batch album switch routes subsequent uploads correctly. Omitted
-      // keys leave the session as a plain workspace upload (legacy behaviour).
-      const dest = destinationRef.current;
-      // total_size MUST be the size of what we actually chunk and PATCH. In the
-      // E2EE path that is the encrypted ciphertext (uploadBlob), not the
-      // plaintext source; the chunk loop below iterates uploadBlob.size.
-      const createBody: Record<string, unknown> = {
-        filename: item.file.name,
-        content_type: item.file.type || "application/octet-stream",
-        total_size: uploadBlob.size,
-        chunk_size: CHUNK_SIZE,
-        scan_manifest: manifest,
-      };
-      // E2EE manifests for the encrypted original + source metadata, only
-      // present when client-side encryption ran for this item.
-      if (mediaEncryption) {
-        createBody.media_encryption = mediaEncryption;
-      }
-      if (sourceMetadata) {
-        createBody.source_metadata = sourceMetadata;
-      }
-      if (dest?.galleryId) {
-        createBody.gallery_id = dest.galleryId;
-        if (dest.albumId) createBody.album_id = dest.albumId;
-      }
-
-      const createRes = await authFetch("/api/v1/uploads", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(createBody),
-        signal: controller.signal,
-      });
-
-      if (!createRes.ok) {
-        let errorBody: { error?: string; message?: string } = {};
-        try {
-          errorBody = await createRes.json();
-        } catch {
-          /* ignore — body may not be JSON */
+        // E2EE manifests for the encrypted original + source metadata, only
+        // present when client-side encryption ran for this item.
+        if (mediaEncryption) {
+          createBody.media_encryption = mediaEncryption;
         }
-        if (createRes.status === 400 && errorBody.error?.startsWith("SCAN_")) {
-          updateItem(item.id, {
-            status: "blocked",
-            error:
-              errorBody.message ??
-              `backend rejected manifest: ${errorBody.error}`,
-          });
-          return;
+        if (sourceMetadata) {
+          createBody.source_metadata = sourceMetadata;
         }
-        // Terms gate (safety-net). The frontend pre-checks acceptance before
-        // starting an upload, but if the status was stale/unknown the backend
-        // returns 403 TERMS_NOT_ACCEPTED. Mark the item blocked and ask the
-        // page to open the acceptance modal so the user can accept and retry.
-        if (createRes.status === 403 && errorBody.error === "TERMS_NOT_ACCEPTED") {
-          updateItem(item.id, {
-            status: "blocked",
-            error:
-              errorBody.message ??
-              "You must accept the Terms of Service before uploading.",
-          });
-          onTermsRequiredRef.current?.();
-          return;
+        if (dest?.galleryId) {
+          createBody.gallery_id = dest.galleryId;
+          if (dest.albumId) createBody.album_id = dest.albumId;
         }
-        // 2026-05-20: surface plan-storage-quota rejection as a "blocked"
-        // item rather than a raw 403 string, so the dropzone shows a real
-        // sentence (the backend already returns a customer-readable message)
-        // instead of "Create session failed: 403". Status 403 + the documented
-        // `storage_quota_exceeded` error code is the contract — same code
-        // the unused QuotaEnforcer middleware emits. The user will need to
-        // free space or upgrade their plan; no point retrying.
-        if (createRes.status === 403 && errorBody.error === "storage_quota_exceeded") {
-          updateItem(item.id, {
-            status: "blocked",
-            error:
-              errorBody.message ??
-              "Your workspace has exceeded its storage quota. Please upgrade your plan or delete unused assets.",
-          });
-          return;
-        }
-        // S3-G4: the server validates the destination gallery/album belongs to
-        // the caller's workspace at CreateSession and returns 404
-        // {"error":"gallery not found"} / "album not found" when it does not.
-        // Surface this as a real error row instead of a bare status code so the
-        // photographer learns the link target was rejected (e.g. a stale album
-        // id) rather than the upload silently landing unlinked.
-        if (createRes.status === 404 && (errorBody.error === "gallery not found" || errorBody.error === "album not found")) {
-          updateItem(item.id, {
-            status: "error",
-            error:
-              errorBody.error === "album not found"
-                ? "Couldn't link this upload to the selected sub-gallery (it may have been deleted). Try again."
-                : "Couldn't link this upload to this gallery (it may have been deleted). Try again.",
-          });
-          return;
-        }
-        throw new Error(`Create session failed: ${createRes.status}`);
-      }
 
-      const { upload_id } = await createRes.json();
-      let offset = 0;
-      let finalAssetId: string | undefined;
-
-      while (offset < uploadBlob.size) {
-        while (pausedRef.current || pausedItems.current.has(item.id)) {
-          await new Promise((resolve) => setTimeout(resolve, 500));
-          if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
-        }
-        await waitForOnline(controller.signal);
-
-        const end = Math.min(offset + CHUNK_SIZE, uploadBlob.size);
-        const chunk = uploadBlob.slice(offset, end);
-
-        const { nextOffset, response: patchRes } = await uploadChunkWithResume({
-          uploadId: upload_id,
-          offset,
-          end,
-          chunk,
-          totalSize: uploadBlob.size,
+        const createRes = await authFetch("/api/v1/uploads", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(createBody),
           signal: controller.signal,
         });
 
-        offset = nextOffset;
-        if (offset >= uploadBlob.size) {
-          const body = await patchRes.json().catch(() => ({})) as { asset?: { id?: string } };
-          finalAssetId = body.asset?.id;
+        if (!createRes.ok) {
+          let errorBody: { error?: string; message?: string } = {};
+          try {
+            errorBody = await createRes.json();
+          } catch {
+            /* ignore — body may not be JSON */
+          }
+          if (
+            createRes.status === 400 &&
+            errorBody.error?.startsWith("SCAN_")
+          ) {
+            updateItem(item.id, {
+              status: "blocked",
+              error:
+                errorBody.message ??
+                `backend rejected manifest: ${errorBody.error}`,
+            });
+            return;
+          }
+          // Terms gate (safety-net). The frontend pre-checks acceptance before
+          // starting an upload, but if the status was stale/unknown the backend
+          // returns 403 TERMS_NOT_ACCEPTED. Mark the item blocked and ask the
+          // page to open the acceptance modal so the user can accept and retry.
+          if (
+            createRes.status === 403 &&
+            errorBody.error === "TERMS_NOT_ACCEPTED"
+          ) {
+            updateItem(item.id, {
+              status: "blocked",
+              error:
+                errorBody.message ??
+                "You must accept the Terms of Service before uploading.",
+            });
+            onTermsRequiredRef.current?.();
+            return;
+          }
+          // 2026-05-20: surface plan-storage-quota rejection as a "blocked"
+          // item rather than a raw 403 string, so the dropzone shows a real
+          // sentence (the backend already returns a customer-readable message)
+          // instead of "Create session failed: 403". Status 403 + the documented
+          // `storage_quota_exceeded` error code is the contract — same code
+          // the unused QuotaEnforcer middleware emits. The user will need to
+          // free space or upgrade their plan; no point retrying.
+          if (
+            createRes.status === 403 &&
+            errorBody.error === "storage_quota_exceeded"
+          ) {
+            updateItem(item.id, {
+              status: "blocked",
+              error:
+                errorBody.message ??
+                "Your workspace has exceeded its storage quota. Please upgrade your plan or delete unused assets.",
+            });
+            return;
+          }
+          // S3-G4: the server validates the destination gallery/album belongs to
+          // the caller's workspace at CreateSession and returns 404
+          // {"error":"gallery not found"} / "album not found" when it does not.
+          // Surface this as a real error row instead of a bare status code so the
+          // photographer learns the link target was rejected (e.g. a stale album
+          // id) rather than the upload silently landing unlinked.
+          if (
+            createRes.status === 404 &&
+            (errorBody.error === "gallery not found" ||
+              errorBody.error === "album not found")
+          ) {
+            updateItem(item.id, {
+              status: "error",
+              error:
+                errorBody.error === "album not found"
+                  ? "Couldn't link this upload to the selected sub-gallery (it may have been deleted). Try again."
+                  : "Couldn't link this upload to this gallery (it may have been deleted). Try again.",
+            });
+            return;
+          }
+          throw new Error(`Create session failed: ${createRes.status}`);
         }
-        updateItem(item.id, {
-          progress: Math.round((offset / uploadBlob.size) * (encryptedDerivatives.length > 0 ? 80 : 100)),
-        });
-      }
 
-      if (finalAssetId && encryptedDerivatives.length > 0) {
-        for (let i = 0; i < encryptedDerivatives.length; i += 1) {
-          await uploadEncryptedDerivative(finalAssetId, encryptedDerivatives[i], controller.signal);
+        const { upload_id } = await createRes.json();
+        let offset = 0;
+        let finalAssetId: string | undefined;
+
+        while (offset < uploadBlob.size) {
+          while (pausedRef.current || pausedItems.current.has(item.id)) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            if (controller.signal.aborted)
+              throw new DOMException("Aborted", "AbortError");
+          }
+          await waitForOnline(controller.signal);
+
+          const end = Math.min(offset + CHUNK_SIZE, uploadBlob.size);
+          const chunk = uploadBlob.slice(offset, end);
+
+          const { nextOffset, response: patchRes } =
+            await uploadChunkWithResume({
+              uploadId: upload_id,
+              offset,
+              end,
+              chunk,
+              totalSize: uploadBlob.size,
+              signal: controller.signal,
+            });
+
+          offset = nextOffset;
+          if (offset >= uploadBlob.size) {
+            const body = (await patchRes.json().catch(() => ({}))) as {
+              asset?: { id?: string };
+            };
+            finalAssetId = body.asset?.id;
+          }
           updateItem(item.id, {
-            progress: 80 + Math.round(((i + 1) / encryptedDerivatives.length) * 15),
+            progress: Math.round(
+              (offset / uploadBlob.size) *
+                (encryptedDerivatives.length > 0 ? 80 : 100),
+            ),
           });
         }
-      }
 
-      if (finalAssetId && faceIndexImage) {
+        if (finalAssetId && encryptedDerivatives.length > 0) {
+          for (let i = 0; i < encryptedDerivatives.length; i += 1) {
+            await uploadEncryptedDerivative(
+              finalAssetId,
+              encryptedDerivatives[i],
+              controller.signal,
+            );
+            updateItem(item.id, {
+              progress:
+                80 + Math.round(((i + 1) / encryptedDerivatives.length) * 15),
+            });
+          }
+        }
+
+        if (finalAssetId && faceIndexImage) {
+          updateItem(item.id, {
+            status: "indexing_faces",
+            progress: 98,
+            assetId: finalAssetId,
+          });
+          const activeDest = destinationRef.current;
+          try {
+            await uploadAssetFaceIndexImage(finalAssetId, faceIndexImage, {
+              galleryId: activeDest?.galleryId,
+              signal: controller.signal,
+            });
+          } catch (err) {
+            if (isAbortError(err)) throw err;
+            console.warn("FaceID indexing failed after upload completion", {
+              assetId: finalAssetId,
+              error: err,
+            });
+          }
+        }
+
         updateItem(item.id, {
-          status: "indexing_faces",
-          progress: 98,
+          status: "complete",
+          progress: 100,
           assetId: finalAssetId,
         });
-        const activeDest = destinationRef.current;
-        await uploadAssetFaceIndexImage(finalAssetId, faceIndexImage, {
-          galleryId: activeDest?.galleryId,
-          signal: controller.signal,
+      } catch (err) {
+        if ((err as Error).name === "AbortError") {
+          return;
+        }
+        updateItem(item.id, {
+          status: "error",
+          error: (err as Error).message,
         });
+      } finally {
+        abortControllers.current.delete(item.id);
+        activeUploads.current = Math.max(0, activeUploads.current - 1);
+        pumpQueue.current();
       }
-
-      updateItem(item.id, { status: "complete", progress: 100, assetId: finalAssetId });
-    } catch (err) {
-      if ((err as Error).name === "AbortError") {
-        return;
-      }
-      updateItem(item.id, {
-        status: "error",
-        error: (err as Error).message,
-      });
-    } finally {
-      abortControllers.current.delete(item.id);
-      activeUploads.current = Math.max(0, activeUploads.current - 1);
-      pumpQueue.current();
-    }
-  }, [apiUrl, encryption, token, updateItem]);
+    },
+    [apiUrl, encryption, token, updateItem],
+  );
 
   // Keep pumpQueue.current pointing at a closure over the latest chunkedUpload
   // after each commit (assigning a ref during render is impure under the React
@@ -601,68 +704,82 @@ export function useUpload(apiUrl: string, token: string | null, options?: UseUpl
     pumpQueue.current();
   }, []);
 
-  const addFiles = useCallback((files: File[]) => {
-    const newItems: UploadItem[] = files.map((file) => ({
-      id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      file,
-      progress: 0,
-      status: "pending" as const,
-    }));
+  const addFiles = useCallback(
+    (files: File[]) => {
+      const newItems: UploadItem[] = files.map((file) => ({
+        id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        file,
+        progress: 0,
+        status: "pending" as const,
+      }));
 
-    // 2026-05-21: a fresh batch should not inherit stale terminal rows
-    // from prior batches. Without this, the panel showed last batch's
-    // "complete" rows above the new uploads AND the aggregate byte bar
-    // double-counted the prior batch's bytes as already-uploaded. Active
-    // uploads (uploading/pending/screening) survive so a user can drop
-    // additional files mid-batch. Failed/blocked items from prior batches
-    // also clear — the user has already seen those errors; they're
-    // stale state relative to the new upload session.
-    setItems((prev) => {
-      const active = prev.filter(
-        (i) => isActiveUploadStatus(i.status),
-      );
-      return [...active, ...newItems];
-    });
+      // 2026-05-21: a fresh batch should not inherit stale terminal rows
+      // from prior batches. Without this, the panel showed last batch's
+      // "complete" rows above the new uploads AND the aggregate byte bar
+      // double-counted the prior batch's bytes as already-uploaded. Active
+      // uploads (uploading/pending/screening) survive so a user can drop
+      // additional files mid-batch. Failed/blocked items from prior batches
+      // also clear — the user has already seen those errors; they're
+      // stale state relative to the new upload session.
+      setItems((prev) => {
+        const active = prev.filter((i) => isActiveUploadStatus(i.status));
+        return [...active, ...newItems];
+      });
 
-    enqueueUploads(newItems);
-  }, [enqueueUploads]);
+      enqueueUploads(newItems);
+    },
+    [enqueueUploads],
+  );
 
   const cancel = useCallback((id: string) => {
     pausedItems.current.delete(id);
-    pendingQueue.current = pendingQueue.current.filter((item) => item.id !== id);
+    pendingQueue.current = pendingQueue.current.filter(
+      (item) => item.id !== id,
+    );
     const controller = abortControllers.current.get(id);
     if (controller) controller.abort();
     setItems((prev) => prev.filter((item) => item.id !== id));
   }, []);
 
-  const pause = useCallback((id: string) => {
-    pausedItems.current.add(id);
-    pendingQueue.current = pendingQueue.current.filter((item) => item.id !== id);
-    updateItem(id, { status: "paused" });
-  }, [updateItem]);
+  const pause = useCallback(
+    (id: string) => {
+      pausedItems.current.add(id);
+      pendingQueue.current = pendingQueue.current.filter(
+        (item) => item.id !== id,
+      );
+      updateItem(id, { status: "paused" });
+    },
+    [updateItem],
+  );
 
-  const resume = useCallback((id: string) => {
-    pausedItems.current.delete(id);
-    const item = items.find((entry) => entry.id === id);
-    if (!item) return;
-    if (abortControllers.current.has(id)) {
-      updateItem(id, { status: "uploading" });
-      return;
-    }
-    const retryItem = { ...item, status: "pending" as const };
-    updateItem(id, { status: "pending" });
-    enqueueUploads([retryItem]);
-  }, [enqueueUploads, items, updateItem]);
-
-  const retry = useCallback((id: string) => {
-    const item = items.find((entry) => entry.id === id);
-    if (item) {
+  const resume = useCallback(
+    (id: string) => {
       pausedItems.current.delete(id);
-      const retryItem = { ...item, status: "pending" as const, progress: 0 };
-      updateItem(id, { status: "pending", progress: 0, error: undefined });
+      const item = items.find((entry) => entry.id === id);
+      if (!item) return;
+      if (abortControllers.current.has(id)) {
+        updateItem(id, { status: "uploading" });
+        return;
+      }
+      const retryItem = { ...item, status: "pending" as const };
+      updateItem(id, { status: "pending" });
       enqueueUploads([retryItem]);
-    }
-  }, [enqueueUploads, items, updateItem]);
+    },
+    [enqueueUploads, items, updateItem],
+  );
+
+  const retry = useCallback(
+    (id: string) => {
+      const item = items.find((entry) => entry.id === id);
+      if (item) {
+        pausedItems.current.delete(id);
+        const retryItem = { ...item, status: "pending" as const, progress: 0 };
+        updateItem(id, { status: "pending", progress: 0, error: undefined });
+        enqueueUploads([retryItem]);
+      }
+    },
+    [enqueueUploads, items, updateItem],
+  );
 
   // 2026-05-21: bulk-retry every item in the "error" set so the UI can offer
   // a single "Retry All" button on the persisted-after-failure upload panel.
@@ -670,10 +787,16 @@ export function useUpload(apiUrl: string, token: string | null, options?: UseUpl
   // rejected at the screening stage and the same file would block again.
   const retryAll = useCallback(() => {
     const failed = items.filter((i) => i.status === "error");
-    const retryItems = failed.map((item) => ({ ...item, status: "pending" as const, progress: 0 }));
+    const retryItems = failed.map((item) => ({
+      ...item,
+      status: "pending" as const,
+      progress: 0,
+    }));
     setItems((prev) =>
       prev.map((item) =>
-        item.status === "error" ? { ...item, status: "pending", progress: 0, error: undefined } : item,
+        item.status === "error"
+          ? { ...item, status: "pending", progress: 0, error: undefined }
+          : item,
       ),
     );
     enqueueUploads(retryItems);
@@ -695,9 +818,7 @@ export function useUpload(apiUrl: string, token: string | null, options?: UseUpl
   // action on the persisted-after-failure panel. Active uploads survive.
   const clearFinished = useCallback(() => {
     setItems((prev) =>
-      prev.filter(
-        (item) => isActiveUploadStatus(item.status),
-      ),
+      prev.filter((item) => isActiveUploadStatus(item.status)),
     );
   }, []);
 

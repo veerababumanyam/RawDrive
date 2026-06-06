@@ -28,9 +28,17 @@ describe("gallery cover page design-system contracts", () => {
     expect(source).toContain('className="input-base cover-header-select"');
     expect(source).toContain('className="glass-segmented cover-device-toggle"');
     expect(source).toContain('className="cover-font-trigger"');
+    expect(source).toContain("COVER_TEXT_LANGUAGES");
+    expect(source).toContain("COVER_FONT_WEIGHTS");
+    expect(source).toContain("cover-language-select");
+    expect(source).toContain("cover-text-style-toggle");
     expect(source).toContain('className="cover-control-card"');
     expect(source).toContain('className="cover-panel-stack"');
+    expect(source).toContain('className="cover-template-grid"');
+    expect(source).toContain('className="cover-template-tile"');
+    expect(source).toContain('className="cover-slot-tabs"');
     expect(source).toContain('className="cover-section cover-photo-picker"');
+    expect(source).toContain('className="cover-upload-stack"');
     expect(source).toContain('className="cover-info-panel"');
     expect(source).toContain("className={COVER_RANGE_CLASS}");
     expect(source).toContain("className={COVER_COLOR_CLASS}");
@@ -66,8 +74,8 @@ describe("gallery cover page design-system contracts", () => {
     );
     expect(source).toContain('className="cover-photo-tile"');
     expect(source).toContain('fallbackMode="compact"');
-    expect(source).toContain('className="cover-preview-fallback"');
-    expect(source).toContain("cover-preview-status");
+    expect(source).toContain('className="cover-template-slot__fallback"');
+    expect(source).toContain("LockedMediaFallback");
     expect(source).not.toContain("media-choice-button");
     expect(source).not.toContain(
       "bg-gradient-to-br from-surface-container to-surface-container-high",
@@ -80,10 +88,17 @@ describe("gallery cover page design-system contracts", () => {
     expect(css).toContain(".selectable-tile__media");
     expect(css).toContain(".cover-header-select");
     expect(css).toContain(".cover-font-trigger");
+    expect(css).toContain(".cover-language-select");
+    expect(css).toContain(".cover-text-style-toggle");
     expect(css).toContain(".cover-control-card");
     expect(css).toContain(".cover-panel-stack");
     expect(css).toContain(".cover-section-header");
+    expect(css).toContain(".cover-template-layout");
+    expect(css).toContain(".cover-template-grid");
+    expect(css).toContain(".cover-template-mini");
+    expect(css).toContain(".cover-slot-controls");
     expect(css).toContain(".cover-photo-picker");
+    expect(css).toContain(".cover-upload-stack");
     expect(css).toContain(".cover-range-input");
     expect(css).toContain(".cover-color-input");
     expect(css).toContain(".cover-option-grid");

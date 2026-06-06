@@ -3,11 +3,18 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 
 	"github.com/rawdrive/backend/internal/repository"
+)
+
+var (
+	ErrDesignCoverAssetNotInGallery     = errors.New("design cover asset is not in this gallery")
+	ErrDesignCoverValidationUnavailable = errors.New("design cover asset validation unavailable")
 )
 
 // GalleryDesignConfig holds the full design configuration for a gallery.
@@ -113,14 +120,29 @@ func DefaultDesignConfig() GalleryDesignConfig {
 	}
 }
 
+type galleryDesignRepo interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*repository.Gallery, error)
+	Update(ctx context.Context, g *repository.Gallery) error
+}
+
+type galleryDesignAssetLister interface {
+	ListByGallery(ctx context.Context, galleryID uuid.UUID) ([]repository.GalleryAsset, error)
+}
+
 // GalleryDesignService manages gallery design configurations.
 type GalleryDesignService struct {
-	galleryRepo *repository.GalleryRepo
+	galleryRepo      galleryDesignRepo
+	galleryAssetRepo galleryDesignAssetLister
 }
 
 // NewGalleryDesignService creates a new GalleryDesignService.
 func NewGalleryDesignService(gr *repository.GalleryRepo) *GalleryDesignService {
 	return &GalleryDesignService{galleryRepo: gr}
+}
+
+func (s *GalleryDesignService) WithGalleryAssetRepo(repo *repository.GalleryAssetRepo) *GalleryDesignService {
+	s.galleryAssetRepo = repo
+	return s
 }
 
 // GetDesignConfig retrieves the design configuration for a gallery.
@@ -164,6 +186,12 @@ func (s *GalleryDesignService) UpdateDesignConfig(ctx context.Context, galleryID
 
 	config.Version++
 
+	if config.Cover.AssetID != nil {
+		if err := s.validateDesignCoverAssetIDs(ctx, galleryID, []uuid.UUID{*config.Cover.AssetID}); err != nil {
+			return err
+		}
+	}
+
 	if gallery.Settings == nil {
 		gallery.Settings = map[string]interface{}{}
 	}
@@ -181,6 +209,14 @@ func (s *GalleryDesignService) UpdateDesignConfigRaw(ctx context.Context, galler
 	gallery, err := s.galleryRepo.GetByID(ctx, galleryID)
 	if err != nil || gallery == nil {
 		return fmt.Errorf("design: gallery not found")
+	}
+
+	coverIDs, err := collectRawDesignCoverAssetIDs(raw)
+	if err != nil {
+		return err
+	}
+	if err := s.validateDesignCoverAssetIDs(ctx, galleryID, coverIDs); err != nil {
+		return err
 	}
 
 	// Increment version. The frontend sends a `version: number` field;
@@ -225,8 +261,139 @@ func (s *GalleryDesignService) UpdateDesignConfigRaw(ctx context.Context, galler
 	return s.galleryRepo.Update(ctx, gallery)
 }
 
+func collectRawDesignCoverAssetIDs(raw map[string]interface{}) ([]uuid.UUID, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	coverRaw, ok := raw["cover"]
+	if !ok || coverRaw == nil {
+		return nil, nil
+	}
+	cover, ok := coverRaw.(map[string]interface{})
+	if !ok {
+		return nil, nil
+	}
+
+	var ids []uuid.UUID
+	parse := func(field string, value interface{}) error {
+		switch v := value.(type) {
+		case nil:
+			return nil
+		case string:
+			trimmed := strings.TrimSpace(v)
+			if trimmed == "" {
+				return nil
+			}
+			parsed, err := uuid.Parse(trimmed)
+			if err != nil {
+				return fmt.Errorf("%w: invalid %s", ErrDesignCoverAssetNotInGallery, field)
+			}
+			ids = append(ids, parsed)
+			return nil
+		default:
+			return fmt.Errorf("%w: invalid %s", ErrDesignCoverAssetNotInGallery, field)
+		}
+	}
+
+	parseProfile := func(prefix string, profile map[string]interface{}) error {
+		if value, ok := profile["assetId"]; ok {
+			if err := parse(prefix+".assetId", value); err != nil {
+				return err
+			}
+		}
+		if value, ok := profile["assetSlots"]; ok {
+			if err := parseSlots(prefix+".assetSlots", value, parse); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	if err := parseProfile("cover", cover); err != nil {
+		return nil, err
+	}
+
+	if value, ok := cover["deviceProfiles"]; ok {
+		switch profiles := value.(type) {
+		case nil:
+		case map[string]interface{}:
+			for device, rawProfile := range profiles {
+				if rawProfile == nil {
+					continue
+				}
+				profile, ok := rawProfile.(map[string]interface{})
+				if !ok {
+					return nil, fmt.Errorf("%w: invalid cover.deviceProfiles.%s", ErrDesignCoverAssetNotInGallery, device)
+				}
+				if err := parseProfile("cover.deviceProfiles."+device, profile); err != nil {
+					return nil, err
+				}
+			}
+		default:
+			return nil, fmt.Errorf("%w: invalid cover.deviceProfiles", ErrDesignCoverAssetNotInGallery)
+		}
+	}
+
+	return ids, nil
+}
+
+func parseSlots(field string, value interface{}, parse func(string, interface{}) error) error {
+	switch slots := value.(type) {
+	case nil:
+	case []interface{}:
+		for i, slot := range slots {
+			if err := parse(fmt.Sprintf("%s[%d]", field, i), slot); err != nil {
+				return err
+			}
+		}
+	case []string:
+		for i, slot := range slots {
+			if err := parse(fmt.Sprintf("%s[%d]", field, i), slot); err != nil {
+				return err
+			}
+		}
+	default:
+		return fmt.Errorf("%w: invalid %s", ErrDesignCoverAssetNotInGallery, field)
+	}
+	return nil
+}
+
+func (s *GalleryDesignService) validateDesignCoverAssetIDs(ctx context.Context, galleryID uuid.UUID, ids []uuid.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	if s.galleryAssetRepo == nil {
+		return ErrDesignCoverValidationUnavailable
+	}
+
+	seen := make(map[uuid.UUID]struct{}, len(ids))
+	unique := make([]uuid.UUID, 0, len(ids))
+	for _, id := range ids {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+
+	links, err := s.galleryAssetRepo.ListByGallery(ctx, galleryID)
+	if err != nil {
+		return fmt.Errorf("design cover validation: %w", err)
+	}
+	allowed := make(map[uuid.UUID]struct{}, len(links))
+	for _, link := range links {
+		allowed[link.AssetID] = struct{}{}
+	}
+	for _, id := range unique {
+		if _, ok := allowed[id]; !ok {
+			return fmt.Errorf("%w: %s", ErrDesignCoverAssetNotInGallery, id)
+		}
+	}
+	return nil
+}
+
 // UpdateEmbeddedVideos persists the embedded-video array for a gallery.
-// Added 2026-05-18 for the YouTube/Vimeo embed feature. Stored under
+// Added 2026-05-18 for the YouTube/Vimeo/Instagram embed feature. Stored under
 // `gallery.settings.embedded_videos` as a JSON array so the frontend
 // (dashboard editor + public viewer) can read it through the existing
 // gallery settings field without a new column or migration.

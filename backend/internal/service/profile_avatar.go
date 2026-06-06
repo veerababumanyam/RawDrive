@@ -11,8 +11,9 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/rawdrive/backend/internal/imageops"
 	xdraw "golang.org/x/image/draw"
+
+	"github.com/rawdrive/backend/internal/imageops"
 )
 
 // AvatarCropPosition is the persisted crop contract used by the profile UI.

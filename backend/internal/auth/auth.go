@@ -453,15 +453,26 @@ type jwtService struct {
 	refreshStore RefreshSessionStore
 }
 
+var (
+	ephemeralJWTKeyOnce sync.Once
+	ephemeralJWTKey     *rsa.PrivateKey
+	ephemeralJWTKeyErr  error
+)
+
 func NewJWTService(config JWTConfig) JWTService {
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		log.Fatalf("auth: failed to generate RSA key for JWT service: %v", err)
+	// Generate the boot-time fallback key once per process. Production replaces
+	// it with the persisted signing key during startup; tests construct many JWT
+	// services and should not repeatedly pay the RSA key-generation cost.
+	ephemeralJWTKeyOnce.Do(func() {
+		ephemeralJWTKey, ephemeralJWTKeyErr = rsa.GenerateKey(rand.Reader, 2048)
+	})
+	if ephemeralJWTKeyErr != nil {
+		log.Fatalf("auth: failed to generate RSA key for JWT service: %v", ephemeralJWTKeyErr)
 	}
 	return &jwtService{
 		config:       config,
-		privateKey:   key,
-		publicKey:    &key.PublicKey,
+		privateKey:   ephemeralJWTKey,
+		publicKey:    &ephemeralJWTKey.PublicKey,
 		refreshStore: NewInMemoryRefreshStore(),
 	}
 }

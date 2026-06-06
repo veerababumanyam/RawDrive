@@ -1,24 +1,43 @@
 "use client";
 import { getApiBaseUrl } from "@/lib/api/base-url";
 
-import {
-  useEffect,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import {
   publicGalleryMusicUrl,
   type Gallery,
   type GalleryBranding,
   type PublicAsset,
 } from "@/lib/api/galleries";
-import type { PublicDesignConfig } from "@/lib/gallery-design-config";
+import {
+  resolveCoverDeviceProfile,
+  type CoverDevice,
+  type CoverDeviceProfile,
+  type CoverProfileThumbnailMap,
+  type PublicDesignConfig,
+} from "@/lib/gallery-design-config";
 import { getCoverStyleById } from "@/components/gallery/cover-styles";
+import {
+  coverTemplateSlotIndices,
+  getCoverTemplate,
+  type CoverTemplate,
+} from "@/components/gallery/cover-templates";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
+import {
+  buildCoverGoogleFontsHref,
+  fontFamilyForCoverText,
+  getCoverLanguage,
+} from "@/lib/indian-cover-typography";
+import {
+  getFullscreenElement,
+  isFullscreenSupportedForElement,
+  requestElementFullscreen,
+} from "@/lib/browser-fullscreen";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
+import { assetUsesClientMediaEncryption } from "@/lib/media-encryption/asset-media";
+import { publicMediaErrorMessage } from "@/lib/media-encryption/public-media-error";
 import { GallerySlideshow } from "@/components/gallery/gallery-slideshow";
 import { SlideshowSlide } from "@/components/gallery/public-gallery-slideshow-launcher";
+import { LockedMediaFallback } from "@/components/gallery/media-key-recovery";
 import { Camera, Play } from "@/components/icons";
 
 const API_BASE = getApiBaseUrl();
@@ -81,14 +100,14 @@ export function resolvePublicCoverImage(
 function resolveDesignCoverImage(
   gallery: Gallery,
   assets: PublicAsset[],
-  design: PublicDesignConfig | null,
+  cover: CoverDeviceProfile,
   designCoverThumbnails: Record<string, string> | null,
 ): string {
   if (designCoverThumbnails) {
     const url = pickFromThumbnails(designCoverThumbnails);
     if (url) return url;
   }
-  const designAssetId = design?.cover?.assetId || gallery.cover_asset_id;
+  const designAssetId = cover.assetId || gallery.cover_asset_id;
   if (designAssetId) {
     const match = assets.find((a) => a.id === designAssetId);
     if (match) return pickFromThumbnails(match.thumbnail_urls);
@@ -103,7 +122,7 @@ const HERO_VARIANTS = [
   "display_webp",
 ] as const;
 
-type PublicCoverConfig = NonNullable<PublicDesignConfig["cover"]>;
+type PublicCoverConfig = CoverDeviceProfile;
 
 function resolvePublicCoverAsset(
   gallery: Gallery,
@@ -118,10 +137,11 @@ function resolvePublicCoverAsset(
 function coverAssetFromThumbnails(
   gallery: Gallery,
   thumbnailUrls: Record<string, string> | null,
+  assetId?: string | null,
 ): PublicAsset | null {
   if (!thumbnailUrls || Object.keys(thumbnailUrls).length === 0) return null;
   return {
-    id: gallery.cover_asset_id || "design-cover",
+    id: assetId || gallery.cover_asset_id || "design-cover",
     filename: gallery.title || "Cover photo",
     content_type: "image/webp",
     thumbnail_urls: thumbnailUrls,
@@ -132,20 +152,25 @@ function coverAssetFromThumbnails(
 function resolveDesignCoverAsset(
   gallery: Gallery,
   assets: PublicAsset[],
-  design: PublicDesignConfig | null,
+  cover: CoverDeviceProfile,
   designCoverThumbnails: Record<string, string> | null,
   designCoverAsset?: PublicAsset | null,
 ): PublicAsset | null {
-  if (designCoverAsset) return designCoverAsset;
+  if (
+    designCoverAsset &&
+    (!cover.assetId || designCoverAsset.id === cover.assetId)
+  ) {
+    return designCoverAsset;
+  }
 
-  const designAssetId = design?.cover?.assetId || gallery.cover_asset_id;
+  const designAssetId = cover.assetId || gallery.cover_asset_id;
   if (designAssetId) {
     const match = assets.find((a) => a.id === designAssetId);
     if (match) return match;
   }
 
   return (
-    coverAssetFromThumbnails(gallery, designCoverThumbnails) ||
+    coverAssetFromThumbnails(gallery, designCoverThumbnails, designAssetId) ||
     resolvePublicCoverAsset(gallery, assets)
   );
 }
@@ -161,6 +186,7 @@ interface PublicGalleryHeroProps {
   design?: PublicDesignConfig | null;
   designCoverAsset?: PublicAsset | null;
   designCoverThumbnails?: Record<string, string> | null;
+  designCoverProfileThumbnails?: CoverProfileThumbnailMap | null;
   // Public slideshow wiring. The page passes these so the "Play" button can
   // sit next to "View Gallery" / "Find me" and open the same full-screen
   // slideshow the old standalone launcher exposed. Music remains optional:
@@ -277,6 +303,165 @@ function mediaUrlForAsset(asset: PublicAsset | null | undefined): string {
   return pickFromThumbnails(asset?.thumbnail_urls);
 }
 
+function templateSlotAssetId(
+  cover: PublicCoverConfig | undefined,
+  slotIndex: number,
+): string | null {
+  if (!cover) return null;
+  if (slotIndex === 0) {
+    return cover.assetId || cover.assetSlots?.[0] || null;
+  }
+  return cover.assetSlots?.[slotIndex] || null;
+}
+
+function resolveTemplateSlotAssets({
+  gallery,
+  assets,
+  cover,
+  coverAsset,
+  template,
+}: {
+  gallery: Gallery;
+  assets: PublicAsset[];
+  cover: PublicCoverConfig | undefined;
+  coverAsset: PublicAsset | null;
+  template: CoverTemplate;
+}): Array<PublicAsset | null> {
+  const orderedPool = [
+    coverAsset,
+    ...assets.filter((asset) => asset.id !== coverAsset?.id),
+  ].filter((asset): asset is PublicAsset => Boolean(asset));
+  return coverTemplateSlotIndices(template).map((slotIndex) => {
+    const explicitId = templateSlotAssetId(cover, slotIndex);
+    if (explicitId) {
+      const explicit = assets.find((asset) => asset.id === explicitId);
+      if (explicit) return explicit;
+      if (slotIndex === 0 && coverAsset?.id === explicitId) return coverAsset;
+    }
+    if (slotIndex === 0)
+      return coverAsset || resolvePublicCoverAsset(gallery, assets);
+    return orderedPool[slotIndex] || orderedPool[0] || null;
+  });
+}
+
+function templateSlotFocalPoint(
+  cover: PublicCoverConfig | undefined,
+  slotIndex: number,
+): { x: number; y: number } {
+  if (slotIndex === 0) {
+    return cover?.focalPoint || { x: 50, y: 50 };
+  }
+  return cover?.slotFocalPoints?.[slotIndex] || { x: 50, y: 50 };
+}
+
+function PublicCoverTemplateMedia({
+  template,
+  assets,
+  coverUrl,
+  cover,
+  title,
+  viewerToken,
+  assetAccessToken,
+}: {
+  template: CoverTemplate;
+  assets: Array<PublicAsset | null>;
+  coverUrl: string;
+  cover: PublicCoverConfig | undefined;
+  title: string;
+  viewerToken: string | null;
+  assetAccessToken: string | null;
+}) {
+  return (
+    <div
+      className={`cover-template-layout cover-template-layout--${template.layout}`}
+      data-cover-template={template.id}
+      data-testid={
+        template.layout === "quad"
+          ? "gallery-cover-photo-grid"
+          : "gallery-cover-template"
+      }
+    >
+      {coverTemplateSlotIndices(template).map((slotIndex) => (
+        <PublicCoverTemplateSlot
+          key={slotIndex}
+          asset={assets[slotIndex]}
+          fallbackUrl={slotIndex === 0 ? coverUrl : ""}
+          focalPoint={templateSlotFocalPoint(cover, slotIndex)}
+          title={title}
+          slotIndex={slotIndex}
+          viewerToken={viewerToken}
+          assetAccessToken={assetAccessToken}
+        />
+      ))}
+      {template.layout === "journal" && (
+        <div className="cover-template-journal-panel" aria-hidden />
+      )}
+      {template.layout === "outline" && (
+        <div className="cover-template-outline" aria-hidden />
+      )}
+    </div>
+  );
+}
+
+function PublicCoverTemplateSlot({
+  asset,
+  fallbackUrl,
+  focalPoint,
+  title,
+  slotIndex,
+  viewerToken,
+  assetAccessToken,
+}: {
+  asset: PublicAsset | null | undefined;
+  fallbackUrl: string;
+  focalPoint: { x: number; y: number };
+  title: string;
+  slotIndex: number;
+  viewerToken: string | null;
+  assetAccessToken: string | null;
+}) {
+  const media = useDecryptedAssetUrl(
+    asset,
+    HERO_VARIANTS,
+    viewerToken,
+    assetAccessToken,
+  );
+  const rawFallback = assetUsesClientMediaEncryption(asset)
+    ? ""
+    : mediaUrlForAsset(asset);
+  const src = media.src || rawFallback || fallbackUrl;
+  return (
+    <div
+      className="cover-template-slot"
+      data-cover-slot={slotIndex}
+      data-testid={`gallery-cover-template-slot-${slotIndex}`}
+    >
+      {src ? (
+        <img
+          src={src}
+          alt={slotIndex === 0 ? title : ""}
+          className="cover-template-slot__image"
+          style={{
+            objectPosition: `${focalPoint.x}% ${focalPoint.y}%`,
+          }}
+          loading={slotIndex === 0 ? "eager" : "lazy"}
+        />
+      ) : media.loading ? (
+        <div className="cover-template-slot__fallback">
+          <span className="text-xs text-text-tertiary">Loading cover</span>
+        </div>
+      ) : (
+        <LockedMediaFallback
+          asset={asset}
+          error={media.error}
+          message={publicMediaErrorMessage(media.error) || "Cover unavailable"}
+          className="cover-template-slot__fallback"
+        />
+      )}
+    </div>
+  );
+}
+
 function sceneCoverUrl(
   scene: NonNullable<PublicDesignConfig["sceneHeaders"]>[number],
   assets: PublicAsset[],
@@ -330,30 +515,29 @@ function CoverSlideshow({
   );
 }
 
-// Builds a fonts.googleapis.com URL for the heading and body fonts the
-// design studio picked. The studio injects fonts at design time via
-// dynamic <link>; on the public viewer we add a static <link> in the
-// rendered output so first paint already has the right family. Falls
-// back silently when no design is present.
-function googleFontsHref(
-  headingFont: string | undefined,
-  bodyFont: string | undefined,
-): string | null {
-  const families: string[] = [];
-  if (headingFont) families.push(headingFont);
-  if (bodyFont && bodyFont !== headingFont) families.push(bodyFont);
-  if (families.length === 0) return null;
-  const param = families
-    .map((f) => `family=${encodeURIComponent(f)}:wght@400;500;600;700`)
-    .join("&");
-  return `https://fonts.googleapis.com/css2?${param}&display=swap`;
-}
-
 // Central design-system CTA classes. The public-cover call-to-actions build
 // on the shared .glass-button primitive (translucent liquid-glass surface,
 // ≥44px touch target, token-driven focus via the global *:focus-visible rule)
 // so "Play", "View Gallery" and "Find Me" read as one consistent group.
 const COVER_CTA_CLASS = "glass-button glass-button--surface glass-button--md";
+
+function requestPageFullscreenForSlideshow() {
+  if (typeof document === "undefined") return;
+  if (getFullscreenElement(document)) return;
+
+  const target = document.documentElement;
+  if (!isFullscreenSupportedForElement(target, document)) return;
+  try {
+    const request = requestElementFullscreen(target, {
+      navigationUI: "hide",
+    });
+    if (request && typeof request.catch === "function") {
+      request.catch(() => {});
+    }
+  } catch {
+    // Fullscreen is a progressive enhancement; opening the slideshow is primary.
+  }
+}
 
 // Play CTA — opens the in-page slideshow rather than navigating, so it is a
 // real <button>. It uses the same .glass-button primitive as the View Gallery /
@@ -458,6 +642,7 @@ export function PublicGalleryHero({
   design,
   designCoverAsset,
   designCoverThumbnails,
+  designCoverProfileThumbnails,
   slug,
   ws,
   hasMusic = false,
@@ -478,7 +663,10 @@ export function PublicGalleryHero({
   // set-state-in-effect) keeps this React-Compiler-safe and avoids a flash of
   // the closed state.
   const [slideshowOpen, setSlideshowOpen] = useState(() => slideshowHasMusic);
-  const openSlideshow = () => setSlideshowOpen(true);
+  const openSlideshow = () => {
+    requestPageFullscreenForSlideshow();
+    setSlideshowOpen(true);
+  };
   const closeSlideshow = () => setSlideshowOpen(false);
   const slideshowOverlay =
     slideshowEnabled && slideshowOpen ? (
@@ -494,12 +682,7 @@ export function PublicGalleryHero({
         )}
         musicUrl={
           slideshowHasMusic && slug
-            ? publicGalleryMusicUrl(
-                slug,
-                ws,
-                assetAccessToken,
-                shareToken,
-              )
+            ? publicGalleryMusicUrl(slug, ws, assetAccessToken, shareToken)
             : null
         }
         onClose={closeSlideshow}
@@ -533,16 +716,25 @@ export function PublicGalleryHero({
   //      hides it.
   // An explicit `face_detection_enabled: false` always wins and hides the CTA.
   const photoSearchEnabled =
-    gallery.face_detection_enabled !== false &&
-    (faceDetectionEnabled || !slug);
+    gallery.face_detection_enabled !== false && (faceDetectionEnabled || !slug);
   const findMeEnabled = photoSearchEnabled;
 
+  const coverDevice: CoverDevice = mobileViewport ? "phone" : "desktop";
+  const activeProfile = resolveCoverDeviceProfile(design, coverDevice);
+  const activeCover = activeProfile.cover;
+  const activeTypography = activeProfile.typography;
+  const activeProfileThumbnails =
+    designCoverProfileThumbnails?.[coverDevice] ||
+    (coverDevice === "phone"
+      ? designCoverProfileThumbnails?.desktop || designCoverThumbnails
+      : designCoverThumbnails) ||
+    null;
+
   // Design-driven path — runs when the studio has saved anything we can
-  // act on. We check `design?.cover?.styleId` rather than just "design
-  // exists" so an entirely-empty design_config (e.g. a gallery that was
-  // saved with all defaults intact) still falls through to the legacy
-  // path for predictability.
-  const designStyleId = design?.cover?.styleId;
+  // act on. We check the resolved cover profile's styleId rather than just
+  // "design exists" so an entirely-empty design_config still falls through
+  // to the legacy path for predictability.
+  const designStyleId = activeCover.styleId;
   const designStyle = designStyleId
     ? getCoverStyleById(designStyleId)
     : undefined;
@@ -551,8 +743,8 @@ export function PublicGalleryHero({
       ? resolveDesignCoverAsset(
           gallery,
           assets,
-          design,
-          designCoverThumbnails ?? null,
+          activeCover,
+          activeProfileThumbnails,
           designCoverAsset,
         )
       : null;
@@ -563,39 +755,58 @@ export function PublicGalleryHero({
     resolvedDesignCoverAsset || legacyCoverAsset,
     HERO_VARIANTS,
     viewerToken,
+    assetAccessToken ?? null,
   );
 
   if (design && designStyle) {
+    const coverAssetForMedia = resolvedDesignCoverAsset || legacyCoverAsset;
+    const coverAssetEncrypted =
+      assetUsesClientMediaEncryption(coverAssetForMedia);
     const coverUrl =
       coverMedia.src ||
-      (resolvedDesignCoverAsset
+      (coverAssetEncrypted || resolvedDesignCoverAsset
         ? ""
         : resolveDesignCoverImage(
             gallery,
             assets,
-            design,
-            designCoverThumbnails ?? null,
+            activeCover,
+            activeProfileThumbnails,
           ));
+    const videoPoster = assetUsesClientMediaEncryption(resolvedDesignCoverAsset)
+      ? undefined
+      : mediaUrlForAsset(resolvedDesignCoverAsset);
     const accent = design.theme?.accentColor || studioAccent || "";
     const variant = design.theme?.variant;
-    const scrim = coverExperienceScrim(design.cover?.scrimStyle, variant);
-    const focal = design.cover?.focalPoint;
-    const mobileFocal = design.cover?.mobileFocalPoint;
+    const scrim = coverExperienceScrim(activeCover.scrimStyle, variant);
+    const focal = activeCover.focalPoint;
     const objectPosition = focal
-      ? `${mobileViewport && mobileFocal ? mobileFocal.x : focal.x}% ${mobileViewport && mobileFocal ? mobileFocal.y : focal.y}%`
+      ? `${focal.x}% ${focal.y}%`
       : designStyle.objectPosition;
-    const title = design.cover?.title?.trim() || gallery.title;
-    const subtitle =
-      design.cover?.subtitle?.trim() || gallery.description || "";
-    const titleSize = design.typography?.titleSize;
-    const subtitleSize = design.typography?.subtitleSize;
-    const headingFont = design.typography?.headingFont;
-    const bodyFont = design.typography?.bodyFont;
-    const fontsHref = googleFontsHref(headingFont, bodyFont);
+    const titleVisible = activeCover.titleVisible !== false;
+    const subtitleVisible = activeCover.subtitleVisible !== false;
+    const title = titleVisible
+      ? activeCover.title?.trim() || gallery.title
+      : "";
+    const subtitle = subtitleVisible
+      ? activeCover.subtitle?.trim() || gallery.description || ""
+      : "";
+    const titleSize = activeTypography.titleSize;
+    const subtitleSize = activeTypography.subtitleSize;
+    const headingFont = activeTypography.headingFont;
+    const bodyFont = activeTypography.bodyFont;
+    const titleLanguage = getCoverLanguage(activeTypography.titleLanguage);
+    const subtitleLanguage = getCoverLanguage(
+      activeTypography.subtitleLanguage,
+    );
+    const titleWeight = activeTypography.titleWeight ?? 600;
+    const subtitleWeight = activeTypography.subtitleWeight ?? 400;
+    const titleItalic = Boolean(activeTypography.titleItalic);
+    const subtitleItalic = Boolean(activeTypography.subtitleItalic);
+    const fontsHref = buildCoverGoogleFontsHref([headingFont, bodyFont]);
     // Cover & Design page can override the styleId's textAlign with a
     // free-positioned overlay. When the override is set, the dragged
     // text uses it; otherwise we honor the style's declared alignment.
-    const effectiveAlign = design.cover?.textAlign || designStyle.textAlign;
+    const effectiveAlign = activeCover.textAlign || designStyle.textAlign;
     const textAlignClass =
       effectiveAlign === "left"
         ? "text-left items-start"
@@ -604,40 +815,42 @@ export function PublicGalleryHero({
           : "text-center items-center";
     // Aspect-ratio override from the Cover & Design page lets the user
     // crop a 21/9 panoramic style to 4/3 without picking a new style.
-    const effectiveAspectRatio =
-      design.cover?.aspectRatio || designStyle.aspectRatio;
-    const mobileAspectRatio = design.cover?.mobileAspectRatio || "4/5";
-    const renderedAspectRatio = mobileViewport
-      ? mobileAspectRatio
-      : effectiveAspectRatio;
-    const titlePos = design.cover?.titlePosition;
-    const subtitlePos = design.cover?.subtitlePosition;
+    const renderedAspectRatio =
+      activeCover.aspectRatio || designStyle.aspectRatio;
+    const titlePos = activeCover.titlePosition;
+    const subtitlePos = activeCover.subtitlePosition;
     const useDragLayout = Boolean(titlePos || subtitlePos);
     // 2026-05-18: title/subtitle colors split into separate fields. The
     // editor picker writes both `titleColor` and `subtitleColor`; the
     // legacy `textColor` stays in the payload as a fallback so older
     // galleries that saved only the shared color still render with a
     // sensible value on both elements.
-    const textColor = design.cover?.textColor || undefined;
-    const titleColor = design.cover?.titleColor || textColor;
-    const subtitleColor = design.cover?.subtitleColor || textColor;
-    const textShadow = design.cover?.textShadow
+    const textColor = activeCover.textColor || undefined;
+    const titleColor = activeCover.titleColor || textColor;
+    const subtitleColor = activeCover.subtitleColor || textColor;
+    const textShadow = activeCover.textShadow
       ? "var(--cover-text-shadow)"
       : undefined;
-    const backdropStyle = textBackdropStyle(design.cover?.textBackdrop);
-    const mediaMode = design.cover?.mediaMode || "single-photo";
+    const backdropStyle = textBackdropStyle(activeCover.textBackdrop);
+    const mediaMode = activeCover.mediaMode || "single-photo";
     const enabledScenes = (design.sceneHeaders || []).filter(
       (scene) => scene.enabled,
     );
     const coverForGrid = resolvedDesignCoverAsset || legacyCoverAsset;
+    const coverTemplate = getCoverTemplate(activeCover.styleId);
+    const templateAssets = resolveTemplateSlotAssets({
+      gallery,
+      assets,
+      cover: activeCover,
+      coverAsset: coverForGrid,
+      template: coverTemplate,
+    });
     const photoGridAssets = [
       coverForGrid,
       ...assets.filter((asset) => asset.id !== coverForGrid?.id),
     ]
       .filter((asset): asset is PublicAsset => Boolean(asset))
       .slice(0, 4);
-    const showPhotoGrid =
-      mediaMode === "photo-grid" && photoGridAssets.length > 1;
     const showVideo =
       mediaMode === "short-video" &&
       resolvedDesignCoverAsset?.content_type?.startsWith("video/");
@@ -650,6 +863,11 @@ export function PublicGalleryHero({
     const monogram = design.branding?.monogram?.trim();
     const brandColor =
       design.branding?.brandColor || accent || textColor || "var(--text-media)";
+    const logoSize = design.branding?.logoSize ?? 40;
+    const logoOpacity = (design.branding?.logoOpacity ?? 100) / 100;
+    const watermarkOpacity = (design.branding?.watermarkOpacity ?? 70) / 100;
+    const watermarkText =
+      design.branding?.watermarkText?.trim() || monogram || brandName || "";
     // Title and subtitle are anchored at their CENTER regardless of
     // textAlign — matches the Cover & Design editor's drag behavior
     // (Canva/Figma-style: object grabbed at visual middle). textAlign
@@ -683,39 +901,11 @@ export function PublicGalleryHero({
         data-cover-style={designStyle.id}
       >
         {fontsHref && <link rel="stylesheet" href={fontsHref} />}
-        {showPhotoGrid ? (
-          <div
-            className="absolute inset-0 grid grid-cols-2 grid-rows-2"
-            data-testid="gallery-cover-photo-grid"
-          >
-            {photoGridAssets.map((asset, idx) => {
-              const src =
-                idx === 0
-                  ? coverUrl || mediaUrlForAsset(asset)
-                  : mediaUrlForAsset(asset);
-              return (
-                <div
-                  key={`${asset.id}-${idx}`}
-                  className="relative overflow-hidden"
-                >
-                  {src && (
-                    <img
-                      src={src}
-                      alt={idx === 0 ? title : ""}
-                      className="absolute inset-0 h-full w-full object-cover"
-                      style={{ objectPosition }}
-                      loading={idx === 0 ? "eager" : "lazy"}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : showVideo && coverUrl ? (
+        {showVideo && coverUrl ? (
           <video
             className="absolute inset-0 h-full w-full object-cover"
             src={coverUrl}
-            poster={mediaUrlForAsset(resolvedDesignCoverAsset)}
+            poster={videoPoster}
             style={{ objectPosition }}
             muted
             loop
@@ -731,15 +921,15 @@ export function PublicGalleryHero({
             objectPosition={objectPosition}
           />
         ) : (
-          coverUrl && (
-            <img
-              src={coverUrl}
-              alt={title}
-              className="absolute inset-0 h-full w-full object-cover"
-              style={{ objectPosition }}
-              loading="eager"
-            />
-          )
+          <PublicCoverTemplateMedia
+            template={coverTemplate}
+            assets={templateAssets}
+            coverUrl={coverUrl}
+            cover={activeCover}
+            title={title}
+            viewerToken={viewerToken}
+            assetAccessToken={assetAccessToken ?? null}
+          />
         )}
         {designStyle.overlay && (
           <div
@@ -761,18 +951,24 @@ export function PublicGalleryHero({
           // editor. This is the WYSIWYG path: the editor's preview uses
           // the exact same coordinate scheme.
           <div className="absolute inset-0 z-10">
-            {titlePos && (
+            {title && titlePos && (
               <h1
                 className="absolute font-semibold tracking-tight"
                 data-testid="gallery-cover-title"
+                lang={titleLanguage.htmlLang}
+                dir={titleLanguage.dir}
                 style={{
                   left: `${titlePos.x}%`,
                   top: `${titlePos.y}%`,
                   transform: "translate(-50%, -50%)",
-                  fontFamily: headingFont
-                    ? `'${headingFont}', serif`
-                    : undefined,
+                  fontFamily: fontFamilyForCoverText(
+                    headingFont,
+                    titleLanguage.id,
+                  ),
                   fontSize: titleSize ? `${titleSize}px` : undefined,
+                  fontWeight: titleWeight,
+                  fontStyle: titleItalic ? "italic" : "normal",
+                  direction: titleLanguage.dir,
                   color: titleColor || accent || "var(--text-media)",
                   textShadow,
                   textAlign: effectiveAlign,
@@ -787,14 +983,20 @@ export function PublicGalleryHero({
               <p
                 className="absolute"
                 data-testid="gallery-cover-subtitle"
+                lang={subtitleLanguage.htmlLang}
+                dir={subtitleLanguage.dir}
                 style={{
                   left: `${subtitlePos.x}%`,
                   top: `${subtitlePos.y}%`,
                   transform: "translate(-50%, -50%)",
-                  fontFamily: bodyFont
-                    ? `'${bodyFont}', sans-serif`
-                    : undefined,
+                  fontFamily: fontFamilyForCoverText(
+                    bodyFont,
+                    subtitleLanguage.id,
+                  ),
                   fontSize: subtitleSize ? `${subtitleSize}px` : undefined,
+                  fontWeight: subtitleWeight,
+                  fontStyle: subtitleItalic ? "italic" : "normal",
+                  direction: subtitleLanguage.dir,
                   color: subtitleColor || "var(--text-media)",
                   textShadow,
                   textAlign: effectiveAlign,
@@ -818,13 +1020,25 @@ export function PublicGalleryHero({
                     src={logoUrl}
                     alt={brandName ? `${brandName} logo` : "Studio logo"}
                     className="h-10 w-10 rounded-full bg-surface-raised object-contain p-1"
+                    style={{
+                      width: `${logoSize}px`,
+                      height: `${logoSize}px`,
+                      opacity: logoOpacity,
+                    }}
                   />
                 )}
                 {brandName && <span className="media-label">{brandName}</span>}
                 {monogram && (
                   <span
                     className="cover-brand-mark inline-flex h-10 min-w-10 items-center justify-center rounded-full px-2 text-sm font-semibold"
-                    style={{ color: brandColor, borderColor: brandColor }}
+                    style={{
+                      color: brandColor,
+                      borderColor: brandColor,
+                      width: `${logoSize}px`,
+                      minWidth: `${logoSize}px`,
+                      height: `${logoSize}px`,
+                      opacity: logoOpacity,
+                    }}
                   >
                     {monogram}
                   </span>
@@ -832,16 +1046,33 @@ export function PublicGalleryHero({
               </div>
             )}
             {design.branding?.watermarkStyle &&
-              design.branding.watermarkStyle !== "none" && (
-                <span
-                  className={`media-label pointer-events-none absolute left-6 font-semibold opacity-70 ${
-                    enabledScenes.length > 0 ? "bottom-24" : "bottom-5"
-                  }`}
-                  style={{ color: brandColor, textShadow }}
+              design.branding.watermarkStyle !== "none" &&
+              watermarkText && (
+                <div
+                  className={`cover-watermark-public cover-watermark-public--${design.branding.watermarkStyle} pointer-events-none absolute font-semibold`}
+                  style={{
+                    color: brandColor,
+                    opacity: watermarkOpacity,
+                    textShadow,
+                    bottom:
+                      design.branding.watermarkStyle === "tiled"
+                        ? undefined
+                        : enabledScenes.length > 0
+                          ? "var(--space-24)"
+                          : "var(--space-5)",
+                    left:
+                      design.branding.watermarkStyle === "tiled"
+                        ? undefined
+                        : "var(--space-6)",
+                  }}
                   aria-hidden
                 >
-                  {monogram || brandName}
-                </span>
+                  {design.branding.watermarkStyle === "tiled"
+                    ? Array.from({ length: 8 }, (_, index) => (
+                        <span key={index}>{watermarkText}</span>
+                      ))
+                    : watermarkText}
+                </div>
               )}
             {enabledScenes.length > 0 && (
               <div
@@ -908,6 +1139,11 @@ export function PublicGalleryHero({
                     src={logoUrl}
                     alt={brandName ? `${brandName} logo` : "Studio logo"}
                     className="h-10 w-10 rounded-full bg-surface-raised object-contain p-1"
+                    style={{
+                      width: `${logoSize}px`,
+                      height: `${logoSize}px`,
+                      opacity: logoOpacity,
+                    }}
                   />
                 )}
                 {brandName && (
@@ -917,28 +1153,44 @@ export function PublicGalleryHero({
                 )}
               </div>
             )}
-            <h1
-              className="font-semibold tracking-tight text-text-inverse"
-              data-testid="gallery-cover-title"
-              style={{
-                fontFamily: headingFont ? `'${headingFont}', serif` : undefined,
-                fontSize: titleSize ? `${titleSize}px` : undefined,
-                color: titleColor || accent || undefined,
-                textShadow,
-                ...backdropStyle,
-              }}
-            >
-              {title}
-            </h1>
+            {title && (
+              <h1
+                className="font-semibold tracking-tight text-text-inverse"
+                data-testid="gallery-cover-title"
+                lang={titleLanguage.htmlLang}
+                dir={titleLanguage.dir}
+                style={{
+                  fontFamily: fontFamilyForCoverText(
+                    headingFont,
+                    titleLanguage.id,
+                  ),
+                  fontSize: titleSize ? `${titleSize}px` : undefined,
+                  fontWeight: titleWeight,
+                  fontStyle: titleItalic ? "italic" : "normal",
+                  direction: titleLanguage.dir,
+                  color: titleColor || accent || undefined,
+                  textShadow,
+                  ...backdropStyle,
+                }}
+              >
+                {title}
+              </h1>
+            )}
             {subtitle && (
               <p
                 className="mt-3 max-w-2xl text-text-inverse/85"
                 data-testid="gallery-cover-subtitle"
+                lang={subtitleLanguage.htmlLang}
+                dir={subtitleLanguage.dir}
                 style={{
-                  fontFamily: bodyFont
-                    ? `'${bodyFont}', sans-serif`
-                    : undefined,
+                  fontFamily: fontFamilyForCoverText(
+                    bodyFont,
+                    subtitleLanguage.id,
+                  ),
                   fontSize: subtitleSize ? `${subtitleSize}px` : undefined,
+                  fontWeight: subtitleWeight,
+                  fontStyle: subtitleItalic ? "italic" : "normal",
+                  direction: subtitleLanguage.dir,
                   color: subtitleColor || undefined,
                   textShadow,
                   ...backdropStyle,

@@ -2,9 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
-import { decryptBlobWithAvailableMediaKeys } from "./media-key-store";
+import {
+  decryptBlobWithAvailableMediaKeys,
+  galleryIdFromMediaKeyId,
+  subscribeMediaKeyStoreChanges,
+  type MediaKeyStoreChangeDetail,
+} from "./media-key-store";
 import {
   assetUsesClientMediaEncryption,
+  mediaKeyIdsForAsset,
   pickAssetMediaCandidates,
   type EncryptedAssetLike,
 } from "./asset-media";
@@ -46,6 +52,19 @@ function shouldFetchStorageWithBearer(
   );
 }
 
+function mediaKeyStoreChangeAppliesToAsset(
+  detail: MediaKeyStoreChangeDetail,
+  assetKeyIds: readonly string[],
+): boolean {
+  if (detail.reason === "storage") return true;
+  if (assetKeyIds.length === 0) return true;
+  if (detail.keyId && assetKeyIds.includes(detail.keyId)) return true;
+  if (!detail.galleryId) return false;
+  return assetKeyIds.some(
+    (keyId) => galleryIdFromMediaKeyId(keyId) === detail.galleryId,
+  );
+}
+
 /**
  * Try to resolve a storage URL from Cache Storage (offline-first).
  * Returns the cached Response on a hit, or null on a miss / if the
@@ -73,11 +92,25 @@ export function useDecryptedAssetUrl(
     () => pickAssetMediaCandidates(asset, variants),
     [asset, variants],
   );
+  const assetKeyIds = useMemo(() => mediaKeyIdsForAsset(asset), [asset]);
   const [state, setState] = useState<DecryptedAssetUrlState>({
     src: "",
     loading: false,
     error: null,
   });
+  const [keyStoreVersion, setKeyStoreVersion] = useState(0);
+
+  useEffect(
+    () =>
+      subscribeMediaKeyStoreChanges((detail) =>
+        setKeyStoreVersion((version) =>
+          mediaKeyStoreChangeAppliesToAsset(detail, assetKeyIds)
+            ? version + 1
+            : version,
+        ),
+      ),
+    [assetKeyIds],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -238,7 +271,7 @@ export function useDecryptedAssetUrl(
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [asset, candidates, token, assetAccessToken]);
+  }, [asset, candidates, token, assetAccessToken, keyStoreVersion]);
 
   return state;
 }

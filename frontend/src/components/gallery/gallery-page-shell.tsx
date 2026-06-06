@@ -28,7 +28,10 @@ export function GalleryPageShell({
 }: GalleryPageShellProps) {
   return (
     <div
-      className={cn("mx-auto w-full max-w-6xl space-y-6 px-4 py-8", className)}
+      className={cn(
+        "mx-auto w-full max-w-6xl space-y-6 px-4 pb-8 pt-4",
+        className,
+      )}
     >
       {/* Workspace nav first so the section dropdown is the topmost
           element on mobile. */}

@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useCallback, useState } from "react";
-import { ArrowLeft, Check, Copy, Eye } from "lucide-react";
 import type { Gallery } from "@/lib/api/galleries";
-import { cn } from "@/lib/utils";
 import { ShareQrPopover } from "@/components/gallery/share-qr-popover";
+import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { ArrowLeft, Check, Copy, Eye } from "@/components/icons";
 
 // Owner-facing chrome bar that sits above the rendered preview. Pinned
 // just below the dashboard header so the photographer can copy the
@@ -16,16 +16,23 @@ import { ShareQrPopover } from "@/components/gallery/share-qr-popover";
 interface Props {
   gallery: Gallery;
   publicUrl: string;
+  isPublished?: boolean;
 }
 
-export function PreviewChrome({ gallery, publicUrl }: Props) {
+export function PreviewChrome({ gallery, publicUrl, isPublished }: Props) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const published = isPublished ?? gallery.is_published === true;
+  const shareEnabled = published && Boolean(publicUrl);
 
   const handleCopy = useCallback(async () => {
     setError(null);
-    if (!publicUrl) {
-      setError("Preview URL unavailable.");
+    if (!shareEnabled) {
+      setError(
+        published
+          ? "Preview URL unavailable."
+          : "Publish this gallery before copying the client link.",
+      );
       return;
     }
     try {
@@ -52,9 +59,8 @@ export function PreviewChrome({ gallery, publicUrl }: Props) {
     } catch {
       setError("Copy failed — long-press the URL to copy manually.");
     }
-  }, [publicUrl]);
+  }, [publicUrl, published, shareEnabled]);
 
-  const isPublished = gallery.is_published === true;
   const friendlyUrl = publicUrl
     ? publicUrl.replace(/^https?:\/\//, "")
     : "Publish to generate a public URL";
@@ -70,15 +76,16 @@ export function PreviewChrome({ gallery, publicUrl }: Props) {
           className="inline-flex items-center gap-1.5 rounded-full bg-surface-container-high px-3 py-1.5 text-xs font-semibold text-text-secondary transition-colors hover:bg-surface-container-highest hover:text-text-primary"
           title="Back to gallery workspace"
         >
-          <ArrowLeft className="h-3.5 w-3.5" />
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
           Back
         </Link>
 
         <div className="flex items-center gap-2">
           <span className="status-badge status-badge--accent">
-            <Eye className="mr-1 inline h-3 w-3" /> Preview Mode
+            <Eye className="mr-1 inline h-3 w-3" aria-hidden="true" /> Preview
+            Mode
           </span>
-          {!isPublished && (
+          {!published && (
             <span className="text-xs text-text-tertiary">
               Unpublished — clients can&apos;t access this link yet
             </span>
@@ -92,34 +99,21 @@ export function PreviewChrome({ gallery, publicUrl }: Props) {
           >
             {friendlyUrl}
           </span>
-          <button
+          <GlassIconButton
             type="button"
             onClick={handleCopy}
-            disabled={!publicUrl}
+            disabled={!shareEnabled}
             data-testid="preview-share-button"
-            aria-label={copied ? "Share link copied" : "Copy share link"}
-            className={cn(
-              "inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
-              !publicUrl
-                ? "bg-surface-container-high text-text-tertiary cursor-not-allowed"
-                : copied
-                  ? "bg-success text-text-inverse"
-                  : "bg-accent text-text-inverse hover:bg-accent-hover",
-            )}
-            title={publicUrl ? `Copy ${publicUrl}` : "Publish to share"}
+            label={copied ? "Share link copied" : "Copy share link"}
+            variant={copied ? "success" : "accent"}
+            size="md"
+            className={!shareEnabled ? "cursor-not-allowed opacity-50" : ""}
           >
-            {copied ? (
-              <>
-                <Check className="h-3.5 w-3.5" /> Copied
-              </>
-            ) : (
-              <>
-                <Copy className="h-3.5 w-3.5" /> Share link
-              </>
-            )}
-          </button>
+            {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+          </GlassIconButton>
           <ShareQrPopover
             url={publicUrl}
+            disabled={!shareEnabled}
             label="Show QR for share link"
             filename={`${gallery.slug || "gallery"}-qr`}
           />

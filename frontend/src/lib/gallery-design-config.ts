@@ -21,6 +21,91 @@
  * masking the gallery entirely.
  */
 
+export type CoverDevice = "desktop" | "phone";
+
+export type CoverPresetId =
+  | "classic-wedding"
+  | "editorial-split"
+  | "luxury-dark"
+  | "haldi-warm"
+  | "mehendi-green"
+  | "sangeet-night"
+  | "engagement-soft"
+  | "reception-glow"
+  | "minimal-studio"
+  | "story-cover"
+  | "proofing-first"
+  | "housewarming-warm"
+  | "birthday-bright"
+  | "corporate-clean"
+  | "portfolio-editorial";
+
+export type CoverMediaMode =
+  | "single-photo"
+  | "slideshow"
+  | "short-video"
+  | "photo-grid";
+
+export type CoverScrimStyle =
+  | "none"
+  | "soft-gradient"
+  | "cinematic-dark"
+  | "warm-vignette"
+  | "blur-band"
+  | "light-wash";
+
+export type CoverTextBackdrop = "none" | "glass" | "dark" | "light";
+export type CoverTextAlign = "left" | "center" | "right";
+export type CoverPoint = { x: number; y: number };
+
+export interface CoverDeviceTypography {
+  headingFont?: string;
+  bodyFont?: string;
+  titleLanguage?: string;
+  subtitleLanguage?: string;
+  titleWeight?: number;
+  subtitleWeight?: number;
+  titleItalic?: boolean;
+  subtitleItalic?: boolean;
+  titleSize?: number;
+  subtitleSize?: number;
+}
+
+export interface CoverDeviceProfile {
+  assetId?: string | null;
+  assetSlots?: Array<string | null>;
+  styleId?: string;
+  layoutPreset?: CoverPresetId;
+  mediaMode?: CoverMediaMode;
+  focalPoint?: CoverPoint;
+  slotFocalPoints?: CoverPoint[];
+  aspectRatio?: string;
+  title?: string;
+  subtitle?: string;
+  titleVisible?: boolean;
+  subtitleVisible?: boolean;
+  titlePosition?: CoverPoint;
+  subtitlePosition?: CoverPoint;
+  textAlign?: CoverTextAlign;
+  textColor?: string;
+  titleColor?: string;
+  subtitleColor?: string;
+  textShadow?: boolean;
+  scrimStyle?: CoverScrimStyle;
+  textBackdrop?: CoverTextBackdrop;
+  typography?: CoverDeviceTypography;
+}
+
+export type CoverProfileThumbnailMap = Partial<
+  Record<CoverDevice, Record<string, string>>
+>;
+
+export interface ResolvedCoverDeviceProfile {
+  device: CoverDevice;
+  cover: CoverDeviceProfile;
+  typography: CoverDeviceTypography;
+}
+
 export interface PublicDesignConfig {
   theme?: {
     id?: string;
@@ -29,33 +114,32 @@ export interface PublicDesignConfig {
   };
   cover?: {
     assetId?: string | null;
+    assetSlots?: Array<string | null>;
     styleId?: string;
-    layoutPreset?:
-      | "classic-wedding"
-      | "editorial-split"
-      | "luxury-dark"
-      | "haldi-warm"
-      | "reception-glow"
-      | "minimal-studio"
-      | "story-cover"
-      | "proofing-first";
-    mediaMode?: "single-photo" | "slideshow" | "short-video" | "photo-grid";
-    focalPoint?: { x: number; y: number };
-    mobileFocalPoint?: { x: number; y: number };
+    layoutPreset?: CoverPresetId;
+    mediaMode?: CoverMediaMode;
+    focalPoint?: CoverPoint;
+    mobileFocalPoint?: CoverPoint;
+    slotFocalPoints?: CoverPoint[];
+    mobileSlotFocalPoints?: CoverPoint[];
     mobileAspectRatio?: string;
     title?: string;
     subtitle?: string;
+    titleVisible?: boolean;
+    subtitleVisible?: boolean;
     // Free-positioned text overlay — written by the Cover & Design page's
     // drag editor. When set, the public hero renders the title/subtitle at
     // these (x, y) percentage coordinates of the cover frame rather than
     // the styleId's fixed justify-end-with-textAlign position. Either or
     // both can be set; missing values fall back to the legacy positioning.
-    titlePosition?: { x: number; y: number };
-    subtitlePosition?: { x: number; y: number };
+    titlePosition?: CoverPoint;
+    subtitlePosition?: CoverPoint;
+    mobileTitlePosition?: CoverPoint;
+    mobileSubtitlePosition?: CoverPoint;
     // Text alignment for the dragged overlay — `start`/`end` use the drop
     // point as the anchor edge so the text grows toward the opposite edge;
     // `center` anchors the midpoint at the drop point.
-    textAlign?: "left" | "center" | "right";
+    textAlign?: CoverTextAlign;
     // Overlay readability controls. textColor is a hex string; textShadow
     // toggles a CSS text-shadow that makes light copy legible over busy
     // photos without requiring a full scrim layer.
@@ -63,25 +147,28 @@ export interface PublicDesignConfig {
     titleColor?: string;
     subtitleColor?: string;
     textShadow?: boolean;
-    scrimStyle?:
-      | "none"
-      | "soft-gradient"
-      | "cinematic-dark"
-      | "warm-vignette"
-      | "blur-band"
-      | "light-wash";
-    textBackdrop?: "none" | "glass" | "dark" | "light";
+    scrimStyle?: CoverScrimStyle;
+    textBackdrop?: CoverTextBackdrop;
     // Aspect-ratio override for the cover frame. When set, replaces the
     // styleId's declared aspectRatio so users can crop a 21/9 panoramic
     // to 4/3 without picking a whole new style. Format: "W/H" string.
     aspectRatio?: string;
+    deviceProfiles?: Partial<Record<CoverDevice, CoverDeviceProfile>>;
   };
   typography?: {
     pairingId?: string;
     headingFont?: string;
     bodyFont?: string;
+    titleLanguage?: string;
+    subtitleLanguage?: string;
+    titleWeight?: number;
+    subtitleWeight?: number;
+    titleItalic?: boolean;
+    subtitleItalic?: boolean;
     titleSize?: number;
     subtitleSize?: number;
+    mobileTitleSize?: number;
+    mobileSubtitleSize?: number;
   };
   grid?: {
     layout?: "masonry" | "grid" | "justified" | "carousel";
@@ -96,10 +183,19 @@ export interface PublicDesignConfig {
     assetId?: string | null;
   }>;
   branding?: {
-    logoPlacement?: "hidden" | "top-left" | "top-right" | "bottom-left" | "bottom-right";
+    logoPlacement?:
+      | "hidden"
+      | "top-left"
+      | "top-right"
+      | "bottom-left"
+      | "bottom-right";
     monogram?: string;
     brandColor?: string;
     watermarkStyle?: "none" | "subtle-corner" | "center-mark" | "tiled";
+    logoSize?: number;
+    logoOpacity?: number;
+    watermarkText?: string;
+    watermarkOpacity?: number;
   };
   version?: number;
 }
@@ -117,10 +213,15 @@ function asBool(v: unknown): boolean | undefined {
 }
 
 function asObject(v: unknown): Record<string, unknown> | undefined {
-  return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
+  return v && typeof v === "object" && !Array.isArray(v)
+    ? (v as Record<string, unknown>)
+    : undefined;
 }
 
-function asOneOf<T extends readonly string[]>(value: unknown, allowed: T): T[number] | undefined {
+function asOneOf<T extends readonly string[]>(
+  value: unknown,
+  allowed: T,
+): T[number] | undefined {
   const text = asString(value);
   return text && allowed.includes(text) ? text : undefined;
 }
@@ -130,17 +231,47 @@ const COVER_PRESETS = [
   "editorial-split",
   "luxury-dark",
   "haldi-warm",
+  "mehendi-green",
+  "sangeet-night",
+  "engagement-soft",
   "reception-glow",
   "minimal-studio",
   "story-cover",
   "proofing-first",
+  "housewarming-warm",
+  "birthday-bright",
+  "corporate-clean",
+  "portfolio-editorial",
 ] as const;
 
-const MEDIA_MODES = ["single-photo", "slideshow", "short-video", "photo-grid"] as const;
-const SCRIM_STYLES = ["none", "soft-gradient", "cinematic-dark", "warm-vignette", "blur-band", "light-wash"] as const;
+const MEDIA_MODES = [
+  "single-photo",
+  "slideshow",
+  "short-video",
+  "photo-grid",
+] as const;
+const SCRIM_STYLES = [
+  "none",
+  "soft-gradient",
+  "cinematic-dark",
+  "warm-vignette",
+  "blur-band",
+  "light-wash",
+] as const;
 const TEXT_BACKDROPS = ["none", "glass", "dark", "light"] as const;
-const LOGO_PLACEMENTS = ["hidden", "top-left", "top-right", "bottom-left", "bottom-right"] as const;
-const WATERMARK_STYLES = ["none", "subtle-corner", "center-mark", "tiled"] as const;
+const LOGO_PLACEMENTS = [
+  "hidden",
+  "top-left",
+  "top-right",
+  "bottom-left",
+  "bottom-right",
+] as const;
+const WATERMARK_STYLES = [
+  "none",
+  "subtle-corner",
+  "center-mark",
+  "tiled",
+] as const;
 
 function readPoint(value: unknown, fallbackY: number) {
   const point = asObject(value);
@@ -151,7 +282,99 @@ function readPoint(value: unknown, fallbackY: number) {
   };
 }
 
-function readSceneHeaders(raw: unknown): PublicDesignConfig["sceneHeaders"] | undefined {
+function readAssetSlots(raw: unknown): Array<string | null> | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const slots = raw.map((entry) => (typeof entry === "string" ? entry : null));
+  return slots.length > 0 ? slots : undefined;
+}
+
+function readPointList(raw: unknown): CoverPoint[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const points = raw.map((entry) => readPoint(entry, 50) || { x: 50, y: 50 });
+  return points.length > 0 ? points : undefined;
+}
+
+function readOptionalAssetId(
+  raw: Record<string, unknown>,
+): string | null | undefined {
+  if (!Object.prototype.hasOwnProperty.call(raw, "assetId")) return undefined;
+  return asString(raw.assetId) ?? null;
+}
+
+function readCoverDeviceTypography(
+  raw: unknown,
+): CoverDeviceTypography | undefined {
+  const typo = asObject(raw);
+  if (!typo) return undefined;
+  const out: CoverDeviceTypography = {
+    headingFont: asString(typo.headingFont),
+    bodyFont: asString(typo.bodyFont),
+    titleLanguage: asString(typo.titleLanguage),
+    subtitleLanguage: asString(typo.subtitleLanguage),
+    titleWeight: asNumber(typo.titleWeight),
+    subtitleWeight: asNumber(typo.subtitleWeight),
+    titleItalic: asBool(typo.titleItalic),
+    subtitleItalic: asBool(typo.subtitleItalic),
+    titleSize: asNumber(typo.titleSize),
+    subtitleSize: asNumber(typo.subtitleSize),
+  };
+  return Object.values(out).some((value) => value !== undefined)
+    ? out
+    : undefined;
+}
+
+function readCoverDeviceProfile(raw: unknown): CoverDeviceProfile | undefined {
+  const profile = asObject(raw);
+  if (!profile) return undefined;
+  const coverTextAlign = asString(profile.textAlign);
+  const out: CoverDeviceProfile = {
+    assetId: readOptionalAssetId(profile),
+    assetSlots: readAssetSlots(profile.assetSlots),
+    styleId: asString(profile.styleId),
+    layoutPreset: asOneOf(profile.layoutPreset, COVER_PRESETS),
+    mediaMode: asOneOf(profile.mediaMode, MEDIA_MODES),
+    focalPoint: readPoint(profile.focalPoint, 50),
+    slotFocalPoints: readPointList(profile.slotFocalPoints),
+    aspectRatio: asString(profile.aspectRatio),
+    title: asString(profile.title),
+    subtitle: asString(profile.subtitle),
+    titleVisible: asBool(profile.titleVisible),
+    subtitleVisible: asBool(profile.subtitleVisible),
+    titlePosition: readPoint(profile.titlePosition, 50),
+    subtitlePosition: readPoint(profile.subtitlePosition, 60),
+    textAlign:
+      coverTextAlign === "left" ||
+      coverTextAlign === "center" ||
+      coverTextAlign === "right"
+        ? coverTextAlign
+        : undefined,
+    textColor: asString(profile.textColor),
+    titleColor: asString(profile.titleColor),
+    subtitleColor: asString(profile.subtitleColor),
+    textShadow: asBool(profile.textShadow),
+    scrimStyle: asOneOf(profile.scrimStyle, SCRIM_STYLES),
+    textBackdrop: asOneOf(profile.textBackdrop, TEXT_BACKDROPS),
+    typography: readCoverDeviceTypography(profile.typography),
+  };
+  return Object.values(out).some((value) => value !== undefined)
+    ? out
+    : undefined;
+}
+
+function readCoverDeviceProfiles(
+  raw: unknown,
+): Partial<Record<CoverDevice, CoverDeviceProfile>> | undefined {
+  const profiles = asObject(raw);
+  if (!profiles) return undefined;
+  const desktop = readCoverDeviceProfile(profiles.desktop);
+  const phone = readCoverDeviceProfile(profiles.phone);
+  if (!desktop && !phone) return undefined;
+  return { ...(desktop ? { desktop } : {}), ...(phone ? { phone } : {}) };
+}
+
+function readSceneHeaders(
+  raw: unknown,
+): PublicDesignConfig["sceneHeaders"] | undefined {
   if (!Array.isArray(raw)) return undefined;
   const scenes = raw.flatMap((entry) => {
     const scene = asObject(entry);
@@ -159,12 +382,14 @@ function readSceneHeaders(raw: unknown): PublicDesignConfig["sceneHeaders"] | un
     const id = asString(scene.id);
     const label = asString(scene.label);
     if (!id || !label) return [];
-    return [{
-      id,
-      label,
-      enabled: asBool(scene.enabled) ?? false,
-      assetId: asString(scene.assetId) ?? null,
-    }];
+    return [
+      {
+        id,
+        label,
+        enabled: asBool(scene.enabled) ?? false,
+        assetId: asString(scene.assetId) ?? null,
+      },
+    ];
   });
   return scenes.length > 0 ? scenes : undefined;
 }
@@ -192,13 +417,17 @@ export function readPublicDesignConfig(
     theme: themeRaw
       ? {
           id: asString(themeRaw.id),
-          variant: variant === "light" || variant === "dark" || variant === "auto" ? variant : undefined,
+          variant:
+            variant === "light" || variant === "dark" || variant === "auto"
+              ? variant
+              : undefined,
           accentColor: asString(themeRaw.accentColor),
         }
       : undefined,
     cover: coverRaw
       ? {
           assetId: asString(coverRaw.assetId) ?? null,
+          assetSlots: readAssetSlots(coverRaw.assetSlots),
           styleId: asString(coverRaw.styleId),
           layoutPreset: asOneOf(coverRaw.layoutPreset, COVER_PRESETS),
           mediaMode: asOneOf(coverRaw.mediaMode, MEDIA_MODES),
@@ -209,13 +438,24 @@ export function readPublicDesignConfig(
               }
             : undefined,
           mobileFocalPoint: readPoint(coverRaw.mobileFocalPoint, 50),
+          slotFocalPoints: readPointList(coverRaw.slotFocalPoints),
+          mobileSlotFocalPoints: readPointList(coverRaw.mobileSlotFocalPoints),
           mobileAspectRatio: asString(coverRaw.mobileAspectRatio),
           title: asString(coverRaw.title),
           subtitle: asString(coverRaw.subtitle),
+          titleVisible: asBool(coverRaw.titleVisible),
+          subtitleVisible: asBool(coverRaw.subtitleVisible),
           titlePosition: readPoint(coverRaw.titlePosition, 50),
           subtitlePosition: readPoint(coverRaw.subtitlePosition, 60),
+          mobileTitlePosition: readPoint(coverRaw.mobileTitlePosition, 56),
+          mobileSubtitlePosition: readPoint(
+            coverRaw.mobileSubtitlePosition,
+            68,
+          ),
           textAlign:
-            coverTextAlign === "left" || coverTextAlign === "center" || coverTextAlign === "right"
+            coverTextAlign === "left" ||
+            coverTextAlign === "center" ||
+            coverTextAlign === "right"
               ? coverTextAlign
               : undefined,
           textColor: asString(coverRaw.textColor),
@@ -225,6 +465,7 @@ export function readPublicDesignConfig(
           scrimStyle: asOneOf(coverRaw.scrimStyle, SCRIM_STYLES),
           textBackdrop: asOneOf(coverRaw.textBackdrop, TEXT_BACKDROPS),
           aspectRatio: asString(coverRaw.aspectRatio),
+          deviceProfiles: readCoverDeviceProfiles(coverRaw.deviceProfiles),
         }
       : undefined,
     typography: typoRaw
@@ -232,20 +473,31 @@ export function readPublicDesignConfig(
           pairingId: asString(typoRaw.pairingId),
           headingFont: asString(typoRaw.headingFont),
           bodyFont: asString(typoRaw.bodyFont),
+          titleLanguage: asString(typoRaw.titleLanguage),
+          subtitleLanguage: asString(typoRaw.subtitleLanguage),
+          titleWeight: asNumber(typoRaw.titleWeight),
+          subtitleWeight: asNumber(typoRaw.subtitleWeight),
+          titleItalic: asBool(typoRaw.titleItalic),
+          subtitleItalic: asBool(typoRaw.subtitleItalic),
           titleSize: asNumber(typoRaw.titleSize),
           subtitleSize: asNumber(typoRaw.subtitleSize),
+          mobileTitleSize: asNumber(typoRaw.mobileTitleSize),
+          mobileSubtitleSize: asNumber(typoRaw.mobileSubtitleSize),
         }
       : undefined,
     grid: gridRaw
       ? {
           layout:
-            layout === "masonry" || layout === "grid" || layout === "justified" || layout === "carousel"
+            layout === "masonry" ||
+            layout === "grid" ||
+            layout === "justified" ||
+            layout === "carousel"
               ? layout
               : undefined,
           columns: asNumber(gridRaw.columns),
           gap: asNumber(gridRaw.gap),
           showInfo: asBool(gridRaw.showInfo),
-      }
+        }
       : undefined,
     sceneHeaders,
     branding: brandingRaw
@@ -254,6 +506,10 @@ export function readPublicDesignConfig(
           monogram: asString(brandingRaw.monogram),
           brandColor: asString(brandingRaw.brandColor),
           watermarkStyle: asOneOf(brandingRaw.watermarkStyle, WATERMARK_STYLES),
+          logoSize: asNumber(brandingRaw.logoSize),
+          logoOpacity: asNumber(brandingRaw.logoOpacity),
+          watermarkText: asString(brandingRaw.watermarkText),
+          watermarkOpacity: asNumber(brandingRaw.watermarkOpacity),
         }
       : undefined,
     version: asNumber(root.version),
@@ -273,10 +529,147 @@ export function readPublicCoverThumbnails(
   return Object.keys(out).length > 0 ? out : null;
 }
 
+export function readPublicCoverProfileThumbnails(
+  settings: Record<string, unknown> | undefined | null,
+): CoverProfileThumbnailMap | null {
+  if (!settings) return null;
+  const raw = asObject(settings["cover_profile_thumbnails"]);
+  if (!raw) return null;
+  const out: CoverProfileThumbnailMap = {};
+  for (const device of ["desktop", "phone"] as const) {
+    const urlsRaw = asObject(raw[device]);
+    if (!urlsRaw) continue;
+    const urls: Record<string, string> = {};
+    for (const [key, value] of Object.entries(urlsRaw)) {
+      if (typeof value === "string" && value.length > 0) urls[key] = value;
+    }
+    if (Object.keys(urls).length > 0) out[device] = urls;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+function mergeCoverProfiles(
+  base: CoverDeviceProfile,
+  override: CoverDeviceProfile | undefined,
+): CoverDeviceProfile {
+  if (!override) return base;
+  const merged: CoverDeviceProfile = { ...base };
+  for (const [key, value] of Object.entries(override) as Array<
+    [keyof CoverDeviceProfile, CoverDeviceProfile[keyof CoverDeviceProfile]]
+  >) {
+    if (key === "typography" || value === undefined) continue;
+    merged[key] = value as never;
+  }
+  merged.typography = {
+    ...(base.typography || {}),
+    ...(override.typography || {}),
+  };
+  for (const key of Object.keys(merged.typography) as Array<
+    keyof CoverDeviceTypography
+  >) {
+    if (merged.typography[key] === undefined) delete merged.typography[key];
+  }
+  return {
+    ...merged,
+    typography:
+      Object.keys(merged.typography).length > 0 ? merged.typography : undefined,
+  };
+}
+
+function legacyDesktopProfile(
+  cover: PublicDesignConfig["cover"] | undefined,
+  typography: PublicDesignConfig["typography"] | undefined,
+): CoverDeviceProfile {
+  return {
+    assetId: cover?.assetId,
+    assetSlots: cover?.assetSlots,
+    styleId: cover?.styleId,
+    layoutPreset: cover?.layoutPreset,
+    mediaMode: cover?.mediaMode,
+    focalPoint: cover?.focalPoint,
+    slotFocalPoints: cover?.slotFocalPoints,
+    aspectRatio: cover?.aspectRatio,
+    title: cover?.title,
+    subtitle: cover?.subtitle,
+    titleVisible: cover?.titleVisible,
+    subtitleVisible: cover?.subtitleVisible,
+    titlePosition: cover?.titlePosition,
+    subtitlePosition: cover?.subtitlePosition,
+    textAlign: cover?.textAlign,
+    textColor: cover?.textColor,
+    titleColor: cover?.titleColor,
+    subtitleColor: cover?.subtitleColor,
+    textShadow: cover?.textShadow,
+    scrimStyle: cover?.scrimStyle,
+    textBackdrop: cover?.textBackdrop,
+    typography: {
+      headingFont: typography?.headingFont,
+      bodyFont: typography?.bodyFont,
+      titleLanguage: typography?.titleLanguage,
+      subtitleLanguage: typography?.subtitleLanguage,
+      titleWeight: typography?.titleWeight,
+      subtitleWeight: typography?.subtitleWeight,
+      titleItalic: typography?.titleItalic,
+      subtitleItalic: typography?.subtitleItalic,
+      titleSize: typography?.titleSize,
+      subtitleSize: typography?.subtitleSize,
+    },
+  };
+}
+
+function legacyPhoneProfile(
+  desktop: CoverDeviceProfile,
+  cover: PublicDesignConfig["cover"] | undefined,
+  typography: PublicDesignConfig["typography"] | undefined,
+): CoverDeviceProfile {
+  return {
+    ...desktop,
+    focalPoint: cover?.mobileFocalPoint || desktop.focalPoint,
+    slotFocalPoints: cover?.mobileSlotFocalPoints || desktop.slotFocalPoints,
+    aspectRatio: cover?.mobileAspectRatio || desktop.aspectRatio,
+    titlePosition: cover?.mobileTitlePosition || desktop.titlePosition,
+    subtitlePosition: cover?.mobileSubtitlePosition || desktop.subtitlePosition,
+    typography: {
+      ...(desktop.typography || {}),
+      titleSize: typography?.mobileTitleSize || desktop.typography?.titleSize,
+      subtitleSize:
+        typography?.mobileSubtitleSize || desktop.typography?.subtitleSize,
+    },
+  };
+}
+
+export function resolveCoverDeviceProfile(
+  design: PublicDesignConfig | null | undefined,
+  device: CoverDevice,
+): ResolvedCoverDeviceProfile {
+  const cover = design?.cover;
+  const legacyDesktop = legacyDesktopProfile(cover, design?.typography);
+  const desktop = mergeCoverProfiles(
+    legacyDesktop,
+    cover?.deviceProfiles?.desktop,
+  );
+  const resolvedCover =
+    device === "phone"
+      ? mergeCoverProfiles(
+          legacyPhoneProfile(desktop, cover, design?.typography),
+          cover?.deviceProfiles?.phone,
+        )
+      : desktop;
+
+  return {
+    device,
+    cover: resolvedCover,
+    typography: resolvedCover.typography || {},
+  };
+}
+
 export function readGalleryCoverAssetId(
   settings: Record<string, unknown> | undefined | null,
   fallbackAssetId?: string | null,
 ): string | undefined {
-  const designAssetId = readPublicDesignConfig(settings)?.cover?.assetId;
+  const designAssetId = resolveCoverDeviceProfile(
+    readPublicDesignConfig(settings),
+    "desktop",
+  ).cover.assetId;
   return designAssetId || fallbackAssetId || undefined;
 }

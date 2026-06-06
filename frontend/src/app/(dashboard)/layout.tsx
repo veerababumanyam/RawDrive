@@ -608,7 +608,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       </header>
 
       {/* Main content — offset by sidebar on desktop */}
-      <main className="min-h-screen px-4 pb-12 pt-24 transition-[margin-left] duration-200 ease-out md:ml-[var(--sidebar-width)] md:px-6">
+      <main className="dashboard-main min-h-screen px-4 pb-12 transition-[margin-left] duration-200 ease-out md:ml-[var(--sidebar-width)] md:px-6">
         {children}
       </main>
 

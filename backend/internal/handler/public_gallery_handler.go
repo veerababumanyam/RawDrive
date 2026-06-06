@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -1228,6 +1229,8 @@ func (h *PublicGalleryHandler) GetBySlug(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	needsAssetAccessToken := hasSession || h.galleryHasClientEncryptedAssets(r.Context(), gallery.ID)
+
 	// PERF-HDR: conditional-request handling + a consistent caching policy for
 	// the public gallery metadata read. The ETag is derived from fields that are
 	// CONSTANT for an unchanged gallery (ID + DB-managed UpdatedAt), so it tracks
@@ -1251,7 +1254,7 @@ func (h *PublicGalleryHandler) GetBySlug(w http.ResponseWriter, r *http.Request)
 	//     stale so a gallery edit is picked up promptly.
 	etag := fmt.Sprintf(`"g-%s-%d"`, gallery.ID, gallery.UpdatedAt.Unix())
 	w.Header().Set("ETag", etag)
-	if hasSession {
+	if needsAssetAccessToken {
 		w.Header().Set("Cache-Control", "private, no-store, must-revalidate")
 	} else {
 		w.Header().Set("Cache-Control", "public, max-age=0, s-maxage=60, must-revalidate")
@@ -1287,11 +1290,33 @@ func (h *PublicGalleryHandler) GetBySlug(w http.ResponseWriter, r *http.Request)
 	// over the legacy `gallery.cover_asset_id`; both are tried before
 	// giving up. Best-effort: any failure leaves cover_thumbnails unset and
 	// the frontend falls back to its existing legacy behavior.
-	if h.assetSvc != nil {
-		if coverID := resolveDesignCoverAssetID(gallery.Settings, gallery.CoverAssetID); coverID != nil {
-			if coverAsset, err := h.assetSvc.GetByID(r.Context(), *coverID); err == nil && coverAsset != nil && len(coverAsset.ThumbnailURLs) > 0 {
-				gallery.Settings["cover_thumbnails"] = coverAsset.ThumbnailURLs
-				gallery.Settings["cover_asset_resolved_id"] = coverAsset.ID.String()
+	profileCoverIDs := resolveDesignCoverProfileAssetIDs(gallery.Settings, gallery.CoverAssetID)
+	if len(profileCoverIDs) > 0 {
+		uniqueIDs := make([]uuid.UUID, 0, len(profileCoverIDs))
+		seenIDs := make(map[uuid.UUID]struct{}, len(profileCoverIDs))
+		for _, id := range profileCoverIDs {
+			if _, ok := seenIDs[id]; ok {
+				continue
+			}
+			seenIDs[id] = struct{}{}
+			uniqueIDs = append(uniqueIDs, id)
+		}
+		assetsByID, err := h.publicCoverAssetsForGallery(r.Context(), gallery.ID, uniqueIDs)
+		if err == nil {
+			profileThumbnails := make(map[string]map[string]string, len(profileCoverIDs))
+			for device, id := range profileCoverIDs {
+				asset := assetsByID[id]
+				if asset == nil || len(asset.ThumbnailURLs) == 0 {
+					continue
+				}
+				profileThumbnails[device] = asset.ThumbnailURLs
+				if device == "desktop" {
+					gallery.Settings["cover_thumbnails"] = asset.ThumbnailURLs
+					gallery.Settings["cover_asset_resolved_id"] = asset.ID.String()
+				}
+			}
+			if len(profileThumbnails) > 0 {
+				gallery.Settings["cover_profile_thumbnails"] = profileThumbnails
 			}
 		}
 	}
@@ -1299,12 +1324,12 @@ func (h *PublicGalleryHandler) GetBySlug(w http.ResponseWriter, r *http.Request)
 	// SEC-1 (security audit 2026-05-30): mint a short-lived, gallery-scoped,
 	// signed asset-access token so header-less <img>/<audio> byte loads
 	// (split-origin) can authenticate via ?at= instead of carrying the durable
-	// session token in the URL. Only minted once access is PROVEN (hasSession),
-	// never for a password/private gallery viewed without a valid session, so
-	// the token can't bypass the gate. Open galleries serve bytes anonymously
-	// and need no token. Best-effort: only available on the stateless HMAC path
-	// (prod signing key wired); gallery.Settings is already non-nil here.
-	if h.accessSvc != nil && hasSession {
+	// session token in the URL. Only minted after the normal gallery access gate
+	// has passed: session-bound galleries need it for protected bytes, and open
+	// client-side-encrypted galleries need it to fetch ciphertext that the URL
+	// fragment key can decrypt. Best-effort: only available on the stateless HMAC
+	// path (prod signing key wired); gallery.Settings is already non-nil here.
+	if h.accessSvc != nil && needsAssetAccessToken {
 		if at, err := h.accessSvc.IssueAssetAccessToken(gallery.ID); err == nil {
 			gallery.Settings["asset_access_token"] = at
 		}
@@ -1320,25 +1345,123 @@ func (h *PublicGalleryHandler) GetBySlug(w http.ResponseWriter, r *http.Request)
 	respondJSON(w, http.StatusOK, gallery)
 }
 
-// resolveDesignCoverAssetID returns the asset ID the public viewer should use
-// for the cover thumbnail. Checks design_config.cover.assetId first, then
-// falls back to the gallery's legacy CoverAssetID. Returns nil only when
-// neither source has a usable UUID.
-func resolveDesignCoverAssetID(settings map[string]interface{}, fallback *uuid.UUID) *uuid.UUID {
+func resolveDesignCoverProfileAssetIDs(settings map[string]interface{}, fallback *uuid.UUID) map[string]uuid.UUID {
+	out := make(map[string]uuid.UUID, 2)
 	if settings != nil {
 		if raw, ok := settings["design_config"]; ok {
 			if m, ok := raw.(map[string]interface{}); ok {
 				if cover, ok := m["cover"].(map[string]interface{}); ok {
-					if idStr, ok := cover["assetId"].(string); ok && idStr != "" {
-						if parsed, err := uuid.Parse(idStr); err == nil {
-							return &parsed
+					desktopID := uuidFromCoverMap(cover, "assetId")
+					if profiles, ok := cover["deviceProfiles"].(map[string]interface{}); ok {
+						if desktopProfile, ok := profiles["desktop"].(map[string]interface{}); ok {
+							if id := uuidFromCoverMap(desktopProfile, "assetId"); id != nil {
+								desktopID = id
+							}
 						}
+					}
+					if desktopID != nil {
+						out["desktop"] = *desktopID
+					}
+
+					phoneID := desktopID
+					if profiles, ok := cover["deviceProfiles"].(map[string]interface{}); ok {
+						if phoneProfile, ok := profiles["phone"].(map[string]interface{}); ok {
+							if id := uuidFromCoverMap(phoneProfile, "assetId"); id != nil {
+								phoneID = id
+							}
+						}
+					}
+					if phoneID != nil {
+						out["phone"] = *phoneID
 					}
 				}
 			}
 		}
 	}
-	return fallback
+	if len(out) == 0 && fallback != nil {
+		out["desktop"] = *fallback
+		out["phone"] = *fallback
+	}
+	return out
+}
+
+func uuidFromCoverMap(m map[string]interface{}, key string) *uuid.UUID {
+	if idStr, ok := m[key].(string); ok {
+		idStr = strings.TrimSpace(idStr)
+		if idStr == "" {
+			return nil
+		}
+		if parsed, err := uuid.Parse(idStr); err == nil {
+			return &parsed
+		}
+	}
+	return nil
+}
+
+func (h *PublicGalleryHandler) publicCoverAssetsForGallery(ctx context.Context, galleryID uuid.UUID, assetIDs []uuid.UUID) (map[uuid.UUID]*repository.Asset, error) {
+	out := make(map[uuid.UUID]*repository.Asset, len(assetIDs))
+	if h.pool == nil || len(assetIDs) == 0 {
+		return out, nil
+	}
+
+	rows, err := poolAssetBatchSource{pool: h.pool}.GetByIDs(ctx, assetIDs)
+	if err != nil {
+		return out, err
+	}
+	linkedRows, err := h.pool.Query(ctx,
+		`SELECT ga.asset_id
+		 FROM gallery_assets ga
+		 WHERE ga.gallery_id = $1 AND ga.asset_id = ANY($2::uuid[])`,
+		galleryID, assetIDs,
+	)
+	if err != nil {
+		return out, err
+	}
+	defer linkedRows.Close()
+	linked := make(map[uuid.UUID]struct{}, len(assetIDs))
+	for linkedRows.Next() {
+		var id uuid.UUID
+		if err := linkedRows.Scan(&id); err != nil {
+			return out, err
+		}
+		linked[id] = struct{}{}
+	}
+	if err := linkedRows.Err(); err != nil {
+		return out, err
+	}
+
+	for _, asset := range rows {
+		if asset == nil {
+			continue
+		}
+		if _, ok := linked[asset.ID]; ok {
+			out[asset.ID] = asset
+		}
+	}
+	return out, nil
+}
+
+func (h *PublicGalleryHandler) galleryHasClientEncryptedAssets(ctx context.Context, galleryID uuid.UUID) bool {
+	if h.pool == nil {
+		return false
+	}
+	var exists bool
+	err := h.pool.QueryRow(ctx,
+		`SELECT EXISTS (
+			SELECT 1
+			FROM gallery_assets ga
+			JOIN assets a ON a.id = ga.asset_id
+			WHERE ga.gallery_id = $1
+			  AND a.deleted_at IS NULL
+			  AND (a.encryption_algo = 'client-side-aes-256-gcm' OR a.media_encryption IS NOT NULL)
+		)`,
+		galleryID,
+	).Scan(&exists)
+	if err != nil {
+		log.Printf("public gallery encrypted asset lookup failed: gallery_id=%s err=%v", galleryID, err)
+		return false
+	}
+	return exists
 }
 
 // publicAssetResponse is the enriched asset returned to public gallery viewers.
@@ -2302,7 +2425,7 @@ func (h *PublicGalleryHandler) ListPersonPhotos(w http.ResponseWriter, r *http.R
 		respondJSON(w, http.StatusOK, map[string]any{"asset_ids": []string{}, "count": 0})
 		return
 	}
-	ids, err := h.faceRepo.ListClusterAssetIDsInGallery(r.Context(), gallery.ID, personID)
+	ids, err := h.faceRepo.ListClusterAssetIDsInGallery(r.Context(), gallery.WorkspaceID, gallery.ID, personID)
 	if err != nil {
 		http.Error(w, `{"error":"failed to list person photos"}`, http.StatusInternalServerError)
 		return
@@ -2513,7 +2636,7 @@ func (h *PublicGalleryHandler) PhotoSearch(w http.ResponseWriter, r *http.Reques
 	// Gallery-scoped asset list. Uses the same helper the public People
 	// tab uses for click-through — guarantees the visitor only sees
 	// photos from THIS shared gallery, never any other workspace gallery.
-	assetIDs, err := h.faceRepo.ListClusterAssetIDsInGallery(r.Context(), gallery.ID, winner.label)
+	assetIDs, err := h.faceRepo.ListClusterAssetIDsInGallery(r.Context(), gallery.WorkspaceID, gallery.ID, winner.label)
 	if err != nil {
 		http.Error(w, `{"error":"could not load matched photos"}`, http.StatusInternalServerError)
 		return

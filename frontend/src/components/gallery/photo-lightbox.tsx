@@ -57,6 +57,7 @@ import { FaceBoxesOverlay } from "./face-boxes-overlay";
 import { VideoPlayer } from "./video-player";
 import { Filmstrip } from "./filmstrip";
 import { CompareMode } from "./compare-mode";
+import { LockedMediaFallback } from "./media-key-recovery";
 import { useTouchGestures } from "@/hooks/use-touch-gestures";
 import { useScrollRestore } from "@/hooks/use-scroll-restore";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
@@ -181,7 +182,14 @@ function BurstSiblingThumb({
           onError={handleImageError}
         />
       ) : (
-        <div className="h-full w-full bg-surface-overlay/5" />
+        <LockedMediaFallback
+          asset={sibling}
+          error={media.error}
+          message={media.error || "Preview unavailable"}
+          mode="compact"
+          allowRecovery={false}
+          className="bg-surface-overlay/5"
+        />
       )}
       {sibling.burst_is_top_pick && (
         <div
@@ -835,9 +843,12 @@ export function PhotoLightbox({
                       draggable={false}
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-sm text-text-media/60">
-                      {media.error || "Preview unavailable"}
-                    </div>
+                    <LockedMediaFallback
+                      asset={asset}
+                      error={media.error}
+                      message={media.error || "Preview unavailable"}
+                      mode="viewer"
+                    />
                   )}
                   {/* GAL-FR-088 — watermark overlay */}
                   <WatermarkOverlay config={gallery?.watermark_config} />

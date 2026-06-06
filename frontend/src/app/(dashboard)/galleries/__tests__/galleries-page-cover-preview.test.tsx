@@ -239,8 +239,9 @@ describe("GalleriesPage cover previews", () => {
 
     render(<GalleriesPage />);
 
+    expect(await screen.findByText("Encrypted photo locked")).toBeInTheDocument();
     expect(
-      await screen.findByText("Encrypted cover key unavailable"),
+      await screen.findByRole("button", { name: "Restore key" }),
     ).toBeInTheDocument();
     expect(mocks.getAsset).not.toHaveBeenCalled();
   });

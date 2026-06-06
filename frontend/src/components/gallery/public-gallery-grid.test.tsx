@@ -37,6 +37,10 @@ function makeAssets(n: number): PublicAsset[] {
   })) as unknown as PublicAsset[];
 }
 
+function renderedImageCount(container: HTMLElement): number {
+  return container.querySelectorAll("img").length;
+}
+
 // IntersectionObserver is not implemented in jsdom. Provide a controllable
 // stub so we can (a) assert the component registers a sentinel observer and
 // (b) drive "scrolled into view" to exercise the load-more path.
@@ -75,14 +79,16 @@ describe("PublicGalleryGrid — F-092 incremental rendering", () => {
   it("does NOT eagerly mount every tile for a large gallery", () => {
     // 500 assets — far more than the initial render window. The regression
     // (rendering visibleAssets.map directly) mounts all 500 <img> nodes.
-    render(<PublicGalleryGrid slug="big" assets={makeAssets(500)} />);
-    const imgs = screen.getAllByRole("img");
+    const { container } = render(
+      <PublicGalleryGrid slug="big" assets={makeAssets(500)} />,
+    );
+    const imgs = renderedImageCount(container);
     // Initial window is capped (INITIAL_GRID_RENDER_COUNT = 60). Assert we
     // rendered substantially fewer than the full set. This fails on the
     // pre-fix code (which rendered all 500) and passes after.
-    expect(imgs.length).toBeLessThan(500);
-    expect(imgs.length).toBeLessThanOrEqual(60);
-    expect(imgs.length).toBeGreaterThan(0);
+    expect(imgs).toBeLessThan(500);
+    expect(imgs).toBeLessThanOrEqual(60);
+    expect(imgs).toBeGreaterThan(0);
   });
 
   it("renders a load-more sentinel and an IntersectionObserver when more assets remain", () => {
@@ -91,9 +97,11 @@ describe("PublicGalleryGrid — F-092 incremental rendering", () => {
     expect(observeCount).toBeGreaterThan(0);
   });
 
-  it("appends the next batch when the sentinel intersects, eventually reaching every asset", () => {
-    render(<PublicGalleryGrid slug="big" assets={makeAssets(130)} />);
-    expect(screen.getAllByRole("img").length).toBeLessThanOrEqual(60);
+  it("appends the next batch when the sentinel intersects, eventually reaching every asset", async () => {
+    const { container } = render(
+      <PublicGalleryGrid slug="big" assets={makeAssets(130)} />,
+    );
+    expect(renderedImageCount(container)).toBeLessThanOrEqual(60);
 
     // Drive the sentinel into view repeatedly. Each batch grows visibleCount,
     // which re-renders and re-creates the observer (cleanup + re-observe), so
@@ -105,20 +113,26 @@ describe("PublicGalleryGrid — F-092 incremental rendering", () => {
       if (!screen.queryByTestId("grid-load-more-sentinel")) break;
       const cb = lastObserverCallback;
       if (!cb) break;
-      act(() => {
+      const before = renderedImageCount(container);
+      await act(async () => {
         cb([{ isIntersecting: true }]);
       });
+      await waitFor(() =>
+        expect(renderedImageCount(container)).toBeGreaterThan(before),
+      );
     }
 
     // All 130 photos are now reachable in the grid, and the sentinel has
     // unmounted because nothing remains to render.
-    expect(screen.getAllByRole("img").length).toBe(130);
+    expect(renderedImageCount(container)).toBe(130);
     expect(screen.queryByTestId("grid-load-more-sentinel")).toBeNull();
   });
 
   it("does not render a sentinel when the gallery fits in the first window", () => {
-    render(<PublicGalleryGrid slug="small" assets={makeAssets(10)} />);
-    expect(screen.getAllByRole("img").length).toBe(10);
+    const { container } = render(
+      <PublicGalleryGrid slug="small" assets={makeAssets(10)} />,
+    );
+    expect(renderedImageCount(container)).toBe(10);
     expect(screen.queryByTestId("grid-load-more-sentinel")).toBeNull();
   });
 });

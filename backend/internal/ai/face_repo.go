@@ -263,17 +263,26 @@ func (r *FaceRepo) ListClusters(ctx context.Context, workspaceID uuid.UUID, gall
 	// computeCropStyle always saw {x:0,y:0,w:0,h:0} and fell back to
 	// object-position:center — the People-tab cover thumbnails rendered
 	// the whole photo instead of the face.
-	query := `SELECT fc.cluster_label,
-		 MAX(fc.cluster_name) AS cluster_name,
-		 COUNT(*) AS face_count,
-		 COUNT(DISTINCT fc.asset_id) AS asset_count,
-		 (SELECT fc2.asset_id FROM face_clusters fc2
-		  WHERE fc2.cluster_label = fc.cluster_label AND fc2.workspace_id = $1
-		  ORDER BY fc2.confidence DESC, fc2.id ASC LIMIT 1) AS sample_asset_id,
-		 (SELECT fc2.bounding_box FROM face_clusters fc2
-		  WHERE fc2.cluster_label = fc.cluster_label AND fc2.workspace_id = $1
-		  ORDER BY fc2.confidence DESC, fc2.id ASC LIMIT 1) AS sample_bounding_box
-		 FROM face_clusters fc`
+	query := `WITH RECURSIVE alias_chain(alias_label, canonical_label, depth) AS (
+			SELECT alias_label, canonical_label, 1
+			FROM face_identity_aliases
+			WHERE workspace_id = $1
+			UNION ALL
+			SELECT alias_chain.alias_label, a.canonical_label, alias_chain.depth + 1
+			FROM alias_chain
+			INNER JOIN face_identity_aliases a ON a.alias_label = alias_chain.canonical_label
+			WHERE a.workspace_id = $1 AND alias_chain.depth < 8
+		),
+		resolved_aliases AS (
+			SELECT DISTINCT ON (alias_label) alias_label, canonical_label
+			FROM alias_chain
+			ORDER BY alias_label, depth DESC
+		),
+		scoped_faces AS (
+			SELECT fc.id, fc.asset_id, fc.bounding_box, fc.cluster_label, fc.cluster_name,
+			       fc.confidence, COALESCE(ra.canonical_label, fc.cluster_label) AS resolved_label
+			FROM face_clusters fc
+			LEFT JOIN resolved_aliases ra ON ra.alias_label = fc.cluster_label`
 
 	args := []any{workspaceID}
 	if galleryID != nil {
@@ -281,8 +290,17 @@ func (r *FaceRepo) ListClusters(ctx context.Context, workspaceID uuid.UUID, gall
 		args = append(args, *galleryID)
 	}
 	query += ` WHERE fc.workspace_id = $1
-		   AND fc.cluster_label IS NOT NULL`
-	query += ` GROUP BY fc.cluster_label ORDER BY face_count DESC`
+		   AND fc.cluster_label IS NOT NULL
+		)
+		SELECT resolved_label,
+		       (ARRAY_AGG(cluster_name ORDER BY (cluster_label = resolved_label) DESC, confidence DESC, id ASC))[1] AS cluster_name,
+		       COUNT(*) AS face_count,
+		       COUNT(DISTINCT asset_id) AS asset_count,
+		       (ARRAY_AGG(asset_id ORDER BY confidence DESC, id ASC))[1] AS sample_asset_id,
+		       (ARRAY_AGG(bounding_box ORDER BY confidence DESC, id ASC))[1] AS sample_bounding_box
+		FROM scoped_faces
+		GROUP BY resolved_label
+		ORDER BY face_count DESC`
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -317,12 +335,20 @@ func (r *FaceRepo) ListClusters(ctx context.Context, workspaceID uuid.UUID, gall
 // Used by the face filter endpoint (E8-S3 "FaceID filter") and the smart
 // album smart-filter evaluator to resolve face_cluster_label → asset list.
 func (r *FaceRepo) ListClusterAssetIDs(ctx context.Context, workspaceID, clusterLabel uuid.UUID) ([]uuid.UUID, error) {
+	canonical, err := r.ResolveClusterLabel(ctx, workspaceID, clusterLabel)
+	if err != nil {
+		return nil, err
+	}
+	labels, err := r.clusterLabelsForCanonical(ctx, workspaceID, canonical)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT DISTINCT asset_id
 		 FROM face_clusters
-		 WHERE workspace_id = $1 AND cluster_label = $2
+		 WHERE workspace_id = $1 AND cluster_label = ANY($2)
 		 ORDER BY asset_id`,
-		workspaceID, clusterLabel)
+		workspaceID, labels)
 	if err != nil {
 		return nil, fmt.Errorf("face repo: list cluster assets: %w", err)
 	}
@@ -346,18 +372,28 @@ func (r *FaceRepo) ListClusterAssetIDs(ctx context.Context, workspaceID, cluster
 // same person's photos across OTHER galleries in the workspace —
 // cross-gallery leakage is a real concern when one person (e.g. a
 // vendor photographer) attends multiple weddings the studio hosts.
-func (r *FaceRepo) ListClusterAssetIDsInGallery(ctx context.Context, galleryID, clusterLabel uuid.UUID) ([]uuid.UUID, error) {
+func (r *FaceRepo) ListClusterAssetIDsInGallery(ctx context.Context, workspaceID, galleryID, clusterLabel uuid.UUID) ([]uuid.UUID, error) {
 	// JOIN through gallery_assets — same reason as ListClusters above:
 	// face_clusters.gallery_id is denormalized and frequently NULL when
 	// the asset was detected via the auto-enqueue path. gallery_assets
 	// is the source of truth.
+	canonical, err := r.ResolveClusterLabel(ctx, workspaceID, clusterLabel)
+	if err != nil {
+		return nil, err
+	}
+	labels, err := r.clusterLabelsForCanonical(ctx, workspaceID, canonical)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT DISTINCT fc.asset_id
 		 FROM face_clusters fc
 		 INNER JOIN gallery_assets ga ON ga.asset_id = fc.asset_id
-		 WHERE ga.gallery_id = $1 AND fc.cluster_label = $2
+		 WHERE fc.workspace_id = $1
+		   AND ga.gallery_id = $2
+		   AND fc.cluster_label = ANY($3)
 		 ORDER BY fc.asset_id`,
-		galleryID, clusterLabel)
+		workspaceID, galleryID, labels)
 	if err != nil {
 		return nil, fmt.Errorf("face repo: list cluster assets in gallery: %w", err)
 	}
@@ -372,6 +408,77 @@ func (r *FaceRepo) ListClusterAssetIDsInGallery(ctx context.Context, galleryID, 
 		ids = append(ids, id)
 	}
 	return ids, rows.Err()
+}
+
+// ListClusterFaces returns face rows in a cluster for photographer review.
+// When galleryID is supplied, gallery membership is resolved through
+// gallery_assets so denormalized face_clusters.gallery_id gaps do not hide
+// faces that belong to the opened gallery.
+func (r *FaceRepo) ListClusterFaces(ctx context.Context, workspaceID, clusterLabel uuid.UUID, galleryID *uuid.UUID) ([]*FaceCluster, error) {
+	canonical, err := r.ResolveClusterLabel(ctx, workspaceID, clusterLabel)
+	if err != nil {
+		return nil, err
+	}
+	labels, err := r.clusterLabelsForCanonical(ctx, workspaceID, canonical)
+	if err != nil {
+		return nil, err
+	}
+	query := `SELECT fc.id, fc.workspace_id, fc.asset_id, fc.gallery_id, fc.face_index, fc.bounding_box,
+		 fc.cluster_label, fc.cluster_name, fc.confidence, fc.source, fc.created_at, fc.updated_at
+		 FROM face_clusters fc`
+	args := []any{workspaceID, labels}
+	if galleryID != nil {
+		query += ` INNER JOIN gallery_assets ga ON ga.asset_id = fc.asset_id AND ga.gallery_id = $3`
+		args = append(args, *galleryID)
+	}
+	query += ` WHERE fc.workspace_id = $1
+		   AND fc.cluster_label = ANY($2)
+		 ORDER BY fc.confidence DESC, fc.asset_id, fc.face_index`
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("face repo: list cluster faces: %w", err)
+	}
+	defer rows.Close()
+
+	return scanFaces(rows)
+}
+
+func (r *FaceRepo) clusterLabelsForCanonical(ctx context.Context, workspaceID, canonicalLabel uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := r.pool.Query(ctx,
+		`WITH RECURSIVE aliases(label, depth) AS (
+			SELECT alias_label, 1
+			FROM face_identity_aliases
+			WHERE workspace_id = $1 AND canonical_label = $2
+			UNION ALL
+			SELECT a.alias_label, aliases.depth + 1
+			FROM face_identity_aliases a
+			INNER JOIN aliases ON a.canonical_label = aliases.label
+			WHERE a.workspace_id = $1 AND aliases.depth < 8
+		)
+		SELECT $2::uuid AS label
+		UNION
+		SELECT label FROM aliases`,
+		workspaceID, canonicalLabel)
+	if err != nil {
+		return nil, fmt.Errorf("face repo: list cluster aliases: %w", err)
+	}
+	defer rows.Close()
+
+	labels := []uuid.UUID{canonicalLabel}
+	seen := map[uuid.UUID]struct{}{canonicalLabel: {}}
+	for rows.Next() {
+		var label uuid.UUID
+		if err := rows.Scan(&label); err != nil {
+			return nil, fmt.Errorf("face repo: scan cluster alias: %w", err)
+		}
+		if _, ok := seen[label]; ok {
+			continue
+		}
+		seen[label] = struct{}{}
+		labels = append(labels, label)
+	}
+	return labels, rows.Err()
 }
 
 // DeleteFacesByAsset removes all face rows for an asset.
@@ -392,26 +499,120 @@ func (r *FaceRepo) DeleteFacesByAssetAndSource(ctx context.Context, assetID uuid
 
 // MergeClusters moves all faces from src cluster to dst cluster within a workspace.
 func (r *FaceRepo) MergeClusters(ctx context.Context, workspaceID, srcLabel, dstLabel uuid.UUID, dstName string) (int, error) {
-	tag, err := r.pool.Exec(ctx,
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("face repo: begin merge clusters: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after Commit
+
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO face_identity_aliases (workspace_id, alias_label, canonical_label, reason, updated_at)
+		 VALUES ($1, $2, $3, 'manual_merge', now())
+		 ON CONFLICT (workspace_id, alias_label)
+		 DO UPDATE SET canonical_label = EXCLUDED.canonical_label,
+		               reason = EXCLUDED.reason,
+		               updated_at = now()`,
+		workspaceID, srcLabel, dstLabel); err != nil {
+		return 0, fmt.Errorf("face repo: upsert cluster alias: %w", err)
+	}
+
+	tag, err := tx.Exec(ctx,
 		`UPDATE face_clusters SET cluster_label = $3, cluster_name = $4, updated_at = now()
 		 WHERE workspace_id = $1 AND cluster_label = $2`,
 		workspaceID, srcLabel, dstLabel, dstName)
 	if err != nil {
 		return 0, fmt.Errorf("face repo: merge clusters: %w", err)
 	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("face repo: commit merge clusters: %w", err)
+	}
 	return int(tag.RowsAffected()), nil
 }
 
-// SplitCluster creates a new cluster label for specified face IDs.
-func (r *FaceRepo) SplitCluster(ctx context.Context, faceIDs []uuid.UUID, newLabel uuid.UUID, newName string) error {
+// SplitCluster creates a new cluster label for specified face IDs. The face IDs
+// must all belong to the caller's workspace and source cluster, and the split
+// cannot empty the original cluster.
+func (r *FaceRepo) SplitCluster(ctx context.Context, workspaceID, sourceLabel uuid.UUID, faceIDs []uuid.UUID, newLabel uuid.UUID, newName string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("face repo: begin split cluster: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after Commit
+
+	var total int
+	if err := tx.QueryRow(ctx,
+		`SELECT COUNT(*) FROM face_clusters WHERE workspace_id = $1 AND cluster_label = $2`,
+		workspaceID, sourceLabel).Scan(&total); err != nil {
+		return fmt.Errorf("face repo: count source cluster: %w", err)
+	}
+	if total == 0 {
+		return ErrClusterNotFound
+	}
+
+	seen := make(map[uuid.UUID]struct{}, len(faceIDs))
+	unique := make([]uuid.UUID, 0, len(faceIDs))
 	for _, fid := range faceIDs {
-		if _, err := r.pool.Exec(ctx,
+		if _, ok := seen[fid]; ok {
+			continue
+		}
+		seen[fid] = struct{}{}
+		unique = append(unique, fid)
+
+		var exists bool
+		if err := tx.QueryRow(ctx,
+			`SELECT EXISTS (
+				SELECT 1 FROM face_clusters
+				WHERE id = $1 AND workspace_id = $2 AND cluster_label = $3
+			)`,
+			fid, workspaceID, sourceLabel).Scan(&exists); err != nil {
+			return fmt.Errorf("face repo: check split face %s: %w", fid, err)
+		}
+		if !exists {
+			return ErrNonMemberFace
+		}
+	}
+	if len(unique) >= total {
+		return ErrSplitWouldEmpty
+	}
+
+	for _, fid := range unique {
+		if _, err := tx.Exec(ctx,
 			`UPDATE face_clusters SET cluster_label = $2, cluster_name = $3, updated_at = now()
-			 WHERE id = $1`, fid, newLabel, newName); err != nil {
+			 WHERE id = $1 AND workspace_id = $4 AND cluster_label = $5`,
+			fid, newLabel, newName, workspaceID, sourceLabel); err != nil {
 			return fmt.Errorf("face repo: split face %s: %w", fid, err)
 		}
 	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("face repo: commit split cluster: %w", err)
+	}
 	return nil
+}
+
+// ResolveClusterLabel follows manual face identity aliases and returns the
+// canonical label. If no alias exists, the input label is already canonical.
+func (r *FaceRepo) ResolveClusterLabel(ctx context.Context, workspaceID, label uuid.UUID) (uuid.UUID, error) {
+	var out uuid.UUID
+	err := r.pool.QueryRow(ctx,
+		`WITH RECURSIVE chain(alias_label, canonical_label, depth) AS (
+			SELECT alias_label, canonical_label, 1
+			FROM face_identity_aliases
+			WHERE workspace_id = $1 AND alias_label = $2
+			UNION ALL
+			SELECT a.alias_label, a.canonical_label, chain.depth + 1
+			FROM face_identity_aliases a
+			INNER JOIN chain ON a.alias_label = chain.canonical_label
+			WHERE a.workspace_id = $1 AND chain.depth < 8
+		)
+		SELECT canonical_label FROM chain ORDER BY depth DESC LIMIT 1`,
+		workspaceID, label).Scan(&out)
+	if err == pgx.ErrNoRows {
+		return label, nil
+	}
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("face repo: resolve cluster label: %w", err)
+	}
+	return out, nil
 }
 
 func scanFaces(rows pgx.Rows) ([]*FaceCluster, error) {

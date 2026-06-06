@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   Cloud,
   FileText,
-  Lock,
   Plus,
   Sparkles,
   UserPlus,
@@ -22,11 +21,11 @@ import {
   GRID_VARIANTS,
   type EncryptedAssetLike,
 } from "@/lib/media-encryption/asset-media";
-import { MEDIA_KEY_UNAVAILABLE_MESSAGE } from "@/lib/media-encryption/media-key-store";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { readGalleryCoverAssetId } from "@/lib/gallery-design-config";
 import { cn } from "@/lib/utils";
 import { RecentGalleryMenu } from "./recent-gallery-menu";
+import { LockedMediaFallback } from "@/components/gallery/media-key-recovery";
 
 type GalleryCard = {
   id: string;
@@ -131,15 +130,15 @@ function DashboardGalleryCover({
     );
   }
 
-  if (media.error === MEDIA_KEY_UNAVAILABLE_MESSAGE) {
+  if (media.error) {
     return (
-      <div
-        className="absolute inset-0 flex items-center justify-center bg-surface-container-low text-text-tertiary"
-        title="Encrypted cover key unavailable"
-      >
-        <Lock className="h-8 w-8" aria-hidden="true" />
-        <span className="sr-only">Encrypted cover key unavailable</span>
-      </div>
+      <LockedMediaFallback
+        asset={fallbackAsset}
+        galleryId={gallery.id}
+        error={media.error}
+        message={media.error}
+        className="absolute inset-0 bg-surface-container-low"
+      />
     );
   }
 

@@ -7,18 +7,12 @@ import {
   getPublicGalleryBranding,
   getPublicGalleryWithSession,
 } from "@/lib/api/galleries";
-import { PublicGalleryAlbumChips } from "@/components/gallery/public-gallery-album-chips";
 import { listPublicBanners, listPublicProducts } from "@/lib/api/commerce";
-import { PublicGalleryEnhancements } from "@/components/gallery/public-gallery-enhancements";
-import { PublicGalleryGrid } from "@/components/gallery/public-gallery-grid";
-import { PublicGalleryProducts } from "@/components/gallery/public-gallery-products";
-import { PublicGalleryBanners } from "@/components/gallery/public-gallery-banners";
 import { GalleryPasswordGate } from "@/components/gallery/gallery-password-gate";
 import { GalleryLockedShell } from "@/components/gallery/gallery-locked-shell";
 import { SharePinGate } from "@/components/gallery/share-pin-gate";
-import { PublicGalleryHero } from "@/components/gallery/public-gallery-hero";
 import { PublicGallerySessionBridge } from "@/components/gallery/public-gallery-session-bridge";
-import { GalleryExpiryBanner } from "@/components/gallery/gallery-expiry-banner";
+import { PublicGalleryBody } from "@/components/gallery/public-gallery-body";
 import {
   galleryAccentCssVars,
   resolveGalleryAccent,
@@ -26,8 +20,9 @@ import {
 import {
   readPublicDesignConfig,
   readPublicCoverThumbnails,
+  readPublicCoverProfileThumbnails,
+  resolveCoverDeviceProfile,
 } from "@/lib/gallery-design-config";
-import { EmbeddedVideosPanel } from "@/components/gallery/embedded-videos-panel";
 import { readEmbeddedVideos } from "@/lib/embedded-videos";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import { Clock, Photo } from "@/components/icons";
@@ -269,6 +264,9 @@ export default async function PublicGalleryPage({
   // otherwise hide it from the asset list.
   const designConfig = readPublicDesignConfig(gallery.settings);
   const designCoverThumbnails = readPublicCoverThumbnails(gallery.settings);
+  const designCoverProfileThumbnails = readPublicCoverProfileThumbnails(
+    gallery.settings,
+  );
   // SEC-1: the backend mints a short-lived, gallery-scoped asset-access token
   // into gallery.settings.asset_access_token once access is proven (valid
   // session forwarded on this server-side fetch). Header-less <img>/<audio>
@@ -281,11 +279,12 @@ export default async function PublicGalleryPage({
           .asset_access_token as string)
       : null;
   const designCoverAssetId =
-    designConfig?.cover?.assetId || gallery.cover_asset_id;
+    resolveCoverDeviceProfile(designConfig, "desktop").cover.assetId ||
+    gallery.cover_asset_id;
   const designCoverAsset = designCoverAssetId
     ? (assets.find((asset) => asset.id === designCoverAssetId) ?? null)
     : null;
-  // 2026-05-18: embedded YouTube/Vimeo videos. Same shape the dashboard
+  // 2026-05-18: embedded YouTube/Vimeo/Instagram videos. Same shape the dashboard
   // editor writes — see frontend/src/lib/embedded-videos.ts. Empty list
   // makes the panel render nothing (read-only short-circuits).
   const embeddedVideos = readEmbeddedVideos(
@@ -361,94 +360,25 @@ export default async function PublicGalleryPage({
         ws={ws ?? null}
         assetAccessToken={assetAccessToken}
       />
-      <PublicGalleryHero
+      <PublicGalleryBody
         gallery={gallery}
         assets={assets}
         branding={branding}
         design={designConfig}
         designCoverAsset={designCoverAsset}
         designCoverThumbnails={designCoverThumbnails}
-        // Public slideshow ("Play" CTA next to "View Gallery"). When the
-        // gallery has music it auto-opens on mount so the music plays as soon
-        // as the share link loads. assetAccessToken is the byte-only ?at=
-        // token; the durable share token is only forwarded when no asset
-        // token was minted (same split the grid uses).
-        slug={slug}
-        ws={ws}
-        hasMusic={Boolean(gallery.music_asset_id)}
-        assetAccessToken={assetAccessToken}
-        shareToken={assetAccessToken ? undefined : followupShareToken}
-        // "Find me" photo-search CTA in the hero CTA row (replaces the old
-        // floating FAB). face_detection_enabled defaults to true in the schema
-        // (migration 046), so only an explicit false hides the CTA.
-        faceDetectionEnabled={gallery.face_detection_enabled !== false}
-      />
-
-      <GalleryExpiryBanner expiresAt={gallery.expires_at} />
-
-      <PublicGalleryBanners
-        slug={slug}
-        ws={ws}
-        shareToken={followupShareToken}
-        gallerySessionToken={effectiveSessionToken}
-        initialBanners={banners}
-      />
-
-      <PublicGalleryAlbumChips
-        slug={slug}
+        designCoverProfileThumbnails={designCoverProfileThumbnails}
         albums={albums}
         totalAssetCount={totalAssetCount}
         activeAlbumId={albumId}
-      />
-
-      <div id="gallery-grid" className="mx-auto max-w-6xl space-y-6 px-4 pb-16">
-        {/* The public slideshow launch control ("Play") now lives in the hero
-            next to "View Gallery" — see PublicGalleryHero. */}
-        {/* Embedded YouTube/Vimeo videos in read-only mode. Shows the
-            same iframe grid the photographer sees in the dashboard
-            editor; the panel auto-hides when the gallery has none. */}
-        {embeddedVideos.length > 0 && (
-          <EmbeddedVideosPanel
-            galleryId={gallery.id}
-            initialVideos={embeddedVideos}
-            readOnly
-          />
-        )}
-        <PublicGalleryGrid
-          slug={slug}
-          assets={assets}
-          galleryType={gallery.gallery_type}
-          maxSelections={gallery.max_selections || 0}
-          downloadEnabled={gallery.download_enabled !== false}
-          downloadQuality={gallery.download_quality}
-          design={designConfig}
-          watermark={gallery.watermark_config as Record<string, unknown> | null}
-          watermarkLogoUrl={
-            branding?.can_customize ? branding.logo_url : undefined
-          }
-          // gallerySessionToken (durable session, from the SameSite=Strict
-          // cookie) authenticates the header-based JSON APIs: favorites and
-          // proofing submit. assetAccessToken (SEC-1) is the byte-only ?at=
-          // token for protected image/download URLs — kept separate so the
-          // durable session never lands in a URL.
-          gallerySessionToken={effectiveSessionToken ?? null}
-          assetAccessToken={assetAccessToken}
-          workspaceScope={ws ?? null}
-        />
-      </div>
-
-      <PublicGalleryProducts
-        slug={slug}
-        workspaceScope={ws}
-        shareToken={followupShareToken}
-        gallerySessionToken={effectiveSessionToken}
         products={products}
-      />
-
-      <PublicGalleryEnhancements
+        banners={banners}
+        embeddedVideos={embeddedVideos}
         slug={slug}
-        faceIdEnabled={Boolean(gallery.faceid_enabled)}
-        encrypted={Boolean(gallery.cover_asset?.is_encrypted)}
+        ws={ws ?? null}
+        shareToken={followupShareToken}
+        gallerySessionToken={effectiveSessionToken ?? null}
+        assetAccessToken={assetAccessToken}
       />
 
       {/* Reachable entry point for the offline manage/remove surface

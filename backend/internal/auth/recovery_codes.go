@@ -28,7 +28,8 @@ const (
 // RecoveryCodeConfig customizes recovery-code generation. Zero values use
 // defaults: 10 codes per user, 10 hex characters per code.
 type RecoveryCodeConfig struct {
-	Count int
+	Count      int
+	BcryptCost int
 }
 
 // RecoveryCodes is the result of Generate. Plaintext[i] pairs with Hashes[i]
@@ -55,6 +56,9 @@ func NewRecoveryCodeService(config RecoveryCodeConfig) RecoveryCodeService {
 	if config.Count <= 0 {
 		config.Count = defaultRecoveryCodeCount
 	}
+	if config.BcryptCost <= 0 {
+		config.BcryptCost = recoveryBcryptCost
+	}
 	return &recoveryCodeService{config: config}
 }
 
@@ -68,7 +72,7 @@ func (s *recoveryCodeService) Generate() (*RecoveryCodes, error) {
 		if err != nil {
 			return nil, err
 		}
-		hash, err := bcrypt.GenerateFromPassword([]byte(code), recoveryBcryptCost)
+		hash, err := bcrypt.GenerateFromPassword([]byte(code), s.config.BcryptCost)
 		if err != nil {
 			return nil, err
 		}

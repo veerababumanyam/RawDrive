@@ -1,4 +1,4 @@
-import { getApiBaseUrl } from "@/lib/api/base-url";
+import { getBrowserApiBaseUrl } from "@/lib/api/base-url";
 export const invoiceStatusClasses: Record<string, string> = {
   draft: "status-badge status-badge--neutral",
   sent: "status-badge status-badge--info",
@@ -54,8 +54,6 @@ export const galleryTypeClasses: Record<string, string> = {
   proofing: "status-badge status-badge--accent",
   delivery: "status-badge status-badge--info",
 };
-
-const API_BASE = getApiBaseUrl();
 
 /**
  * Returns true when the backend has accepted an upload but the
@@ -113,12 +111,7 @@ export function getStorageBackedUrl(
   void token;
   if (!url) return "";
 
-  if (
-    url.startsWith("http://") ||
-    url.startsWith("https://") ||
-    url.startsWith("data:") ||
-    url.startsWith("blob:")
-  ) {
+  if (url.startsWith("data:") || url.startsWith("blob:")) {
     return url;
   }
 
@@ -126,10 +119,27 @@ export function getStorageBackedUrl(
     return url;
   }
 
-  const storagePath = url.startsWith("/storage/")
-    ? url
-    : `/storage/${url.replace(/^\/+/, "")}`;
-  let absoluteUrl = `${API_BASE}${storagePath}`;
+  let absoluteUrl = "";
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    try {
+      const parsed = new URL(url);
+      if (!parsed.pathname.startsWith("/storage/")) {
+        return url;
+      }
+      const origin = parsed.hostname.includes(".")
+        ? parsed.origin
+        : getBrowserApiBaseUrl();
+      absoluteUrl = `${origin}${parsed.pathname}${parsed.search}`;
+    } catch {
+      return url;
+    }
+  } else {
+    const storagePath = url.startsWith("/storage/")
+      ? url
+      : `/storage/${url.replace(/^\/+/, "")}`;
+    absoluteUrl = `${getBrowserApiBaseUrl()}${storagePath}`;
+  }
+
   if (!absoluteUrl.includes("/storage/")) {
     return absoluteUrl;
   }

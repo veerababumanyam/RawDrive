@@ -18,10 +18,10 @@
  *
  * UX shape:
  *   - Mobile-first. Live preview at top, tab bar at bottom.
- *   - 5 tabs: Cover / Text / Typography / Grid / Theme.
+ *   - 6 sections: Cover / Text / Media / Scenes / Brand / Grid.
  *   - All interactions land on the same preview — no separate "preview"
- *     screen, no preview-device toggle, no undo history (lighter than
- *     the design studio, deliberately).
+ *     screen. Desktop/phone preview and undo/redo keep the editor fast
+ *     without opening a second design studio surface.
  *
  * Schema compatibility:
  *   The persisted shape matches `frontend/src/lib/gallery-design-config.ts`
@@ -47,6 +47,7 @@ import {
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { getStoredAccessToken } from "@/lib/auth";
+import { getApiBaseUrl } from "@/lib/api/base-url";
 import {
   getGallery,
   listGalleryAssets,
@@ -54,21 +55,48 @@ import {
   type Gallery,
 } from "@/lib/api/galleries";
 import { getAsset, type Asset } from "@/lib/api/assets";
+import { useUpload } from "@/hooks/use-upload";
 import {
   FILMSTRIP_VARIANTS,
   GRID_VARIANTS,
   LIGHTBOX_VARIANTS,
 } from "@/lib/media-encryption/asset-media";
+import { getOrCreateGalleryMediaKey } from "@/lib/media-encryption/media-key-store";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
+import { UploadDropzone, UploadProgress } from "@/components/upload";
+import { TermsAcceptanceModal } from "@/components/legal/terms-acceptance-modal";
+import {
+  COVER_TEMPLATES,
+  coverTemplateSlotIndices,
+  getCoverTemplate,
+  type CoverTemplate,
+} from "@/components/gallery/cover-templates";
 import { GalleryPageShell } from "@/components/gallery/gallery-page-shell";
 import { GalleryPageHeader } from "@/components/gallery/gallery-page-header";
+import { LockedMediaFallback } from "@/components/gallery/media-key-recovery";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { GlassButton } from "@/components/ui/glass-button";
 import { SelectableTile } from "@/components/ui/selectable-tile";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
-import { Check, Key, Loader2, Photo, RefreshCw } from "@/components/icons";
+import { Check, Loader2, Photo, RefreshCw } from "@/components/icons";
+import {
+  buildCoverGoogleFontsHref,
+  COVER_FONT_WEIGHTS,
+  COVER_TEXT_LANGUAGES,
+  fontFamilyForCoverText,
+  getCoverFontsForLanguage,
+  getCoverLanguage,
+  normalizeCoverFontForLanguage,
+  normalizeCoverFontWeight,
+  type CoverFontOption,
+} from "@/lib/indian-cover-typography";
 import { components as designComponents } from "@/lib/tokens";
+import type {
+  CoverDevice,
+  CoverDeviceProfile,
+  CoverDeviceTypography,
+} from "@/lib/gallery-design-config";
 
 // ──────────────────────────── Data ────────────────────────────
 
@@ -76,16 +104,23 @@ type ThemeVariant = "light" | "dark" | "auto";
 type GridLayout = "masonry" | "grid" | "justified" | "carousel";
 type TextAlign = "left" | "center" | "right";
 type TabId = "cover" | "text" | "media" | "scenes" | "brand" | "grid";
-type PreviewDevice = "desktop" | "phone";
+type PreviewDevice = CoverDevice;
 type CoverPresetId =
   | "classic-wedding"
   | "editorial-split"
   | "luxury-dark"
   | "haldi-warm"
+  | "mehendi-green"
+  | "sangeet-night"
+  | "engagement-soft"
   | "reception-glow"
   | "minimal-studio"
   | "story-cover"
-  | "proofing-first";
+  | "proofing-first"
+  | "housewarming-warm"
+  | "birthday-bright"
+  | "corporate-clean"
+  | "portfolio-editorial";
 type CoverMediaMode =
   | "single-photo"
   | "slideshow"
@@ -126,16 +161,23 @@ interface DesignConfig {
   theme: { id: string; variant: ThemeVariant; accentColor: string };
   cover: {
     assetId: string | null;
+    assetSlots: Array<string | null>;
     styleId: string;
     layoutPreset: CoverPresetId;
     mediaMode: CoverMediaMode;
     focalPoint: FocalPoint;
     mobileFocalPoint: FocalPoint;
+    slotFocalPoints: FocalPoint[];
+    mobileSlotFocalPoints: FocalPoint[];
     mobileAspectRatio: string;
     title: string;
     subtitle: string;
+    titleVisible: boolean;
+    subtitleVisible: boolean;
     titlePosition: TextPos;
     subtitlePosition: TextPos;
+    mobileTitlePosition: TextPos;
+    mobileSubtitlePosition: TextPos;
     textAlign: TextAlign;
     // Per-element colors. 2026-05-18: split from a single `textColor` so
     // users can pick a different hex for title vs subtitle. `textColor`
@@ -149,12 +191,21 @@ interface DesignConfig {
     scrimStyle: ScrimStyle;
     textBackdrop: TextBackdrop;
     aspectRatio: string;
+    deviceProfiles?: Partial<Record<PreviewDevice, CoverDeviceProfile>>;
   };
   typography: {
     headingFont: string;
     bodyFont: string;
+    titleLanguage: string;
+    subtitleLanguage: string;
+    titleWeight: number;
+    subtitleWeight: number;
+    titleItalic: boolean;
+    subtitleItalic: boolean;
     titleSize: number;
     subtitleSize: number;
+    mobileTitleSize: number;
+    mobileSubtitleSize: number;
   };
   grid: {
     layout: GridLayout;
@@ -168,52 +219,25 @@ interface DesignConfig {
     monogram: string;
     brandColor: string;
     watermarkStyle: WatermarkStyle;
+    logoSize: number;
+    logoOpacity: number;
+    watermarkText: string;
+    watermarkOpacity: number;
     applyToAll: boolean;
   };
   version: number;
-}
-
-// Flat, deduped font catalog. Used by the per-element font selectors
-// inside PanelText so title and subtitle each pick independently — the
-// older "Font pairing" concept was removed 2026-05-18. Order groups
-// serif headlines first, sans-serif next, mono last so the dropdown
-// reads top-down by visual weight.
-const FONT_OPTIONS: {
-  name: string;
-  classification: "serif" | "sans" | "mono";
-}[] = [
-  { name: "Playfair Display", classification: "serif" },
-  { name: "Cormorant Garamond", classification: "serif" },
-  { name: "Lora", classification: "serif" },
-  { name: "Manrope", classification: "sans" },
-  { name: "Montserrat", classification: "sans" },
-  { name: "DM Sans", classification: "sans" },
-  { name: "Inter", classification: "sans" },
-  { name: "Lato", classification: "sans" },
-  { name: "Open Sans", classification: "sans" },
-  { name: "Source Sans Pro", classification: "sans" },
-  { name: "DM Mono", classification: "mono" },
-];
-
-// Build the font-family CSS string for an option, using a sensible
-// fallback class based on the font's classification. Serif heads
-// fall back to Georgia, sans bodies to system-ui, mono to ui-monospace.
-function fontFamilyFor(name: string | undefined): string | undefined {
-  if (!name) return undefined;
-  const def = FONT_OPTIONS.find((f) => f.name === name);
-  const fallback =
-    def?.classification === "serif"
-      ? "Georgia, serif"
-      : def?.classification === "mono"
-        ? "ui-monospace, Menlo, monospace"
-        : "Inter, system-ui, sans-serif";
-  return `'${name}', ${fallback}`;
 }
 
 const TITLE_SIZE_MIN = 16;
 const TITLE_SIZE_MAX = 96;
 const SUBTITLE_SIZE_MIN = 10;
 const SUBTITLE_SIZE_MAX = 40;
+const MOBILE_TITLE_SIZE_MIN = 18;
+const MOBILE_TITLE_SIZE_MAX = 72;
+const MOBILE_SUBTITLE_SIZE_MIN = 10;
+const MOBILE_SUBTITLE_SIZE_MAX = 32;
+const LOGO_SIZE_MIN = 28;
+const LOGO_SIZE_MAX = 96;
 
 // Editor-offered grid layouts. The schema's `layout` field still
 // accepts masonry/carousel (the public viewer can render them) — they
@@ -361,6 +385,106 @@ const COVER_PRESETS: Array<{
     },
   },
   {
+    id: "mehendi-green",
+    name: "Mehendi Green",
+    mood: "Botanical, intimate",
+    patch: {
+      cover: {
+        styleId: "classic-split",
+        aspectRatio: "16/9",
+        mobileAspectRatio: "4/5",
+        titlePosition: { x: 50, y: 60 },
+        subtitlePosition: { x: 50, y: 72 },
+        mobileTitlePosition: { x: 50, y: 56 },
+        mobileSubtitlePosition: { x: 50, y: 68 },
+        textAlign: "center",
+        mediaMode: "single-photo",
+        scrimStyle: "warm-vignette",
+        textBackdrop: "glass",
+        textShadow: true,
+        titleColor: COVER_COLORS.haldiTitle,
+        subtitleColor: COVER_COLORS.haldiSubtitle,
+        textColor: COVER_COLORS.haldiTitle,
+      },
+      typography: {
+        headingFont: "Lora",
+        bodyFont: "Manrope",
+        titleSize: 52,
+        subtitleSize: 17,
+        mobileTitleSize: 42,
+        mobileSubtitleSize: 15,
+      },
+      theme: { variant: "dark", accentColor: COVER_COLORS.warmAccent },
+      grid: { layout: "grid", columns: 4 },
+    },
+  },
+  {
+    id: "sangeet-night",
+    name: "Sangeet Night",
+    mood: "Stage, music, motion",
+    patch: {
+      cover: {
+        styleId: "cinematic-wide",
+        aspectRatio: "21/9",
+        mobileAspectRatio: "4/5",
+        titlePosition: { x: 50, y: 54 },
+        subtitlePosition: { x: 50, y: 65 },
+        mobileTitlePosition: { x: 50, y: 52 },
+        mobileSubtitlePosition: { x: 50, y: 63 },
+        textAlign: "center",
+        mediaMode: "slideshow",
+        scrimStyle: "cinematic-dark",
+        textBackdrop: "glass",
+        textShadow: true,
+        titleColor: COVER_COLORS.textMedia,
+        subtitleColor: COVER_COLORS.receptionSubtitle,
+        textColor: COVER_COLORS.textMedia,
+      },
+      typography: {
+        headingFont: "Montserrat",
+        bodyFont: "DM Sans",
+        titleSize: 56,
+        subtitleSize: 18,
+        mobileTitleSize: 44,
+        mobileSubtitleSize: 15,
+      },
+      theme: { variant: "dark" },
+      grid: { layout: "grid", columns: 5 },
+    },
+  },
+  {
+    id: "engagement-soft",
+    name: "Engagement Soft",
+    mood: "Romantic, airy",
+    patch: {
+      cover: {
+        styleId: "elegant-frame",
+        aspectRatio: "16/9",
+        mobileAspectRatio: "4/5",
+        titlePosition: { x: 50, y: 61 },
+        subtitlePosition: { x: 50, y: 72 },
+        mobileTitlePosition: { x: 50, y: 58 },
+        mobileSubtitlePosition: { x: 50, y: 69 },
+        textAlign: "center",
+        scrimStyle: "soft-gradient",
+        textBackdrop: "glass",
+        textShadow: true,
+        titleColor: COVER_COLORS.warmTitle,
+        subtitleColor: COVER_COLORS.warmSubtitle,
+        textColor: COVER_COLORS.warmTitle,
+      },
+      typography: {
+        headingFont: "Cormorant Garamond",
+        bodyFont: "Lato",
+        titleSize: 58,
+        subtitleSize: 17,
+        mobileTitleSize: 44,
+        mobileSubtitleSize: 15,
+      },
+      theme: { variant: "dark", accentColor: COVER_COLORS.warmAccent },
+    },
+  },
+  {
     id: "reception-glow",
     name: "Reception Glow",
     mood: "Stage lights",
@@ -475,6 +599,137 @@ const COVER_PRESETS: Array<{
       grid: { layout: "grid", columns: 5 },
     },
   },
+  {
+    id: "housewarming-warm",
+    name: "Housewarming Warm",
+    mood: "Family, blessing",
+    patch: {
+      cover: {
+        styleId: "magazine-minimal",
+        aspectRatio: "16/9",
+        mobileAspectRatio: "4/5",
+        titlePosition: { x: 72, y: 54 },
+        subtitlePosition: { x: 72, y: 66 },
+        mobileTitlePosition: { x: 50, y: 56 },
+        mobileSubtitlePosition: { x: 50, y: 67 },
+        textAlign: "right",
+        scrimStyle: "light-wash",
+        textBackdrop: "light",
+        textShadow: false,
+        titleColor: COVER_COLORS.editorialTitle,
+        subtitleColor: COVER_COLORS.editorialSubtitle,
+        textColor: COVER_COLORS.editorialTitle,
+      },
+      typography: {
+        headingFont: "Lora",
+        bodyFont: "Manrope",
+        titleSize: 44,
+        subtitleSize: 16,
+        mobileTitleSize: 36,
+        mobileSubtitleSize: 14,
+      },
+      theme: { variant: "light", accentColor: COVER_COLORS.warmAccent },
+    },
+  },
+  {
+    id: "birthday-bright",
+    name: "Birthday Bright",
+    mood: "Colorful, celebratory",
+    patch: {
+      cover: {
+        styleId: "modern-grid",
+        aspectRatio: "16/9",
+        mobileAspectRatio: "4/5",
+        titlePosition: { x: 50, y: 52 },
+        subtitlePosition: { x: 50, y: 64 },
+        mobileTitlePosition: { x: 50, y: 50 },
+        mobileSubtitlePosition: { x: 50, y: 62 },
+        textAlign: "center",
+        mediaMode: "photo-grid",
+        scrimStyle: "soft-gradient",
+        textBackdrop: "glass",
+        textShadow: true,
+        titleColor: COVER_COLORS.textMedia,
+        subtitleColor: COVER_COLORS.textMedia,
+        textColor: COVER_COLORS.textMedia,
+      },
+      typography: {
+        headingFont: "DM Sans",
+        bodyFont: "Inter",
+        titleSize: 46,
+        subtitleSize: 16,
+        mobileTitleSize: 38,
+        mobileSubtitleSize: 14,
+      },
+      theme: { variant: "dark" },
+      grid: { layout: "grid", columns: 4 },
+    },
+  },
+  {
+    id: "corporate-clean",
+    name: "Corporate Clean",
+    mood: "Brand-forward",
+    patch: {
+      cover: {
+        styleId: "magazine-minimal",
+        aspectRatio: "16/9",
+        mobileAspectRatio: "4/5",
+        titlePosition: { x: 72, y: 50 },
+        subtitlePosition: { x: 72, y: 61 },
+        mobileTitlePosition: { x: 50, y: 52 },
+        mobileSubtitlePosition: { x: 50, y: 63 },
+        textAlign: "right",
+        scrimStyle: "light-wash",
+        textBackdrop: "light",
+        textShadow: false,
+        titleColor: COVER_COLORS.editorialTitle,
+        subtitleColor: COVER_COLORS.editorialSubtitle,
+        textColor: COVER_COLORS.editorialTitle,
+      },
+      typography: {
+        headingFont: "Manrope",
+        bodyFont: "Inter",
+        titleSize: 42,
+        subtitleSize: 15,
+        mobileTitleSize: 34,
+        mobileSubtitleSize: 13,
+      },
+      theme: { variant: "light" },
+      grid: { layout: "grid", columns: 3 },
+    },
+  },
+  {
+    id: "portfolio-editorial",
+    name: "Portfolio Editorial",
+    mood: "Photographer showcase",
+    patch: {
+      cover: {
+        styleId: "elegant-border",
+        aspectRatio: "16/9",
+        mobileAspectRatio: "4/5",
+        titlePosition: { x: 50, y: 55 },
+        subtitlePosition: { x: 50, y: 66 },
+        mobileTitlePosition: { x: 50, y: 54 },
+        mobileSubtitlePosition: { x: 50, y: 65 },
+        textAlign: "center",
+        scrimStyle: "cinematic-dark",
+        textBackdrop: "none",
+        textShadow: true,
+        titleColor: COVER_COLORS.textMedia,
+        subtitleColor: COVER_COLORS.receptionSubtitle,
+        textColor: COVER_COLORS.textMedia,
+      },
+      typography: {
+        headingFont: "Playfair Display",
+        bodyFont: "Lato",
+        titleSize: 54,
+        subtitleSize: 17,
+        mobileTitleSize: 42,
+        mobileSubtitleSize: 14,
+      },
+      theme: { variant: "dark" },
+    },
+  },
 ];
 
 const MEDIA_MODES: Array<{
@@ -521,16 +776,23 @@ const DEFAULT_CONFIG: DesignConfig = {
   theme: { id: "liquid-glass", variant: "dark", accentColor: "" },
   cover: {
     assetId: null,
+    assetSlots: [],
     styleId: "classic-full",
     layoutPreset: "classic-wedding",
     mediaMode: "single-photo",
     focalPoint: { x: 50, y: 50 },
     mobileFocalPoint: { x: 50, y: 50 },
+    slotFocalPoints: [],
+    mobileSlotFocalPoints: [],
     mobileAspectRatio: "4/5",
     title: "",
     subtitle: "",
+    titleVisible: true,
+    subtitleVisible: true,
     titlePosition: { x: 50, y: 70 },
     subtitlePosition: { x: 50, y: 82 },
+    mobileTitlePosition: { x: 50, y: 58 },
+    mobileSubtitlePosition: { x: 50, y: 70 },
     textAlign: "center",
     textColor: COVER_COLORS.textMedia,
     titleColor: COVER_COLORS.textMedia,
@@ -543,8 +805,16 @@ const DEFAULT_CONFIG: DesignConfig = {
   typography: {
     headingFont: "Playfair Display",
     bodyFont: "Inter",
+    titleLanguage: "english",
+    subtitleLanguage: "english",
+    titleWeight: 600,
+    subtitleWeight: 400,
+    titleItalic: false,
+    subtitleItalic: false,
     titleSize: 48,
     subtitleSize: 18,
+    mobileTitleSize: 38,
+    mobileSubtitleSize: 15,
   },
   grid: { layout: "grid", columns: 3, gap: DEFAULT_GRID_GAP, showInfo: false },
   sceneHeaders: DEFAULT_SCENE_HEADERS,
@@ -553,12 +823,590 @@ const DEFAULT_CONFIG: DesignConfig = {
     monogram: "",
     brandColor: "",
     watermarkStyle: "none",
+    logoSize: 40,
+    logoOpacity: 100,
+    watermarkText: "",
+    watermarkOpacity: 70,
     applyToAll: false,
   },
-  version: 3,
+  version: 4,
 };
 
 // ───────────── Helpers ─────────────
+
+function readSavedAssetSlots(value: unknown): Array<string | null> {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry) => (typeof entry === "string" ? entry : null));
+}
+
+function readSavedFocalPoints(value: unknown): FocalPoint[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry) => {
+    if (!entry || typeof entry !== "object") return { x: 50, y: 50 };
+    const point = entry as Partial<FocalPoint>;
+    return {
+      x:
+        typeof point.x === "number" && Number.isFinite(point.x)
+          ? clamp(Math.round(point.x), 0, 100)
+          : 50,
+      y:
+        typeof point.y === "number" && Number.isFinite(point.y)
+          ? clamp(Math.round(point.y), 0, 100)
+          : 50,
+    };
+  });
+}
+
+function normalizeTextPosition(value: unknown, fallback: TextPos): TextPos {
+  if (!value || typeof value !== "object") return fallback;
+  const point = value as Partial<TextPos>;
+  return {
+    x:
+      typeof point.x === "number" && Number.isFinite(point.x)
+        ? clamp(Math.round(point.x), 0, 100)
+        : fallback.x,
+    y:
+      typeof point.y === "number" && Number.isFinite(point.y)
+        ? clamp(Math.round(point.y), 0, 100)
+        : fallback.y,
+  };
+}
+
+function desktopTypographyProfile(
+  typography: DesignConfig["typography"],
+): CoverDeviceTypography {
+  return {
+    headingFont: typography.headingFont,
+    bodyFont: typography.bodyFont,
+    titleLanguage: typography.titleLanguage,
+    subtitleLanguage: typography.subtitleLanguage,
+    titleWeight: typography.titleWeight,
+    subtitleWeight: typography.subtitleWeight,
+    titleItalic: typography.titleItalic,
+    subtitleItalic: typography.subtitleItalic,
+    titleSize: typography.titleSize,
+    subtitleSize: typography.subtitleSize,
+  };
+}
+
+function profileFromConfig(
+  config: DesignConfig,
+  device: PreviewDevice,
+): CoverDeviceProfile {
+  const sharedCoverFields: Partial<CoverDeviceProfile> = {
+    title: config.cover.title,
+    subtitle: config.cover.subtitle,
+    titleVisible: config.cover.titleVisible,
+    subtitleVisible: config.cover.subtitleVisible,
+    textAlign: config.cover.textAlign,
+    textColor: config.cover.textColor,
+    titleColor: config.cover.titleColor,
+    subtitleColor: config.cover.subtitleColor,
+    textShadow: config.cover.textShadow,
+    scrimStyle: config.cover.scrimStyle,
+    textBackdrop: config.cover.textBackdrop,
+  };
+  const sharedTypographyFields: CoverDeviceTypography = {
+    headingFont: config.typography.headingFont,
+    bodyFont: config.typography.bodyFont,
+    titleLanguage: config.typography.titleLanguage,
+    subtitleLanguage: config.typography.subtitleLanguage,
+    titleWeight: config.typography.titleWeight,
+    subtitleWeight: config.typography.subtitleWeight,
+    titleItalic: config.typography.titleItalic,
+    subtitleItalic: config.typography.subtitleItalic,
+  };
+  const desktop: CoverDeviceProfile = {
+    assetId: config.cover.assetId,
+    assetSlots: config.cover.assetSlots,
+    styleId: config.cover.styleId,
+    layoutPreset: config.cover.layoutPreset,
+    mediaMode: config.cover.mediaMode,
+    focalPoint: config.cover.focalPoint,
+    slotFocalPoints: config.cover.slotFocalPoints,
+    aspectRatio: config.cover.aspectRatio,
+    title: config.cover.title,
+    subtitle: config.cover.subtitle,
+    titleVisible: config.cover.titleVisible,
+    subtitleVisible: config.cover.subtitleVisible,
+    titlePosition: config.cover.titlePosition,
+    subtitlePosition: config.cover.subtitlePosition,
+    textAlign: config.cover.textAlign,
+    textColor: config.cover.textColor,
+    titleColor: config.cover.titleColor,
+    subtitleColor: config.cover.subtitleColor,
+    textShadow: config.cover.textShadow,
+    scrimStyle: config.cover.scrimStyle,
+    textBackdrop: config.cover.textBackdrop,
+    typography: desktopTypographyProfile(config.typography),
+  };
+  const savedDesktop = config.cover.deviceProfiles?.desktop;
+  const resolvedDesktop = {
+    ...desktop,
+    ...(savedDesktop || {}),
+    ...sharedCoverFields,
+    typography: {
+      ...(desktop.typography || {}),
+      ...(savedDesktop?.typography || {}),
+      ...sharedTypographyFields,
+      titleSize:
+        savedDesktop?.typography?.titleSize ?? config.typography.titleSize,
+      subtitleSize:
+        savedDesktop?.typography?.subtitleSize ??
+        config.typography.subtitleSize,
+    },
+  };
+  if (device === "desktop") return resolvedDesktop;
+
+  const phoneBase: CoverDeviceProfile = {
+    ...resolvedDesktop,
+    focalPoint: config.cover.mobileFocalPoint,
+    slotFocalPoints:
+      config.cover.mobileSlotFocalPoints.length > 0
+        ? config.cover.mobileSlotFocalPoints
+        : resolvedDesktop.slotFocalPoints,
+    aspectRatio: config.cover.mobileAspectRatio,
+    titlePosition: config.cover.mobileTitlePosition,
+    subtitlePosition: config.cover.mobileSubtitlePosition,
+    typography: {
+      ...(resolvedDesktop.typography || {}),
+      titleSize: config.typography.mobileTitleSize,
+      subtitleSize: config.typography.mobileSubtitleSize,
+    },
+  };
+  const savedPhone = config.cover.deviceProfiles?.phone;
+  return {
+    ...phoneBase,
+    ...(savedPhone || {}),
+    ...sharedCoverFields,
+    typography: {
+      ...(phoneBase.typography || {}),
+      ...(savedPhone?.typography || {}),
+      ...sharedTypographyFields,
+      titleSize:
+        savedPhone?.typography?.titleSize ?? config.typography.mobileTitleSize,
+      subtitleSize:
+        savedPhone?.typography?.subtitleSize ??
+        config.typography.mobileSubtitleSize,
+    },
+  };
+}
+
+function setProfileForDevice(
+  config: DesignConfig,
+  device: PreviewDevice,
+  profile: CoverDeviceProfile,
+): DesignConfig {
+  const nextProfiles = {
+    ...(config.cover.deviceProfiles || {}),
+    [device]: profile,
+  };
+  if (device === "phone") {
+    return {
+      ...config,
+      cover: {
+        ...config.cover,
+        mobileFocalPoint: profile.focalPoint || config.cover.mobileFocalPoint,
+        mobileSlotFocalPoints:
+          profile.slotFocalPoints || config.cover.mobileSlotFocalPoints,
+        mobileAspectRatio:
+          profile.aspectRatio || config.cover.mobileAspectRatio,
+        mobileTitlePosition:
+          profile.titlePosition || config.cover.mobileTitlePosition,
+        mobileSubtitlePosition:
+          profile.subtitlePosition || config.cover.mobileSubtitlePosition,
+        deviceProfiles: nextProfiles,
+      },
+      typography: {
+        ...config.typography,
+        mobileTitleSize:
+          profile.typography?.titleSize || config.typography.mobileTitleSize,
+        mobileSubtitleSize:
+          profile.typography?.subtitleSize ||
+          config.typography.mobileSubtitleSize,
+      },
+    };
+  }
+
+  return {
+    ...config,
+    cover: {
+      ...config.cover,
+      assetId: profile.assetId ?? null,
+      assetSlots: profile.assetSlots || [],
+      styleId: (profile.styleId as CoverTemplate["id"]) || config.cover.styleId,
+      layoutPreset:
+        (profile.layoutPreset as CoverPresetId) || config.cover.layoutPreset,
+      mediaMode:
+        (profile.mediaMode as CoverMediaMode) || config.cover.mediaMode,
+      focalPoint: profile.focalPoint || config.cover.focalPoint,
+      slotFocalPoints: profile.slotFocalPoints || config.cover.slotFocalPoints,
+      aspectRatio: profile.aspectRatio || config.cover.aspectRatio,
+      title: profile.title ?? config.cover.title,
+      subtitle: profile.subtitle ?? config.cover.subtitle,
+      titleVisible: profile.titleVisible ?? config.cover.titleVisible,
+      subtitleVisible: profile.subtitleVisible ?? config.cover.subtitleVisible,
+      titlePosition: profile.titlePosition || config.cover.titlePosition,
+      subtitlePosition:
+        profile.subtitlePosition || config.cover.subtitlePosition,
+      textAlign: (profile.textAlign as TextAlign) || config.cover.textAlign,
+      textColor: profile.textColor || config.cover.textColor,
+      titleColor: profile.titleColor || config.cover.titleColor,
+      subtitleColor: profile.subtitleColor || config.cover.subtitleColor,
+      textShadow: profile.textShadow ?? config.cover.textShadow,
+      scrimStyle: (profile.scrimStyle as ScrimStyle) || config.cover.scrimStyle,
+      textBackdrop:
+        (profile.textBackdrop as TextBackdrop) || config.cover.textBackdrop,
+      deviceProfiles: nextProfiles,
+    },
+    typography: normalizeTypography({
+      ...config.typography,
+      ...(profile.typography || {}),
+      mobileTitleSize: config.typography.mobileTitleSize,
+      mobileSubtitleSize: config.typography.mobileSubtitleSize,
+    }),
+  };
+}
+
+function updateProfileForDevice(
+  config: DesignConfig,
+  device: PreviewDevice,
+  coverPatch: Partial<CoverDeviceProfile>,
+  typographyPatch?: Partial<CoverDeviceTypography>,
+): DesignConfig {
+  const current = profileFromConfig(config, device);
+  return setProfileForDevice(config, device, {
+    ...current,
+    ...coverPatch,
+    typography: {
+      ...(current.typography || {}),
+      ...(typographyPatch || {}),
+    },
+  });
+}
+
+function updateSharedTypographyProfiles(
+  config: DesignConfig,
+  patch: Partial<CoverDeviceTypography>,
+): DesignConfig {
+  let next = {
+    ...config,
+    typography: normalizeTypography({
+      ...config.typography,
+      ...patch,
+    }),
+  };
+  next = updateProfileForDevice(next, "desktop", {}, patch);
+  next = updateProfileForDevice(next, "phone", {}, patch);
+  return next;
+}
+
+function updateSharedCoverProfiles(
+  config: DesignConfig,
+  patch: Partial<CoverDeviceProfile>,
+): DesignConfig {
+  let next = {
+    ...config,
+    cover: {
+      ...config.cover,
+      ...patch,
+    },
+  };
+  next = updateProfileForDevice(next, "desktop", patch);
+  next = updateProfileForDevice(next, "phone", patch);
+  return next;
+}
+
+function copyDesktopToPhoneProfile(config: DesignConfig): DesignConfig {
+  return setProfileForDevice(
+    config,
+    "phone",
+    profileFromConfig(config, "desktop"),
+  );
+}
+
+function textPositionForDevice(
+  config: DesignConfig,
+  target: "title" | "subtitle",
+  previewDevice: PreviewDevice,
+): TextPos {
+  const profile = profileFromConfig(config, previewDevice);
+  if (target === "title") {
+    return (
+      (profile.titlePosition as TextPos | undefined) ||
+      config.cover.titlePosition
+    );
+  }
+  return (
+    (profile.subtitlePosition as TextPos | undefined) ||
+    config.cover.subtitlePosition
+  );
+}
+
+function setTextPositionForDevice(
+  config: DesignConfig,
+  target: "title" | "subtitle",
+  previewDevice: PreviewDevice,
+  next: { x?: string | number; y?: string | number },
+): DesignConfig {
+  const current = textPositionForDevice(config, target, previewDevice);
+  return updateProfileForDevice(config, previewDevice, {
+    [target === "title" ? "titlePosition" : "subtitlePosition"]: {
+      x: next.x === undefined ? current.x : clampPercentInput(next.x),
+      y: next.y === undefined ? current.y : clampPercentInput(next.y),
+    },
+  });
+}
+
+function textSizeForDevice(
+  config: DesignConfig,
+  target: "title" | "subtitle",
+  previewDevice: PreviewDevice,
+) {
+  const profileSize =
+    target === "title"
+      ? profileFromConfig(config, previewDevice).typography?.titleSize
+      : profileFromConfig(config, previewDevice).typography?.subtitleSize;
+  if (profileSize) return profileSize;
+  if (target === "title") {
+    return previewDevice === "phone"
+      ? config.typography.mobileTitleSize
+      : config.typography.titleSize;
+  }
+  return previewDevice === "phone"
+    ? config.typography.mobileSubtitleSize
+    : config.typography.subtitleSize;
+}
+
+function setTextSizeForDevice(
+  config: DesignConfig,
+  target: "title" | "subtitle",
+  previewDevice: PreviewDevice,
+  value: string | number,
+): DesignConfig {
+  const bounds =
+    target === "title"
+      ? previewDevice === "phone"
+        ? [MOBILE_TITLE_SIZE_MIN, MOBILE_TITLE_SIZE_MAX]
+        : [TITLE_SIZE_MIN, TITLE_SIZE_MAX]
+      : previewDevice === "phone"
+        ? [MOBILE_SUBTITLE_SIZE_MIN, MOBILE_SUBTITLE_SIZE_MAX]
+        : [SUBTITLE_SIZE_MIN, SUBTITLE_SIZE_MAX];
+  return updateProfileForDevice(
+    config,
+    previewDevice,
+    {},
+    {
+      [target === "title" ? "titleSize" : "subtitleSize"]: clampTextSizeInput(
+        value,
+        bounds[0],
+        bounds[1],
+      ),
+    },
+  );
+}
+
+function coverAssetIdForSlot(
+  config: DesignConfig,
+  assets: Asset[],
+  slotIndex: number,
+  previewDevice: PreviewDevice = "desktop",
+): string | null {
+  const profile = profileFromConfig(config, previewDevice);
+  if (slotIndex === 0) {
+    return profile.assetId || profile.assetSlots?.[0] || null;
+  }
+  return (
+    profile.assetSlots?.[slotIndex] ||
+    assets[slotIndex]?.id ||
+    profile.assetId ||
+    null
+  );
+}
+
+function coverAssetForSlot(
+  config: DesignConfig,
+  assets: Asset[],
+  slotIndex: number,
+  previewDevice: PreviewDevice = "desktop",
+): Asset | null {
+  const assetId = coverAssetIdForSlot(config, assets, slotIndex, previewDevice);
+  return assetId ? assets.find((asset) => asset.id === assetId) || null : null;
+}
+
+function coverSlotFocalPoint(
+  config: DesignConfig,
+  slotIndex: number,
+  previewDevice: PreviewDevice,
+): FocalPoint {
+  const profile = profileFromConfig(config, previewDevice);
+  if (slotIndex === 0) {
+    return (
+      (profile.focalPoint as FocalPoint | undefined) || {
+        x: 50,
+        y: 50,
+      }
+    );
+  }
+  const points = profile.slotFocalPoints || [];
+  return points[slotIndex] || { x: 50, y: 50 };
+}
+
+function setCoverSlotAsset(
+  config: DesignConfig,
+  slotIndex: number,
+  assetId: string,
+  previewDevice: PreviewDevice = "desktop",
+): DesignConfig {
+  const profile = profileFromConfig(config, previewDevice);
+  const assetSlots = [...(profile.assetSlots || [])];
+  assetSlots[slotIndex] = assetId;
+  return updateProfileForDevice(config, previewDevice, {
+    assetId: slotIndex === 0 ? assetId : profile.assetId,
+    assetSlots,
+  });
+}
+
+function setCoverSlotFocalPoint(
+  config: DesignConfig,
+  slotIndex: number,
+  previewDevice: PreviewDevice,
+  point: FocalPoint,
+): DesignConfig {
+  const nextPoint = {
+    x: clamp(Math.round(point.x), 0, 100),
+    y: clamp(Math.round(point.y), 0, 100),
+  };
+  if (slotIndex === 0) {
+    return updateProfileForDevice(config, previewDevice, {
+      focalPoint: nextPoint,
+    });
+  }
+  const profile = profileFromConfig(config, previewDevice);
+  const points = [...(profile.slotFocalPoints || [])];
+  points[slotIndex] = nextPoint;
+  return updateProfileForDevice(config, previewDevice, {
+    slotFocalPoints: points,
+  });
+}
+
+function normalizeTypography(
+  typography: DesignConfig["typography"],
+): DesignConfig["typography"] {
+  const titleLanguage = getCoverLanguage(typography.titleLanguage).id;
+  const subtitleLanguage = getCoverLanguage(typography.subtitleLanguage).id;
+  return {
+    ...typography,
+    titleLanguage,
+    subtitleLanguage,
+    headingFont: normalizeCoverFontForLanguage(
+      typography.headingFont,
+      titleLanguage,
+    ),
+    bodyFont: normalizeCoverFontForLanguage(
+      typography.bodyFont,
+      subtitleLanguage,
+    ),
+    titleWeight: normalizeCoverFontWeight(typography.titleWeight, 600),
+    subtitleWeight: normalizeCoverFontWeight(typography.subtitleWeight, 400),
+    titleItalic: Boolean(typography.titleItalic),
+    subtitleItalic: Boolean(typography.subtitleItalic),
+    titleSize: clampTextSizeInput(
+      typography.titleSize,
+      TITLE_SIZE_MIN,
+      TITLE_SIZE_MAX,
+    ),
+    subtitleSize: clampTextSizeInput(
+      typography.subtitleSize,
+      SUBTITLE_SIZE_MIN,
+      SUBTITLE_SIZE_MAX,
+    ),
+    mobileTitleSize: clampTextSizeInput(
+      typography.mobileTitleSize || typography.titleSize,
+      MOBILE_TITLE_SIZE_MIN,
+      MOBILE_TITLE_SIZE_MAX,
+    ),
+    mobileSubtitleSize: clampTextSizeInput(
+      typography.mobileSubtitleSize || typography.subtitleSize,
+      MOBILE_SUBTITLE_SIZE_MIN,
+      MOBILE_SUBTITLE_SIZE_MAX,
+    ),
+  };
+}
+
+function applyCoverTemplate(
+  config: DesignConfig,
+  template: CoverTemplate,
+  assets: Asset[],
+  previewDevice: PreviewDevice = "desktop",
+): DesignConfig {
+  const mobileTitlePosition = {
+    x:
+      template.textAlign === "left"
+        ? 28
+        : template.textAlign === "right"
+          ? 72
+          : 50,
+    y: Math.min(template.titlePosition.y, 58),
+  };
+  const mobileSubtitlePosition = {
+    x:
+      template.textAlign === "left"
+        ? 28
+        : template.textAlign === "right"
+          ? 72
+          : 50,
+    y: Math.min(template.subtitlePosition.y, 70),
+  };
+  let next = updateProfileForDevice(config, previewDevice, {
+    styleId: template.id,
+    mediaMode: template.mediaMode,
+    aspectRatio:
+      previewDevice === "phone"
+        ? template.mobileAspectRatio
+        : template.aspectRatio,
+    textAlign: template.textAlign,
+    titlePosition:
+      previewDevice === "phone" ? mobileTitlePosition : template.titlePosition,
+    subtitlePosition:
+      previewDevice === "phone"
+        ? mobileSubtitlePosition
+        : template.subtitlePosition,
+  });
+  if (previewDevice === "desktop" && !config.cover.deviceProfiles?.phone) {
+    next = {
+      ...next,
+      cover: {
+        ...next.cover,
+        mobileAspectRatio: template.mobileAspectRatio,
+        mobileTitlePosition,
+        mobileSubtitlePosition,
+      },
+    };
+  }
+  const activeProfile = profileFromConfig(next, previewDevice);
+  if (activeProfile.assetId && !activeProfile.assetSlots?.[0]) {
+    next = setCoverSlotAsset(next, 0, activeProfile.assetId, previewDevice);
+  }
+  for (const slotIndex of coverTemplateSlotIndices(template)) {
+    const profile = profileFromConfig(next, previewDevice);
+    const savedAssetId =
+      slotIndex === 0
+        ? profile.assetId || profile.assetSlots?.[0]
+        : profile.assetSlots?.[slotIndex];
+    if (savedAssetId) continue;
+    const fallbackAsset = assets[slotIndex] || assets[0];
+    if (fallbackAsset) {
+      next = setCoverSlotAsset(
+        next,
+        slotIndex,
+        fallbackAsset.id,
+        previewDevice,
+      );
+    }
+  }
+  return next;
+}
 
 // Pull a partial design_config out of `gallery.settings` and merge into our
 // strict DesignConfig shape. Anything missing keeps its default so users
@@ -570,7 +1418,7 @@ function configFromGallery(gallery: Gallery): DesignConfig {
     | { focal_point?: FocalPoint; aspect_ratio?: string }
     | undefined;
 
-  const merged: DesignConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  let merged: DesignConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
 
   // Default title from gallery.title — most users will want this as the
   // starting overlay, not the placeholder string from DEFAULT_CONFIG.
@@ -605,6 +1453,17 @@ function configFromGallery(gallery: Gallery): DesignConfig {
       | Partial<DesignConfig["branding"]>
       | undefined;
     if (branding) Object.assign(merged.branding, branding);
+  }
+
+  merged.cover.assetSlots = readSavedAssetSlots(merged.cover.assetSlots);
+  merged.cover.slotFocalPoints = readSavedFocalPoints(
+    merged.cover.slotFocalPoints,
+  );
+  merged.cover.mobileSlotFocalPoints = readSavedFocalPoints(
+    merged.cover.mobileSlotFocalPoints,
+  );
+  if (!merged.cover.assetId && merged.cover.assetSlots[0]) {
+    merged.cover.assetId = merged.cover.assetSlots[0];
   }
 
   // Pre-design-config legacy path — pull focal_point + aspect_ratio out of
@@ -652,6 +1511,67 @@ function configFromGallery(gallery: Gallery): DesignConfig {
   if (!savedCover.subtitleColor && merged.cover.textColor) {
     merged.cover.subtitleColor = merged.cover.textColor;
   }
+  merged.cover.titleVisible = merged.cover.titleVisible !== false;
+  merged.cover.subtitleVisible = merged.cover.subtitleVisible !== false;
+  merged.cover.titlePosition = normalizeTextPosition(
+    merged.cover.titlePosition,
+    DEFAULT_CONFIG.cover.titlePosition,
+  );
+  merged.cover.subtitlePosition = normalizeTextPosition(
+    merged.cover.subtitlePosition,
+    DEFAULT_CONFIG.cover.subtitlePosition,
+  );
+  merged.cover.mobileTitlePosition = normalizeTextPosition(
+    merged.cover.mobileTitlePosition,
+    merged.cover.titlePosition,
+  );
+  merged.cover.mobileSubtitlePosition = normalizeTextPosition(
+    merged.cover.mobileSubtitlePosition,
+    merged.cover.subtitlePosition,
+  );
+  merged.typography = normalizeTypography(merged.typography);
+  const savedDeviceProfiles = merged.cover.deviceProfiles;
+  if (savedDeviceProfiles?.desktop) {
+    merged = setProfileForDevice(
+      merged,
+      "desktop",
+      savedDeviceProfiles.desktop,
+    );
+  }
+  if (savedDeviceProfiles?.phone) {
+    merged = setProfileForDevice(merged, "phone", savedDeviceProfiles.phone);
+  }
+  merged.branding.logoSize = clamp(
+    Math.round(
+      Number(merged.branding.logoSize) || DEFAULT_CONFIG.branding.logoSize,
+    ),
+    LOGO_SIZE_MIN,
+    LOGO_SIZE_MAX,
+  );
+  const savedLogoOpacity = Number(merged.branding.logoOpacity);
+  merged.branding.logoOpacity = clamp(
+    Math.round(
+      Number.isFinite(savedLogoOpacity)
+        ? savedLogoOpacity
+        : DEFAULT_CONFIG.branding.logoOpacity,
+    ),
+    0,
+    100,
+  );
+  merged.branding.watermarkText =
+    typeof merged.branding.watermarkText === "string"
+      ? merged.branding.watermarkText
+      : "";
+  const savedWatermarkOpacity = Number(merged.branding.watermarkOpacity);
+  merged.branding.watermarkOpacity = clamp(
+    Math.round(
+      Number.isFinite(savedWatermarkOpacity)
+        ? savedWatermarkOpacity
+        : DEFAULT_CONFIG.branding.watermarkOpacity,
+    ),
+    0,
+    100,
+  );
 
   return merged;
 }
@@ -659,19 +1579,93 @@ function configFromGallery(gallery: Gallery): DesignConfig {
 function applyCoverPreset(
   config: DesignConfig,
   presetId: CoverPresetId,
+  assets: Asset[] = [],
+  previewDevice: PreviewDevice = "desktop",
 ): DesignConfig {
   const preset = COVER_PRESETS.find((p) => p.id === presetId);
   if (!preset) return config;
-  return {
-    ...config,
-    theme: { ...config.theme, ...(preset.patch.theme || {}) },
-    cover: {
-      ...config.cover,
-      ...preset.patch.cover,
+  const next = updateProfileForDevice(
+    {
+      ...config,
+      theme: { ...config.theme, ...(preset.patch.theme || {}) },
+      grid: { ...config.grid, ...(preset.patch.grid || {}) },
+    },
+    previewDevice,
+    {
+      ...(preset.patch.cover || {}),
       layoutPreset: preset.id,
     },
-    typography: { ...config.typography, ...preset.patch.typography },
-    grid: { ...config.grid, ...(preset.patch.grid || {}) },
+    preset.patch.typography,
+  );
+  return applyCoverTemplate(
+    next,
+    getCoverTemplate(
+      profileFromConfig(next, previewDevice).styleId || config.cover.styleId,
+    ),
+    assets,
+    previewDevice,
+  );
+}
+
+function prepareDesignConfigForSave(config: DesignConfig): DesignConfig {
+  const desktop = profileFromConfig(config, "desktop");
+  const phone = profileFromConfig(config, "phone");
+  return {
+    ...config,
+    cover: {
+      ...config.cover,
+      assetId: desktop.assetId ?? null,
+      assetSlots: desktop.assetSlots || [],
+      styleId: desktop.styleId || config.cover.styleId,
+      layoutPreset:
+        (desktop.layoutPreset as CoverPresetId) || config.cover.layoutPreset,
+      mediaMode:
+        (desktop.mediaMode as CoverMediaMode) || config.cover.mediaMode,
+      focalPoint: (desktop.focalPoint as FocalPoint) || config.cover.focalPoint,
+      slotFocalPoints:
+        (desktop.slotFocalPoints as FocalPoint[]) ||
+        config.cover.slotFocalPoints,
+      aspectRatio: desktop.aspectRatio || config.cover.aspectRatio,
+      title: desktop.title ?? config.cover.title,
+      subtitle: desktop.subtitle ?? config.cover.subtitle,
+      titleVisible: desktop.titleVisible ?? config.cover.titleVisible,
+      subtitleVisible: desktop.subtitleVisible ?? config.cover.subtitleVisible,
+      titlePosition:
+        (desktop.titlePosition as TextPos) || config.cover.titlePosition,
+      subtitlePosition:
+        (desktop.subtitlePosition as TextPos) || config.cover.subtitlePosition,
+      textAlign: (desktop.textAlign as TextAlign) || config.cover.textAlign,
+      textColor: desktop.textColor || config.cover.textColor,
+      titleColor: desktop.titleColor || config.cover.titleColor,
+      subtitleColor: desktop.subtitleColor || config.cover.subtitleColor,
+      textShadow: desktop.textShadow ?? config.cover.textShadow,
+      scrimStyle: (desktop.scrimStyle as ScrimStyle) || config.cover.scrimStyle,
+      textBackdrop:
+        (desktop.textBackdrop as TextBackdrop) || config.cover.textBackdrop,
+      mobileFocalPoint:
+        (phone.focalPoint as FocalPoint) || config.cover.mobileFocalPoint,
+      mobileSlotFocalPoints:
+        (phone.slotFocalPoints as FocalPoint[]) ||
+        config.cover.mobileSlotFocalPoints,
+      mobileAspectRatio: phone.aspectRatio || config.cover.mobileAspectRatio,
+      mobileTitlePosition:
+        (phone.titlePosition as TextPos) || config.cover.mobileTitlePosition,
+      mobileSubtitlePosition:
+        (phone.subtitlePosition as TextPos) ||
+        config.cover.mobileSubtitlePosition,
+      deviceProfiles: {
+        desktop,
+        phone,
+      },
+    },
+    typography: normalizeTypography({
+      ...config.typography,
+      ...(desktop.typography || {}),
+      mobileTitleSize:
+        phone.typography?.titleSize || config.typography.mobileTitleSize,
+      mobileSubtitleSize:
+        phone.typography?.subtitleSize || config.typography.mobileSubtitleSize,
+    }),
   };
 }
 
@@ -736,22 +1730,43 @@ function pctFromEvent(e: { clientX: number; clientY: number }, rect: DOMRect) {
   };
 }
 
-function buildGoogleFontsHref(heading: string, body: string): string {
-  const families = heading === body ? [heading] : [heading, body];
-  const param = families
-    .map((f) => `family=${encodeURIComponent(f)}:wght@400;500;600;700`)
-    .join("&");
-  return `https://fonts.googleapis.com/css2?${param}&display=swap`;
+function clampPercentInput(value: string | number) {
+  const next = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(next) ? clamp(Math.round(next), 0, 100) : 50;
+}
+
+function clampTextSizeInput(value: string | number, lo: number, hi: number) {
+  const next = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(next) ? clamp(Math.round(next), lo, hi) : lo;
 }
 
 const loadedFontHrefs = new Set<string>();
-function ensureFontsLoaded(href: string) {
+function ensureFontsLoaded(href: string | null) {
+  if (!href) return;
   if (typeof document === "undefined" || loadedFontHrefs.has(href)) return;
   loadedFontHrefs.add(href);
   const link = document.createElement("link");
   link.rel = "stylesheet";
   link.href = href;
   document.head.appendChild(link);
+}
+
+async function hydrateGalleryAssets(
+  token: string,
+  rows: Awaited<ReturnType<typeof listGalleryAssets>>,
+): Promise<Asset[]> {
+  const hydrated = rows.every((entry) => entry.asset !== undefined)
+    ? rows.map((entry) => entry.asset ?? null)
+    : await Promise.all(
+        rows.map(async (entry) => {
+          try {
+            return await getAsset(token, entry.asset_id);
+          } catch {
+            return null;
+          }
+        }),
+      );
+  return hydrated.filter((asset): asset is Asset => asset !== null);
 }
 
 // ───────────── Page ─────────────
@@ -770,6 +1785,7 @@ export default function CoverDesignPage() {
   const [tab, setTab] = useState<TabId>("cover");
   const [previewDevice, setPreviewDevice] = useState<PreviewDevice>("desktop");
   const [activeText, setActiveText] = useState<"title" | "subtitle">("title");
+  const [activeCoverSlot, setActiveCoverSlot] = useState(0);
   const [dragKind, setDragKind] = useState<DragKind>(null);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
@@ -779,12 +1795,69 @@ export default function CoverDesignPage() {
   // immediately on successful save). 2026-05-18: replaces silent
   // "Saving…" text-only feedback that users were missing entirely.
   const [savedSnapshot, setSavedSnapshot] = useState<string>("");
+  const [undoStack, setUndoStack] = useState<DesignConfig[]>([]);
+  const [redoStack, setRedoStack] = useState<DesignConfig[]>([]);
   // `justSaved` runs a brief green check-icon state on the button right
   // after a successful save. Auto-clears after 1800ms so the button
   // returns to its idle look but the user has had a clear "yes that
   // worked" moment.
   const [justSaved, setJustSaved] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [termsModalOpen, setTermsModalOpen] = useState(false);
+  const completedCoverUploadKeyRef = useRef("");
+
+  const token = useMemo(() => getStoredAccessToken(), []);
+  const apiUrl = useMemo(() => getApiBaseUrl(), []);
+  const uploadEncryption = useMemo(
+    () => ({
+      getKey: () => getOrCreateGalleryMediaKey(galleryId),
+    }),
+    [galleryId],
+  );
+  const upload = useUpload(apiUrl, token, {
+    encryption: uploadEncryption,
+    destination: { galleryId },
+    onTermsRequired: () => setTermsModalOpen(true),
+  });
+
+  const updateConfig: React.Dispatch<React.SetStateAction<DesignConfig>> =
+    useCallback((action) => {
+      setConfig((current) => {
+        const next =
+          typeof action === "function"
+            ? (action as (value: DesignConfig) => DesignConfig)(current)
+            : action;
+        if (JSON.stringify(current) !== JSON.stringify(next)) {
+          setUndoStack((past) => [...past.slice(-19), current]);
+          setRedoStack([]);
+        }
+        return next;
+      });
+    }, []);
+
+  const handleUndo = useCallback(() => {
+    setUndoStack((past) => {
+      if (past.length === 0) return past;
+      const previous = past[past.length - 1];
+      setConfig((current) => {
+        setRedoStack((future) => [current, ...future].slice(0, 20));
+        return previous;
+      });
+      return past.slice(0, -1);
+    });
+  }, []);
+
+  const handleRedo = useCallback(() => {
+    setRedoStack((future) => {
+      if (future.length === 0) return future;
+      const next = future[0];
+      setConfig((current) => {
+        setUndoStack((past) => [...past.slice(-19), current]);
+        return next;
+      });
+      return future.slice(1);
+    });
+  }, []);
 
   // Mount: fetch gallery + assets, hydrate config from gallery.settings.
   useEffect(() => {
@@ -804,33 +1877,27 @@ export default function CoverDesignPage() {
         if (cancelled) return;
         setGallery(g);
 
-        const hydrated = galleryAssets.every(
-          (entry) => entry.asset !== undefined,
-        )
-          ? galleryAssets.map((entry) => entry.asset ?? null)
-          : await Promise.all(
-              galleryAssets.map(async (entry) => {
-                try {
-                  return await getAsset(token, entry.asset_id);
-                } catch {
-                  return null;
-                }
-              }),
-            );
+        const realAssets = await hydrateGalleryAssets(token, galleryAssets);
         if (cancelled) return;
-        const realAssets = hydrated.filter((a): a is Asset => a !== null);
         setAssets(realAssets);
 
         const initial = configFromGallery(g);
-        const persistedSnapshot = JSON.stringify(initial);
+        const persistedSnapshot = JSON.stringify(
+          prepareDesignConfigForSave(initial),
+        );
         if (!initial.cover.assetId) {
           initial.cover.assetId = realAssets[0]?.id || null;
+          if (initial.cover.assetId) {
+            initial.cover.assetSlots[0] = initial.cover.assetId;
+          }
         }
         setConfig(initial);
         // If no photographer-set cover exists yet, keep the first asset visible
         // as the working default while the saved snapshot stays at the persisted
         // state. Saving then makes that default durable through Design Studio.
         setSavedSnapshot((prev) => (prev ? prev : persistedSnapshot));
+        setUndoStack([]);
+        setRedoStack([]);
         setLoaded(true);
       } catch (err) {
         console.error("Failed to load Cover & Design data:", err);
@@ -841,47 +1908,128 @@ export default function CoverDesignPage() {
     };
   }, [galleryId]);
 
-  // Lazy-load the active font pairing so the live preview matches what
+  const completedCoverUploadKey = useMemo(
+    () =>
+      upload.items
+        .filter((item) => item.status === "complete" && item.assetId)
+        .map((item) => item.assetId as string)
+        .sort()
+        .join("|"),
+    [upload.items],
+  );
+
+  useEffect(() => {
+    if (
+      !completedCoverUploadKey ||
+      completedCoverUploadKeyRef.current === completedCoverUploadKey
+    ) {
+      return;
+    }
+    completedCoverUploadKeyRef.current = completedCoverUploadKey;
+    if (!token) return;
+
+    let cancelled = false;
+    const completedIds = upload.items
+      .filter((item) => item.status === "complete" && item.assetId)
+      .map((item) => item.assetId as string);
+    const preferredAssetId = completedIds[completedIds.length - 1] ?? null;
+
+    (async () => {
+      try {
+        const rows = await listGalleryAssets(token, galleryId, {
+          includeAssets: true,
+        });
+        const nextAssets = await hydrateGalleryAssets(token, rows);
+        if (cancelled) return;
+        setAssets(nextAssets);
+        const uploadedAsset =
+          (preferredAssetId
+            ? nextAssets.find((asset) => asset.id === preferredAssetId)
+            : null) ?? null;
+        if (uploadedAsset) {
+          setConfig((current) =>
+            setCoverSlotAsset(
+              current,
+              activeCoverSlot,
+              uploadedAsset.id,
+              previewDevice,
+            ),
+          );
+          setSaveMessage(
+            "Cover photo uploaded. Review the crop, then save Cover & Design.",
+          );
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setSaveError(
+            err instanceof Error
+              ? err.message
+              : "Failed to refresh cover photos after upload.",
+          );
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    completedCoverUploadKey,
+    galleryId,
+    activeCoverSlot,
+    previewDevice,
+    token,
+    upload.items,
+  ]);
+
+  // Lazy-load the active title/subtitle fonts so the live preview matches what
   // the public viewer will render. Same Google Fonts URL the public
   // hero injects via <link>.
   useEffect(() => {
     if (!loaded) return;
-    const href = buildGoogleFontsHref(
-      config.typography.headingFont,
-      config.typography.bodyFont,
+    ensureFontsLoaded(
+      buildCoverGoogleFontsHref([
+        config.typography.headingFont,
+        config.typography.bodyFont,
+      ]),
     );
-    ensureFontsLoaded(href);
   }, [loaded, config.typography.headingFont, config.typography.bodyFont]);
 
-  // Preload the full FONT_OPTIONS catalog once so the custom font-picker
-  // dropdown can show each option styled in its own font. Without this,
-  // the dropdown list would fall back to the browser default font for
-  // every option until the user picks one. One Google Fonts <link> is
-  // cheaper than 11 individual ones — request all families up front.
+  // Preload the currently selected language catalogs so the custom
+  // font-picker dropdown can show each option styled in its own script.
+  // We intentionally load only the title/subtitle languages instead of every
+  // Indian script at once; the catalog is large enough that loading all of it
+  // would make the editor heavier for no benefit.
   useEffect(() => {
     if (!loaded) return;
-    const allFamilies = FONT_OPTIONS.map((f) => f.name);
-    const param = allFamilies
-      .map((f) => `family=${encodeURIComponent(f)}:wght@400;500;600;700`)
-      .join("&");
     ensureFontsLoaded(
-      `https://fonts.googleapis.com/css2?${param}&display=swap`,
+      buildCoverGoogleFontsHref([
+        ...getCoverFontsForLanguage(config.typography.titleLanguage).map(
+          (font) => font.name,
+        ),
+        ...getCoverFontsForLanguage(config.typography.subtitleLanguage).map(
+          (font) => font.name,
+        ),
+      ]),
     );
-  }, [loaded]);
+  }, [
+    loaded,
+    config.typography.titleLanguage,
+    config.typography.subtitleLanguage,
+  ]);
 
-  const token = useMemo(() => getStoredAccessToken(), []);
-  const selectedAsset = assets.find((a) => a.id === config.cover.assetId);
-  const coverMedia = useDecryptedAssetUrl(
-    selectedAsset,
-    LIGHTBOX_VARIANTS,
-    token,
+  const activeCoverProfile = profileFromConfig(config, previewDevice);
+  const activeTemplate = getCoverTemplate(
+    activeCoverProfile.styleId || config.cover.styleId,
   );
-  const hasCoverPreview = Boolean(coverMedia.src);
-  const coverPreviewStatus = coverMedia.loading
-    ? "Decrypting cover preview"
-    : coverMedia.error
-      ? "Cover key needed"
-      : "Cover preview unavailable";
+  const activeCoverSlotIndex = Math.min(
+    activeCoverSlot,
+    activeTemplate.slotCount - 1,
+  );
+  const hasCoverPreview = coverTemplateSlotIndices(activeTemplate).some(
+    (slotIndex) =>
+      Boolean(coverAssetForSlot(config, assets, slotIndex, previewDevice)),
+  );
 
   // ───────────── Drag handlers ─────────────
 
@@ -891,6 +2039,13 @@ export default function CoverDesignPage() {
       // What's being dragged is decided by data-handle on the target.
       const target = e.target as HTMLElement;
       const handle = target.closest<HTMLElement>("[data-handle]");
+      const slot = target.closest<HTMLElement>("[data-cover-slot]");
+      if (slot?.dataset.coverSlot) {
+        const slotIndex = Number(slot.dataset.coverSlot);
+        if (Number.isFinite(slotIndex)) {
+          setActiveCoverSlot(slotIndex);
+        }
+      }
       const kind = (handle?.dataset.handle as DragKind) || "focal";
       dragKindRef.current = kind;
       setDragKind(kind);
@@ -912,39 +2067,29 @@ export default function CoverDesignPage() {
       const { x, y } = pctFromEvent(e, rect);
       setConfig((c) => {
         if (kind === "focal") {
-          return {
-            ...c,
-            cover: {
-              ...c.cover,
-              [previewDevice === "phone" ? "mobileFocalPoint" : "focalPoint"]: {
-                x: Math.round(x),
-                y: Math.round(y),
-              },
+          return setCoverSlotFocalPoint(
+            c,
+            activeCoverSlotIndex,
+            previewDevice,
+            {
+              x,
+              y,
             },
-          };
+          );
         }
         if (kind === "title") {
-          return {
-            ...c,
-            cover: {
-              ...c.cover,
-              titlePosition: { x: Math.round(x), y: Math.round(y) },
-            },
-          };
+          return setTextPositionForDevice(c, "title", previewDevice, { x, y });
         }
         if (kind === "subtitle") {
-          return {
-            ...c,
-            cover: {
-              ...c.cover,
-              subtitlePosition: { x: Math.round(x), y: Math.round(y) },
-            },
-          };
+          return setTextPositionForDevice(c, "subtitle", previewDevice, {
+            x,
+            y,
+          });
         }
         return c;
       });
     },
-    [previewDevice],
+    [activeCoverSlotIndex, previewDevice],
   );
 
   const onStagePointerUp = useCallback(
@@ -978,15 +2123,16 @@ export default function CoverDesignPage() {
     setSaveMessage("");
     setJustSaved(false);
     try {
+      const payload = prepareDesignConfigForSave(config);
       await updateGalleryDesign(
         token,
         galleryId,
-        config as unknown as Record<string, unknown>,
+        payload as unknown as Record<string, unknown>,
       );
       // Capture the snapshot of what we just sent so the dirty-dot logic
       // recognises this state as "clean". Use JSON.stringify of the same
       // serialisation we sent over the wire so the comparison is exact.
-      setSavedSnapshot(JSON.stringify(config));
+      setSavedSnapshot(JSON.stringify(payload));
       setSaveMessage("Cover & Design saved.");
       setJustSaved(true);
     } catch (err) {
@@ -1014,18 +2160,15 @@ export default function CoverDesignPage() {
   }, [justSaved]);
 
   const isDirty =
-    savedSnapshot !== "" && savedSnapshot !== JSON.stringify(config);
+    savedSnapshot !== "" &&
+    savedSnapshot !== JSON.stringify(prepareDesignConfigForSave(config));
 
   // ───────────── Derived preview state ─────────────
 
   const activeScrim = coverScrimStyle(
-    config.cover.scrimStyle,
+    (activeCoverProfile.scrimStyle as ScrimStyle) || config.cover.scrimStyle,
     config.theme.variant,
   );
-  const activeFocalPoint =
-    previewDevice === "phone"
-      ? config.cover.mobileFocalPoint
-      : config.cover.focalPoint;
   // Drag anchor is always the CENTER of the text bounding box, regardless
   // of textAlign. Earlier behavior used textAlign to pick the anchor edge
   // (left = left edge, right = right edge), which made dragging feel
@@ -1035,10 +2178,38 @@ export default function CoverDesignPage() {
   // visual middle. textAlign still controls multi-line alignment inside
   // the box; it just no longer affects WHERE the box sits relative to the
   // saved position.
-  const textShadowStyle = config.cover.textShadow
-    ? "var(--cover-text-shadow)"
-    : undefined;
-  const activeTextBackdropStyle = textBackdropStyle(config.cover.textBackdrop);
+  const textShadowStyle =
+    (activeCoverProfile.textShadow ?? config.cover.textShadow)
+      ? "var(--cover-text-shadow)"
+      : undefined;
+  const activeTextBackdropStyle = textBackdropStyle(
+    (activeCoverProfile.textBackdrop as TextBackdrop) ||
+      config.cover.textBackdrop,
+  );
+  const previewTitle = activeCoverProfile.title?.trim() || gallery?.title || "";
+  const previewSubtitle =
+    activeCoverProfile.subtitle?.trim() || gallery?.description || "";
+  const previewTitlePosition = textPositionForDevice(
+    config,
+    "title",
+    previewDevice,
+  );
+  const previewSubtitlePosition = textPositionForDevice(
+    config,
+    "subtitle",
+    previewDevice,
+  );
+  const previewTitleSize = textSizeForDevice(config, "title", previewDevice);
+  const previewSubtitleSize = textSizeForDevice(
+    config,
+    "subtitle",
+    previewDevice,
+  );
+  const activeTypographyProfile =
+    activeCoverProfile.typography ||
+    desktopTypographyProfile(config.typography);
+  const watermarkLabel =
+    config.branding.watermarkText.trim() || config.branding.monogram;
 
   // ───────────── Render ─────────────
 
@@ -1073,6 +2244,26 @@ export default function CoverDesignPage() {
               <option value="brand">Brand</option>
               <option value="grid">Grid</option>
             </select>
+            <GlassButton
+              type="button"
+              variant="surface"
+              onClick={handleUndo}
+              disabled={undoStack.length === 0}
+              className="cover-header-action"
+              aria-label="Undo cover design change"
+            >
+              Undo
+            </GlassButton>
+            <GlassButton
+              type="button"
+              variant="surface"
+              onClick={handleRedo}
+              disabled={redoStack.length === 0}
+              className="cover-header-action"
+              aria-label="Redo cover design change"
+            >
+              Redo
+            </GlassButton>
             {gallery?.slug && (
               <Link
                 href={`/galleries/${galleryId}/preview`}
@@ -1170,11 +2361,23 @@ export default function CoverDesignPage() {
                 </button>
               ))}
             </div>
-            <p className="text-xs text-on-surface-variant">
-              {previewDevice === "phone"
-                ? "Phone crop uses its own focal point and safe zone."
-                : "Desktop crop follows the full gallery cover."}
-            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs text-on-surface-variant">
+                {previewDevice === "phone"
+                  ? "Phone profile is active for cover edits."
+                  : "Desktop profile is active for cover edits."}
+              </p>
+              <GlassButton
+                type="button"
+                variant="surface"
+                size="sm"
+                onClick={() =>
+                  updateConfig((current) => copyDesktopToPhoneProfile(current))
+                }
+              >
+                Copy desktop to phone
+              </GlassButton>
+            </div>
           </div>
           <div
             ref={stageRef}
@@ -1191,9 +2394,10 @@ export default function CoverDesignPage() {
             } ${previewDevice === "phone" ? "mx-auto max-w-sm" : ""}`}
             style={{
               aspectRatio:
-                previewDevice === "phone"
+                activeCoverProfile.aspectRatio ||
+                (previewDevice === "phone"
                   ? config.cover.mobileAspectRatio
-                  : config.cover.aspectRatio,
+                  : config.cover.aspectRatio),
               maxHeight:
                 previewDevice === "phone"
                   ? "min(78vh, 760px)"
@@ -1202,37 +2406,15 @@ export default function CoverDesignPage() {
             }}
             aria-label="Cover preview — drag photo to pan, drag title/subtitle to position"
           >
-            {coverMedia.src ? (
-              <img
-                src={coverMedia.src}
-                alt={selectedAsset?.filename || "Cover preview"}
-                className="absolute inset-0 h-full w-full object-cover"
-                style={{
-                  objectPosition: `${activeFocalPoint.x}% ${activeFocalPoint.y}%`,
-                }}
-                draggable={false}
-              />
-            ) : (
-              <div className="cover-preview-fallback">
-                {selectedAsset && (
-                  <span
-                    className="cover-preview-status"
-                    aria-label={`${selectedAsset.filename}: ${coverMedia.error || coverPreviewStatus}`}
-                    title={coverMedia.error || coverPreviewStatus}
-                  >
-                    {coverMedia.loading ? (
-                      <Photo
-                        className="cover-preview-status__icon"
-                        aria-hidden
-                      />
-                    ) : (
-                      <Key className="cover-preview-status__icon" aria-hidden />
-                    )}
-                    <span>{coverPreviewStatus}</span>
-                  </span>
-                )}
-              </div>
-            )}
+            <CoverTemplateStage
+              template={activeTemplate}
+              config={config}
+              assets={assets}
+              token={token}
+              previewDevice={previewDevice}
+              activeSlot={activeCoverSlotIndex}
+              onSelectSlot={setActiveCoverSlot}
+            />
 
             {activeScrim && (
               <div
@@ -1261,23 +2443,46 @@ export default function CoverDesignPage() {
                 width — felt like the title was fighting back against the
                 user. Multi-line titles work by typing an explicit newline,
                 which `pre` preserves. */}
-            {config.cover.title && (
+            {activeCoverProfile.titleVisible !== false && previewTitle && (
               <h2
                 data-handle="title"
+                lang={
+                  getCoverLanguage(activeTypographyProfile.titleLanguage)
+                    .htmlLang
+                }
+                dir={
+                  getCoverLanguage(activeTypographyProfile.titleLanguage).dir
+                }
                 className={`absolute touch-none font-semibold tracking-tight transition-shadow ${
                   activeText === "title" && tab === "text"
                     ? "ring-2 ring-primary ring-offset-2 ring-offset-surface-scrim-strong/30"
                     : ""
                 }`}
                 style={{
-                  left: `${config.cover.titlePosition.x}%`,
-                  top: `${config.cover.titlePosition.y}%`,
+                  left: `${previewTitlePosition.x}%`,
+                  top: `${previewTitlePosition.y}%`,
                   transform: "translate(-50%, -50%)",
-                  fontFamily: `'${config.typography.headingFont}', serif`,
-                  fontSize: `${config.typography.titleSize}px`,
-                  color: config.cover.titleColor || config.cover.textColor,
+                  fontFamily: fontFamilyForCoverText(
+                    activeTypographyProfile.headingFont,
+                    activeTypographyProfile.titleLanguage,
+                  ),
+                  fontSize: `${previewTitleSize}px`,
+                  fontWeight: activeTypographyProfile.titleWeight,
+                  fontStyle: activeTypographyProfile.titleItalic
+                    ? "italic"
+                    : "normal",
+                  direction: getCoverLanguage(
+                    activeTypographyProfile.titleLanguage,
+                  ).dir,
+                  color:
+                    activeCoverProfile.titleColor ||
+                    activeCoverProfile.textColor ||
+                    config.cover.titleColor ||
+                    config.cover.textColor,
                   textShadow: textShadowStyle,
-                  textAlign: config.cover.textAlign,
+                  textAlign:
+                    (activeCoverProfile.textAlign as TextAlign) ||
+                    config.cover.textAlign,
                   cursor: "grab",
                   padding: "var(--space-1) var(--space-2)",
                   borderRadius: "var(--radius-sm)",
@@ -1291,51 +2496,78 @@ export default function CoverDesignPage() {
                   setTab("text");
                 }}
               >
-                {config.cover.title}
+                {previewTitle}
               </h2>
             )}
 
             {/* Subtitle overlay — draggable. Same wrap rules as title. */}
-            {config.cover.subtitle && (
-              <p
-                data-handle="subtitle"
-                className={`absolute touch-none transition-shadow ${
-                  activeText === "subtitle" && tab === "text"
-                    ? "ring-2 ring-primary ring-offset-2 ring-offset-surface-scrim-strong/30"
-                    : ""
-                }`}
-                style={{
-                  left: `${config.cover.subtitlePosition.x}%`,
-                  top: `${config.cover.subtitlePosition.y}%`,
-                  transform: "translate(-50%, -50%)",
-                  fontFamily: `'${config.typography.bodyFont}', sans-serif`,
-                  fontSize: `${config.typography.subtitleSize}px`,
-                  color: config.cover.subtitleColor || config.cover.textColor,
-                  textShadow: textShadowStyle,
-                  textAlign: config.cover.textAlign,
-                  cursor: "grab",
-                  padding: "var(--space-1) var(--space-2)",
-                  borderRadius: "var(--radius-sm)",
-                  lineHeight: 1.3,
-                  userSelect: "none",
-                  whiteSpace: "pre",
-                  ...activeTextBackdropStyle,
-                }}
-                onClick={() => {
-                  setActiveText("subtitle");
-                  setTab("text");
-                }}
-              >
-                {config.cover.subtitle}
-              </p>
-            )}
+            {activeCoverProfile.subtitleVisible !== false &&
+              previewSubtitle && (
+                <p
+                  data-handle="subtitle"
+                  lang={
+                    getCoverLanguage(activeTypographyProfile.subtitleLanguage)
+                      .htmlLang
+                  }
+                  dir={
+                    getCoverLanguage(activeTypographyProfile.subtitleLanguage)
+                      .dir
+                  }
+                  className={`absolute touch-none transition-shadow ${
+                    activeText === "subtitle" && tab === "text"
+                      ? "ring-2 ring-primary ring-offset-2 ring-offset-surface-scrim-strong/30"
+                      : ""
+                  }`}
+                  style={{
+                    left: `${previewSubtitlePosition.x}%`,
+                    top: `${previewSubtitlePosition.y}%`,
+                    transform: "translate(-50%, -50%)",
+                    fontFamily: fontFamilyForCoverText(
+                      activeTypographyProfile.bodyFont,
+                      activeTypographyProfile.subtitleLanguage,
+                    ),
+                    fontSize: `${previewSubtitleSize}px`,
+                    fontWeight: activeTypographyProfile.subtitleWeight,
+                    fontStyle: activeTypographyProfile.subtitleItalic
+                      ? "italic"
+                      : "normal",
+                    direction: getCoverLanguage(
+                      activeTypographyProfile.subtitleLanguage,
+                    ).dir,
+                    color:
+                      activeCoverProfile.subtitleColor ||
+                      activeCoverProfile.textColor ||
+                      config.cover.subtitleColor ||
+                      config.cover.textColor,
+                    textShadow: textShadowStyle,
+                    textAlign:
+                      (activeCoverProfile.textAlign as TextAlign) ||
+                      config.cover.textAlign,
+                    cursor: "grab",
+                    padding: "var(--space-1) var(--space-2)",
+                    borderRadius: "var(--radius-sm)",
+                    lineHeight: 1.3,
+                    userSelect: "none",
+                    whiteSpace: "pre",
+                    ...activeTextBackdropStyle,
+                  }}
+                  onClick={() => {
+                    setActiveText("subtitle");
+                    setTab("text");
+                  }}
+                >
+                  {previewSubtitle}
+                </p>
+              )}
 
             {/* Drag-hint pill */}
             {hasCoverPreview && !dragKind && (
               <div className="cover-preview-drag-hint pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2">
                 {tab === "text"
                   ? "Drag title / subtitle to position"
-                  : "Drag photo to pan"}
+                  : activeTemplate.slotCount > 1
+                    ? `Drag photo ${activeCoverSlotIndex + 1} to pan`
+                    : "Drag photo to pan"}
               </div>
             )}
 
@@ -1354,11 +2586,34 @@ export default function CoverDesignPage() {
                   style={{
                     color: config.branding.brandColor || undefined,
                     borderColor: config.branding.brandColor || undefined,
+                    width: `${config.branding.logoSize}px`,
+                    minWidth: `${config.branding.logoSize}px`,
+                    height: `${config.branding.logoSize}px`,
+                    opacity: config.branding.logoOpacity / 100,
                   }}
                 >
                   {config.branding.monogram}
                 </div>
               )}
+            {config.branding.watermarkStyle !== "none" && watermarkLabel && (
+              <div
+                className={`cover-watermark-preview cover-watermark-preview--${config.branding.watermarkStyle}`}
+                style={{
+                  color:
+                    config.branding.brandColor ||
+                    config.cover.textColor ||
+                    undefined,
+                  opacity: config.branding.watermarkOpacity / 100,
+                }}
+                aria-hidden
+              >
+                {config.branding.watermarkStyle === "tiled"
+                  ? Array.from({ length: 6 }, (_, index) => (
+                      <span key={index}>{watermarkLabel}</span>
+                    ))
+                  : watermarkLabel}
+              </div>
+            )}
           </div>
         </section>
 
@@ -1373,21 +2628,35 @@ export default function CoverDesignPage() {
                 assets={assets}
                 token={token}
                 config={config}
-                setConfig={setConfig}
+                setConfig={updateConfig}
+                previewDevice={previewDevice}
+                activeCoverSlot={activeCoverSlotIndex}
+                setActiveCoverSlot={setActiveCoverSlot}
+                onFilesAccepted={upload.addFiles}
+                uploadItems={upload.items}
+                uploadPaused={upload.isPaused}
+                onCancelUpload={upload.cancel}
+                onRetryUpload={upload.retry}
               />
             )}
             {tab === "text" && (
               <PanelText
                 config={config}
-                setConfig={setConfig}
+                setConfig={updateConfig}
+                albumTitle={gallery?.title || ""}
+                albumSubtitle={gallery?.description || ""}
+                assets={assets}
+                activeTemplate={activeTemplate}
+                previewDevice={previewDevice}
                 activeText={activeText}
                 setActiveText={setActiveText}
+                setTab={setTab}
               />
             )}
             {tab === "grid" && (
               <PanelGrid
                 config={config}
-                setConfig={setConfig}
+                setConfig={updateConfig}
                 assets={assets}
                 token={token}
               />
@@ -1395,22 +2664,29 @@ export default function CoverDesignPage() {
             {tab === "media" && (
               <PanelMedia
                 config={config}
-                setConfig={setConfig}
+                setConfig={updateConfig}
                 assets={assets}
+                previewDevice={previewDevice}
               />
             )}
             {tab === "scenes" && (
               <PanelScenes
                 config={config}
-                setConfig={setConfig}
+                setConfig={updateConfig}
                 assets={assets}
               />
             )}
             {tab === "brand" && (
-              <PanelBrand config={config} setConfig={setConfig} />
+              <PanelBrand config={config} setConfig={updateConfig} />
             )}
           </Card>
         </section>
+        <TermsAcceptanceModal
+          open={termsModalOpen}
+          token={token}
+          onAccepted={() => setTermsModalOpen(false)}
+          onCancel={() => setTermsModalOpen(false)}
+        />
       </div>
     </GalleryPageShell>
   );
@@ -1439,12 +2715,18 @@ export default function CoverDesignPage() {
 function FontPicker({
   id,
   value,
+  languageId,
+  options,
+  sampleText,
   onChange,
   onOpenChange,
   ariaLabel,
 }: {
   id: string;
   value: string;
+  languageId: string;
+  options: CoverFontOption[];
+  sampleText: string;
   onChange: (next: string) => void;
   onOpenChange?: (open: boolean) => void;
   ariaLabel?: string;
@@ -1519,7 +2801,7 @@ function FontPicker({
     const selected = listRef.current.querySelector<HTMLButtonElement>(
       `[data-font-option="${CSS.escape(value)}"]`,
     );
-    selected?.scrollIntoView({ block: "nearest" });
+    selected?.scrollIntoView?.({ block: "nearest" });
     selected?.focus();
   }, [open, value]);
 
@@ -1540,7 +2822,7 @@ function FontPicker({
       >
         <span
           className="cover-font-trigger__value"
-          style={{ fontFamily: fontFamilyFor(value) }}
+          style={{ fontFamily: fontFamilyForCoverText(value, languageId) }}
         >
           {value}
         </span>
@@ -1565,7 +2847,7 @@ function FontPicker({
           aria-label={ariaLabel || "Font options"}
           className="cover-font-popover"
         >
-          {FONT_OPTIONS.map((f) => {
+          {options.map((f) => {
             const selected = f.name === value;
             return (
               <button
@@ -1580,21 +2862,148 @@ function FontPicker({
                   setOpen(false);
                 }}
                 className="cover-font-option"
-                style={{ fontFamily: fontFamilyFor(f.name) }}
+                style={{
+                  fontFamily: fontFamilyForCoverText(f.name, languageId),
+                }}
               >
                 <span className="cover-font-option__name">{f.name}</span>
                 <span
                   className="cover-font-option__sample"
-                  style={{ fontFamily: fontFamilyFor(f.name) }}
+                  style={{
+                    fontFamily: fontFamilyForCoverText(f.name, languageId),
+                  }}
                   aria-hidden
                 >
-                  Aa
+                  {sampleText}
                 </span>
               </button>
             );
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function CoverTemplateMiniPreview({ template }: { template: CoverTemplate }) {
+  return (
+    <span
+      className={`cover-template-mini cover-template-mini--${template.layout}`}
+      aria-hidden
+    >
+      {coverTemplateSlotIndices(template).map((slotIndex) => (
+        <span key={slotIndex} className="cover-template-mini__photo" />
+      ))}
+      <span className="cover-template-mini__title" />
+      {template.layout === "outline" && (
+        <span className="cover-template-mini__outline" />
+      )}
+    </span>
+  );
+}
+
+function CoverTemplateStage({
+  template,
+  config,
+  assets,
+  token,
+  previewDevice,
+  activeSlot,
+  onSelectSlot,
+}: {
+  template: CoverTemplate;
+  config: DesignConfig;
+  assets: Asset[];
+  token: string | null;
+  previewDevice: PreviewDevice;
+  activeSlot: number;
+  onSelectSlot: (slotIndex: number) => void;
+}) {
+  return (
+    <div
+      className={`cover-template-layout cover-template-layout--${template.layout}`}
+      data-cover-template={template.id}
+    >
+      {coverTemplateSlotIndices(template).map((slotIndex) => (
+        <CoverTemplateStageSlot
+          key={slotIndex}
+          asset={coverAssetForSlot(config, assets, slotIndex, previewDevice)}
+          token={token}
+          focalPoint={coverSlotFocalPoint(config, slotIndex, previewDevice)}
+          slotIndex={slotIndex}
+          active={slotIndex === activeSlot}
+          onSelect={() => onSelectSlot(slotIndex)}
+        />
+      ))}
+      {template.layout === "journal" && (
+        <div className="cover-template-journal-panel" aria-hidden />
+      )}
+      {template.layout === "outline" && (
+        <div className="cover-template-outline" aria-hidden />
+      )}
+    </div>
+  );
+}
+
+function CoverTemplateStageSlot({
+  asset,
+  token,
+  focalPoint,
+  slotIndex,
+  active,
+  onSelect,
+}: {
+  asset: Asset | null;
+  token: string | null;
+  focalPoint: FocalPoint;
+  slotIndex: number;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  const media = useDecryptedAssetUrl(asset, LIGHTBOX_VARIANTS, token);
+  const previewStatus = media.loading
+    ? "Decrypting cover preview"
+    : media.error
+      ? "Cover key needed"
+      : asset
+        ? "Cover preview unavailable"
+        : "Choose a photo for this template slot";
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      data-cover-slot={slotIndex}
+      data-state={active ? "active" : "idle"}
+      className="cover-template-slot"
+      aria-label={`Cover template photo ${slotIndex + 1}`}
+      onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
+    >
+      {media.src ? (
+        <img
+          src={media.src}
+          alt={asset?.filename || `Cover photo ${slotIndex + 1}`}
+          className="cover-template-slot__image"
+          style={{
+            objectPosition: `${focalPoint.x}% ${focalPoint.y}%`,
+          }}
+          draggable={false}
+        />
+      ) : (
+        <LockedMediaFallback
+          asset={asset}
+          error={media.loading ? null : media.error}
+          message={previewStatus}
+          className="cover-template-slot__fallback"
+        />
+      )}
+      <span className="cover-template-slot__badge">Photo {slotIndex + 1}</span>
     </div>
   );
 }
@@ -1606,12 +3015,60 @@ function PanelCover({
   token,
   config,
   setConfig,
+  previewDevice,
+  activeCoverSlot,
+  setActiveCoverSlot,
+  onFilesAccepted,
+  uploadItems,
+  uploadPaused,
+  onCancelUpload,
+  onRetryUpload,
 }: {
   assets: Asset[];
   token: string | null;
   config: DesignConfig;
   setConfig: React.Dispatch<React.SetStateAction<DesignConfig>>;
+  previewDevice: PreviewDevice;
+  activeCoverSlot: number;
+  setActiveCoverSlot: (slotIndex: number) => void;
+  onFilesAccepted: (files: File[]) => void;
+  uploadItems: ReturnType<typeof useUpload>["items"];
+  uploadPaused: boolean;
+  onCancelUpload: ReturnType<typeof useUpload>["cancel"];
+  onRetryUpload: ReturnType<typeof useUpload>["retry"];
 }) {
+  const activeCoverProfile = profileFromConfig(config, previewDevice);
+  const activeTemplate = getCoverTemplate(
+    activeCoverProfile.styleId || config.cover.styleId,
+  );
+  const activeLayoutPreset =
+    activeCoverProfile.layoutPreset || config.cover.layoutPreset;
+  const activeCoverSlotIndex = Math.min(
+    activeCoverSlot,
+    activeTemplate.slotCount - 1,
+  );
+  const usedSlotIndexesByAssetId = useMemo(() => {
+    const next = new Map<string, number[]>();
+    for (const slotIndex of coverTemplateSlotIndices(activeTemplate)) {
+      const assetId = coverAssetIdForSlot(
+        config,
+        assets,
+        slotIndex,
+        previewDevice,
+      );
+      if (!assetId) continue;
+      const slots = next.get(assetId) ?? [];
+      slots.push(slotIndex);
+      next.set(assetId, slots);
+    }
+    return next;
+  }, [activeTemplate, assets, config, previewDevice]);
+  const activeFocalPoint = coverSlotFocalPoint(
+    config,
+    activeCoverSlotIndex,
+    previewDevice,
+  );
+
   return (
     <div className="cover-panel-stack">
       <section className="cover-section" aria-labelledby="cover-presets-title">
@@ -1625,7 +3082,7 @@ function PanelCover({
             </p>
           </div>
           <Badge variant="accent" className="uppercase">
-            {config.cover.layoutPreset.replace(/-/g, " ")}
+            {activeLayoutPreset.replace(/-/g, " ")}
           </Badge>
         </div>
         <div
@@ -1634,17 +3091,161 @@ function PanelCover({
           aria-label="Cover design presets"
         >
           {COVER_PRESETS.map((preset) => {
-            const active = config.cover.layoutPreset === preset.id;
+            const active = activeLayoutPreset === preset.id;
             return (
               <SelectableTile
                 key={preset.id}
-                onClick={() => setConfig((c) => applyCoverPreset(c, preset.id))}
+                onClick={() =>
+                  setConfig((c) =>
+                    applyCoverPreset(c, preset.id, assets, previewDevice),
+                  )
+                }
                 selected={active}
                 title={preset.name}
                 description={preset.mood}
               />
             );
           })}
+        </div>
+      </section>
+
+      <section className="cover-section" aria-labelledby="cover-template-title">
+        <div className="cover-section-header">
+          <div className="cover-section-heading">
+            <h3 id="cover-template-title" className="cover-section-title">
+              Cover templates
+            </h3>
+            <p className="cover-section-copy">
+              Choose a single-photo, split, or multi-photo album cover.
+            </p>
+          </div>
+          <Badge variant="accent" className="uppercase">
+            {activeTemplate.name}
+          </Badge>
+        </div>
+        <div
+          className="cover-template-grid"
+          role="group"
+          aria-label="Cover templates"
+        >
+          {COVER_TEMPLATES.map((template) => {
+            const active = activeTemplate.id === template.id;
+            return (
+              <SelectableTile
+                key={template.id}
+                onClick={() => {
+                  setConfig((c) =>
+                    applyCoverTemplate(c, template, assets, previewDevice),
+                  );
+                  setActiveCoverSlot(0);
+                }}
+                selected={active}
+                className="cover-template-tile"
+                media={<CoverTemplateMiniPreview template={template} />}
+                title={template.name}
+                description={template.mood}
+                aria-label={`Use ${template.name} cover template`}
+              />
+            );
+          })}
+        </div>
+      </section>
+
+      <section
+        className="cover-section cover-slot-controls"
+        aria-labelledby="cover-slot-title"
+      >
+        <div className="cover-section-header">
+          <div className="cover-section-heading">
+            <h3 id="cover-slot-title" className="cover-section-title">
+              Template photo slots
+            </h3>
+            <p className="cover-section-copy">
+              Pick a slot, then choose a photo below or drag it in the preview.
+            </p>
+          </div>
+        </div>
+        <div
+          className="cover-slot-tabs"
+          role="group"
+          aria-label="Template photo slots"
+        >
+          {coverTemplateSlotIndices(activeTemplate).map((slotIndex) => (
+            <button
+              key={slotIndex}
+              type="button"
+              className="cover-slot-tab"
+              data-state={
+                slotIndex === activeCoverSlotIndex ? "active" : "idle"
+              }
+              aria-pressed={slotIndex === activeCoverSlotIndex}
+              onClick={() => setActiveCoverSlot(slotIndex)}
+            >
+              Photo {slotIndex + 1}
+            </button>
+          ))}
+        </div>
+        <div className="cover-slot-focal-grid">
+          <div className="cover-field-stack">
+            <div className="cover-field-row">
+              <label htmlFor="cover-slot-focal-x" className="form-label">
+                Horizontal focal
+              </label>
+              <span className="cover-range-value">{activeFocalPoint.x}%</span>
+            </div>
+            <input
+              id="cover-slot-focal-x"
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={activeFocalPoint.x}
+              onChange={(event) =>
+                setConfig((c) =>
+                  setCoverSlotFocalPoint(
+                    c,
+                    activeCoverSlotIndex,
+                    previewDevice,
+                    {
+                      ...activeFocalPoint,
+                      x: Number(event.target.value),
+                    },
+                  ),
+                )
+              }
+              className={COVER_RANGE_CLASS}
+            />
+          </div>
+          <div className="cover-field-stack">
+            <div className="cover-field-row">
+              <label htmlFor="cover-slot-focal-y" className="form-label">
+                Vertical focal
+              </label>
+              <span className="cover-range-value">{activeFocalPoint.y}%</span>
+            </div>
+            <input
+              id="cover-slot-focal-y"
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={activeFocalPoint.y}
+              onChange={(event) =>
+                setConfig((c) =>
+                  setCoverSlotFocalPoint(
+                    c,
+                    activeCoverSlotIndex,
+                    previewDevice,
+                    {
+                      ...activeFocalPoint,
+                      y: Number(event.target.value),
+                    },
+                  ),
+                )
+              }
+              className={COVER_RANGE_CLASS}
+            />
+          </div>
         </div>
       </section>
 
@@ -1662,44 +3263,87 @@ function PanelCover({
             {assets.length} {assets.length === 1 ? "photo" : "photos"}
           </Badge>
         </div>
+        <div className="cover-upload-stack">
+          <UploadDropzone
+            onFilesAccepted={onFilesAccepted}
+            disabled={!token || uploadPaused}
+          />
+          <UploadProgress
+            items={uploadItems}
+            onCancel={onCancelUpload}
+            onRetry={onRetryUpload}
+          />
+        </div>
         <div
           className="cover-photo-grid"
           role="group"
           aria-label="Cover photo choices"
         >
           {assets.map((a, index) => {
-            const active = config.cover.assetId === a.id;
+            const active =
+              coverAssetIdForSlot(
+                config,
+                assets,
+                activeCoverSlotIndex,
+                previewDevice,
+              ) === a.id;
+            const usedSlotIndexes = usedSlotIndexesByAssetId.get(a.id) ?? [];
+            const slotBadge =
+              usedSlotIndexes.length > 0
+                ? usedSlotIndexes
+                    .map((slotIndex) => `Photo ${slotIndex + 1}`)
+                    .join(", ")
+                : "";
             return (
               <SelectableTile
                 key={a.id}
                 onClick={() =>
-                  setConfig((c) => ({
-                    ...c,
-                    cover: { ...c.cover, assetId: a.id },
-                  }))
+                  setConfig((c) =>
+                    setCoverSlotAsset(
+                      c,
+                      activeCoverSlotIndex,
+                      a.id,
+                      previewDevice,
+                    ),
+                  )
                 }
                 selected={active}
                 className="cover-photo-tile"
                 title={a.filename || `Photo ${index + 1}`}
-                description={active ? "Current cover" : `Photo ${index + 1}`}
-                media={
-                  <DecryptedPreviewImage
-                    asset={a}
-                    token={token}
-                    variants={FILMSTRIP_VARIANTS}
-                    alt={a.filename}
-                    className="cover-photo-tile__image"
-                    fallbackMode="compact"
-                  />
+                description={
+                  active
+                    ? `Photo ${activeCoverSlotIndex + 1} slot`
+                    : slotBadge
+                      ? `Used in ${slotBadge}`
+                      : `Photo ${index + 1}`
                 }
-                aria-label={`Use ${a.filename} as cover`}
+                media={
+                  <span className="cover-photo-tile__media-wrap">
+                    <DecryptedPreviewImage
+                      asset={a}
+                      token={token}
+                      variants={FILMSTRIP_VARIANTS}
+                      alt={a.filename}
+                      className="cover-photo-tile__image"
+                      fallbackMode="compact"
+                    />
+                    {slotBadge ? (
+                      <span className="cover-photo-tile__slot-badge">
+                        {slotBadge}
+                      </span>
+                    ) : null}
+                  </span>
+                }
+                aria-label={`Use ${a.filename} as template photo ${activeCoverSlotIndex + 1}`}
               />
             );
           })}
         </div>
         {assets.length === 0 && (
           <p className="cover-empty-note">
-            Upload photos to the gallery to choose a cover.
+            No ready photos are linked to this gallery yet. Upload photos here
+            or add them from the gallery before choosing Photo{" "}
+            {activeCoverSlotIndex + 1} for the cover.
           </p>
         )}
       </section>
@@ -1711,20 +3355,17 @@ function PanelCover({
           size="md"
           icon={<RefreshCw aria-hidden />}
           onClick={() =>
-            setConfig((c) => ({
-              ...c,
-              cover: {
-                ...c.cover,
+            setConfig((c) =>
+              updateProfileForDevice(c, previewDevice, {
                 focalPoint: { x: 50, y: 50 },
-                mobileFocalPoint: { x: 50, y: 50 },
-              },
-            }))
+                slotFocalPoints: [],
+              }),
+            )
           }
           className="cover-panel-reset-button"
         >
-          Reset focal points ({config.cover.focalPoint.x}%,{" "}
-          {config.cover.focalPoint.y}% / phone {config.cover.mobileFocalPoint.x}
-          %, {config.cover.mobileFocalPoint.y}%)
+          Reset {previewDevice} focal points ({activeFocalPoint.x}%,{" "}
+          {activeFocalPoint.y}%)
         </GlassButton>
       </div>
     </div>
@@ -1788,34 +3429,49 @@ function DecryptedPreviewImage({
 
   if (fallbackMode === "compact") {
     return (
-      <span
+      <LockedMediaFallback
+        asset={asset}
+        error={media.error}
+        message={media.error || "Preview unavailable"}
+        mode="compact"
+        allowRecovery={false}
         className="cover-photo-tile__fallback"
-        aria-label={`${asset.filename}: ${media.error || "Preview unavailable"}`}
-        title={media.error || "Preview unavailable"}
-      >
-        <Key className="cover-photo-tile__fallback-icon" aria-hidden />
-        <span className="cover-photo-tile__fallback-text">Key needed</span>
-      </span>
+      />
     );
   }
 
   return (
-    <div className="flex h-full w-full items-center justify-center bg-surface-container-high px-2 text-center text-2xs text-on-surface-variant">
-      {media.error || "Preview unavailable"}
-    </div>
+    <LockedMediaFallback
+      asset={asset}
+      error={media.error}
+      message={media.error || "Preview unavailable"}
+      className="bg-surface-container-high px-2 text-2xs text-on-surface-variant"
+    />
   );
 }
 
 function PanelText({
   config,
   setConfig,
+  albumTitle,
+  albumSubtitle,
+  assets,
+  activeTemplate,
+  previewDevice,
   activeText,
   setActiveText,
+  setTab,
 }: {
   config: DesignConfig;
   setConfig: React.Dispatch<React.SetStateAction<DesignConfig>>;
+  albumTitle: string;
+  albumSubtitle: string;
+  assets: Asset[];
+  activeTemplate: CoverTemplate;
+  previewDevice: PreviewDevice;
   activeText: "title" | "subtitle";
   setActiveText: (t: "title" | "subtitle") => void;
+  setTab: (tab: TabId) => void;
 }) {
   // 2026-05-18 (v2): Typography panel absorbed into Text. Each element
   // (Title, Subtitle) is its own card: text input → font dropdown →
@@ -1835,16 +3491,272 @@ function PanelText({
     (config.cover.textShadow ? 1 : 0) +
     (config.cover.scrimStyle !== "none" ? 1 : 0) +
     (config.cover.textBackdrop !== "none" ? 1 : 0) +
-    (config.typography.titleSize >= 36 ? 1 : 0);
+    (textSizeForDevice(config, "title", previewDevice) >= 36 ? 1 : 0);
   const readabilityLabel =
     readabilityPoints >= 3
       ? "Strong"
       : readabilityPoints >= 2
         ? "Good"
         : "Needs help";
+  const titleLanguage = getCoverLanguage(config.typography.titleLanguage);
+  const subtitleLanguage = getCoverLanguage(config.typography.subtitleLanguage);
+  const titleFonts = getCoverFontsForLanguage(titleLanguage.id);
+  const subtitleFonts = getCoverFontsForLanguage(subtitleLanguage.id);
+  const titlePosition = textPositionForDevice(config, "title", previewDevice);
+  const subtitlePosition = textPositionForDevice(
+    config,
+    "subtitle",
+    previewDevice,
+  );
+  const titleSize = textSizeForDevice(config, "title", previewDevice);
+  const subtitleSize = textSizeForDevice(config, "subtitle", previewDevice);
+  const titleSizeMin =
+    previewDevice === "phone" ? MOBILE_TITLE_SIZE_MIN : TITLE_SIZE_MIN;
+  const titleSizeMax =
+    previewDevice === "phone" ? MOBILE_TITLE_SIZE_MAX : TITLE_SIZE_MAX;
+  const subtitleSizeMin =
+    previewDevice === "phone" ? MOBILE_SUBTITLE_SIZE_MIN : SUBTITLE_SIZE_MIN;
+  const subtitleSizeMax =
+    previewDevice === "phone" ? MOBILE_SUBTITLE_SIZE_MAX : SUBTITLE_SIZE_MAX;
+  const titleUsesAlbumDefault =
+    Boolean(albumTitle) &&
+    (config.cover.title.trim() === "" || config.cover.title === albumTitle);
+  const subtitleUsesAlbumDefault =
+    Boolean(albumSubtitle) &&
+    (config.cover.subtitle.trim() === "" ||
+      config.cover.subtitle === albumSubtitle);
+  const missingTemplateSlots = coverTemplateSlotIndices(activeTemplate).filter(
+    (slotIndex) => !coverAssetForSlot(config, assets, slotIndex, previewDevice),
+  );
+  const phoneTitle = config.cover.mobileTitlePosition;
+  const phoneSubtitle = config.cover.mobileSubtitlePosition;
+  const phoneSafe =
+    phoneTitle.x >= 12 &&
+    phoneTitle.x <= 88 &&
+    phoneTitle.y >= 12 &&
+    phoneTitle.y <= 88 &&
+    (!config.cover.subtitleVisible ||
+      (phoneSubtitle.x >= 12 &&
+        phoneSubtitle.x <= 88 &&
+        phoneSubtitle.y >= 12 &&
+        phoneSubtitle.y <= 88));
+  const brandText =
+    config.branding.watermarkText.trim() || config.branding.monogram.trim();
+  const qualityItems = [
+    {
+      label: "Cover photo",
+      detail: assets.length > 0 ? "Ready" : "Needs a photo",
+      level: assets.length > 0 ? "good" : "danger",
+    },
+    {
+      label: "Template slots",
+      detail:
+        missingTemplateSlots.length === 0
+          ? "All required slots filled"
+          : `${missingTemplateSlots.length} slot${missingTemplateSlots.length === 1 ? "" : "s"} missing`,
+      level: missingTemplateSlots.length === 0 ? "good" : "danger",
+    },
+    {
+      label: "Phone safe zone",
+      detail: phoneSafe ? "Inside safe zone" : "Move phone text inward",
+      level: phoneSafe ? "good" : "warning",
+    },
+    {
+      label: "Readability",
+      detail: readabilityLabel,
+      level: readabilityPoints >= 2 ? "good" : "warning",
+    },
+    {
+      label: "Brand mark",
+      detail:
+        config.branding.watermarkStyle === "none" || brandText
+          ? "Ready"
+          : "Add monogram or watermark text",
+      level:
+        config.branding.watermarkStyle === "none" || brandText
+          ? "good"
+          : "warning",
+    },
+    {
+      label: "Client preview parity",
+      detail: "Editor and public cover use the same saved config",
+      level: "good",
+    },
+  ] as const;
+  const qualityWarnings = qualityItems.filter(
+    (item) => item.level !== "good",
+  ).length;
+  const activeDeviceLabel = previewDevice === "phone" ? "Phone" : "Desktop";
 
   return (
     <div className="space-y-6">
+      <section className="cover-control-card">
+        <div className="cover-control-card__header">
+          <div>
+            <h3 className="form-label">Layers</h3>
+            <p className="cover-helper-text">
+              {activeDeviceLabel} text layout is active.
+            </p>
+          </div>
+          <Badge variant={qualityWarnings === 0 ? "success" : "warning"}>
+            {qualityWarnings === 0
+              ? "Ready"
+              : `${qualityWarnings} checks need review`}
+          </Badge>
+        </div>
+        <div className="cover-layer-grid">
+          <GlassButton
+            type="button"
+            variant="surface"
+            onClick={() => setTab("cover")}
+            className="cover-layer-button"
+          >
+            Cover photos
+          </GlassButton>
+          <GlassButton
+            type="button"
+            variant={activeText === "title" ? "primary" : "surface"}
+            onClick={() => setActiveText("title")}
+            className="cover-layer-button"
+          >
+            Title
+          </GlassButton>
+          <GlassButton
+            type="button"
+            variant={activeText === "subtitle" ? "primary" : "surface"}
+            onClick={() => setActiveText("subtitle")}
+            className="cover-layer-button"
+          >
+            Subtitle
+          </GlassButton>
+          <GlassButton
+            type="button"
+            variant="surface"
+            onClick={() => setTab("brand")}
+            className="cover-layer-button"
+          >
+            Logo & watermark
+          </GlassButton>
+        </div>
+        <div className="cover-layer-toggle-grid">
+          <ToggleSwitch
+            checked={config.cover.titleVisible}
+            label="Show title layer"
+            checkedLabel="Title on"
+            uncheckedLabel="Title off"
+            onCheckedChange={(checked) =>
+              setConfig((c) => ({
+                ...c,
+                cover: { ...c.cover, titleVisible: checked },
+              }))
+            }
+          />
+          <ToggleSwitch
+            checked={config.cover.subtitleVisible}
+            label="Show subtitle layer"
+            checkedLabel="Subtitle on"
+            uncheckedLabel="Subtitle off"
+            onCheckedChange={(checked) =>
+              setConfig((c) => ({
+                ...c,
+                cover: { ...c.cover, subtitleVisible: checked },
+              }))
+            }
+          />
+          <ToggleSwitch
+            checked={config.branding.logoPlacement !== "hidden"}
+            label="Show logo layer"
+            checkedLabel="Logo on"
+            uncheckedLabel="Logo off"
+            onCheckedChange={(checked) =>
+              setConfig((c) => ({
+                ...c,
+                branding: {
+                  ...c.branding,
+                  logoPlacement: checked ? "top-left" : "hidden",
+                },
+              }))
+            }
+          />
+          <ToggleSwitch
+            checked={config.branding.watermarkStyle !== "none"}
+            label="Show watermark layer"
+            checkedLabel="Watermark on"
+            uncheckedLabel="Watermark off"
+            onCheckedChange={(checked) =>
+              setConfig((c) => ({
+                ...c,
+                branding: {
+                  ...c.branding,
+                  watermarkStyle: checked ? "subtle-corner" : "none",
+                },
+              }))
+            }
+          />
+        </div>
+      </section>
+
+      <section className="cover-control-card">
+        <div className="cover-control-card__header">
+          <div>
+            <h3 className="form-label">Cover quality checklist</h3>
+            <p className="cover-helper-text">
+              Checks the album cover before client preview.
+            </p>
+          </div>
+          <GlassButton
+            type="button"
+            variant="surface"
+            onClick={() =>
+              setConfig((c) => ({
+                ...c,
+                cover: {
+                  ...c.cover,
+                  scrimStyle: "cinematic-dark",
+                  textBackdrop: "glass",
+                  textShadow: true,
+                  titleColor: COVER_COLORS.textMedia,
+                  subtitleColor: COVER_COLORS.textMedia,
+                  textColor: COVER_COLORS.textMedia,
+                },
+              }))
+            }
+            className="cover-inline-action"
+          >
+            Auto readability
+          </GlassButton>
+        </div>
+        <div className="cover-quality-list">
+          {qualityItems.map((item) => (
+            <div
+              key={item.label}
+              className="cover-quality-row"
+              data-state={item.level}
+            >
+              <span>
+                <span className="cover-scene-card__title">{item.label}</span>
+                <span className="cover-helper-text">{item.detail}</span>
+              </span>
+              <Badge
+                variant={
+                  item.level === "good"
+                    ? "success"
+                    : item.level === "danger"
+                      ? "danger"
+                      : "warning"
+                }
+              >
+                {item.level === "good"
+                  ? "OK"
+                  : item.level === "danger"
+                    ? "Fix"
+                    : "Review"}
+              </Badge>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* ───────── TITLE GROUP ─────────
           Everything about the title in one block: text input, size
           slider, color. Section heading + position chip up top. Active
@@ -1854,18 +3766,45 @@ function PanelText({
         data-state={activeText === "title" ? "active" : "idle"}
       >
         <div className="cover-control-card__header">
-          <h3 className="form-label">Title</h3>
-          <span
-            className="cover-position-badge"
-            data-state={activeText === "title" ? "active" : "idle"}
-            aria-label={`Title position ${config.cover.titlePosition.x}% horizontal, ${config.cover.titlePosition.y}% vertical`}
-          >
-            {config.cover.titlePosition.x}, {config.cover.titlePosition.y}
-          </span>
+          <div className="cover-heading-stack">
+            <h3 className="form-label">Title</h3>
+            <span className="cover-helper-text">
+              {titleUsesAlbumDefault ? "Using album name" : "Custom title"}
+            </span>
+          </div>
+          <div className="cover-header-actions">
+            {albumTitle && (
+              <GlassButton
+                type="button"
+                variant="surface"
+                onClick={() =>
+                  setConfig((c) => ({
+                    ...c,
+                    cover: { ...c.cover, title: albumTitle },
+                  }))
+                }
+                className="cover-inline-action"
+              >
+                Use album name
+              </GlassButton>
+            )}
+            <span
+              className="cover-position-badge"
+              data-state={activeText === "title" ? "active" : "idle"}
+              aria-label={`${activeDeviceLabel} title position ${titlePosition.x}% horizontal, ${titlePosition.y}% vertical`}
+            >
+              {activeDeviceLabel} {titlePosition.x}, {titlePosition.y}
+            </span>
+          </div>
         </div>
 
-        <input
+        <label htmlFor="cover-title-input" className="sr-only">
+          Cover title text
+        </label>
+        <textarea
           id="cover-title-input"
+          lang={titleLanguage.htmlLang}
+          dir={titleLanguage.dir}
           value={config.cover.title}
           onChange={(e) =>
             setConfig((c) => ({
@@ -1875,58 +3814,199 @@ function PanelText({
           }
           onFocus={() => setActiveText("title")}
           placeholder="Your gallery title"
-          className={COVER_FIELD_CLASS}
+          className={`${COVER_FIELD_CLASS} cover-textarea`}
+          rows={2}
+          spellCheck={false}
+          autoCapitalize="none"
+          inputMode="text"
         />
 
-        {/* Per-element font picker — custom popover dropdown so each
-            option renders styled in its own font (native <select>
-            doesn't honor per-option font-family in Chromium/Webkit).
-            See FontPicker for keyboard nav + click-outside behavior. */}
-        <div className="cover-field-stack">
-          <label htmlFor="cover-title-font" className="form-label">
-            Font
+        <div className="cover-field-grid cover-field-grid--2">
+          <label className="cover-field-stack">
+            <span className="form-label">Horizontal</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              value={titlePosition.x}
+              onChange={(e) =>
+                setConfig((c) =>
+                  setTextPositionForDevice(c, "title", previewDevice, {
+                    x: e.target.value,
+                  }),
+                )
+              }
+              onFocus={() => setActiveText("title")}
+              className={COVER_FIELD_CLASS}
+              aria-label="Title horizontal position"
+            />
           </label>
-          <FontPicker
-            id="cover-title-font"
-            value={config.typography.headingFont}
-            onChange={(next) =>
-              setConfig((c) => ({
-                ...c,
-                typography: { ...c.typography, headingFont: next },
-              }))
-            }
-            onOpenChange={(opened) => {
-              if (opened) setActiveText("title");
-            }}
-            ariaLabel="Title font"
-          />
+          <label className="cover-field-stack">
+            <span className="form-label">Vertical</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              value={titlePosition.y}
+              onChange={(e) =>
+                setConfig((c) =>
+                  setTextPositionForDevice(c, "title", previewDevice, {
+                    y: e.target.value,
+                  }),
+                )
+              }
+              onFocus={() => setActiveText("title")}
+              className={COVER_FIELD_CLASS}
+              aria-label="Title vertical position"
+            />
+          </label>
+        </div>
+
+        <div className="cover-field-grid cover-field-grid--2">
+          <label className="cover-field-stack">
+            <span className="form-label">Language</span>
+            <select
+              id="cover-title-language"
+              value={titleLanguage.id}
+              onChange={(e) => {
+                const nextLanguage = e.target.value;
+                setConfig((c) =>
+                  updateSharedTypographyProfiles(c, {
+                    titleLanguage: nextLanguage,
+                    headingFont: normalizeCoverFontForLanguage(
+                      c.typography.headingFont,
+                      nextLanguage,
+                    ),
+                  }),
+                );
+              }}
+              onFocus={() => setActiveText("title")}
+              className={`${COVER_FIELD_CLASS} cover-language-select`}
+              aria-label="Title language"
+            >
+              {COVER_TEXT_LANGUAGES.map((language) => (
+                <option key={language.id} value={language.id}>
+                  {language.label} · {language.nativeLabel}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {/* Per-element font picker — custom popover dropdown so each
+              option renders styled in its own font (native <select>
+              doesn't honor per-option font-family in Chromium/Webkit).
+              See FontPicker for keyboard nav + click-outside behavior. */}
+          <div className="cover-field-stack">
+            <label htmlFor="cover-title-font" className="form-label">
+              Font
+            </label>
+            <FontPicker
+              id="cover-title-font"
+              value={config.typography.headingFont}
+              languageId={titleLanguage.id}
+              options={titleFonts}
+              sampleText={titleLanguage.sample}
+              onChange={(next) =>
+                setConfig((c) =>
+                  updateSharedTypographyProfiles(c, { headingFont: next }),
+                )
+              }
+              onOpenChange={(opened) => {
+                if (opened) setActiveText("title");
+              }}
+              ariaLabel="Title font"
+            />
+          </div>
+        </div>
+
+        <div className="cover-field-grid cover-field-grid--2">
+          <label className="cover-field-stack">
+            <span className="form-label">Weight</span>
+            <select
+              id="cover-title-weight"
+              value={config.typography.titleWeight}
+              onChange={(e) =>
+                setConfig((c) =>
+                  updateSharedTypographyProfiles(c, {
+                    titleWeight: Number(e.target.value),
+                  }),
+                )
+              }
+              onFocus={() => setActiveText("title")}
+              className={COVER_FIELD_CLASS}
+              aria-label="Title font weight"
+            >
+              {COVER_FONT_WEIGHTS.map((weight) => (
+                <option key={weight.value} value={weight.value}>
+                  {weight.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="cover-toggle-row cover-text-style-toggle">
+            <span className="cover-toggle-row__copy">
+              <span className="cover-scene-card__title">Italic</span>
+              <span className="cover-helper-text">Slanted title style</span>
+            </span>
+            <ToggleSwitch
+              checked={config.typography.titleItalic}
+              label="Italic title"
+              checkedLabel="Italic"
+              uncheckedLabel="Roman"
+              onCheckedChange={(checked) =>
+                setConfig((c) =>
+                  updateSharedTypographyProfiles(c, { titleItalic: checked }),
+                )
+              }
+            />
+          </div>
         </div>
 
         <div className="cover-range-color-grid">
           <div className="cover-field-stack">
             <div className="cover-field-row">
               <label htmlFor="cover-title-size" className="form-label">
-                Size
+                Title font size
               </label>
-              <span className="cover-range-value">
-                {config.typography.titleSize}px
-              </span>
+              <input
+                type="number"
+                min={titleSizeMin}
+                max={titleSizeMax}
+                step={1}
+                value={titleSize}
+                onChange={(e) =>
+                  setConfig((c) =>
+                    setTextSizeForDevice(
+                      c,
+                      "title",
+                      previewDevice,
+                      e.target.value,
+                    ),
+                  )
+                }
+                onFocus={() => setActiveText("title")}
+                className="input-base cover-size-input"
+                aria-label="Title font size value"
+              />
             </div>
             <input
               id="cover-title-size"
               type="range"
-              min={TITLE_SIZE_MIN}
-              max={TITLE_SIZE_MAX}
+              min={titleSizeMin}
+              max={titleSizeMax}
               step={1}
-              value={config.typography.titleSize}
+              value={titleSize}
               onChange={(e) =>
-                setConfig((c) => ({
-                  ...c,
-                  typography: {
-                    ...c.typography,
-                    titleSize: Number(e.target.value),
-                  },
-                }))
+                setConfig((c) =>
+                  setTextSizeForDevice(
+                    c,
+                    "title",
+                    previewDevice,
+                    e.target.value,
+                  ),
+                )
               }
               onFocus={() => setActiveText("title")}
               className={COVER_RANGE_CLASS}
@@ -1941,14 +4021,12 @@ function PanelText({
               type="color"
               value={config.cover.titleColor || COVER_COLORS.textMedia}
               onChange={(e) =>
-                setConfig((c) => ({
-                  ...c,
-                  cover: {
-                    ...c.cover,
+                setConfig((c) =>
+                  updateSharedCoverProfiles(c, {
                     titleColor: e.target.value,
                     textColor: e.target.value,
-                  },
-                }))
+                  }),
+                )
               }
               onFocus={() => setActiveText("title")}
               className={COVER_COLOR_CLASS}
@@ -1967,18 +4045,47 @@ function PanelText({
         data-state={activeText === "subtitle" ? "active" : "idle"}
       >
         <div className="cover-control-card__header">
-          <h3 className="form-label">Subtitle</h3>
-          <span
-            className="cover-position-badge"
-            data-state={activeText === "subtitle" ? "active" : "idle"}
-            aria-label={`Subtitle position ${config.cover.subtitlePosition.x}% horizontal, ${config.cover.subtitlePosition.y}% vertical`}
-          >
-            {config.cover.subtitlePosition.x}, {config.cover.subtitlePosition.y}
-          </span>
+          <div className="cover-heading-stack">
+            <h3 className="form-label">Subtitle</h3>
+            <span className="cover-helper-text">
+              {subtitleUsesAlbumDefault
+                ? "Using album description"
+                : "Custom subtitle"}
+            </span>
+          </div>
+          <div className="cover-header-actions">
+            {albumSubtitle && (
+              <GlassButton
+                type="button"
+                variant="surface"
+                onClick={() =>
+                  setConfig((c) => ({
+                    ...c,
+                    cover: { ...c.cover, subtitle: albumSubtitle },
+                  }))
+                }
+                className="cover-inline-action"
+              >
+                Use description
+              </GlassButton>
+            )}
+            <span
+              className="cover-position-badge"
+              data-state={activeText === "subtitle" ? "active" : "idle"}
+              aria-label={`${activeDeviceLabel} subtitle position ${subtitlePosition.x}% horizontal, ${subtitlePosition.y}% vertical`}
+            >
+              {activeDeviceLabel} {subtitlePosition.x}, {subtitlePosition.y}
+            </span>
+          </div>
         </div>
 
-        <input
+        <label htmlFor="cover-subtitle-input" className="sr-only">
+          Cover subtitle text
+        </label>
+        <textarea
           id="cover-subtitle-input"
+          lang={subtitleLanguage.htmlLang}
+          dir={subtitleLanguage.dir}
           value={config.cover.subtitle}
           onChange={(e) =>
             setConfig((c) => ({
@@ -1988,54 +4095,197 @@ function PanelText({
           }
           onFocus={() => setActiveText("subtitle")}
           placeholder="Optional subtitle"
-          className={COVER_FIELD_CLASS}
+          className={`${COVER_FIELD_CLASS} cover-textarea`}
+          rows={2}
+          spellCheck={false}
+          autoCapitalize="none"
+          inputMode="text"
         />
 
-        <div className="cover-field-stack">
-          <label htmlFor="cover-subtitle-font" className="form-label">
-            Font
+        <div className="cover-field-grid cover-field-grid--2">
+          <label className="cover-field-stack">
+            <span className="form-label">Horizontal</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              value={subtitlePosition.x}
+              onChange={(e) =>
+                setConfig((c) =>
+                  setTextPositionForDevice(c, "subtitle", previewDevice, {
+                    x: e.target.value,
+                  }),
+                )
+              }
+              onFocus={() => setActiveText("subtitle")}
+              className={COVER_FIELD_CLASS}
+              aria-label="Subtitle horizontal position"
+            />
           </label>
-          <FontPicker
-            id="cover-subtitle-font"
-            value={config.typography.bodyFont}
-            onChange={(next) =>
-              setConfig((c) => ({
-                ...c,
-                typography: { ...c.typography, bodyFont: next },
-              }))
-            }
-            onOpenChange={(opened) => {
-              if (opened) setActiveText("subtitle");
-            }}
-            ariaLabel="Subtitle font"
-          />
+          <label className="cover-field-stack">
+            <span className="form-label">Vertical</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              value={subtitlePosition.y}
+              onChange={(e) =>
+                setConfig((c) =>
+                  setTextPositionForDevice(c, "subtitle", previewDevice, {
+                    y: e.target.value,
+                  }),
+                )
+              }
+              onFocus={() => setActiveText("subtitle")}
+              className={COVER_FIELD_CLASS}
+              aria-label="Subtitle vertical position"
+            />
+          </label>
+        </div>
+
+        <div className="cover-field-grid cover-field-grid--2">
+          <label className="cover-field-stack">
+            <span className="form-label">Language</span>
+            <select
+              id="cover-subtitle-language"
+              value={subtitleLanguage.id}
+              onChange={(e) => {
+                const nextLanguage = e.target.value;
+                setConfig((c) =>
+                  updateSharedTypographyProfiles(c, {
+                    subtitleLanguage: nextLanguage,
+                    bodyFont: normalizeCoverFontForLanguage(
+                      c.typography.bodyFont,
+                      nextLanguage,
+                    ),
+                  }),
+                );
+              }}
+              onFocus={() => setActiveText("subtitle")}
+              className={`${COVER_FIELD_CLASS} cover-language-select`}
+              aria-label="Subtitle language"
+            >
+              {COVER_TEXT_LANGUAGES.map((language) => (
+                <option key={language.id} value={language.id}>
+                  {language.label} · {language.nativeLabel}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="cover-field-stack">
+            <label htmlFor="cover-subtitle-font" className="form-label">
+              Font
+            </label>
+            <FontPicker
+              id="cover-subtitle-font"
+              value={config.typography.bodyFont}
+              languageId={subtitleLanguage.id}
+              options={subtitleFonts}
+              sampleText={subtitleLanguage.sample}
+              onChange={(next) =>
+                setConfig((c) =>
+                  updateSharedTypographyProfiles(c, { bodyFont: next }),
+                )
+              }
+              onOpenChange={(opened) => {
+                if (opened) setActiveText("subtitle");
+              }}
+              ariaLabel="Subtitle font"
+            />
+          </div>
+        </div>
+
+        <div className="cover-field-grid cover-field-grid--2">
+          <label className="cover-field-stack">
+            <span className="form-label">Weight</span>
+            <select
+              id="cover-subtitle-weight"
+              value={config.typography.subtitleWeight}
+              onChange={(e) =>
+                setConfig((c) =>
+                  updateSharedTypographyProfiles(c, {
+                    subtitleWeight: Number(e.target.value),
+                  }),
+                )
+              }
+              onFocus={() => setActiveText("subtitle")}
+              className={COVER_FIELD_CLASS}
+              aria-label="Subtitle font weight"
+            >
+              {COVER_FONT_WEIGHTS.map((weight) => (
+                <option key={weight.value} value={weight.value}>
+                  {weight.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="cover-toggle-row cover-text-style-toggle">
+            <span className="cover-toggle-row__copy">
+              <span className="cover-scene-card__title">Italic</span>
+              <span className="cover-helper-text">Slanted subtitle style</span>
+            </span>
+            <ToggleSwitch
+              checked={config.typography.subtitleItalic}
+              label="Italic subtitle"
+              checkedLabel="Italic"
+              uncheckedLabel="Roman"
+              onCheckedChange={(checked) =>
+                setConfig((c) =>
+                  updateSharedTypographyProfiles(c, {
+                    subtitleItalic: checked,
+                  }),
+                )
+              }
+            />
+          </div>
         </div>
 
         <div className="cover-range-color-grid">
           <div className="cover-field-stack">
             <div className="cover-field-row">
               <label htmlFor="cover-subtitle-size" className="form-label">
-                Size
+                Subtitle font size
               </label>
-              <span className="cover-range-value">
-                {config.typography.subtitleSize}px
-              </span>
+              <input
+                type="number"
+                min={subtitleSizeMin}
+                max={subtitleSizeMax}
+                step={1}
+                value={subtitleSize}
+                onChange={(e) =>
+                  setConfig((c) =>
+                    setTextSizeForDevice(
+                      c,
+                      "subtitle",
+                      previewDevice,
+                      e.target.value,
+                    ),
+                  )
+                }
+                onFocus={() => setActiveText("subtitle")}
+                className="input-base cover-size-input"
+                aria-label="Subtitle font size value"
+              />
             </div>
             <input
               id="cover-subtitle-size"
               type="range"
-              min={SUBTITLE_SIZE_MIN}
-              max={SUBTITLE_SIZE_MAX}
+              min={subtitleSizeMin}
+              max={subtitleSizeMax}
               step={1}
-              value={config.typography.subtitleSize}
+              value={subtitleSize}
               onChange={(e) =>
-                setConfig((c) => ({
-                  ...c,
-                  typography: {
-                    ...c.typography,
-                    subtitleSize: Number(e.target.value),
-                  },
-                }))
+                setConfig((c) =>
+                  setTextSizeForDevice(
+                    c,
+                    "subtitle",
+                    previewDevice,
+                    e.target.value,
+                  ),
+                )
               }
               onFocus={() => setActiveText("subtitle")}
               className={COVER_RANGE_CLASS}
@@ -2050,10 +4300,11 @@ function PanelText({
               type="color"
               value={config.cover.subtitleColor || COVER_COLORS.textMedia}
               onChange={(e) =>
-                setConfig((c) => ({
-                  ...c,
-                  cover: { ...c.cover, subtitleColor: e.target.value },
-                }))
+                setConfig((c) =>
+                  updateSharedCoverProfiles(c, {
+                    subtitleColor: e.target.value,
+                  }),
+                )
               }
               onFocus={() => setActiveText("subtitle")}
               className={COVER_COLOR_CLASS}
@@ -2188,14 +4439,19 @@ function PanelMedia({
   config,
   setConfig,
   assets,
+  previewDevice,
 }: {
   config: DesignConfig;
   setConfig: React.Dispatch<React.SetStateAction<DesignConfig>>;
   assets: Asset[];
+  previewDevice: PreviewDevice;
 }) {
   const videoCount = assets.filter((asset) =>
     asset.content_type?.startsWith("video/"),
   ).length;
+  const activeMediaMode =
+    profileFromConfig(config, previewDevice).mediaMode ||
+    config.cover.mediaMode;
 
   return (
     <div className="space-y-4">
@@ -2208,16 +4464,17 @@ function PanelMedia({
       </div>
       <div className="cover-option-grid cover-option-grid--2">
         {MEDIA_MODES.map((mode) => {
-          const active = config.cover.mediaMode === mode.id;
+          const active = activeMediaMode === mode.id;
           const disabled = mode.id === "short-video" && videoCount === 0;
           return (
             <SelectableTile
               key={mode.id}
               onClick={() => {
-                setConfig((c) => ({
-                  ...c,
-                  cover: { ...c.cover, mediaMode: mode.id },
-                }));
+                setConfig((c) =>
+                  updateProfileForDevice(c, previewDevice, {
+                    mediaMode: mode.id,
+                  }),
+                );
               }}
               disabled={disabled}
               selected={active}
@@ -2230,13 +4487,13 @@ function PanelMedia({
         })}
       </div>
       <div className="cover-info-panel">
-        {config.cover.mediaMode === "single-photo" &&
+        {activeMediaMode === "single-photo" &&
           "A single cover photo gives the fastest first paint and cleanest hero."}
-        {config.cover.mediaMode === "slideshow" &&
+        {activeMediaMode === "slideshow" &&
           "The public hero will use available gallery thumbnails as a rotating opener."}
-        {config.cover.mediaMode === "short-video" &&
+        {activeMediaMode === "short-video" &&
           "Short video mode plays the selected video cover when the cover asset is video."}
-        {config.cover.mediaMode === "photo-grid" &&
+        {activeMediaMode === "photo-grid" &&
           "Photo grid mode opens with a 2x2 collage using the cover plus the next gallery images."}
       </div>
     </div>
@@ -2387,6 +4644,75 @@ function PanelBrand({
       </div>
 
       <section className="cover-control-card">
+        <div className="cover-control-card__header">
+          <h4 className="form-label">Logo preview</h4>
+          <Badge variant="neutral">{config.branding.logoSize}px</Badge>
+        </div>
+        <div className="cover-range-color-grid">
+          <div className="cover-field-stack">
+            <div className="cover-field-row">
+              <label htmlFor="cover-logo-size" className="form-label">
+                Logo size
+              </label>
+              <span className="cover-range-value">
+                {config.branding.logoSize}px
+              </span>
+            </div>
+            <input
+              id="cover-logo-size"
+              type="range"
+              min={LOGO_SIZE_MIN}
+              max={LOGO_SIZE_MAX}
+              step={1}
+              value={config.branding.logoSize}
+              onChange={(event) =>
+                setConfig((c) => ({
+                  ...c,
+                  branding: {
+                    ...c.branding,
+                    logoSize: clampTextSizeInput(
+                      event.target.value,
+                      LOGO_SIZE_MIN,
+                      LOGO_SIZE_MAX,
+                    ),
+                  },
+                }))
+              }
+              className={COVER_RANGE_CLASS}
+            />
+          </div>
+          <div className="cover-field-stack">
+            <div className="cover-field-row">
+              <label htmlFor="cover-logo-opacity" className="form-label">
+                Logo opacity
+              </label>
+              <span className="cover-range-value">
+                {config.branding.logoOpacity}%
+              </span>
+            </div>
+            <input
+              id="cover-logo-opacity"
+              type="range"
+              min={20}
+              max={100}
+              step={1}
+              value={config.branding.logoOpacity}
+              onChange={(event) =>
+                setConfig((c) => ({
+                  ...c,
+                  branding: {
+                    ...c.branding,
+                    logoOpacity: clampPercentInput(event.target.value),
+                  },
+                }))
+              }
+              className={COVER_RANGE_CLASS}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="cover-control-card">
         <h4 className="form-label">Logo placement</h4>
         <div className="cover-option-grid cover-option-grid--3">
           {LOGO_PLACEMENTS.map((placement) => {
@@ -2410,7 +4736,28 @@ function PanelBrand({
       </section>
 
       <section className="cover-control-card">
-        <h4 className="form-label">Watermark style</h4>
+        <div className="cover-control-card__header">
+          <h4 className="form-label">Watermark</h4>
+          <Badge variant="neutral">{config.branding.watermarkOpacity}%</Badge>
+        </div>
+        <label className="cover-field-stack">
+          <span className="form-label">Watermark text</span>
+          <input
+            value={config.branding.watermarkText}
+            onChange={(event) =>
+              setConfig((c) => ({
+                ...c,
+                branding: {
+                  ...c.branding,
+                  watermarkText: event.target.value,
+                },
+              }))
+            }
+            placeholder={config.branding.monogram || "Studio mark"}
+            className={COVER_FIELD_CLASS}
+            aria-label="Watermark text"
+          />
+        </label>
         <div className="cover-option-grid cover-option-grid--2">
           {WATERMARK_STYLES.map((watermark) => {
             const active = config.branding.watermarkStyle === watermark.id;
@@ -2429,6 +4776,34 @@ function PanelBrand({
               />
             );
           })}
+        </div>
+        <div className="cover-field-stack">
+          <div className="cover-field-row">
+            <label htmlFor="cover-watermark-opacity" className="form-label">
+              Watermark opacity
+            </label>
+            <span className="cover-range-value">
+              {config.branding.watermarkOpacity}%
+            </span>
+          </div>
+          <input
+            id="cover-watermark-opacity"
+            type="range"
+            min={10}
+            max={100}
+            step={1}
+            value={config.branding.watermarkOpacity}
+            onChange={(event) =>
+              setConfig((c) => ({
+                ...c,
+                branding: {
+                  ...c.branding,
+                  watermarkOpacity: clampPercentInput(event.target.value),
+                },
+              }))
+            }
+            className={COVER_RANGE_CLASS}
+          />
         </div>
       </section>
 

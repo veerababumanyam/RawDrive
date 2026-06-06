@@ -60,14 +60,20 @@ func (f *fakeFaceStore) StoreFaces(_ context.Context, faces []*ai.FaceCluster) e
 }
 
 type fakeIndexer struct {
-	recEnabled bool
-	recErr     error
-	clustered  []*ai.FaceCluster
-	clusterErr error
+	recEnabled     bool
+	recErr         error
+	galleryEnabled bool
+	galleryErr     error
+	clustered      []*ai.FaceCluster
+	clusterErr     error
 }
 
 func (f *fakeIndexer) IsFaceRecognitionEnabled(_ context.Context, _ uuid.UUID) (bool, error) {
 	return f.recEnabled, f.recErr
+}
+
+func (f *fakeIndexer) IsGalleryFaceDetectionEnabled(_ context.Context, _ uuid.UUID) (bool, error) {
+	return f.galleryEnabled, f.galleryErr
 }
 
 func (f *fakeIndexer) ClusterFaces(_ context.Context, faces []*ai.FaceCluster, _ uuid.UUID) error {
@@ -163,7 +169,7 @@ func newFaceImageReq(t *testing.T, idParam string, ws uuid.UUID, image []byte, g
 func okDeps() (*fakeAssetResolver, *fakeFaceStore, *fakeIndexer, fakeFlag) {
 	return &fakeAssetResolver{asset: &repository.Asset{}},
 		&fakeFaceStore{},
-		&fakeIndexer{recEnabled: true},
+		&fakeIndexer{recEnabled: true, galleryEnabled: true},
 		fakeFlag{enabled: true}
 }
 
@@ -326,6 +332,68 @@ func TestFaceEmbeddings_InvalidGalleryID_400(t *testing.T) {
 	}
 }
 
+func TestFaceEmbeddings_StaleGalleryID_404(t *testing.T) {
+	ws := uuid.New()
+	assetID := uuid.New()
+	galleryID := uuid.New()
+	assets := &fakeAssetResolver{asset: &repository.Asset{ID: assetID, WorkspaceID: ws}, galleryOK: false}
+	store, indexer, flag := &fakeFaceStore{}, &fakeIndexer{recEnabled: true, galleryEnabled: true}, fakeFlag{enabled: true}
+	h := NewFaceEmbeddingHandler(assets, store, indexer, flag)
+
+	galleryIDString := galleryID.String()
+	body := faceReqBody(t, []clientFaceInput{{Embedding: emb512()}}, &galleryIDString)
+	rec := httptest.NewRecorder()
+	h.StoreEmbeddings(rec, newFaceEmbReq(assetID.String(), ws, body))
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("stale gallery id should 404, got %d", rec.Code)
+	}
+	if !assets.galleryCheck {
+		t.Fatal("gallery membership should be checked")
+	}
+	if len(store.stored) != 0 {
+		t.Error("must not store with a stale gallery id")
+	}
+}
+
+func TestFaceEmbeddings_GalleryOptOutClearsClientFacesAndSkipsStore(t *testing.T) {
+	ws := uuid.New()
+	assetID := uuid.New()
+	galleryID := uuid.New()
+	assets := &fakeAssetResolver{asset: &repository.Asset{ID: assetID, WorkspaceID: ws}, galleryOK: true}
+	store := &fakeFaceStore{}
+	indexer := &fakeIndexer{recEnabled: true, galleryEnabled: false}
+	h := NewFaceEmbeddingHandler(assets, store, indexer, fakeFlag{enabled: true})
+
+	galleryIDString := galleryID.String()
+	body := faceReqBody(t, []clientFaceInput{{Embedding: emb512()}}, &galleryIDString)
+	rec := httptest.NewRecorder()
+	h.StoreEmbeddings(rec, newFaceEmbReq(assetID.String(), ws, body))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("gallery opt-out should be a clean skip, got %d (%s)", rec.Code, rec.Body.String())
+	}
+	if !assets.galleryCheck {
+		t.Fatal("gallery membership should be checked")
+	}
+	if len(store.deletes) != 1 || store.deletes[0].source != "client" || store.deletes[0].asset != assetID {
+		t.Fatalf("want prior client faces cleared, got %+v", store.deletes)
+	}
+	if len(store.stored) != 0 {
+		t.Fatal("must not store faces when gallery Find Me is disabled")
+	}
+	if len(indexer.clustered) != 0 {
+		t.Fatal("must not cluster faces when gallery Find Me is disabled")
+	}
+	var out storeFaceEmbeddingsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if out.Stored != 0 {
+		t.Fatalf("stored = %d, want 0", out.Stored)
+	}
+}
+
 // JSON itself cannot carry NaN/Inf (the decoder rejects them, so such a body
 // 400s at decode), but allFinite32/boxFinite are defense-in-depth guards on the
 // values that DO decode — test them directly so the index can never be poisoned
@@ -353,7 +421,7 @@ func TestFaceIndexImage_HappyPath_IndexesClientSource(t *testing.T) {
 	assetID := uuid.New()
 	galleryID := uuid.New()
 	assets := &fakeAssetResolver{asset: &repository.Asset{ID: assetID, WorkspaceID: ws, ContentType: "image/jpeg"}, galleryOK: true}
-	indexer := &fakeIndexer{recEnabled: true}
+	indexer := &fakeIndexer{recEnabled: true, galleryEnabled: true}
 	imageIndexer := &fakeImageIndexer{stored: 2}
 	h := NewFaceEmbeddingHandler(assets, &fakeFaceStore{}, indexer, fakeFlag{enabled: false}).
 		WithImageIndexer(imageIndexer)
@@ -458,6 +526,41 @@ func TestFaceIndexImage_StaleGalleryID_404(t *testing.T) {
 	}
 	if len(imageIndexer.calls) != 0 {
 		t.Fatal("must not index with a stale gallery id")
+	}
+}
+
+func TestFaceIndexImage_GalleryOptOutClearsClientFacesAndSkipsIndex(t *testing.T) {
+	ws := uuid.New()
+	assetID := uuid.New()
+	galleryID := uuid.New()
+	assets := &fakeAssetResolver{asset: &repository.Asset{ID: assetID, WorkspaceID: ws, ContentType: "image/jpeg"}, galleryOK: true}
+	store := &fakeFaceStore{}
+	indexer := &fakeIndexer{recEnabled: true, galleryEnabled: false}
+	imageIndexer := &fakeImageIndexer{stored: 2}
+	h := NewFaceEmbeddingHandler(assets, store, indexer, fakeFlag{enabled: false}).
+		WithImageIndexer(imageIndexer)
+
+	rec := httptest.NewRecorder()
+	h.StoreIndexImage(rec, newFaceImageReq(t, assetID.String(), ws, []byte("WEBP"), &galleryID))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("gallery opt-out should be a clean skip, got %d (%s)", rec.Code, rec.Body.String())
+	}
+	if !assets.galleryCheck {
+		t.Fatal("gallery membership should be checked")
+	}
+	if len(store.deletes) != 1 || store.deletes[0].source != "client" || store.deletes[0].asset != assetID {
+		t.Fatalf("want prior client faces cleared, got %+v", store.deletes)
+	}
+	if len(imageIndexer.calls) != 0 {
+		t.Fatal("must not call image indexer when gallery Find Me is disabled")
+	}
+	var out storeFaceEmbeddingsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if out.Stored != 0 {
+		t.Fatalf("stored = %d, want 0", out.Stored)
 	}
 }
 

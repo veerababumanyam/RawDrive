@@ -62,6 +62,7 @@ describe("next.config CSP (F-098)", () => {
     // The Razorpay allowance and 'self' must survive the nonce switch.
     expect(script).toContain("'self'");
     expect(script).toContain("https://checkout.razorpay.com");
+    expect(script).toContain("https://www.instagram.com");
     // prod must never enable unsafe-eval.
     expect(script).not.toContain("'unsafe-eval'");
   });
@@ -80,6 +81,7 @@ describe("next.config CSP (F-098)", () => {
     const script = scriptSrc(csp);
     expect(script).toContain("'self'");
     expect(script).toContain("https://checkout.razorpay.com");
+    expect(script).toContain("https://www.instagram.com");
     expect(script).toContain("'wasm-unsafe-eval'");
     // No nonce supplied -> the static header cannot carry one, so this path
     // still falls back to 'unsafe-inline'. (Removing it for real is the
@@ -104,5 +106,13 @@ describe("next.config CSP (F-098)", () => {
     expect(directive(csp, "connect-src")).toContain("http://localhost:8080");
     expect(directive(csp, "media-src")).toContain("http://localhost:8080");
     expect(csp).not.toContain("/api/v1");
+  });
+
+  it("allows Instagram embeds without reintroducing unsafe inline scripts", () => {
+    const csp = buildCsp({ isDev: false, nonce: "abc" });
+
+    expect(scriptSrc(csp)).toContain("https://www.instagram.com");
+    expect(scriptSrc(csp)).not.toContain("'unsafe-inline'");
+    expect(directive(csp, "frame-src")).toContain("https://www.instagram.com");
   });
 });

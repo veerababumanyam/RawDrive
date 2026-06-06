@@ -5,13 +5,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // F-007 (M17 hardening wave 1): recovery code service tests.
 // Decision packet §3.1: 10 codes per user, bcrypt-hashed, one-time use.
 
 func TestRecoveryCodes_GenerateProducesTenDistinct(t *testing.T) {
-	svc := NewRecoveryCodeService(RecoveryCodeConfig{})
+	svc := newTestRecoveryCodeService()
 
 	codes, err := svc.Generate()
 	require.NoError(t, err)
@@ -27,7 +28,7 @@ func TestRecoveryCodes_GenerateProducesTenDistinct(t *testing.T) {
 }
 
 func TestRecoveryCodes_VerifyAcceptsValidCode(t *testing.T) {
-	svc := NewRecoveryCodeService(RecoveryCodeConfig{})
+	svc := newTestRecoveryCodeService()
 
 	codes, err := svc.Generate()
 	require.NoError(t, err)
@@ -39,7 +40,7 @@ func TestRecoveryCodes_VerifyAcceptsValidCode(t *testing.T) {
 }
 
 func TestRecoveryCodes_VerifyRejectsWrongCode(t *testing.T) {
-	svc := NewRecoveryCodeService(RecoveryCodeConfig{})
+	svc := newTestRecoveryCodeService()
 
 	codes, err := svc.Generate()
 	require.NoError(t, err)
@@ -52,14 +53,14 @@ func TestRecoveryCodes_VerifyRejectsWrongCode(t *testing.T) {
 }
 
 func TestRecoveryCodes_VerifyRejectsEmptyInputs(t *testing.T) {
-	svc := NewRecoveryCodeService(RecoveryCodeConfig{})
+	svc := newTestRecoveryCodeService()
 	assert.False(t, svc.Verify("", "some-hash"))
 	assert.False(t, svc.Verify("plaintext", ""))
 	assert.False(t, svc.Verify("", ""))
 }
 
 func TestRecoveryCodes_HashesAreBcryptFormat(t *testing.T) {
-	svc := NewRecoveryCodeService(RecoveryCodeConfig{})
+	svc := newTestRecoveryCodeService()
 
 	codes, err := svc.Generate()
 	require.NoError(t, err)
@@ -70,7 +71,7 @@ func TestRecoveryCodes_HashesAreBcryptFormat(t *testing.T) {
 }
 
 func TestRecoveryCodes_CustomCountHonored(t *testing.T) {
-	svc := NewRecoveryCodeService(RecoveryCodeConfig{Count: 5})
+	svc := newTestRecoveryCodeService(RecoveryCodeConfig{Count: 5})
 
 	codes, err := svc.Generate()
 	require.NoError(t, err)
@@ -79,9 +80,25 @@ func TestRecoveryCodes_CustomCountHonored(t *testing.T) {
 }
 
 func TestRecoveryCodes_ZeroCountDefaults(t *testing.T) {
-	svc := NewRecoveryCodeService(RecoveryCodeConfig{Count: 0})
+	svc := newTestRecoveryCodeService(RecoveryCodeConfig{Count: 0})
 
 	codes, err := svc.Generate()
 	require.NoError(t, err)
 	assert.Len(t, codes.Plaintext, 10, "zero count must default to 10")
+}
+
+func TestRecoveryCodes_DefaultCostIsProductionCost(t *testing.T) {
+	svc := NewRecoveryCodeService(RecoveryCodeConfig{}).(*recoveryCodeService)
+	assert.Equal(t, recoveryBcryptCost, svc.config.BcryptCost)
+}
+
+func newTestRecoveryCodeService(configs ...RecoveryCodeConfig) RecoveryCodeService {
+	config := RecoveryCodeConfig{BcryptCost: bcrypt.MinCost}
+	if len(configs) > 0 {
+		config = configs[0]
+		if config.BcryptCost <= 0 {
+			config.BcryptCost = bcrypt.MinCost
+		}
+	}
+	return NewRecoveryCodeService(config)
 }

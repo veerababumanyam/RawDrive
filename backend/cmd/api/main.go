@@ -2232,7 +2232,7 @@ func main() {
 			AssetDerivativeRepo:  assetDerivativeRepo,
 			StorageProvider:      storageProvider,
 			// M12
-			GalleryDesignSvc:  service.NewGalleryDesignService(galleryRepo),
+			GalleryDesignSvc:  service.NewGalleryDesignService(galleryRepo).WithGalleryAssetRepo(galleryAssetRepo),
 			GalleryRepo:       galleryRepo,
 			DesignTemplateSvc: service.NewDesignTemplateService(repository.NewDesignTemplateRepo(dbPool), galleryRepo),
 			DesignCollabSvc:   service.NewDesignCollabService(nil), // nil NATS — uses in-memory presence

@@ -56,6 +56,8 @@ interface ProductPreviewProps {
   sourceHeightPx?: number;
   /** Client email for persistent cart keying. */
   clientEmail?: string;
+  /** Owner preview renders the card but must not write public cart state. */
+  previewMode?: boolean;
   /** Override the default print size presets. */
   sizes?: PrintSize[];
   /** Called when the product is successfully added to the cart. */
@@ -71,6 +73,7 @@ export function ProductPreview({
   sourceWidthPx,
   sourceHeightPx,
   clientEmail,
+  previewMode = false,
   sizes = DEFAULT_PRINT_SIZES,
   onAddedToCart,
 }: ProductPreviewProps) {
@@ -145,6 +148,10 @@ export function ProductPreview({
   }, [canPreflight, selectedSize, sourceWidthPx, sourceHeightPx]);
 
   const handleAddToCart = useCallback(async () => {
+    if (previewMode) {
+      setAddError("Cart is disabled in owner preview.");
+      return;
+    }
     if (!clientEmail) {
       setAddError("enter your email to save your cart");
       return;
@@ -188,6 +195,7 @@ export function ProductPreview({
     gallerySessionToken,
     isPrintProduct,
     onAddedToCart,
+    previewMode,
     product.id,
     quantity,
     selectedSize,
@@ -303,7 +311,9 @@ export function ProductPreview({
           type="button"
           onClick={handleAddToCart}
           disabled={
-            addingToCart || (preflight?.quality === "fail" && isPrintProduct)
+            addingToCart ||
+            previewMode ||
+            (preflight?.quality === "fail" && isPrintProduct)
           }
           className={[
             "touch-min rounded-xl px-5 py-2 text-sm font-semibold",
@@ -313,7 +323,13 @@ export function ProductPreview({
             "disabled:cursor-not-allowed disabled:opacity-50",
           ].join(" ")}
         >
-          {addingToCart ? "Adding…" : addSuccess ? "Added ✓" : "Add to cart"}
+          {previewMode
+            ? "Preview only"
+            : addingToCart
+              ? "Adding…"
+              : addSuccess
+                ? "Added ✓"
+                : "Add to cart"}
         </button>
       </footer>
 

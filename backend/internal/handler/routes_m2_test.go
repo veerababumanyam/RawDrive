@@ -70,6 +70,7 @@ func TestM2Routes_GalleryEndpoints(t *testing.T) {
 	assert.True(t, routeExists(r, "GET", "/api/v1/galleries"), "GET /api/v1/galleries")
 	assert.True(t, routeExists(r, "POST", "/api/v1/galleries"), "POST /api/v1/galleries")
 	assert.True(t, routeExists(r, "GET", "/api/v1/galleries/test-id"), "GET /galleries/{id}")
+	assert.True(t, routeExists(r, "GET", "/api/v1/galleries/test-id/client-preview"), "GET /galleries/{id}/client-preview")
 	assert.True(t, routeExists(r, "PUT", "/api/v1/galleries/test-id"), "PUT /galleries/{id}")
 	assert.True(t, routeExists(r, "DELETE", "/api/v1/galleries/test-id"), "DELETE /galleries/{id}")
 	assert.True(t, routeExists(r, "GET", "/api/v1/galleries/test-id/assets"), "GET /galleries/{id}/assets")

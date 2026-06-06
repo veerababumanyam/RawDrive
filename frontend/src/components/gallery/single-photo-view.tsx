@@ -20,7 +20,8 @@ import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import { useEffect, useState } from "react";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
-import { Download, Share, XCircle, ZoomIn, ZoomOut } from "@/components/icons";
+import { Download, Share, ZoomIn, ZoomOut } from "@/components/icons";
+import { LockedMediaFallback } from "@/components/gallery/media-key-recovery";
 import type {
   Gallery,
   GalleryBranding,
@@ -336,14 +337,18 @@ export function SinglePhotoView({
             )}
           </div>
         ) : (
-          <div className="text-center">
-            <XCircle className="mx-auto mb-2 h-8 w-8 text-text-tertiary" />
-            <p className="text-sm text-text-secondary">
-              {media.loading
-                ? "Decrypting photo..."
-                : publicMediaErrorMessage(media.error) || "Image unavailable"}
-            </p>
-          </div>
+          media.loading ? (
+            <div className="text-sm text-text-secondary">
+              Decrypting photo...
+            </div>
+          ) : (
+            <LockedMediaFallback
+              asset={photo}
+              error={media.error}
+              message={publicMediaErrorMessage(media.error) || "Image unavailable"}
+              mode="viewer"
+            />
+          )
         )}
       </main>
 
