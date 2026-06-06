@@ -423,6 +423,9 @@ export default async function PublicGalleryPage({
           downloadQuality={gallery.download_quality}
           design={designConfig}
           watermark={gallery.watermark_config as Record<string, unknown> | null}
+          watermarkLogoUrl={
+            branding?.can_customize ? branding.logo_url : undefined
+          }
           // gallerySessionToken (durable session, from the SameSite=Strict
           // cookie) authenticates the header-based JSON APIs: favorites and
           // proofing submit. assetAccessToken (SEC-1) is the byte-only ?at=
@@ -462,7 +465,9 @@ export default async function PublicGalleryPage({
   // (see the `hasPassword && !effectiveSessionToken` short-circuit above), so by
   // the time we reach here access is proven and no second gate is needed.
   const galleryContent = (
-    <PublicGalleryOfflineGate slug={slug}>{galleryBody}</PublicGalleryOfflineGate>
+    <PublicGalleryOfflineGate slug={slug}>
+      {galleryBody}
+    </PublicGalleryOfflineGate>
   );
 
   return galleryContent;

@@ -137,6 +137,8 @@ export function SinglePhotoView({
     : [];
   const wm = gallery.watermark_config as Record<string, unknown> | undefined;
   const watermarkConfig = wm && wm.enabled === true ? wm : undefined;
+  const watermarkLogoUrl =
+    branding?.can_customize && branding.logo_url ? branding.logo_url : null;
 
   const plainShareUrl =
     typeof window !== "undefined"
@@ -328,6 +330,7 @@ export function SinglePhotoView({
               >
                 <WatermarkOverlay
                   config={watermarkConfig as Gallery["watermark_config"]}
+                  logoUrl={watermarkLogoUrl}
                 />
               </div>
             )}

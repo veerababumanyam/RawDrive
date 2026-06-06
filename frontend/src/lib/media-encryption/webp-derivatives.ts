@@ -29,6 +29,15 @@ export type EncryptedDerivativeSet = {
     width: number;
     height: number;
   };
+  // Plain display-sized WebP frame used only for face indexing. The caller
+  // sends it immediately to the authenticated face-index endpoint; it is not
+  // stored as gallery media and is derived from the same decoded source as the
+  // encrypted display derivative, so upload does not decode the file twice.
+  faceIndexImage?: {
+    blob: Blob;
+    width: number;
+    height: number;
+  };
   derivatives: EncryptedDerivative[];
 };
 
@@ -68,9 +77,13 @@ export async function createEncryptedWebPDerivativeSet(
   const decoded = await decodeImage(file);
   try {
     const out: EncryptedDerivative[] = [];
+    let faceIndexImage: EncryptedDerivativeSet["faceIndexImage"];
     for (const spec of DERIVATIVE_SPECS) {
       const { width, height } = fitWithin(decoded.width, decoded.height, spec.maxWidth, spec.maxHeight);
       const webp = await renderWebP(decoded.source, width, height, spec.quality);
+      if (spec.variant === "display_webp") {
+        faceIndexImage = { blob: webp, width, height };
+      }
       const encrypted = await encryptBlob(webp, {
         key,
         keyId,
@@ -90,6 +103,7 @@ export async function createEncryptedWebPDerivativeSet(
         width: decoded.width,
         height: decoded.height,
       },
+      faceIndexImage,
       derivatives: out,
     };
   } finally {

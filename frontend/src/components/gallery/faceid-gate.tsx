@@ -3,7 +3,7 @@
 /**
  * FaceIDGate — GAL-FR-107 / 108 / 109
  *
- * Guest "Find Me" entry gate. Workflow (unencrypted galleries):
+ * Guest "Find Me" entry gate. Workflow:
  *   1. Consent modal explaining biometric handling (GAL-FR-107).
  *   2. On consent, open the device camera and capture a self-portrait.
  *   3. POST the captured image to /api/v1/public/galleries/{slug}/photo-search.
@@ -22,11 +22,10 @@
  * sends the image and lets the server embed it with the very model that built
  * the index.
  *
- * Encrypted galleries: an end-to-end-encrypted gallery has no server-side face
- * index — the server only ever sees ciphertext and cannot detect faces — so
- * face search cannot work there yet. The gate shows an honest "not available"
- * state instead of a pseudo-match. (This lifts when the client-side buffalo_l
- * indexing slice ships and the gallery has a real index.)
+ * Encrypted galleries: upload writes a face index from a short-lived
+ * display-sized frame before the encrypted asset is marked complete. If an
+ * older gallery has not been indexed yet, /photo-search returns an index-empty
+ * result instead of pretending the visitor simply has no matching photos.
  *
  * Privacy stance: the selfie is sent to the server only to find matches in this
  * one gallery and is not stored. The camera stream stops as soon as the snapshot
@@ -39,9 +38,9 @@ import { searchPublicFaceInGallery } from "@/lib/api/ai";
 interface Props {
   slug: string;
   /**
-   * The gallery is end-to-end encrypted. The server holds only ciphertext and
-   * has no face index for it, so server-side face search is unavailable — the
-   * gate shows an honest state instead of a misleading pseudo-match.
+   * Historical prop kept for callers that know whether the gallery is
+   * encrypted. Encryption no longer blocks matching by itself; the backend
+   * reports index readiness from face_clusters.
    */
   encrypted?: boolean;
   /**
@@ -125,9 +124,8 @@ export function FaceIDGate({
     }
   };
 
-  // Encrypted galleries can never reach the camera/match flow — render the
-  // honest "unavailable" state regardless of internal step.
-  const view: Step = encrypted ? "unavailable" : step;
+  void encrypted;
+  const view: Step = step;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface-scrim-strong/80 glass-blur-medium p-4">

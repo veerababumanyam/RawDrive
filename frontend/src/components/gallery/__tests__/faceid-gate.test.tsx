@@ -47,7 +47,7 @@ describe("FaceIDGate", () => {
     searchMock.mockReset();
   });
 
-  it("shows an honest unavailable state on encrypted galleries and never runs a match", () => {
+  it("does not block encrypted galleries before checking the backend index", () => {
     const onFallback = vi.fn();
     const onMatched = vi.fn();
     render(
@@ -59,10 +59,8 @@ describe("FaceIDGate", () => {
       />,
     );
 
-    expect(screen.getByText(/isn.t available here yet/i)).toBeInTheDocument();
-    // The encrypted path must not offer the camera/consent flow…
-    expect(screen.queryByText(/use camera/i)).not.toBeInTheDocument();
-    // …and must never pseudo-match.
+    expect(screen.queryByText(/isn.t available here yet/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /use camera/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /browse all photos/i }));
     expect(onFallback).toHaveBeenCalledTimes(1);
     expect(searchMock).not.toHaveBeenCalled();

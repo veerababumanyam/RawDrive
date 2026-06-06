@@ -15,6 +15,7 @@ export interface UploadItem {
     | "pending"
     | "screening"
     | "encrypting"
+    | "indexing_faces"
     | "paused"
     | "uploading"
     | "complete"
@@ -82,6 +83,7 @@ export function UploadProgress({
                 {(item.file.size / 1024 / 1024).toFixed(1)} MB
                 {item.status === "screening" && " • screening…"}
                 {item.status === "encrypting" && " • encrypting…"}
+                {item.status === "indexing_faces" && " • indexing faces…"}
                 {item.status === "paused" && " • paused"}
                 {item.status === "blocked" && item.error && ` • ${item.error}`}
                 {item.status === "needs_desktop" &&
@@ -98,6 +100,12 @@ export function UploadProgress({
             {item.status === "encrypting" && (
               <span className="text-xs font-medium text-text-secondary">
                 Encrypting
+              </span>
+            )}
+
+            {item.status === "indexing_faces" && (
+              <span className="text-xs font-medium text-text-secondary">
+                Indexing faces
               </span>
             )}
 
@@ -153,6 +161,7 @@ export function UploadProgress({
             {(item.status === "pending" ||
               item.status === "screening" ||
               item.status === "encrypting" ||
+              item.status === "indexing_faces" ||
               item.status === "paused" ||
               item.status === "uploading") &&
               onCancel && (

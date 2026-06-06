@@ -37,6 +37,7 @@ type Stage =
   | "searching"
   | "result-found"
   | "result-no-face"
+  | "result-index-empty"
   | "result-no-match"
   | "camera-error";
 
@@ -232,6 +233,7 @@ export default function PublicPhotoSearchPage({
     if (
       stage === "result-found" ||
       stage === "result-no-face" ||
+      stage === "result-index-empty" ||
       stage === "result-no-match"
     ) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -292,9 +294,13 @@ export default function PublicPhotoSearchPage({
       setSearchResult(result);
       if (!result.found) {
         stopCamera();
-        setStage(
-          result.faces_detected === 0 ? "result-no-face" : "result-no-match",
-        );
+        if (result.faces_detected === 0) {
+          setStage("result-no-face");
+        } else if (result.index_status === "empty") {
+          setStage("result-index-empty");
+        } else {
+          setStage("result-no-match");
+        }
         return;
       }
       stopCamera();
@@ -482,6 +488,36 @@ export default function PublicPhotoSearchPage({
               <RefreshCw className="h-4 w-4" aria-hidden />
               Try again
             </button>
+          </div>
+        </section>
+      )}
+
+      {stage === "result-index-empty" && (
+        <section className="surface-panel p-6 text-center space-y-3">
+          <p className="text-sm font-semibold text-text-primary">
+            Face search is still indexing this gallery
+          </p>
+          <p className="text-xs text-text-secondary">
+            We saw {searchResult?.faces_detected ?? 1}{" "}
+            {(searchResult?.faces_detected ?? 1) === 1 ? "face" : "faces"} in
+            your capture, but this gallery has no indexed people yet. Try again
+            after the studio finishes processing the upload.
+          </p>
+          <div className="flex justify-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="inline-flex items-center gap-2 rounded-full border border-border-default bg-surface-container px-4 py-2 text-sm text-text-primary hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
+            >
+              <RefreshCw className="h-4 w-4" aria-hidden />
+              Try again
+            </button>
+            <Link
+              href={withPublicScope(`/g/${slug}`, { shareToken, ws })}
+              className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-text-inverse hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
+            >
+              Browse gallery
+            </Link>
           </div>
         </section>
       )}

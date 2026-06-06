@@ -81,8 +81,7 @@ import { submitPublicProofing } from "@/lib/api/proofing";
 // public asset download endpoint lives on the Go API (port 8081 in dev)
 // while the Next site serves /g/<slug> from a different origin (3000/3001),
 // so we always need an absolute URL for the download <a href>.
-const PUBLIC_API_BASE =
-  getApiBaseUrl();
+const PUBLIC_API_BASE = getApiBaseUrl();
 
 function absoluteApiUrl(url?: string | null) {
   if (!url) return "";
@@ -95,10 +94,27 @@ function absoluteApiUrl(url?: string | null) {
   return `${PUBLIC_API_BASE}${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
+function clampWatermarkPercent(value: unknown, fallback: number): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(100, Math.max(0, n));
+}
+
+function readWatermarkPlacement(value: unknown): WatermarkDisplay["placement"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  return {
+    x: clampWatermarkPercent(raw.x, 84),
+    y: clampWatermarkPercent(raw.y, 84),
+  };
+}
+
 type WatermarkDisplay = {
   text: string;
   opacity: number;
   position: string;
+  placement: { x: number; y: number } | null;
+  scale: number;
   mode: "text" | "logo";
   logoUrl: string;
 };
@@ -232,7 +248,9 @@ function PublicAssetTileImage({
     return (
       <img
         src={media.src}
-        srcSet={media.src.startsWith("blob:") ? undefined : (srcSet ?? undefined)}
+        srcSet={
+          media.src.startsWith("blob:") ? undefined : (srcSet ?? undefined)
+        }
         sizes={
           media.src.startsWith("blob:") || !srcSet ? undefined : GRID_SIZES
         }
@@ -299,6 +317,8 @@ function PublicLightboxImage({
             text={watermarkOverlay.text}
             opacity={watermarkOverlay.opacity}
             position={watermarkOverlay.position}
+            placement={watermarkOverlay.placement}
+            scale={watermarkOverlay.scale}
             mode={watermarkOverlay.mode}
             logoUrl={watermarkOverlay.logoUrl}
           />
@@ -696,6 +716,7 @@ interface Props {
   // rather than a typed interface so settings-side schema additions
   // (font, color, use_logo) flow through without a Props change.
   watermark?: Record<string, unknown> | null;
+  watermarkLogoUrl?: string | null;
   // S4-G1: the gallery-session token (password- or share-PIN-scoped) minted
   // after a successful unlock. When set, it is appended as `?gs=` to every
   // protected image URL so cross-origin <img> requests authenticate without
@@ -824,12 +845,16 @@ function WatermarkOverlay({
   text,
   opacity,
   position,
+  placement,
+  scale,
   mode,
   logoUrl,
 }: {
   text: string;
   opacity: number;
   position: string;
+  placement: { x: number; y: number } | null;
+  scale: number;
   mode?: "text" | "logo";
   logoUrl?: string;
 }) {
@@ -837,10 +862,49 @@ function WatermarkOverlay({
     "pointer-events-none absolute select-none font-semibold tracking-widest uppercase text-text-media";
   // text-shadow on both axes survives both bright and dark photos
   // without needing a backdrop scrim — keeps the photo visible.
+  const scaleTransform = `scale(${scale / 100})`;
   const style: React.CSSProperties = {
     opacity,
     textShadow: "var(--cover-text-shadow)",
   };
+
+  if (placement) {
+    const transformParts = [
+      "translate(-50%, -50%)",
+      position === "diagonal" ? "rotate(-30deg)" : "",
+      scaleTransform,
+    ].filter(Boolean);
+    const customStyle: React.CSSProperties = {
+      ...style,
+      left: `${placement.x}%`,
+      top: `${placement.y}%`,
+      transform: transformParts.join(" "),
+    };
+    if (mode === "logo" && logoUrl) {
+      return (
+        <div
+          aria-hidden
+          style={customStyle}
+          className="pointer-events-none absolute select-none"
+        >
+          <img
+            src={logoUrl}
+            alt=""
+            className="h-14 w-14 object-contain sm:h-16 sm:w-16"
+          />
+        </div>
+      );
+    }
+    return (
+      <div
+        aria-hidden
+        style={customStyle}
+        className={`${shared} whitespace-nowrap text-xs sm:text-sm`}
+      >
+        {text}
+      </div>
+    );
+  }
 
   if (mode === "logo" && logoUrl) {
     const corner =
@@ -849,10 +913,16 @@ function WatermarkOverlay({
         : position === "center"
           ? "inset-0 flex items-center justify-center"
           : "bottom-3 right-3";
+    const logoStyle: React.CSSProperties = {
+      opacity,
+      transform: scaleTransform,
+      transformOrigin:
+        position === "bottom-left" ? "bottom left" : "bottom right",
+    };
     return (
       <div
         aria-hidden
-        style={{ opacity }}
+        style={logoStyle}
         className={`pointer-events-none absolute ${corner} select-none`}
       >
         <img
@@ -868,7 +938,7 @@ function WatermarkOverlay({
     return (
       <div
         aria-hidden
-        style={style}
+        style={{ ...style, transform: scaleTransform }}
         className={`${shared} inset-0 flex items-center justify-center text-2xl sm:text-3xl md:text-4xl`}
       >
         {text}
@@ -884,7 +954,7 @@ function WatermarkOverlay({
         aria-hidden
         style={{
           ...style,
-          transform: "translate(-50%, -50%) rotate(-30deg)",
+          transform: `translate(-50%, -50%) rotate(-30deg) ${scaleTransform}`,
           left: "50%",
           top: "50%",
         }}
@@ -901,7 +971,12 @@ function WatermarkOverlay({
   return (
     <div
       aria-hidden
-      style={style}
+      style={{
+        ...style,
+        transform: scaleTransform,
+        transformOrigin:
+          position === "bottom-left" ? "bottom left" : "bottom right",
+      }}
       className={`${shared} ${corner} text-xs sm:text-sm`}
     >
       {text}
@@ -919,6 +994,7 @@ export function PublicGalleryGrid({
   favoritesDisabledReason,
   design = null,
   watermark = null,
+  watermarkLogoUrl = null,
   gallerySessionToken = null,
   assetAccessToken = null,
   workspaceScope = null,
@@ -934,10 +1010,10 @@ export function PublicGalleryGrid({
       typeof watermark.text === "string" ? watermark.text.trim() : "";
     const mode: WatermarkDisplay["mode"] =
       watermark.mode === "logo" ? "logo" : "text";
+    const legacyLogoUrl =
+      typeof watermark.logo_url === "string" ? watermark.logo_url : "";
     const logoUrl =
-      mode === "logo" && typeof watermark.logo_url === "string"
-        ? absoluteApiUrl(watermark.logo_url)
-        : "";
+      mode === "logo" ? absoluteApiUrl(watermarkLogoUrl || legacyLogoUrl) : "";
     if (rawText.length === 0 && !logoUrl) return null;
     const rawOpacity =
       typeof watermark.opacity === "number" ? watermark.opacity : 40;
@@ -949,7 +1025,19 @@ export function PublicGalleryGrid({
       typeof watermark.position === "string"
         ? watermark.position
         : "bottom-right";
-    return { text: rawText, opacity, position, mode, logoUrl };
+    const placement = readWatermarkPlacement(watermark.placement);
+    const rawScale =
+      typeof watermark.scale === "number" ? watermark.scale : 100;
+    const scale = Math.max(60, Math.min(180, rawScale));
+    return {
+      text: rawText,
+      opacity,
+      position,
+      placement,
+      scale,
+      mode,
+      logoUrl,
+    };
   })();
   // viewMode + the Grid/Map toggle were removed 2026-05-19. The grid is
   // now the only render path; see the file header for context.
@@ -1648,6 +1736,8 @@ export function PublicGalleryGrid({
                   text={watermarkOverlay.text}
                   opacity={watermarkOverlay.opacity}
                   position={watermarkOverlay.position}
+                  placement={watermarkOverlay.placement}
+                  scale={watermarkOverlay.scale}
                   mode={watermarkOverlay.mode}
                   logoUrl={watermarkOverlay.logoUrl}
                 />

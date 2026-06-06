@@ -1,4 +1,5 @@
 "use client";
+import type { CSSProperties } from "react";
 import { getApiBaseUrl } from "@/lib/api/base-url";
 
 /**
@@ -27,6 +28,7 @@ const WATERMARK_TEXT_COLOR = designComponents.mediaCover.presetColors.textMedia;
 
 interface Props {
   config?: Gallery["watermark_config"];
+  logoUrl?: string | null;
 }
 
 const API_BASE = getApiBaseUrl();
@@ -42,7 +44,24 @@ function absoluteApiUrl(url?: string | null) {
   return `${API_BASE}${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
-export function WatermarkOverlay({ config }: Props) {
+function clampWatermarkPercent(value: unknown, fallback: number): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(100, Math.max(0, n));
+}
+
+function readWatermarkPlacement(
+  value: unknown,
+): { x: number; y: number } | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  return {
+    x: clampWatermarkPercent(raw.x, 84),
+    y: clampWatermarkPercent(raw.y, 84),
+  };
+}
+
+export function WatermarkOverlay({ config, logoUrl: logoUrlOverride }: Props) {
   if (!config) return null;
 
   const rawOpacity = config.opacity ?? 30;
@@ -52,7 +71,48 @@ export function WatermarkOverlay({ config }: Props) {
   );
   const text = config.text ?? "";
   const position = config.position ?? "center";
-  const logoUrl = absoluteApiUrl(config.logo_url);
+  const logoUrl = absoluteApiUrl(logoUrlOverride || config.logo_url);
+  const scale =
+    typeof config.scale === "number" && Number.isFinite(config.scale)
+      ? config.scale / 100
+      : 1;
+  const placement = readWatermarkPlacement(config.placement);
+
+  if (placement) {
+    const transformParts = [
+      "translate(-50%, -50%)",
+      position === "diagonal" ? "rotate(-30deg)" : "",
+      `scale(${scale})`,
+    ].filter(Boolean);
+    const style: CSSProperties = {
+      left: `${placement.x}%`,
+      top: `${placement.y}%`,
+      opacity,
+      transform: transformParts.join(" "),
+      textShadow: "var(--cover-text-shadow)",
+    };
+    if (config.mode === "logo" && logoUrl) {
+      return (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute select-none"
+          style={style}
+        >
+          <img src={logoUrl} alt="" className="h-16 w-16 object-contain" />
+        </div>
+      );
+    }
+    if (!text) return null;
+    return (
+      <div
+        aria-hidden
+        className="pointer-events-none absolute select-none whitespace-nowrap text-sm font-semibold uppercase tracking-wider text-text-media"
+        style={style}
+      >
+        {text}
+      </div>
+    );
+  }
 
   if (config.mode === "logo" && logoUrl) {
     const corner =
@@ -65,7 +125,12 @@ export function WatermarkOverlay({ config }: Props) {
       <div
         aria-hidden
         className={`pointer-events-none absolute ${corner} select-none`}
-        style={{ opacity }}
+        style={{
+          opacity,
+          transform: `scale(${scale})`,
+          transformOrigin:
+            position === "bottom-left" ? "bottom left" : "bottom right",
+        }}
       >
         <img
           src={logoUrl}
@@ -113,7 +178,7 @@ export function WatermarkOverlay({ config }: Props) {
           className="select-none text-6xl font-bold uppercase tracking-widest text-text-media"
           style={{
             opacity,
-            transform: "rotate(-15deg)",
+            transform: `rotate(-15deg) scale(${scale})`,
             textShadow: "var(--cover-text-shadow)",
           }}
         >
@@ -134,7 +199,12 @@ export function WatermarkOverlay({ config }: Props) {
     <div
       aria-hidden
       className={`pointer-events-none absolute ${corner} select-none`}
-      style={{ opacity }}
+      style={{
+        opacity,
+        transform: `scale(${scale})`,
+        transformOrigin:
+          position === "bottom-left" ? "bottom left" : "bottom right",
+      }}
     >
       <span className="text-sm font-semibold uppercase tracking-wider text-text-media">
         {text}

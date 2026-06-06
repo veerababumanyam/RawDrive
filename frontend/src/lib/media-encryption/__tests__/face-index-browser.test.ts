@@ -1,0 +1,99 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { clearAuthTokens, persistAuthTokens } from "@/lib/auth";
+import { indexAssetFacesFromBrowser } from "../face-index-browser";
+
+const mockFetch = vi.fn<typeof fetch>();
+global.fetch = mockFetch;
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+describe("indexAssetFacesFromBrowser", () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    persistAuthTokens("owner-token");
+  });
+
+  afterEach(() => {
+    clearAuthTokens();
+  });
+
+  it("fetches owner-protected media and POSTs the image to the face index endpoint", async () => {
+    mockFetch
+      .mockResolvedValueOnce(
+        new Response(new Blob(["webp"], { type: "image/webp" })),
+      )
+      .mockResolvedValueOnce(jsonResponse({ stored: 2 }));
+
+    const result = await indexAssetFacesFromBrowser(
+      {
+        id: "asset-1",
+        is_encrypted: false,
+        thumbnail_urls: { display_webp: "/storage/display.webp" },
+      },
+      { galleryId: "gallery-1", token: "owner-token" },
+    );
+
+    expect(result).toEqual({
+      stored: 2,
+      variant: "display_webp",
+      encrypted: false,
+    });
+
+    const [mediaUrl, mediaInit] = mockFetch.mock.calls[0];
+    expect(String(mediaUrl)).toContain("/storage/display.webp");
+    expect(mediaInit?.credentials).toBe("include");
+    expect(new Headers(mediaInit?.headers).get("Authorization")).toBe(
+      "Bearer owner-token",
+    );
+
+    const [indexUrl, indexInit] = mockFetch.mock.calls[1];
+    expect(String(indexUrl)).toContain(
+      "/api/v1/assets/asset-1/face-index-image",
+    );
+    expect(indexInit?.method).toBe("POST");
+    expect(indexInit?.credentials).toBe("include");
+    expect(new Headers(indexInit?.headers).get("Authorization")).toBe(
+      "Bearer owner-token",
+    );
+    const body = indexInit?.body as FormData;
+    expect(body.get("gallery_id")).toBe("gallery-1");
+    expect(body.get("image")).toBeInstanceOf(Blob);
+  });
+
+  it("retries a smaller derivative when the display frame is too large", async () => {
+    mockFetch
+      .mockResolvedValueOnce(
+        new Response(new Blob(["large"], { type: "image/webp" })),
+      )
+      .mockResolvedValueOnce(
+        new Response(`{"error":"image file too large"}`, { status: 413 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(new Blob(["small"], { type: "image/webp" })),
+      )
+      .mockResolvedValueOnce(jsonResponse({ stored: 1 }));
+
+    const result = await indexAssetFacesFromBrowser(
+      {
+        id: "asset-2",
+        is_encrypted: false,
+        thumbnail_urls: {
+          display_webp: "/storage/display.webp",
+          thumb_md_webp: "/storage/thumb-md.webp",
+        },
+      },
+      { galleryId: "gallery-1", token: "owner-token" },
+    );
+
+    expect(result.variant).toBe("thumb_md_webp");
+    expect(result.stored).toBe(1);
+    expect(String(mockFetch.mock.calls[2][0])).toContain(
+      "/storage/thumb-md.webp",
+    );
+  });
+});

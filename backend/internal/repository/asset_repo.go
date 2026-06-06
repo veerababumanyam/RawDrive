@@ -993,6 +993,29 @@ func (r *AssetRepo) GetGalleriesForAsset(ctx context.Context, assetID uuid.UUID)
 	return ids, rows.Err()
 }
 
+// AssetBelongsToGallery returns true when an asset is linked to a gallery in
+// the same workspace. Adjunct ingest endpoints use this to avoid writing stale
+// or foreign gallery IDs into asset-scoped metadata.
+func (r *AssetRepo) AssetBelongsToGallery(ctx context.Context, assetID, galleryID, workspaceID uuid.UUID) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx,
+		`SELECT EXISTS (
+		   SELECT 1
+		   FROM gallery_assets ga
+		   JOIN galleries g ON g.id = ga.gallery_id
+		   WHERE ga.asset_id = $1
+		     AND ga.gallery_id = $2
+		     AND g.workspace_id = $3
+		     AND g.deleted_at IS NULL
+		 )`,
+		assetID, galleryID, workspaceID,
+	).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("asset repo gallery membership: %w", err)
+	}
+	return exists, nil
+}
+
 // BulkUpdateStatus changes status for multiple assets at once.
 func (r *AssetRepo) BulkUpdateStatus(ctx context.Context, ids []uuid.UUID, status string, workspaceID uuid.UUID) (int64, error) {
 	if len(ids) == 0 {

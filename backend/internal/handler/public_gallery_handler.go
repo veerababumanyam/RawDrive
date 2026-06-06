@@ -2169,6 +2169,30 @@ func (h *PublicGalleryHandler) isFaceRecognitionEnabledForGallery(ctx context.Co
 	return wsEnabled && galEnabled, nil
 }
 
+type publicFaceIndexStats struct {
+	Faces  int
+	People int
+}
+
+func (h *PublicGalleryHandler) faceIndexStatsForGallery(ctx context.Context, galleryID uuid.UUID) (publicFaceIndexStats, error) {
+	if h.pool == nil {
+		return publicFaceIndexStats{}, fmt.Errorf("face recognition deps not wired")
+	}
+	var stats publicFaceIndexStats
+	err := h.pool.QueryRow(ctx, `
+		SELECT
+		  COUNT(fc.id)::int,
+		  COUNT(DISTINCT fc.cluster_label) FILTER (WHERE fc.cluster_label IS NOT NULL)::int
+		FROM gallery_assets ga
+		LEFT JOIN face_clusters fc ON fc.asset_id = ga.asset_id
+		WHERE ga.gallery_id = $1
+	`, galleryID).Scan(&stats.Faces, &stats.People)
+	if err != nil {
+		return publicFaceIndexStats{}, err
+	}
+	return stats, nil
+}
+
 // ListPeople handles GET /api/v1/public/galleries/{slug}/people. Read-only
 // listing of face clusters for a published gallery, gated on the workspace
 // + per-gallery opt-in flags. Guests cannot rename / merge / split — those
@@ -2384,6 +2408,16 @@ func (h *PublicGalleryHandler) PhotoSearch(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	indexStats, err := h.faceIndexStatsForGallery(r.Context(), gallery.ID)
+	if err != nil {
+		http.Error(w, `{"error":"face index status check failed"}`, http.StatusInternalServerError)
+		return
+	}
+	indexStatus := "ready"
+	if indexStats.Faces == 0 || indexStats.People == 0 {
+		indexStatus = "empty"
+	}
+
 	// Highest-confidence face wins (foreground subject vs background bystanders).
 	best := resp.Faces[0]
 	for i := range resp.Faces[1:] {
@@ -2417,6 +2451,9 @@ func (h *PublicGalleryHandler) PhotoSearch(w http.ResponseWriter, r *http.Reques
 			"faces_detected": len(resp.Faces),
 			"asset_ids":      []string{},
 			"count":          0,
+			"index_status":   indexStatus,
+			"indexed_faces":  indexStats.Faces,
+			"indexed_people": indexStats.People,
 		})
 		return
 	}
@@ -2466,6 +2503,9 @@ func (h *PublicGalleryHandler) PhotoSearch(w http.ResponseWriter, r *http.Reques
 			"faces_detected": len(resp.Faces),
 			"asset_ids":      []string{},
 			"count":          0,
+			"index_status":   indexStatus,
+			"indexed_faces":  indexStats.Faces,
+			"indexed_people": indexStats.People,
 		})
 		return
 	}
@@ -2490,6 +2530,9 @@ func (h *PublicGalleryHandler) PhotoSearch(w http.ResponseWriter, r *http.Reques
 		"cluster_name":   winner.name,
 		"similarity":     winner.bestSim,
 		"asset_ids":      stringIDs,
+		"index_status":   indexStatus,
+		"indexed_faces":  indexStats.Faces,
+		"indexed_people": indexStats.People,
 		// Decryptable asset records so the result grid renders decrypted
 		// thumbnails on E2EE galleries.
 		"assets": h.buildPublicAssetResponses(r.Context(), assetIDs),

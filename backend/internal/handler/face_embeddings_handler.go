@@ -20,8 +20,11 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"math"
+	"mime/multipart"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -43,7 +46,13 @@ const (
 	// maxFaceEmbeddingsBody bounds the request body. 50 faces × 512 JSON floats
 	// is well under 1 MB; 4 MB is a generous ceiling.
 	maxFaceEmbeddingsBody = 4 << 20
+	// maxFaceIndexImageBody caps the downscaled upload frame sent by the E2EE
+	// browser path. face-svc itself caps requests at 20 MB; this public API
+	// stays tighter because the client sends display-sized WebP, not originals.
+	maxFaceIndexImageBody = 10 << 20
 )
+
+var errFaceIndexImageTooLarge = http.ErrBodyReadAfterClose
 
 // faceEmbeddingStore is the persistence surface the handler needs.
 // Satisfied by *ai.FaceRepo.
@@ -59,6 +68,16 @@ type faceClusterIndexer interface {
 	ClusterFaces(ctx context.Context, faces []*ai.FaceCluster, workspaceID uuid.UUID) error
 }
 
+// faceImageIndexer indexes a short-lived caller-supplied image frame into the
+// same face_clusters table. Satisfied by *ai.FaceService.
+type faceImageIndexer interface {
+	DetectImageAndStoreFaces(ctx context.Context, assetID, workspaceID uuid.UUID, galleryID *uuid.UUID, imageData []byte, filename, source string) (int, error)
+}
+
+type assetGalleryMembershipChecker interface {
+	AssetBelongsToGallery(ctx context.Context, assetID, galleryID, workspaceID uuid.UUID) (bool, error)
+}
+
 // clientFaceIndexGate is the feature-flag surface. Satisfied by
 // *featureflag.ClientFaceIndexFlag.
 type clientFaceIndexGate interface {
@@ -67,15 +86,29 @@ type clientFaceIndexGate interface {
 
 // FaceEmbeddingHandler serves POST /api/v1/assets/{id}/face-embeddings.
 type FaceEmbeddingHandler struct {
-	assets  assetWorkspaceResolver
-	store   faceEmbeddingStore
-	indexer faceClusterIndexer
-	flag    clientFaceIndexGate
+	assets       assetWorkspaceResolver
+	membership   assetGalleryMembershipChecker
+	store        faceEmbeddingStore
+	indexer      faceClusterIndexer
+	imageIndexer faceImageIndexer
+	flag         clientFaceIndexGate
 }
 
 // NewFaceEmbeddingHandler wires the ingest handler.
 func NewFaceEmbeddingHandler(assets assetWorkspaceResolver, store faceEmbeddingStore, indexer faceClusterIndexer, flag clientFaceIndexGate) *FaceEmbeddingHandler {
-	return &FaceEmbeddingHandler{assets: assets, store: store, indexer: indexer, flag: flag}
+	h := &FaceEmbeddingHandler{assets: assets, store: store, indexer: indexer, flag: flag}
+	if membership, ok := assets.(assetGalleryMembershipChecker); ok {
+		h.membership = membership
+	}
+	return h
+}
+
+// WithImageIndexer enables server-assisted indexing of an encrypted upload's
+// short-lived, downscaled client frame. Without it, /face-index-image fails
+// closed with 503 while /face-embeddings continues to work.
+func (h *FaceEmbeddingHandler) WithImageIndexer(indexer faceImageIndexer) *FaceEmbeddingHandler {
+	h.imageIndexer = indexer
+	return h
 }
 
 type clientFaceInput struct {
@@ -194,6 +227,117 @@ func (h *FaceEmbeddingHandler) StoreEmbeddings(w http.ResponseWriter, r *http.Re
 	}
 
 	respondJSON(w, http.StatusOK, storeFaceEmbeddingsResponse{Stored: len(clusters)})
+}
+
+// StoreIndexImage ingests a short-lived upload frame for encrypted galleries.
+// The browser derives the frame from the plaintext it already has while
+// generating encrypted WebP derivatives, then sends it here over the
+// authenticated owner API. The backend never persists the image bytes; it runs
+// face-svc and stores only embeddings/bounding boxes in face_clusters.
+func (h *FaceEmbeddingHandler) StoreIndexImage(w http.ResponseWriter, r *http.Request) {
+	assetID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid asset id"}`, http.StatusBadRequest)
+		return
+	}
+
+	asset, workspaceID, ok := guardAssetWorkspace(w, r, h.assets, assetID)
+	if !ok {
+		return
+	}
+	if asset == nil || !strings.HasPrefix(strings.ToLower(strings.TrimSpace(asset.ContentType)), "image/") {
+		http.Error(w, `{"error":"asset is not an image"}`, http.StatusBadRequest)
+		return
+	}
+	if h.imageIndexer == nil {
+		http.Error(w, `{"error":"face image indexer unavailable"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	recEnabled, err := h.indexer.IsFaceRecognitionEnabled(r.Context(), workspaceID)
+	if err != nil {
+		http.Error(w, `{"error":"face recognition status check failed"}`, http.StatusInternalServerError)
+		return
+	}
+	if !recEnabled {
+		http.Error(w, `{"error":"face recognition disabled for this workspace"}`, http.StatusForbidden)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxFaceIndexImageBody)
+	if err := r.ParseMultipartForm(maxFaceIndexImageBody); err != nil {
+		if strings.Contains(err.Error(), "request body too large") {
+			http.Error(w, `{"error":"image file too large"}`, http.StatusRequestEntityTooLarge)
+			return
+		}
+		http.Error(w, `{"error":"could not parse index image"}`, http.StatusBadRequest)
+		return
+	}
+
+	var galleryID *uuid.UUID
+	if raw := strings.TrimSpace(r.FormValue("gallery_id")); raw != "" {
+		gid, perr := uuid.Parse(raw)
+		if perr != nil {
+			http.Error(w, `{"error":"invalid gallery_id"}`, http.StatusBadRequest)
+			return
+		}
+		if h.membership != nil {
+			ok, merr := h.membership.AssetBelongsToGallery(r.Context(), assetID, gid, workspaceID)
+			if merr != nil {
+				http.Error(w, `{"error":"gallery membership check failed"}`, http.StatusInternalServerError)
+				return
+			}
+			if !ok {
+				http.Error(w, `{"error":"gallery not found"}`, http.StatusNotFound)
+				return
+			}
+		}
+		galleryID = &gid
+	}
+
+	file, header, err := r.FormFile("image")
+	if err != nil {
+		http.Error(w, `{"error":"image file required (form field 'image')"}`, http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	imageData, err := readLimitedMultipartFile(file, maxFaceIndexImageBody)
+	if err != nil {
+		if err == errFaceIndexImageTooLarge {
+			http.Error(w, `{"error":"image file too large"}`, http.StatusRequestEntityTooLarge)
+			return
+		}
+		http.Error(w, `{"error":"could not read index image"}`, http.StatusBadRequest)
+		return
+	}
+	if len(imageData) == 0 {
+		http.Error(w, `{"error":"empty image"}`, http.StatusBadRequest)
+		return
+	}
+
+	filename := "face-index.webp"
+	if header != nil && strings.TrimSpace(header.Filename) != "" {
+		filename = header.Filename
+	}
+	stored, err := h.imageIndexer.DetectImageAndStoreFaces(r.Context(), assetID, workspaceID, galleryID, imageData, filename, clientFaceSource)
+	if err != nil {
+		http.Error(w, `{"error":"failed to index faces"}`, http.StatusBadGateway)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, storeFaceEmbeddingsResponse{Stored: stored})
+}
+
+func readLimitedMultipartFile(file multipart.File, limit int64) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(file, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, errFaceIndexImageTooLarge
+	}
+	return data, nil
 }
 
 func allFinite32(v []float32) bool {

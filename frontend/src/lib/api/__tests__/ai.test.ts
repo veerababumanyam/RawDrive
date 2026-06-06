@@ -16,6 +16,7 @@ import {
   setSpendCap,
   validateAIKey,
   uploadAssetFaceEmbeddings,
+  uploadAssetFaceIndexImage,
   listPublicPeople,
   listPublicPersonPhotos,
   searchPublicFaceInGallery,
@@ -324,5 +325,35 @@ describe("uploadAssetFaceEmbeddings (client face-index ingest)", () => {
     await expect(
       uploadAssetFaceEmbeddings("asset-1", [{ embedding: new Array(512).fill(0) }]),
     ).rejects.toThrow(/disabled|403/);
+  });
+});
+
+describe("uploadAssetFaceIndexImage (server-assisted encrypted face index)", () => {
+  it("POSTs a downscaled image frame to the asset face-index-image endpoint", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ stored: 1 }) });
+
+    const result = await uploadAssetFaceIndexImage(
+      "asset-1",
+      new Blob(["webp"], { type: "image/webp" }),
+      { galleryId: "g-1" },
+    );
+    expect(result.stored).toBe(1);
+
+    const [calledUrl, init] = mockFetch.mock.calls[0];
+    expect(String(calledUrl)).toContain("/api/v1/assets/asset-1/face-index-image");
+    expect(init.method).toBe("POST");
+    expect(init.credentials).toBe("include");
+    expect(new Headers(init.headers).get("Authorization")).toBe("Bearer test-token");
+    expect(init.body).toBeInstanceOf(FormData);
+    const body = init.body as FormData;
+    expect(body.get("gallery_id")).toBe("g-1");
+    expect(body.get("image")).toBeInstanceOf(File);
+  });
+
+  it("throws on a non-ok response", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 502, text: () => Promise.resolve("failed to index faces") });
+    await expect(
+      uploadAssetFaceIndexImage("asset-1", new Blob(["webp"], { type: "image/webp" })),
+    ).rejects.toThrow(/failed to index|502/);
   });
 });

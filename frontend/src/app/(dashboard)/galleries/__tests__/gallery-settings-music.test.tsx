@@ -4,6 +4,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
   waitFor,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +13,7 @@ import GallerySettingsPage from "../[id]/settings/page";
 const mocks = vi.hoisted(() => ({
   getGallery: vi.fn(),
   updateGallerySettings: vi.fn(),
+  listGalleryAssets: vi.fn(),
   uploadMusicTrack: vi.fn(),
   selectGalleryMusic: vi.fn(),
   listMusicLibrary: vi.fn(),
@@ -55,6 +57,7 @@ vi.mock("@/lib/auth", () => ({ getStoredAccessToken: vi.fn(() => "token-1") }));
 vi.mock("@/lib/api/galleries", () => ({
   getGallery: mocks.getGallery,
   updateGallerySettings: mocks.updateGallerySettings,
+  listGalleryAssets: mocks.listGalleryAssets,
   uploadMusicTrack: mocks.uploadMusicTrack,
   selectGalleryMusic: mocks.selectGalleryMusic,
   listMusicLibrary: mocks.listMusicLibrary,
@@ -90,7 +93,8 @@ vi.mock("@/lib/api/workspace-profile", () => ({
 }));
 
 vi.mock("@/lib/dashboard-ui", () => ({
-  getStorageBackedUrl: (key: string) => `/storage/${key}`,
+  getStorageBackedUrl: (key: string) =>
+    key.startsWith("data:") ? key : `/storage/${key}`,
 }));
 
 function gallery(overrides: Record<string, unknown> = {}) {
@@ -166,6 +170,29 @@ describe("Gallery settings — slideshow music", () => {
     });
     mocks.getWorkspaceProfile.mockResolvedValue(workspaceProfile());
     mocks.updateWorkspaceProfile.mockResolvedValue({ updated: 1 });
+    mocks.listGalleryAssets.mockResolvedValue([
+      {
+        id: "gallery-asset-1",
+        gallery_id: "gallery-1",
+        asset_id: "asset-1",
+        sort_order: 1,
+        is_hero: false,
+        asset: {
+          id: "asset-1",
+          workspace_id: "workspace-1",
+          filename: "Wedding (42).jpg",
+          content_type: "image/jpeg",
+          size_bytes: 1234,
+          storage_key: "workspaces/w1/asset-1/original.jpg",
+          thumbnail_urls: {
+            thumb_md_webp: "data:image/webp;base64,preview",
+          },
+          exif_data: {},
+          status: "ready",
+          created_at: "2026-06-04T00:00:00Z",
+        },
+      },
+    ]);
     mocks.listMusicLibrary.mockResolvedValue([]);
     mocks.fetchMusicTrackBlobUrl.mockResolvedValue("blob:preview");
     mocks.deleteMusicTrack.mockResolvedValue(undefined);
@@ -370,64 +397,19 @@ describe("Gallery settings — slideshow music", () => {
     expect(mocks.uploadMusicTrack).toHaveBeenLastCalledWith("token-1", file);
   });
 
-  it("uploads a studio logo from Gallery Settings and uses it for watermarking", async () => {
-    mocks.getWorkspaceProfile
-      .mockResolvedValueOnce(workspaceProfile())
-      .mockResolvedValueOnce(
-        workspaceProfile({
-          logo_asset_id: "logo-asset-1",
-          logo_url: "workspaces/logo.webp",
-          logo_metadata: {
-            filename: "studio-logo.webp",
-            storage_key: "workspaces/logo.webp",
-          },
-        }),
-      );
-    mocks.uploadWorkspaceLogo.mockResolvedValue({ id: "logo-asset-1" });
-    mocks.updateGallerySettings.mockImplementation(
-      async (_token, _id, payload) =>
-        gallery(payload as Record<string, unknown>),
-    );
+  it("keeps logo upload in Business Profile instead of Gallery Settings", async () => {
     await renderPage();
     await waitFor(() => screen.getByRole("heading", { name: "Watermark" }));
 
-    const file = new File([new Uint8Array([1, 2])], "studio-logo.webp", {
-      type: "image/webp",
-    });
-    await act(async () => {
-      fireEvent.change(
-        screen.getByLabelText("Upload studio logo for watermark"),
-        {
-          target: { files: [file] },
-        },
-      );
-    });
-
-    await waitFor(() =>
-      expect(mocks.uploadWorkspaceLogo).toHaveBeenCalledWith("token-1", file),
-    );
-    expect(mocks.updateWorkspaceProfile).toHaveBeenCalledWith("token-1", {
-      logo_asset_id: "logo-asset-1",
-    });
-    await waitFor(() =>
-      expect(mocks.updateGallerySettings).toHaveBeenCalledWith(
-        "token-1",
-        "gallery-1",
-        expect.objectContaining({
-          watermark_config: expect.objectContaining({
-            enabled: true,
-            mode: "logo",
-            logo_asset_id: "logo-asset-1",
-            logo_url:
-              "/api/v1/public/galleries/uat-test-gallery/branding/logo?ws=kaveri-a1b2c3d4",
-            text: "Kaveri Stories",
-          }),
-        }),
-      ),
-    );
+    expect(
+      screen.queryByLabelText("Upload studio logo for watermark"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Upload logo in Business Profile" }),
+    ).toHaveAttribute("href", "/settings/business");
   });
 
-  it("uses the existing Business Profile logo for watermarking without uploading a duplicate", async () => {
+  it("stores a Business Profile logo source without copying logo data into the album", async () => {
     mocks.getWorkspaceProfile.mockResolvedValue(
       workspaceProfile({
         logo_asset_id: "logo-asset-1",
@@ -443,19 +425,98 @@ describe("Gallery settings — slideshow music", () => {
         gallery(payload as Record<string, unknown>),
     );
     await renderPage();
-    await waitFor(() =>
-      screen.getByRole("button", { name: "Use Business Profile logo" }),
-    );
+    await waitFor(() => screen.getByRole("heading", { name: "Watermark" }));
 
-    expect(screen.queryByText("Use as watermark")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "studio-logo.webp · automatically linked from Business Profile",
+      ),
+    ).toBeInTheDocument();
 
     await act(async () => {
-      fireEvent.click(
-        screen.getByRole("button", { name: "Use Business Profile logo" }),
-      );
+      fireEvent.click(screen.getByRole("switch", { name: /Enable watermark/ }));
     });
 
     expect(mocks.uploadWorkspaceLogo).not.toHaveBeenCalled();
+    await waitFor(() => expect(mocks.updateGallerySettings).toHaveBeenCalled());
+    const payload =
+      mocks.updateGallerySettings.mock.calls.at(-1)?.[2]?.watermark_config;
+    expect(payload).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        mode: "logo",
+        logo_source: "business_profile",
+        text: "Kaveri Stories",
+      }),
+    );
+    expect(payload.logo_asset_id).toBeUndefined();
+    expect(payload.logo_url).toBeUndefined();
+  });
+
+  it("opens a real album watermark preview and persists adjusted placement", async () => {
+    mocks.getWorkspaceProfile.mockResolvedValue(
+      workspaceProfile({
+        logo_asset_id: "logo-asset-1",
+        logo_url: "data:image/png;base64,logo",
+        logo_metadata: {
+          filename: "studio-logo.webp",
+          storage_key: "workspaces/logo.webp",
+        },
+      }),
+    );
+    mocks.getGallery.mockResolvedValue(
+      gallery({
+        cover_asset_id: "asset-1",
+        watermark_config: {
+          enabled: true,
+          mode: "logo",
+          logo_source: "business_profile",
+          text: "Kaveri Stories",
+          position: "bottom-left",
+          placement: { x: 16, y: 84 },
+          opacity: 35,
+          scale: 90,
+        },
+      }),
+    );
+    mocks.updateGallerySettings.mockImplementation(
+      async (_token, _id, payload) =>
+        gallery(payload as Record<string, unknown>),
+    );
+
+    await renderPage();
+    await waitFor(() => screen.getByRole("heading", { name: "Watermark" }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Preview & adjust" }));
+    });
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Watermark preview",
+    });
+    expect(mocks.listGalleryAssets).toHaveBeenCalledWith(
+      "token-1",
+      "gallery-1",
+      {
+        includeAssets: true,
+      },
+    );
+    expect(screen.getByAltText("Wedding (42).jpg")).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Center" }));
+    fireEvent.change(screen.getByLabelText(/Logo size/), {
+      target: { value: "125" },
+    });
+    fireEvent.change(screen.getByLabelText(/Opacity/), {
+      target: { value: "55" },
+    });
+
+    await act(async () => {
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: "Save album watermark" }),
+      );
+    });
+
     await waitFor(() =>
       expect(mocks.updateGallerySettings).toHaveBeenCalledWith(
         "token-1",
@@ -464,13 +525,19 @@ describe("Gallery settings — slideshow music", () => {
           watermark_config: expect.objectContaining({
             enabled: true,
             mode: "logo",
-            logo_asset_id: "logo-asset-1",
-            logo_url:
-              "/api/v1/public/galleries/uat-test-gallery/branding/logo?ws=kaveri-a1b2c3d4",
+            logo_source: "business_profile",
+            position: "center",
+            placement: { x: 50, y: 50 },
+            opacity: 55,
+            scale: 125,
           }),
         }),
       ),
     );
+    const saved =
+      mocks.updateGallerySettings.mock.calls.at(-1)?.[2]?.watermark_config;
+    expect(saved.logo_asset_id).toBeUndefined();
+    expect(saved.logo_url).toBeUndefined();
   });
 
   it("toggles automated client emails off", async () => {

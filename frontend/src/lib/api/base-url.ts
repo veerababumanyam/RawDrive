@@ -28,6 +28,15 @@ function currentBrowserHostname(): string {
   return window.location.hostname;
 }
 
+function apiUrlPointsAtLocalhost(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return isLocalHostname(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
 export function resolveApiBaseUrl({
   isServer = typeof window === "undefined",
   env = process.env,
@@ -40,9 +49,19 @@ export function resolveApiBaseUrl({
       LOCAL_API_BASE_URL
     );
   }
-  if (env.NEXT_PUBLIC_API_URL) return env.NEXT_PUBLIC_API_URL;
 
   const hostname = locationHostname || currentBrowserHostname();
+  if (env.NEXT_PUBLIC_API_URL) {
+    if (
+      hostname &&
+      !isLocalHostname(hostname) &&
+      apiUrlPointsAtLocalhost(env.NEXT_PUBLIC_API_URL)
+    ) {
+      return PRODUCTION_API_BASE_URL;
+    }
+    return env.NEXT_PUBLIC_API_URL;
+  }
+
   if (hostname && !isLocalHostname(hostname)) {
     return PRODUCTION_API_BASE_URL;
   }

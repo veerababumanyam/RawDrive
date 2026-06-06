@@ -2631,8 +2631,10 @@ func main() {
 			platformSettingsRepo,
 			strings.EqualFold(os.Getenv("FEATURE_CLIENT_FACE_INDEX"), "true"),
 		)
-		faceEmbeddingHandler := handler.NewFaceEmbeddingHandler(assetRepo, aiFaceRepo, faceSvc, clientFaceIndexFlag)
+		faceEmbeddingHandler := handler.NewFaceEmbeddingHandler(assetRepo, aiFaceRepo, faceSvc, clientFaceIndexFlag).
+			WithImageIndexer(faceSvc)
 		api.Post("/api/v1/assets/{id}/face-embeddings", faceEmbeddingHandler.StoreEmbeddings)
+		api.Post("/api/v1/assets/{id}/face-index-image", faceEmbeddingHandler.StoreIndexImage)
 
 		// ──────────────────────── M4: Business Operations ──────────────────────
 

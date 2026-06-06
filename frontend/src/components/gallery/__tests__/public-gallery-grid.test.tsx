@@ -6,7 +6,10 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { PublicGalleryGrid, getPrefetchRootMargin } from "../public-gallery-grid";
+import {
+  PublicGalleryGrid,
+  getPrefetchRootMargin,
+} from "../public-gallery-grid";
 import type { PublicAsset } from "@/lib/api/galleries";
 
 // Module-level mock of the favorites API. Each test can vi.mocked() the
@@ -64,6 +67,37 @@ describe("PublicGalleryGrid", () => {
       "src",
       "http://localhost:8080/storage/workspaces/w1/public-thumb.webp",
     );
+  });
+
+  it("renders persisted album watermark placement and scale", () => {
+    const { container } = render(
+      <PublicGalleryGrid
+        slug="wedding-gallery"
+        assets={[galleryAsset()]}
+        watermarkLogoUrl="data:image/png;base64,logo"
+        watermark={{
+          enabled: true,
+          mode: "logo",
+          logo_source: "business_profile",
+          text: "Kaveri Stories",
+          position: "custom",
+          placement: { x: 30, y: 70 },
+          opacity: 55,
+          scale: 140,
+        }}
+      />,
+    );
+
+    const logo = container.querySelector(
+      'img[src="data:image/png;base64,logo"]',
+    );
+    expect(logo).not.toBeNull();
+    expect(logo?.parentElement).toHaveStyle({
+      left: "30%",
+      top: "70%",
+      opacity: "0.55",
+    });
+    expect(logo?.parentElement?.style.transform).toContain("scale(1.4)");
   });
 
   it("keeps public download controls available on touch screens", () => {
@@ -296,7 +330,9 @@ describe("PublicGalleryGrid", () => {
   });
 
   it("moves focus into the modal lightbox when a photo is opened (focus trap)", () => {
-    render(<PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />);
+    render(
+      <PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />,
+    );
 
     const gridButton = screen
       .getByAltText("Wedding (42).jpg")

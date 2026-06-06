@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"math"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,12 +21,20 @@ import (
 // ── fakes ────────────────────────────────────────────────────────────────
 
 type fakeAssetResolver struct {
-	asset *repository.Asset
-	err   error
+	asset           *repository.Asset
+	err             error
+	galleryOK       bool
+	galleryCheck    bool
+	galleryCheckErr error
 }
 
 func (f *fakeAssetResolver) GetByIDAndWorkspace(_ context.Context, _, _ uuid.UUID) (*repository.Asset, error) {
 	return f.asset, f.err
+}
+
+func (f *fakeAssetResolver) AssetBelongsToGallery(_ context.Context, _, _, _ uuid.UUID) (bool, error) {
+	f.galleryCheck = true
+	return f.galleryOK, f.galleryCheckErr
 }
 
 type deleteCall struct {
@@ -66,6 +75,33 @@ func (f *fakeIndexer) ClusterFaces(_ context.Context, faces []*ai.FaceCluster, _
 	return f.clusterErr
 }
 
+type imageIndexCall struct {
+	assetID   uuid.UUID
+	workspace uuid.UUID
+	galleryID *uuid.UUID
+	imageLen  int
+	filename  string
+	source    string
+}
+
+type fakeImageIndexer struct {
+	calls  []imageIndexCall
+	stored int
+	err    error
+}
+
+func (f *fakeImageIndexer) DetectImageAndStoreFaces(_ context.Context, assetID, workspaceID uuid.UUID, galleryID *uuid.UUID, imageData []byte, filename, source string) (int, error) {
+	f.calls = append(f.calls, imageIndexCall{
+		assetID:   assetID,
+		workspace: workspaceID,
+		galleryID: galleryID,
+		imageLen:  len(imageData),
+		filename:  filename,
+		source:    source,
+	})
+	return f.stored, f.err
+}
+
 type fakeFlag struct{ enabled bool }
 
 func (f fakeFlag) IsEnabled(_ context.Context, _ uuid.UUID) (bool, string) {
@@ -87,6 +123,35 @@ func faceReqBody(t *testing.T, faces []clientFaceInput, galleryID *string) []byt
 
 func newFaceEmbReq(idParam string, ws uuid.UUID, body []byte) *http.Request {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/assets/"+idParam+"/face-embeddings", bytes.NewReader(body))
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", idParam)
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = middleware.WithJWTClaims(ctx, map[string]interface{}{"sub": uuid.NewString(), "workspace_id": ws.String()})
+	ctx = middleware.WithWorkspaceID(ctx, ws.String())
+	return req.WithContext(ctx)
+}
+
+func newFaceImageReq(t *testing.T, idParam string, ws uuid.UUID, image []byte, galleryID *uuid.UUID) *http.Request {
+	t.Helper()
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	if galleryID != nil {
+		if err := mw.WriteField("gallery_id", galleryID.String()); err != nil {
+			t.Fatalf("write gallery_id: %v", err)
+		}
+	}
+	part, err := mw.CreateFormFile("image", "face-index.webp")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	if _, err := part.Write(image); err != nil {
+		t.Fatalf("write image: %v", err)
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatalf("close multipart: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/assets/"+idParam+"/face-index-image", &body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", idParam)
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
@@ -280,5 +345,137 @@ func TestFaceEmbeddings_FiniteGuards(t *testing.T) {
 	}
 	if boxFinite(ai.BoundingBox{X: math.NaN()}) {
 		t.Error("boxFinite must reject NaN")
+	}
+}
+
+func TestFaceIndexImage_HappyPath_IndexesClientSource(t *testing.T) {
+	ws := uuid.New()
+	assetID := uuid.New()
+	galleryID := uuid.New()
+	assets := &fakeAssetResolver{asset: &repository.Asset{ID: assetID, WorkspaceID: ws, ContentType: "image/jpeg"}, galleryOK: true}
+	indexer := &fakeIndexer{recEnabled: true}
+	imageIndexer := &fakeImageIndexer{stored: 2}
+	h := NewFaceEmbeddingHandler(assets, &fakeFaceStore{}, indexer, fakeFlag{enabled: false}).
+		WithImageIndexer(imageIndexer)
+
+	rec := httptest.NewRecorder()
+	h.StoreIndexImage(rec, newFaceImageReq(t, assetID.String(), ws, []byte("WEBP"), &galleryID))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d (%s)", rec.Code, rec.Body.String())
+	}
+	if len(imageIndexer.calls) != 1 {
+		t.Fatalf("want one image-index call, got %d", len(imageIndexer.calls))
+	}
+	call := imageIndexer.calls[0]
+	if call.assetID != assetID || call.workspace != ws || call.imageLen != 4 || call.source != "client" {
+		t.Fatalf("unexpected call: %+v", call)
+	}
+	if call.galleryID == nil || *call.galleryID != galleryID {
+		t.Fatalf("gallery_id not forwarded: %+v", call.galleryID)
+	}
+	if !assets.galleryCheck {
+		t.Fatal("gallery membership must be checked when gallery_id is supplied")
+	}
+	var out storeFaceEmbeddingsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if out.Stored != 2 {
+		t.Fatalf("stored = %d, want 2", out.Stored)
+	}
+}
+
+func TestFaceIndexImage_DoesNotRequireClientFaceFlag(t *testing.T) {
+	ws := uuid.New()
+	assetID := uuid.New()
+	assets := &fakeAssetResolver{asset: &repository.Asset{ID: assetID, WorkspaceID: ws, ContentType: "image/jpeg"}}
+	imageIndexer := &fakeImageIndexer{}
+	h := NewFaceEmbeddingHandler(assets, &fakeFaceStore{}, &fakeIndexer{recEnabled: true}, fakeFlag{enabled: false}).
+		WithImageIndexer(imageIndexer)
+
+	rec := httptest.NewRecorder()
+	h.StoreIndexImage(rec, newFaceImageReq(t, assetID.String(), ws, []byte("WEBP"), nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("server-assisted image indexing should not be blocked by client_face_index flag, got %d", rec.Code)
+	}
+}
+
+func TestFaceIndexImage_BiometricOptInDisabled_403(t *testing.T) {
+	ws := uuid.New()
+	assetID := uuid.New()
+	assets := &fakeAssetResolver{asset: &repository.Asset{ID: assetID, WorkspaceID: ws, ContentType: "image/jpeg"}}
+	imageIndexer := &fakeImageIndexer{}
+	h := NewFaceEmbeddingHandler(assets, &fakeFaceStore{}, &fakeIndexer{recEnabled: false}, fakeFlag{enabled: false}).
+		WithImageIndexer(imageIndexer)
+
+	rec := httptest.NewRecorder()
+	h.StoreIndexImage(rec, newFaceImageReq(t, assetID.String(), ws, []byte("WEBP"), nil))
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("face recognition disabled should 403, got %d", rec.Code)
+	}
+	if len(imageIndexer.calls) != 0 {
+		t.Fatal("must not index when biometric opt-in is off")
+	}
+}
+
+func TestFaceIndexImage_CrossTenantAsset_404(t *testing.T) {
+	assets := &fakeAssetResolver{asset: nil}
+	imageIndexer := &fakeImageIndexer{}
+	h := NewFaceEmbeddingHandler(assets, &fakeFaceStore{}, &fakeIndexer{recEnabled: true}, fakeFlag{enabled: false}).
+		WithImageIndexer(imageIndexer)
+
+	rec := httptest.NewRecorder()
+	h.StoreIndexImage(rec, newFaceImageReq(t, uuid.NewString(), uuid.New(), []byte("WEBP"), nil))
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("cross-tenant asset should 404, got %d", rec.Code)
+	}
+	if len(imageIndexer.calls) != 0 {
+		t.Fatal("must not index a foreign asset")
+	}
+}
+
+func TestFaceIndexImage_StaleGalleryID_404(t *testing.T) {
+	ws := uuid.New()
+	assetID := uuid.New()
+	galleryID := uuid.New()
+	assets := &fakeAssetResolver{asset: &repository.Asset{ID: assetID, WorkspaceID: ws, ContentType: "image/jpeg"}, galleryOK: false}
+	imageIndexer := &fakeImageIndexer{}
+	h := NewFaceEmbeddingHandler(assets, &fakeFaceStore{}, &fakeIndexer{recEnabled: true}, fakeFlag{enabled: false}).
+		WithImageIndexer(imageIndexer)
+
+	rec := httptest.NewRecorder()
+	h.StoreIndexImage(rec, newFaceImageReq(t, assetID.String(), ws, []byte("WEBP"), &galleryID))
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("stale gallery id should 404, got %d", rec.Code)
+	}
+	if !assets.galleryCheck {
+		t.Fatal("gallery membership should be checked")
+	}
+	if len(imageIndexer.calls) != 0 {
+		t.Fatal("must not index with a stale gallery id")
+	}
+}
+
+func TestFaceIndexImage_EmptyImage_400(t *testing.T) {
+	ws := uuid.New()
+	assetID := uuid.New()
+	assets := &fakeAssetResolver{asset: &repository.Asset{ID: assetID, WorkspaceID: ws, ContentType: "image/jpeg"}}
+	imageIndexer := &fakeImageIndexer{}
+	h := NewFaceEmbeddingHandler(assets, &fakeFaceStore{}, &fakeIndexer{recEnabled: true}, fakeFlag{enabled: false}).
+		WithImageIndexer(imageIndexer)
+
+	rec := httptest.NewRecorder()
+	h.StoreIndexImage(rec, newFaceImageReq(t, assetID.String(), ws, nil, nil))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("empty image should 400, got %d", rec.Code)
+	}
+	if len(imageIndexer.calls) != 0 {
+		t.Fatal("must not index an empty image")
 	}
 }

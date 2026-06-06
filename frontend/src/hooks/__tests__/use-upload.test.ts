@@ -50,6 +50,13 @@ describe("useUpload", () => {
     expect(uploadRetryDelayMs(1, "3")).toBe(3000);
   });
 
+  it("has an explicit face indexing phase for encrypted uploads", async () => {
+    const source = await readFile(join(process.cwd(), "src/hooks/use-upload.ts"), "utf8");
+    expect(source).toContain("uploadAssetFaceIndexImage");
+    expect(source).toContain('status: "indexing_faces"');
+    expect(source).toContain("faceIndexImage");
+  });
+
   it("parses server upload offsets for resumable recovery", async () => {
     const { parseUploadOffsetHeader } = await import("../use-upload");
     expect(parseUploadOffsetHeader("10485760")).toBe(10485760);

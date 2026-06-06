@@ -157,6 +157,66 @@ func (s *FaceService) DetectAndStore(ctx context.Context, assetID, workspaceID u
 	return len(clusters), s.ClusterFaces(ctx, clusters, workspaceID)
 }
 
+// DetectImageAndStoreFaces indexes faces from a caller-supplied image for a
+// known asset. This is used by encrypted upload flows: the persisted object is
+// ciphertext, so DetectAndStore cannot read the original from storage. The
+// caller sends a short-lived, downscaled frame; this method stores only the
+// resulting embeddings/bounding boxes and replaces prior rows for the same
+// asset+source idempotently.
+func (s *FaceService) DetectImageAndStoreFaces(ctx context.Context, assetID, workspaceID uuid.UUID, galleryID *uuid.UUID, imageData []byte, filename, source string) (int, error) {
+	enabled, err := s.isFaceRecognitionEnabled(ctx, workspaceID)
+	if err != nil {
+		return 0, fmt.Errorf("face service: workspace gate check: %w", err)
+	}
+	if !enabled {
+		return 0, fmt.Errorf("face service: face recognition disabled for this workspace")
+	}
+	if s.faceClient == nil {
+		return 0, fmt.Errorf("face service: face-svc client not configured for asset %s", assetID)
+	}
+	if len(imageData) == 0 {
+		return 0, fmt.Errorf("face service: empty index image for asset %s", assetID)
+	}
+	if source == "" {
+		source = "client"
+	}
+
+	resp, err := s.faceClient.DetectAndEmbed(ctx, imageData, filename)
+	if err != nil {
+		return 0, fmt.Errorf("face service: face-svc detect: %w", err)
+	}
+
+	if err := s.faceRepo.DeleteFacesByAssetAndSource(ctx, assetID, source); err != nil {
+		return 0, fmt.Errorf("face service: replace source faces: %w", err)
+	}
+	if len(resp.Faces) == 0 {
+		return 0, nil
+	}
+
+	clusters := make([]*FaceCluster, len(resp.Faces))
+	for i, f := range resp.Faces {
+		clusters[i] = &FaceCluster{
+			WorkspaceID: workspaceID,
+			AssetID:     assetID,
+			GalleryID:   galleryID,
+			FaceIndex:   i,
+			BoundingBox: BoundingBox{
+				X: float64(f.Bbox.X),
+				Y: float64(f.Bbox.Y),
+				W: float64(f.Bbox.W),
+				H: float64(f.Bbox.H),
+			},
+			Embedding:  f.Embedding,
+			Confidence: float64(f.DetScore),
+			Source:     source,
+		}
+	}
+	if err := s.faceRepo.StoreFaces(ctx, clusters); err != nil {
+		return 0, fmt.Errorf("face service: store faces: %w", err)
+	}
+	return len(clusters), s.ClusterFaces(ctx, clusters, workspaceID)
+}
+
 // isFaceRecognitionEnabled reads workspaces.face_recognition_enabled (migration
 // 110). DEFAULT FALSE — biometric data processing is opt-in under DPDP/GDPR.
 func (s *FaceService) isFaceRecognitionEnabled(ctx context.Context, workspaceID uuid.UUID) (bool, error) {

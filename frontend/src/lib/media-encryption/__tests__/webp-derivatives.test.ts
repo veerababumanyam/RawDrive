@@ -70,6 +70,9 @@ describe("createEncryptedWebPDerivativeSet decodeImage seam", () => {
       "thumb_lg_webp",
       "display_webp",
     ]);
+    expect(set.faceIndexImage?.blob.type).toBe("image/webp");
+    expect(set.faceIndexImage?.width).toBe(2400);
+    expect(set.faceIndexImage?.height).toBe(1800);
     // close() is invoked exactly once in the finally block.
     expect(close).toHaveBeenCalledTimes(1);
   });

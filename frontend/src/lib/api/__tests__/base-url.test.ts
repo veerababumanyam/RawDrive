@@ -32,7 +32,7 @@ describe("resolveApiBaseUrl", () => {
     ).toBe("http://backend:8080");
   });
 
-  it("keeps browser calls on the public API URL", () => {
+  it("keeps local browser calls on the public API URL", () => {
     expect(
       resolveApiBaseUrl({
         isServer: false,
@@ -40,8 +40,33 @@ describe("resolveApiBaseUrl", () => {
           INTERNAL_API_BASE_URL: "http://backend:8080",
           NEXT_PUBLIC_API_URL: "http://localhost:8080",
         },
+        locationHostname: "localhost",
       }),
     ).toBe("http://localhost:8080");
+  });
+
+  it("does not leak a localhost public API URL into production browser hosts", () => {
+    expect(
+      resolveApiBaseUrl({
+        isServer: false,
+        env: {
+          NEXT_PUBLIC_API_URL: "http://localhost:8080",
+        },
+        locationHostname: "studio-cobolt-bf998927.rawdrive.in",
+      }),
+    ).toBe("https://api.rawdrive.in");
+  });
+
+  it("keeps explicit non-local public API URLs on production browser hosts", () => {
+    expect(
+      resolveApiBaseUrl({
+        isServer: false,
+        env: {
+          NEXT_PUBLIC_API_URL: "https://api.rawdrive.in",
+        },
+        locationHostname: "studio-cobolt-bf998927.rawdrive.in",
+      }),
+    ).toBe("https://api.rawdrive.in");
   });
 
   it("falls back to the production API on non-local browser hosts", () => {

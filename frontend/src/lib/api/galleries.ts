@@ -32,6 +32,9 @@ export interface Gallery {
     text?: string;
     position?: "center" | "tiled" | "bottom-right" | "bottom-left" | "diagonal";
     opacity?: number; // 0.0–1.0
+    scale?: number;
+    placement?: { x?: number; y?: number };
+    logo_source?: "business_profile" | "custom" | string;
     logo_asset_id?: string;
     logo_url?: string;
   };

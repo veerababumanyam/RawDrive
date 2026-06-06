@@ -45,6 +45,7 @@ import {
 } from "@/lib/media-encryption/share-url";
 import { GRID_VARIANTS } from "@/lib/media-encryption/asset-media";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
+import { indexAssetFacesFromBrowser } from "@/lib/media-encryption/face-index-browser";
 import { browserE2EEMaxUploadSizeLabel } from "@/lib/media-encryption/browser-upload-support";
 import {
   FILE_PICKER_STILL_IMAGE_ACCEPT,
@@ -129,6 +130,16 @@ type GalleryAssetRecord = GalleryAsset & {
   asset: Asset | null;
 };
 
+type FaceIndexRunState = {
+  running: boolean;
+  total: number;
+  processed: number;
+  indexedFaces: number;
+  skippedAssets: number;
+  failedAssets: number;
+  message: string;
+};
+
 type TetheredDirectoryEntry = {
   kind: "directory";
   name: string;
@@ -180,6 +191,7 @@ const SHARE_UNAVAILABLE_MESSAGE =
   "Publish this gallery before sharing client links.";
 type ShareLinkChannel = "copy" | "email" | "whatsapp";
 const ASSET_SETTLE_REFRESH_DELAYS_MS = [1200, 4000] as const;
+const FACE_INDEX_REINDEX_CONCURRENCY = 3;
 const UPLOAD_DROPZONE_BACKEND_PREVIEW_VARIANTS = [
   "display_webp",
   "thumb_lg_webp",
@@ -198,9 +210,20 @@ function assetRowsSignature(
 function assetHasWebPDisplay(asset: Asset | null | undefined): boolean {
   return Boolean(
     asset?.thumbnail_urls?.display_webp ||
-    asset?.thumbnail_urls?.thumb_lg_webp ||
+      asset?.thumbnail_urls?.thumb_lg_webp ||
     asset?.thumbnail_urls?.thumb_md_webp ||
-    asset?.thumbnail_urls?.thumb_sm_webp,
+      asset?.thumbnail_urls?.thumb_sm_webp,
+  );
+}
+
+function assetCanBrowserIndexFaces(
+  asset: Asset | null | undefined,
+): asset is Asset {
+  return Boolean(
+    asset &&
+      !assetIsProcessing(asset) &&
+      asset.content_type?.toLowerCase().startsWith("image/") &&
+      assetHasWebPDisplay(asset),
   );
 }
 
@@ -490,6 +513,9 @@ export default function GalleryDetailPage({
   // can disable itself + show a "Saving…" state. Prevents double-submit
   // when the user clicks during the round-trip.
   const [publishing, setPublishing] = useState(false);
+  const [faceIndexRun, setFaceIndexRun] =
+    useState<FaceIndexRunState | null>(null);
+  const faceIndexAbortRef = useRef<AbortController | null>(null);
   // Per-business subdomain identity for share URLs. Loaded once when the
   // page mounts — share URLs are only built after this resolves; until then
   // buildShareUrl falls back to the legacy /g/<slug> shape.
@@ -1006,6 +1032,108 @@ export default function GalleryDetailPage({
     [gallery, id],
   );
 
+  const handleStopFaceIndexRun = useCallback(() => {
+    faceIndexAbortRef.current?.abort();
+  }, []);
+
+  const handleReindexFaces = useCallback(async () => {
+    if (faceIndexRun?.running) return;
+    const t = getStoredAccessToken();
+    if (!t) {
+      setError("Your session expired. Please log in again.");
+      return;
+    }
+    const targetAssets = assets
+      .map((entry) => entry.asset)
+      .filter(assetCanBrowserIndexFaces);
+    if (targetAssets.length === 0) {
+      setFaceIndexRun({
+        running: false,
+        total: 0,
+        processed: 0,
+        indexedFaces: 0,
+        skippedAssets: 0,
+        failedAssets: 0,
+        message: "No ready photos with WebP derivatives are available to index.",
+      });
+      return;
+    }
+
+    const controller = new AbortController();
+    faceIndexAbortRef.current = controller;
+    let cursor = 0;
+    let processed = 0;
+    let indexedFaces = 0;
+    let skippedAssets = 0;
+    let failedAssets = 0;
+
+    const publish = (running: boolean, message: string) => {
+      setFaceIndexRun({
+        running,
+        total: targetAssets.length,
+        processed,
+        indexedFaces,
+        skippedAssets,
+        failedAssets,
+        message,
+      });
+    };
+
+    publish(true, "Indexing FaceID for this gallery...");
+
+    const worker = async () => {
+      while (!controller.signal.aborted) {
+        const index = cursor;
+        cursor += 1;
+        const asset = targetAssets[index];
+        if (!asset) break;
+        try {
+          const result = await indexAssetFacesFromBrowser(asset, {
+            galleryId: id,
+            token: t,
+            signal: controller.signal,
+          });
+          if (result.stored > 0) {
+            indexedFaces += result.stored;
+          } else {
+            skippedAssets += 1;
+          }
+        } catch (err) {
+          if (controller.signal.aborted) break;
+          failedAssets += 1;
+          console.warn("FaceID browser reindex failed", {
+            assetId: asset.id,
+            error: err,
+          });
+        } finally {
+          processed += 1;
+          if (!controller.signal.aborted) {
+            publish(true, "Indexing FaceID for this gallery...");
+          }
+        }
+      }
+    };
+
+    const workerCount = Math.min(
+      FACE_INDEX_REINDEX_CONCURRENCY,
+      targetAssets.length,
+    );
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+    faceIndexAbortRef.current = null;
+
+    if (controller.signal.aborted) {
+      publish(false, "FaceID indexing stopped.");
+      return;
+    }
+
+    publish(
+      false,
+      failedAssets > 0
+        ? "FaceID indexing finished with some photos skipped by errors."
+        : "FaceID indexing finished.",
+    );
+  }, [assets, faceIndexRun?.running, id]);
+
   const handleDeleteAsset = useCallback(
     async (assetId: string) => {
       const t = getStoredAccessToken();
@@ -1021,6 +1149,12 @@ export default function GalleryDetailPage({
     },
     [refreshAlbums],
   );
+
+  useEffect(() => {
+    return () => {
+      faceIndexAbortRef.current?.abort();
+    };
+  }, []);
 
   // Subscribe to face-filter events from the FaceFilter component. The
   // component doesn't know anything about the page's asset list — it
@@ -1390,6 +1524,7 @@ export default function GalleryDetailPage({
       i.status === "pending" ||
       i.status === "screening" ||
       i.status === "encrypting" ||
+      i.status === "indexing_faces" ||
       i.status === "paused",
   ).length;
   const completedUploadCount = upload.items.filter(
@@ -1414,6 +1549,7 @@ export default function GalleryDetailPage({
       i.status === "pending" ||
       i.status === "screening" ||
       i.status === "encrypting" ||
+      i.status === "indexing_faces" ||
       i.status === "paused" ||
       i.status === "complete" ||
       i.status === "error",
@@ -2657,6 +2793,28 @@ export default function GalleryDetailPage({
                         Select photos
                       </button>
                     )}
+                    {assets.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => void handleReindexFaces()}
+                        disabled={faceIndexRun?.running}
+                        className="btn-tertiary inline-flex items-center gap-2 px-3 py-1.5 text-xs disabled:opacity-30"
+                      >
+                        <Shield className="h-4 w-4" aria-hidden="true" />
+                        {faceIndexRun?.running
+                          ? "Indexing FaceID"
+                          : "Index FaceID"}
+                      </button>
+                    )}
+                    {faceIndexRun?.running && (
+                      <button
+                        type="button"
+                        onClick={handleStopFaceIndexRun}
+                        className="btn-tertiary px-3 py-1.5 text-xs"
+                      >
+                        Stop
+                      </button>
+                    )}
                   </>
                 )}
                 <div className="flex items-center gap-2">
@@ -2695,6 +2853,28 @@ export default function GalleryDetailPage({
                 </div>
               </div>
             </div>
+
+            {faceIndexRun && (
+              <div className="rounded-xl border border-border-subtle bg-surface-sunken/40 px-3 py-2 text-xs text-text-secondary">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium text-text-primary">
+                    {faceIndexRun.message}
+                  </span>
+                  {faceIndexRun.total > 0 && (
+                    <span>
+                      {faceIndexRun.processed}/{faceIndexRun.total} photos
+                    </span>
+                  )}
+                </div>
+                {faceIndexRun.total > 0 && (
+                  <p className="mt-1">
+                    {faceIndexRun.indexedFaces} faces indexed,{" "}
+                    {faceIndexRun.skippedAssets} photos without faces,{" "}
+                    {faceIndexRun.failedAssets} failed.
+                  </p>
+                )}
+              </div>
+            )}
 
             <div
               id="albums"

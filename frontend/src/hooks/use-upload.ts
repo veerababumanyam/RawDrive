@@ -18,6 +18,7 @@ import {
 import type { GalleryMediaKey } from "@/lib/media-encryption/media-key-store";
 import { extractSourceImageMetadata } from "@/lib/media-encryption/source-metadata";
 import { getBrowserE2EEUploadBlockReason } from "@/lib/media-encryption/browser-upload-support";
+import { uploadAssetFaceIndexImage } from "@/lib/api/ai";
 
 const CHUNK_SIZE = 5 * 1024 * 1024;
 const DEFAULT_METADATA_BUDGET = 512 * 1024;
@@ -99,7 +100,7 @@ async function uploadEncryptedDerivative(
 }
 
 function isActiveUploadStatus(status: UploadItem["status"]): boolean {
-  return status === "uploading" || status === "pending" || status === "screening" || status === "encrypting" || status === "paused";
+  return status === "uploading" || status === "pending" || status === "screening" || status === "encrypting" || status === "indexing_faces" || status === "paused";
 }
 
 export function isRetryableUploadStatus(status: number): boolean {
@@ -358,6 +359,7 @@ export function useUpload(apiUrl: string, token: string | null, options?: UseUpl
       let mediaEncryption: Record<string, unknown> | undefined;
       let sourceMetadata: Record<string, unknown> | undefined;
       let encryptedDerivatives: EncryptedDerivative[] = [];
+      let faceIndexImage: Blob | undefined;
 
       if (encryption) {
         updateItem(item.id, { status: "encrypting", scanManifest: manifest });
@@ -372,6 +374,7 @@ export function useUpload(apiUrl: string, token: string | null, options?: UseUpl
         try {
           const derivativeSet = await createEncryptedWebPDerivativeSet(item.file, mediaKey.key, mediaKey.keyId);
           encryptedDerivatives = derivativeSet.derivatives;
+          faceIndexImage = derivativeSet.faceIndexImage?.blob;
           sourceDimensions = derivativeSet.source;
         } catch (err) {
           // CD4: a NeedsDesktopDecodeError means the in-browser decoder could
@@ -540,9 +543,22 @@ export function useUpload(apiUrl: string, token: string | null, options?: UseUpl
         for (let i = 0; i < encryptedDerivatives.length; i += 1) {
           await uploadEncryptedDerivative(finalAssetId, encryptedDerivatives[i], controller.signal);
           updateItem(item.id, {
-            progress: 80 + Math.round(((i + 1) / encryptedDerivatives.length) * 20),
+            progress: 80 + Math.round(((i + 1) / encryptedDerivatives.length) * 15),
           });
         }
+      }
+
+      if (finalAssetId && faceIndexImage) {
+        updateItem(item.id, {
+          status: "indexing_faces",
+          progress: 98,
+          assetId: finalAssetId,
+        });
+        const activeDest = destinationRef.current;
+        await uploadAssetFaceIndexImage(finalAssetId, faceIndexImage, {
+          galleryId: activeDest?.galleryId,
+          signal: controller.signal,
+        });
       }
 
       updateItem(item.id, { status: "complete", progress: 100, assetId: finalAssetId });

@@ -316,6 +316,9 @@ export async function listPublicPersonPhotos(
 export interface PublicFaceSearchResponse {
   found: boolean;
   faces_detected: number;
+  index_status?: "ready" | "empty";
+  indexed_faces?: number;
+  indexed_people?: number;
   cluster_label?: string;
   cluster_name?: string;
   similarity?: number;
@@ -421,6 +424,29 @@ export async function uploadAssetFaceEmbeddings(
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(text || `Face embedding upload failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+// uploadAssetFaceIndexImage sends a short-lived, downscaled image frame for an
+// encrypted upload so the backend can run the same face-svc model and store
+// only embeddings/bounding boxes. The backend does not persist this image.
+export async function uploadAssetFaceIndexImage(
+  assetId: string,
+  imageBlob: Blob,
+  opts?: { galleryId?: string; signal?: AbortSignal },
+): Promise<{ stored: number }> {
+  const form = new FormData();
+  if (opts?.galleryId) form.set("gallery_id", opts.galleryId);
+  form.set("image", imageBlob, "face-index.webp");
+  const res = await authFetch(`/api/v1/assets/${assetId}/face-index-image`, {
+    method: "POST",
+    body: form,
+    signal: opts?.signal,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `Face index image upload failed: ${res.status}`);
   }
   return res.json();
 }
