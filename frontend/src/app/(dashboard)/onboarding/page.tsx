@@ -2,8 +2,10 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { usePlanCatalog } from "@/hooks/use-plan-catalog";
 import { getStoredAccessToken, refreshAuthSession } from "@/lib/auth";
-import { pricingPlans, viewportThemeColors } from "@/lib/tokens";
+import { fallbackPlanCatalog } from "@/lib/plans";
+import { viewportThemeColors } from "@/lib/tokens";
 import { getDistrictsForState } from "@/lib/data/india-districts";
 
 // Minimal Razorpay types.
@@ -54,7 +56,7 @@ const STEP_LABELS: Record<Step, string> = {
   complete: "Done",
 };
 
-const ONBOARDING_PLANS = pricingPlans.filter((p) =>
+const FALLBACK_ONBOARDING_PLANS = fallbackPlanCatalog.filter((p) =>
   ["free", "starter", "professional", "business", "enterprise"].includes(p.id),
 );
 
@@ -100,6 +102,15 @@ function OnboardingPageContent() {
   const [selectedDistrict, setSelectedDistrict] = useState("");
   const [states, setStates] = useState<IndianState[]>([]);
   const [statesLoading, setStatesLoading] = useState(true);
+  const { plans } = usePlanCatalog();
+  const onboardingPlans = plans.filter(
+    (p) =>
+      ["free", "starter", "professional", "business", "enterprise"].includes(
+        p.id,
+      ) &&
+      p.active &&
+      p.selfServe,
+  );
 
   // Step 2 — profile (collected locally, submitted together with plan in step 3)
   const [businessName, setBusinessName] = useState("");
@@ -116,7 +127,9 @@ function OnboardingPageContent() {
       /* ignore */
     }
     if (!plan) plan = planParam;
-    if (plan && ONBOARDING_PLANS.some((p) => p.id === plan)) return plan;
+    if (plan && FALLBACK_ONBOARDING_PLANS.some((p) => p.id === plan)) {
+      return plan;
+    }
     return "starter";
   });
 
@@ -355,7 +368,7 @@ function OnboardingPageContent() {
       }
 
       const planName =
-        ONBOARDING_PLANS.find((p) => p.id === selectedPlan)?.name ??
+        onboardingPlans.find((p) => p.id === selectedPlan)?.name ??
         selectedPlan;
 
       setSubmitting(false); // let user interact with the modal
@@ -685,10 +698,13 @@ function OnboardingPageContent() {
           </p>
           <form onSubmit={handlePlanSubmit}>
             <div className="mb-6 space-y-3">
-              {ONBOARDING_PLANS.map((plan) => {
+              {onboardingPlans.map((plan) => {
                 const isSelected = selectedPlan === plan.id;
                 const isFree = plan.id === "free";
-                const highlights = PLAN_HIGHLIGHTS[plan.id] ?? [];
+                const highlights =
+                  plan.features.length > 0
+                    ? plan.features.slice(0, 3)
+                    : (PLAN_HIGHLIGHTS[plan.id] ?? []);
                 return (
                   <button
                     key={plan.id}
@@ -767,7 +783,7 @@ function OnboardingPageContent() {
                 : selectedPlan === "free"
                   ? "Start for free"
                   : (() => {
-                      const plan = ONBOARDING_PLANS.find(
+                      const plan = onboardingPlans.find(
                         (p) => p.id === selectedPlan,
                       );
                       return `Pay & activate · ₹${plan ? plan.monthlyPrice.toLocaleString("en-IN") : ""}/mo`;

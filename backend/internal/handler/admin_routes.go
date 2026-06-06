@@ -9,14 +9,15 @@ import (
 )
 
 type AdminDeps struct {
-	UserSvc       *service.AdminUserService
-	ModerationSvc *service.AdminModerationService
-	WorkspaceSvc  *service.AdminWorkspaceService
-	RevenueSvc    *service.AdminRevenueService
-	AnalyticsSvc  *service.AdminAnalyticsService
-	ExportSvc     *service.AdminExportService
-	HealthSvc     *service.AdminHealthService
-	AuditLogSvc   *service.AuditLogService
+	UserSvc        *service.AdminUserService
+	ModerationSvc  *service.AdminModerationService
+	WorkspaceSvc   *service.AdminWorkspaceService
+	RevenueSvc     *service.AdminRevenueService
+	AnalyticsSvc   *service.AdminAnalyticsService
+	ExportSvc      *service.AdminExportService
+	HealthSvc      *service.AdminHealthService
+	AuditLogSvc    *service.AuditLogService
+	PlanCatalogSvc *service.PlanCatalogService
 	// M16 E49-S1 / E49-S2: workspace upload-policy admin handlers.
 	// Nil-safe: route registration succeeds even when the service is unset
 	// (the handler returns 501 in that path), so existing AdminDeps{} call
@@ -68,8 +69,9 @@ func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
 		// catalog so the New User dialog renders the plan dropdown
 		// dynamically instead of bundling the tier list into the
 		// frontend at build time.
-		plans := NewAdminPlansHandler()
+		plans := NewAdminPlansHandler(deps.PlanCatalogSvc)
 		r.Get("/plans", plans.List)
+		r.Put("/plans/{tier}", plans.Update)
 
 		r.Get("/users", users.List)
 		// M39 E5-S1: admin user create (POST /api/v1/admin/users).

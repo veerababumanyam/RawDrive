@@ -1,40 +1,22 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Check, Crown, HardDrive, Zap } from "lucide-react";
+import { usePlanCatalog } from "@/hooks/use-plan-catalog";
 import { getStoredAccessToken } from "@/lib/auth";
-import { pricingPlans } from "@/lib/tokens";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
-// Build the upgrade-eligible plan list from the canonical pricingPlans token.
-const UPGRADE_PLANS = pricingPlans
-  .filter((p) => p.id !== "free")
-  .map((p) => ({
-    tier: p.id,
-    name: p.name,
-    monthlyPrice: p.monthlyPrice as number,
-    annualPrice: p.annualPrice as number,
-    storage: p.storage,
-    features: [...p.features],
-    highlighted: p.popular,
-  }));
-
 type BillingInterval = "monthly" | "annual";
-
-const TIER_ORDER = [
-  "free",
-  "starter",
-  "professional",
-  "business",
-  "enterprise",
-];
-
-function tierIndex(tier: string): number {
-  return TIER_ORDER.indexOf(tier);
-}
 
 // 2026-05-18 — payment-method picker moved to /settings/plans/choose-payment.
 // The plans page is now purely a tier-selection surface; the chooser page
@@ -55,6 +37,27 @@ function PlansPageContent() {
   const [currentTier, setCurrentTier] = useState<string>("free");
   const [billingInterval, setBillingInterval] =
     useState<BillingInterval>("monthly");
+  const { plans } = usePlanCatalog();
+  const upgradePlans = useMemo(
+    () =>
+      plans
+        .filter((plan) => plan.id !== "free" && plan.active && plan.paid)
+        .map((plan) => ({
+          tier: plan.id,
+          name: plan.name,
+          monthlyPrice: plan.monthlyPrice,
+          annualPrice: plan.annualPrice,
+          storage: plan.storage,
+          features: [...plan.features],
+          highlighted: plan.popular,
+          rank: plan.rank,
+        })),
+    [plans],
+  );
+  const currentRank =
+    plans.find((plan) => plan.id === currentTier)?.rank ??
+    plans.find((plan) => plan.id === "free")?.rank ??
+    -1;
   // Compute initial loading state synchronously — if there's no auth token,
   // there's nothing to fetch, so we start in the not-loading state. This
   // avoids the React 19 `react-hooks/set-state-in-effect` lint because the
@@ -95,15 +98,15 @@ function PlansPageContent() {
   // Auto-trigger upgrade when arriving from onboarding with upgrade_to param.
   useEffect(() => {
     if (!upgradeTo || loading || autoUpgradeTriggered.current) return;
-    const target = UPGRADE_PLANS.find((p) => p.tier === upgradeTo);
+    const target = upgradePlans.find((p) => p.tier === upgradeTo);
     if (!target) return;
     autoUpgradeTriggered.current = true;
     handleUpgrade(target.tier);
-  }, [upgradeTo, loading, handleUpgrade]);
+  }, [upgradeTo, loading, handleUpgrade, upgradePlans]);
 
   const isOnboardingUpgrade = Boolean(upgradeTo);
   const successPlanName = successTier
-    ? (UPGRADE_PLANS.find((p) => p.tier === successTier)?.name ?? successTier)
+    ? (upgradePlans.find((p) => p.tier === successTier)?.name ?? successTier)
     : "";
 
   return (
@@ -134,7 +137,7 @@ function PlansPageContent() {
         <div className="rounded-xl border border-accent/30 bg-accent/8 px-5 py-4 text-sm text-accent">
           Your workspace is ready. Complete payment below to activate your{" "}
           <strong>
-            {UPGRADE_PLANS.find((p) => p.tier === upgradeTo)?.name ?? upgradeTo}
+            {upgradePlans.find((p) => p.tier === upgradeTo)?.name ?? upgradeTo}
           </strong>{" "}
           plan.
         </div>
@@ -199,9 +202,9 @@ function PlansPageContent() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
-          {UPGRADE_PLANS.map((plan) => {
+          {upgradePlans.map((plan) => {
             const isCurrent = plan.tier === currentTier;
-            const isUpgrade = tierIndex(plan.tier) > tierIndex(currentTier);
+            const isUpgrade = plan.rank > currentRank;
             const isHighlighted = plan.highlighted && !isCurrent;
             const isAutoTarget = plan.tier === upgradeTo;
             const displayPrice =

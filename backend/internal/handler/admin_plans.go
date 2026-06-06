@@ -1,83 +1,233 @@
 package handler
 
-// 2026-05-19 — GET /api/v1/admin/plans
-//
-// Returns the canonical plan catalog so admin surfaces (the New User
-// dialog at /admin/users) can render a dropdown without bundling the
-// tier list into the frontend bundle. The frontend used to import
-// pricingPlans from src/lib/tokens.ts directly; that worked but
-// hardcoded the catalog into every deploy artifact, so flipping a tier
-// price or adding a new tier required a coordinated FE+BE deploy.
-// Reading from this endpoint keeps the catalog server-driven and lets
-// the admin dialog reflect the truth without a frontend re-bundle.
-//
-// Auth: super_admin / admin only (mounted under /api/v1/admin which
-// already enforces RequirePlatformRole upstream).
-//
-// Response shape:
-//
-//   {
-//     "plans": [
-//       { "tier": "free",         "name": "Free",         "monthly_price_paise": 0 },
-//       { "tier": "starter",      "name": "Starter",      "monthly_price_paise": 9900 },
-//       { "tier": "professional", "name": "Professional", "monthly_price_paise": 29900 },
-//       { "tier": "business",     "name": "Business",     "monthly_price_paise": 299900 },
-//       { "tier": "enterprise",   "name": "Enterprise",   "monthly_price_paise": 599900 }
-//     ]
-//   }
-//
-// Prices are in paise (INR × 100) to match the existing
-// planPricePaise convention in subscription_upgrade_handler.go. The
-// admin dropdown doesn't currently render the price — but exposing it
-// here means a future "show price next to tier name" iteration doesn't
-// need a backend change.
-
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
+	"strings"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/service"
 )
 
-// adminPlan is the wire shape for one row in the plan catalog response.
-type adminPlan struct {
-	Tier              string `json:"tier"`
-	Name              string `json:"name"`
-	MonthlyPricePaise int64  `json:"monthly_price_paise"`
+type planCatalogService interface {
+	List(ctx context.Context, includeInactive bool) ([]service.PlanCatalogEntry, error)
+	Update(ctx context.Context, tier string, input service.PlanCatalogUpdate) (service.PlanCatalogEntry, error)
 }
 
-// adminPlansResponse wraps the catalog array. A top-level object (not a
-// bare array) leaves room to add fields later (catalog version, last
-// updated, currency code) without breaking clients.
+// adminPlan is the wire shape for one row in the plan catalog response.
+type adminPlan struct {
+	Tier              string   `json:"tier"`
+	Name              string   `json:"name"`
+	Description       string   `json:"description"`
+	Currency          string   `json:"currency"`
+	MonthlyPricePaise int64    `json:"monthly_price_paise"`
+	AnnualPricePaise  int64    `json:"annual_price_paise"`
+	QuotaBytes        int64    `json:"quota_bytes"`
+	GalleryLimit      int      `json:"gallery_limit"`
+	ClientLimit       int      `json:"client_limit"`
+	Features          []string `json:"features"`
+	Popular           bool     `json:"popular"`
+	Rank              int      `json:"rank"`
+	Paid              bool     `json:"paid"`
+	Active            bool     `json:"active"`
+	SelfServe         bool     `json:"self_serve"`
+	TrialDays         int      `json:"trial_days"`
+}
+
 type adminPlansResponse struct {
 	Plans []adminPlan `json:"plans"`
 }
 
-// adminPlanCatalog projects the shared backend service catalog into the
-// admin wire shape. The free tier is included because the admin grant flow
-// allows comping a user onto the free tier.
-func adminPlanCatalog() []adminPlan {
-	catalog := service.PlanCatalog()
-	out := make([]adminPlan, 0, len(catalog))
-	for _, p := range catalog {
-		out = append(out, adminPlan{
-			Tier:              p.Tier,
-			Name:              p.Name,
-			MonthlyPricePaise: p.MonthlyPricePaise,
-		})
+type updateAdminPlanRequest struct {
+	Name              string   `json:"name"`
+	Description       string   `json:"description"`
+	Currency          string   `json:"currency"`
+	MonthlyPricePaise int64    `json:"monthly_price_paise"`
+	AnnualPricePaise  int64    `json:"annual_price_paise"`
+	QuotaBytes        int64    `json:"quota_bytes"`
+	GalleryLimit      int      `json:"gallery_limit"`
+	ClientLimit       int      `json:"client_limit"`
+	Features          []string `json:"features"`
+	Popular           bool     `json:"popular"`
+	Rank              int      `json:"rank"`
+	Paid              bool     `json:"paid"`
+	Active            bool     `json:"active"`
+	SelfServe         bool     `json:"self_serve"`
+	TrialDays         int      `json:"trial_days"`
+}
+
+// AdminPlansHandler serves and updates the canonical plan catalog. When the
+// DB-backed service is nil (common in older unit tests), List falls back to the
+// static package catalog while mutation returns 503.
+type AdminPlansHandler struct {
+	catalog planCatalogService
+}
+
+func NewAdminPlansHandler(catalog planCatalogService) *AdminPlansHandler {
+	return &AdminPlansHandler{catalog: catalog}
+}
+
+func (h *AdminPlansHandler) List(w http.ResponseWriter, r *http.Request) {
+	plans, err := h.list(r, true)
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "list plans failed"})
+		return
+	}
+	respondJSON(w, http.StatusOK, adminPlansResponse{Plans: projectAdminPlans(plans)})
+}
+
+func (h *AdminPlansHandler) Update(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.JWTClaimsFromContext(r.Context())
+	if claims == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if role, _ := claims["platform_role"].(string); role != "super_admin" {
+		respondJSON(w, http.StatusForbidden, map[string]string{"error": "super_admin required"})
+		return
+	}
+	if h.catalog == nil {
+		respondJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "plan catalog unavailable"})
+		return
+	}
+	tier := strings.TrimSpace(chi.URLParam(r, "tier"))
+	var req updateAdminPlanRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		return
+	}
+	input, err := req.toServiceUpdate()
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	plan, err := h.catalog.Update(r.Context(), tier, input)
+	if errors.Is(err, service.ErrPlanNotFound) {
+		respondJSON(w, http.StatusNotFound, map[string]string{"error": "plan not found"})
+		return
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		respondJSON(w, http.StatusConflict, map[string]string{"error": "plan rank already in use"})
+		return
+	}
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "update plan failed"})
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]adminPlan{"plan": projectAdminPlan(plan)})
+}
+
+func (h *AdminPlansHandler) list(r *http.Request, includeInactive bool) ([]service.PlanCatalogEntry, error) {
+	if h.catalog == nil {
+		return service.PlanCatalog(), nil
+	}
+	return h.catalog.List(r.Context(), includeInactive)
+}
+
+func (req updateAdminPlanRequest) toServiceUpdate() (service.PlanCatalogUpdate, error) {
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return service.PlanCatalogUpdate{}, errors.New("name required")
+	}
+	currency := strings.ToUpper(strings.TrimSpace(req.Currency))
+	if currency == "" {
+		currency = "INR"
+	}
+	if req.MonthlyPricePaise < 0 || req.AnnualPricePaise < 0 {
+		return service.PlanCatalogUpdate{}, errors.New("prices must be non-negative")
+	}
+	if req.QuotaBytes < 0 {
+		return service.PlanCatalogUpdate{}, errors.New("quota_bytes must be non-negative")
+	}
+	if req.GalleryLimit < -1 || req.ClientLimit < -1 {
+		return service.PlanCatalogUpdate{}, errors.New("limits must be -1 or greater")
+	}
+	if req.Rank < 0 {
+		return service.PlanCatalogUpdate{}, errors.New("rank must be non-negative")
+	}
+	if req.TrialDays < 0 {
+		return service.PlanCatalogUpdate{}, errors.New("trial_days must be non-negative")
+	}
+	return service.PlanCatalogUpdate{
+		Name:              name,
+		Description:       req.Description,
+		Currency:          currency,
+		MonthlyPricePaise: req.MonthlyPricePaise,
+		AnnualPricePaise:  req.AnnualPricePaise,
+		QuotaBytes:        req.QuotaBytes,
+		GalleryLimit:      req.GalleryLimit,
+		ClientLimit:       req.ClientLimit,
+		Features:          req.Features,
+		Popular:           req.Popular,
+		Paid:              req.Paid,
+		Active:            req.Active,
+		SelfServe:         req.SelfServe,
+		TrialDays:         req.TrialDays,
+		Rank:              req.Rank,
+	}, nil
+}
+
+func projectAdminPlans(plans []service.PlanCatalogEntry) []adminPlan {
+	out := make([]adminPlan, 0, len(plans))
+	for _, p := range plans {
+		out = append(out, projectAdminPlan(p))
 	}
 	return out
 }
 
-// AdminPlansHandler serves the canonical plan catalog. Stateless — no
-// dependencies, since the catalog lives in the package variable above.
-// Wired into admin_routes.go alongside the other admin handlers.
-type AdminPlansHandler struct{}
-
-func NewAdminPlansHandler() *AdminPlansHandler {
-	return &AdminPlansHandler{}
+func projectAdminPlan(p service.PlanCatalogEntry) adminPlan {
+	return adminPlan{
+		Tier:              p.Tier,
+		Name:              p.Name,
+		Description:       p.Description,
+		Currency:          p.Currency,
+		MonthlyPricePaise: p.MonthlyPricePaise,
+		AnnualPricePaise:  p.AnnualPricePaise,
+		QuotaBytes:        p.QuotaBytes,
+		GalleryLimit:      p.GalleryLimit,
+		ClientLimit:       p.ClientLimit,
+		Features:          append([]string(nil), p.Features...),
+		Popular:           p.Popular,
+		Rank:              p.Rank,
+		Paid:              p.Paid,
+		Active:            p.Active,
+		SelfServe:         p.SelfServe,
+		TrialDays:         p.TrialDays,
+	}
 }
 
-// List handles GET /api/v1/admin/plans.
-func (h *AdminPlansHandler) List(w http.ResponseWriter, r *http.Request) {
-	respondJSON(w, http.StatusOK, adminPlansResponse{Plans: adminPlanCatalog()})
+type PublicPlansHandler struct {
+	catalog planCatalogService
+}
+
+func NewPublicPlansHandler(catalog planCatalogService) *PublicPlansHandler {
+	return &PublicPlansHandler{catalog: catalog}
+}
+
+func (h *PublicPlansHandler) List(w http.ResponseWriter, r *http.Request) {
+	var (
+		plans []service.PlanCatalogEntry
+		err   error
+	)
+	if h.catalog == nil {
+		plans = service.PlanCatalog()
+	} else {
+		plans, err = h.catalog.List(r.Context(), false)
+	}
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "list plans failed"})
+		return
+	}
+	respondJSON(w, http.StatusOK, adminPlansResponse{Plans: projectAdminPlans(plans)})
+}
+
+func RegisterPlanCatalogRoutes(r chi.Router, catalog planCatalogService) {
+	h := NewPublicPlansHandler(catalog)
+	r.Get("/api/v1/plans", h.List)
 }

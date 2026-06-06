@@ -26,6 +26,8 @@ func TestAdminRoutes_AllEndpointsRegistered(t *testing.T) {
 	r := setupFullAdminRouter()
 
 	expected := []string{
+		"GET /api/v1/admin/plans",
+		"PUT /api/v1/admin/plans/{tier}",
 		"GET /api/v1/admin/users",
 		"GET /api/v1/admin/users/{id}",
 		"POST /api/v1/admin/users/{id}/suspend",
@@ -73,6 +75,7 @@ func TestAdminRoutes_UnauthenticatedReturns401(t *testing.T) {
 
 	endpoints := []string{
 		"/api/v1/admin/users",
+		"/api/v1/admin/plans",
 		"/api/v1/admin/moderation",
 		"/api/v1/admin/workspaces",
 		"/api/v1/admin/revenue",
@@ -99,6 +102,7 @@ func TestAdminRoutes_NonSuperAdminReturns403(t *testing.T) {
 
 	endpoints := []string{
 		"/api/v1/admin/users",
+		"/api/v1/admin/plans",
 		"/api/v1/admin/moderation",
 		"/api/v1/admin/revenue",
 		"/api/v1/admin/revenue/records",

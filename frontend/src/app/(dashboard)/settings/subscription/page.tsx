@@ -10,8 +10,8 @@ import {
   HardDrive,
   Zap,
 } from "lucide-react";
+import { usePlanCatalog } from "@/hooks/use-plan-catalog";
 import { getStoredAccessToken } from "@/lib/auth";
-import { pricingPlans } from "@/lib/tokens";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -45,6 +45,7 @@ export default function SubscriptionPage() {
   const [data, setData] = useState<SubscriptionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { plans } = usePlanCatalog();
 
   useEffect(() => {
     let cancelled = false;
@@ -88,10 +89,14 @@ export default function SubscriptionPage() {
     };
   }, []);
 
-  const tierLabel = data ? (TIER_LABELS[data.plan_tier] ?? data.plan_tier) : "";
+  const tierLabel = data
+    ? (plans.find((p) => p.id === data.plan_tier)?.name ??
+      TIER_LABELS[data.plan_tier] ??
+      data.plan_tier)
+    : "";
   const isFreeTier = !data || data.plan_tier === "free";
   const planStorage = data
-    ? (pricingPlans.find((p) => p.id === data.plan_tier)?.storage ?? null)
+    ? (plans.find((p) => p.id === data.plan_tier)?.storage ?? null)
     : null;
 
   return (

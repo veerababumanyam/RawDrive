@@ -5,6 +5,7 @@ import { AuthRedirect } from "@/components/landing/AuthRedirect";
 import { FinalCta } from "@/components/landing/FinalCta";
 import { GallerySection } from "@/components/landing/GallerySection";
 import { Hero } from "@/components/landing/Hero";
+import { PlanStrip } from "@/components/landing/PlanStrip";
 import { StudioControlSection } from "@/components/landing/StudioControlSection";
 import { TrustRow } from "@/components/landing/TrustRow";
 import { WorkflowPipeline } from "@/components/landing/WorkflowPipeline";
@@ -47,6 +48,7 @@ export default function LandingPage() {
       <StudioControlSection />
       <AiMomentSection />
       <TrustRow />
+      <PlanStrip />
       <FinalCta />
     </div>
   );

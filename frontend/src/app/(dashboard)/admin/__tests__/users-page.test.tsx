@@ -9,8 +9,14 @@ import {
 
 vi.mock("@/lib/api/admin", () => ({
   listUsers: vi.fn(),
+  listAdminPlans: vi.fn(),
   suspendUser: vi.fn(),
   reactivateUser: vi.fn(),
+  deleteUser: vi.fn(),
+  changeUserRole: vi.fn(),
+  changeUserTier: vi.fn(),
+  exportUsers: vi.fn(),
+  createUser: vi.fn(),
   impersonateUser: vi.fn(),
 }));
 
@@ -18,10 +24,16 @@ vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: vi.fn(() => "test-token"),
 }));
 
-import { listUsers, suspendUser, reactivateUser } from "@/lib/api/admin";
+import {
+  listAdminPlans,
+  listUsers,
+  suspendUser,
+  reactivateUser,
+} from "@/lib/api/admin";
 import AdminUsersPage from "../users/page";
 
 const mockListUsers = vi.mocked(listUsers);
+const mockListAdminPlans = vi.mocked(listAdminPlans);
 const mockSuspendUser = vi.mocked(suspendUser);
 const mockReactivateUser = vi.mocked(reactivateUser);
 
@@ -56,6 +68,26 @@ const sampleUsers = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockListUsers.mockResolvedValue(sampleUsers);
+  mockListAdminPlans.mockResolvedValue([
+    {
+      tier: "free",
+      name: "Free",
+      description: "",
+      currency: "INR",
+      monthly_price_paise: 0,
+      annual_price_paise: 0,
+      quota_bytes: 1073741824,
+      gallery_limit: 3,
+      client_limit: 5,
+      features: [],
+      popular: false,
+      rank: 0,
+      paid: false,
+      active: true,
+      self_serve: true,
+      trial_days: 30,
+    },
+  ]);
 });
 
 describe("AdminUsersPage", () => {

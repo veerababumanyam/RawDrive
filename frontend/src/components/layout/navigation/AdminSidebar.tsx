@@ -3,6 +3,7 @@
 import {
   BarChart3,
   Coins,
+  CreditCard,
   FileText,
   Handshake,
   Home,
@@ -21,21 +22,23 @@ import type { NavGroup } from "./SidebarShell";
 /*           Revenue, Analytics, System Health, Audit Logs            */
 /* ------------------------------------------------------------------ */
 
-const groups: NavGroup[] = [
+const baseItems = [
+  { href: "/admin/dashboard", label: "Dashboard Overview", icon: Home },
+  { href: "/admin/users", label: "Users", icon: Users },
+  { href: "/admin/dealers", label: "Dealers", icon: Handshake },
+  { href: "/admin/moderation", label: "Moderation", icon: Shield },
+  { href: "/admin/workspaces", label: "Workspaces", icon: LayoutGrid },
   {
-    items: [
-      { href: "/admin/dashboard", label: "Dashboard Overview", icon: Home },
-      { href: "/admin/users", label: "Users", icon: Users },
-      { href: "/admin/dealers", label: "Dealers", icon: Handshake },
-      { href: "/admin/moderation", label: "Moderation", icon: Shield },
-      { href: "/admin/workspaces", label: "Workspaces", icon: LayoutGrid },
-      { href: "/admin/upload-credits", label: "Upload Credits", icon: Coins },
-      { href: "/admin/revenue", label: "Revenue", icon: LineChart },
-      { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
-      { href: "/admin/system", label: "System Health", icon: Server },
-      { href: "/admin/audit-logs", label: "Audit Logs", icon: FileText },
-    ],
+    href: "/admin/plans",
+    label: "Tier Plans",
+    icon: CreditCard,
+    superAdminOnly: true,
   },
+  { href: "/admin/upload-credits", label: "Upload Credits", icon: Coins },
+  { href: "/admin/revenue", label: "Revenue", icon: LineChart },
+  { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/admin/system", label: "System Health", icon: Server },
+  { href: "/admin/audit-logs", label: "Audit Logs", icon: FileText },
 ];
 
 interface AdminSidebarProps {
@@ -53,6 +56,14 @@ export function AdminSidebar({
   mobileOpen,
   onMobileClose,
 }: AdminSidebarProps) {
+  const groups: NavGroup[] = [
+    {
+      items: baseItems.filter(
+        (item) => !item.superAdminOnly || platformRole === "super_admin",
+      ),
+    },
+  ];
+
   return (
     <SidebarShell
       subtitle="Admin Console"

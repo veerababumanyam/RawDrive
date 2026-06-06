@@ -300,8 +300,8 @@ describe("DashboardLayout role-based sidebar", () => {
     ).toHaveAttribute("href", "https://rawdrive.in");
   });
 
-  it("renders AdminSidebar with 8 items for admin", async () => {
-    setRole("admin");
+  it("renders AdminSidebar with tier plans for super admin", async () => {
+    setRole("super_admin");
     mockUsePathname.mockReturnValue("/admin/users");
     renderDashboardLayout();
 
@@ -334,6 +334,10 @@ describe("DashboardLayout role-based sidebar", () => {
     expect(screen.getByRole("link", { name: /Workspaces/i })).toHaveAttribute(
       "href",
       "/admin/workspaces",
+    );
+    expect(screen.getByRole("link", { name: /Tier Plans/i })).toHaveAttribute(
+      "href",
+      "/admin/plans",
     );
   });
 

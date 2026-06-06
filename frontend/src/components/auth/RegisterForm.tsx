@@ -12,7 +12,7 @@ import {
   openPageInChrome,
 } from "@/lib/auth";
 import { useOAuthAvailability } from "@/hooks/useOAuthAvailability";
-import { pricingPlans } from "@/lib/tokens";
+import { usePlanCatalog } from "@/hooks/use-plan-catalog";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 const REGISTER_NETWORK_ERROR =
@@ -136,6 +136,7 @@ export function RegisterForm() {
   const [webviewNotice, setWebviewNotice] = useState(false);
   const { enabled: oauthEnabled, loading: oauthAvailabilityLoading } =
     useOAuthAvailability(API_BASE);
+  const { plans } = usePlanCatalog();
   const googleUnavailable = !oauthAvailabilityLoading && !oauthEnabled;
   const googleDescriptionId = webviewNotice
     ? "register-google-webview-recovery"
@@ -147,8 +148,11 @@ export function RegisterForm() {
   );
 
   const selectablePlans = useMemo(
-    () => pricingPlans.filter((p) => isSelfServePlan(p.id)),
-    [],
+    () =>
+      plans.filter(
+        (p) => isSelfServePlan(p.id) && p.active && p.selfServe,
+      ),
+    [plans],
   );
 
   async function handleRegister(event?: FormEvent<HTMLFormElement>) {
@@ -293,8 +297,12 @@ export function RegisterForm() {
           const currentPlan = selectablePlans.find((p) => p.id === plan);
           if (!currentPlan) return null;
           const isFree = currentPlan.monthlyPrice === 0;
-          const highlights = planHighlights[plan];
-          const tagline = planTagline[plan];
+          const highlights =
+            currentPlan.features.length > 0
+              ? currentPlan.features.slice(0, 3)
+              : planHighlights[plan];
+          const tagline =
+            currentPlan.description.trim() || planTagline[plan];
           return (
             <div className="relative overflow-hidden rounded-2xl border border-accent/25 bg-gradient-to-br from-accent-subtle/80 via-surface-elevated to-surface-container-low p-5 shadow-glass">
               {/* ambient glow */}
@@ -329,7 +337,7 @@ export function RegisterForm() {
                         Free
                       </span>
                       <span className="text-micro font-medium text-text-tertiary">
-                        · 30-day trial
+                        · {currentPlan.trialDays || 30}-day trial
                       </span>
                     </>
                   ) : (

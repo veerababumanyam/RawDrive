@@ -65,6 +65,7 @@ type SubscriptionUpgradeHandler struct {
 	phonepeWebhookPassword string
 	paymentSettings        paymentSettingsReader
 	storageAccounting      *service.StorageAccounting
+	planCatalog            *service.PlanCatalogService
 }
 
 // NewSubscriptionUpgradeHandler always returns a handler. When credentials are
@@ -140,6 +141,11 @@ func NewSubscriptionUpgradeHandlerFromSettings(ctx context.Context, db *pgxpool.
 
 func (h *SubscriptionUpgradeHandler) WithStorageAccounting(storageAccounting *service.StorageAccounting) *SubscriptionUpgradeHandler {
 	h.storageAccounting = storageAccounting
+	return h
+}
+
+func (h *SubscriptionUpgradeHandler) WithPlanCatalog(planCatalog *service.PlanCatalogService) *SubscriptionUpgradeHandler {
+	h.planCatalog = planCatalog
 	return h
 }
 
@@ -264,6 +270,52 @@ func isStrictUpgrade(fromTier, toTier string) bool {
 	return fromKnown && toKnown && toRank > fromRank
 }
 
+func (h *SubscriptionUpgradeHandler) validUpgradeTier(ctx context.Context, tier string) (bool, error) {
+	if h.planCatalog == nil {
+		return validUpgradeTier(tier), nil
+	}
+	plan, ok, err := h.planCatalog.Get(ctx, strings.TrimSpace(tier))
+	if err != nil {
+		return false, err
+	}
+	return ok && plan.Paid && plan.Active, nil
+}
+
+func (h *SubscriptionUpgradeHandler) planPricePaise(ctx context.Context, tier, billingInterval string) (int64, bool, error) {
+	if h.planCatalog == nil {
+		amount, ok := service.PlanPricePaise(tier, billingInterval)
+		return amount, ok, nil
+	}
+	return h.planCatalog.PricePaise(ctx, tier, billingInterval)
+}
+
+func (h *SubscriptionUpgradeHandler) isStrictUpgrade(ctx context.Context, fromTier, toTier string) (bool, error) {
+	if h.planCatalog == nil {
+		return isStrictUpgrade(fromTier, toTier), nil
+	}
+	fromRank, fromKnown, err := h.planCatalog.TierRank(ctx, strings.TrimSpace(fromTier))
+	if err != nil {
+		return false, err
+	}
+	toRank, toKnown, err := h.planCatalog.TierRank(ctx, strings.TrimSpace(toTier))
+	if err != nil {
+		return false, err
+	}
+	return fromKnown && toKnown && toRank > fromRank, nil
+}
+
+func (h *SubscriptionUpgradeHandler) planQuotaBytes(ctx context.Context, tier string) int64 {
+	if h.planCatalog == nil {
+		return service.PlanDefaultQuotaBytes(tier)
+	}
+	quota, err := h.planCatalog.QuotaBytes(ctx, tier)
+	if err != nil {
+		log.Printf("subscription upgrade: plan quota lookup failed for %q: %v", tier, err)
+		return service.PlanDefaultQuotaBytes(tier)
+	}
+	return quota
+}
+
 func (h *SubscriptionUpgradeHandler) configured() bool {
 	return h.currentPaymentConfig(context.Background()).razorpayConfigured()
 }
@@ -348,7 +400,13 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
 		return
 	}
-	if !validUpgradeTier(body.ToTier) {
+	validTier, err := h.validUpgradeTier(r.Context(), body.ToTier)
+	if err != nil {
+		log.Printf("subscription upgrade: plan catalog tier lookup failed: %v", err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "plan catalog unavailable"})
+		return
+	}
+	if !validTier {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid to_tier"})
 		return
 	}
@@ -357,7 +415,12 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 	if billingInterval != "annual" {
 		billingInterval = "monthly"
 	}
-	amountPaise, ok := service.PlanPricePaise(body.ToTier, billingInterval)
+	amountPaise, ok, err := h.planPricePaise(r.Context(), body.ToTier, billingInterval)
+	if err != nil {
+		log.Printf("subscription upgrade: plan price lookup failed: %v", err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "plan catalog unavailable"})
+		return
+	}
 	if !ok {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no price for tier"})
 		return
@@ -391,7 +454,13 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not read workspace"})
 		return
 	}
-	if !isStrictUpgrade(fromTier, body.ToTier) {
+	strictUpgrade, err := h.isStrictUpgrade(r.Context(), fromTier, body.ToTier)
+	if err != nil {
+		log.Printf("subscription upgrade: plan rank lookup failed: %v", err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "plan catalog unavailable"})
+		return
+	}
+	if !strictUpgrade {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "target tier must be higher than current tier"})
 		return
 	}
@@ -755,7 +824,7 @@ func (h *SubscriptionUpgradeHandler) applyPhonePePayment(ctx context.Context, me
 		`INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes)
 		 VALUES ($1, 0, 0, $2)
 		 ON CONFLICT (workspace_id) DO UPDATE SET quota_bytes = $2`,
-		wsID, service.PlanDefaultQuotaBytes(toTier),
+		wsID, h.planQuotaBytes(ctx, toTier),
 	); err != nil {
 		return fmt.Errorf("update storage quota: %w", err)
 	}
@@ -1043,7 +1112,7 @@ func (h *SubscriptionUpgradeHandler) applyPayment(ctx context.Context, rzpOrderI
 		`INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes)
 		 VALUES ($1, 0, 0, $2)
 		 ON CONFLICT (workspace_id) DO UPDATE SET quota_bytes = $2`,
-		wsID, service.PlanDefaultQuotaBytes(toTier),
+		wsID, h.planQuotaBytes(ctx, toTier),
 	); err != nil {
 		return fmt.Errorf("update storage quota: %w", err)
 	}

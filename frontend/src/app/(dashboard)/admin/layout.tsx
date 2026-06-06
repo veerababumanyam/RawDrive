@@ -1,14 +1,17 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { getStoredPlatformRole } from "@/lib/auth";
 
 const adminNav = [
   { href: "/admin/users", label: "Users" },
   { href: "/admin/dealers", label: "Dealers" },
   { href: "/admin/moderation", label: "Moderation" },
   { href: "/admin/workspaces", label: "Workspaces" },
+  { href: "/admin/plans", label: "Tier Plans", superAdminOnly: true },
   { href: "/admin/revenue", label: "Revenue" },
   { href: "/admin/analytics", label: "Analytics" },
   { href: "/admin/system", label: "System Health" },
@@ -17,6 +20,11 @@ const adminNav = [
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "";
+  const [platformRole] = useState(() => getStoredPlatformRole());
+
+  const visibleNav = adminNav.filter(
+    (item) => !item.superAdminOnly || platformRole === "super_admin",
+  );
 
   return (
     <div>
@@ -24,7 +32,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         className="mb-8 bg-surface-container-low/40 glass-blur-medium border border-border-subtle rounded-2xl p-1.5 flex gap-1 overflow-x-auto"
         aria-label="Admin navigation"
       >
-        {adminNav.map((item) => {
+        {visibleNav.map((item) => {
           const active =
             pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (

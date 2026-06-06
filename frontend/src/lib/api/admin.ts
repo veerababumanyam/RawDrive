@@ -649,7 +649,20 @@ export interface CreateUserInput {
 export interface AdminPlan {
   tier: string;
   name: string;
+  description: string;
+  currency: string;
   monthly_price_paise: number;
+  annual_price_paise: number;
+  quota_bytes: number;
+  gallery_limit: number;
+  client_limit: number;
+  features: string[];
+  popular: boolean;
+  rank: number;
+  paid: boolean;
+  active: boolean;
+  self_serve: boolean;
+  trial_days: number;
 }
 
 export interface ListAdminPlansResponse {
@@ -665,6 +678,36 @@ export async function listAdminPlans(token: string): Promise<AdminPlan[]> {
   }
   const body = (await res.json()) as ListAdminPlansResponse;
   return Array.isArray(body.plans) ? body.plans : [];
+}
+
+export type UpdateAdminPlanInput = Omit<AdminPlan, "tier">;
+
+export async function updateAdminPlan(
+  token: string,
+  tier: string,
+  input: UpdateAdminPlanInput,
+): Promise<AdminPlan> {
+  const res = await fetch(
+    `${API_BASE}/api/v1/admin/plans/${encodeURIComponent(tier)}`,
+    {
+      method: "PUT",
+      headers: headers(token),
+      body: JSON.stringify(input),
+    },
+  );
+  if (!res.ok) {
+    let msg = `Update admin plan failed: ${res.status}`;
+    try {
+      const b = await res.json();
+      if (b?.error) msg = String(b.error);
+    } catch {}
+    throw new Error(msg);
+  }
+  const body = (await res.json()) as { plan?: AdminPlan };
+  if (!body.plan) {
+    throw new Error("Update admin plan failed: missing plan");
+  }
+  return body.plan;
 }
 
 /**

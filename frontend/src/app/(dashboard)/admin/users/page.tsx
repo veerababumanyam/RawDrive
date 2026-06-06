@@ -10,6 +10,8 @@ import {
   changeUserRole,
   changeUserTier,
   exportUsers,
+  listAdminPlans,
+  type AdminPlan,
   type AdminUser,
 } from "@/lib/api/admin";
 import { requestPasswordReset } from "@/lib/api/auth";
@@ -114,6 +116,7 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [planOptions, setPlanOptions] = useState<AdminPlan[]>([]);
   // Issue #4: modal state for admin-initiated user creation.
   const [createOpen, setCreateOpen] = useState(false);
   const [pendingRoleChange, setPendingRoleChange] = useState<{
@@ -157,6 +160,13 @@ export default function AdminUsersPage() {
       await fetchUsers();
     }
     void initialFetch();
+  }, []);
+
+  useEffect(() => {
+    const token = getStoredAccessToken() || "";
+    listAdminPlans(token)
+      .then((plans) => setPlanOptions(plans))
+      .catch(() => setPlanOptions([]));
   }, []);
 
   const handleSuspend = async (id: string) => {
@@ -355,13 +365,10 @@ export default function AdminUsersPage() {
       label: "Tier",
       sortable: true,
       filterable: true,
-      filterOptions: [
-        "Free",
-        "Starter",
-        "Professional",
-        "Business",
-        "Enterprise",
-      ],
+      filterOptions:
+        planOptions.length > 0
+          ? planOptions.map((plan) => plan.name)
+          : ["Free", "Starter", "Professional", "Business", "Enterprise"],
       render: (value) => (
         <span className="text-sm font-medium text-primary">
           {value ? String(value) : "\u2014"}
@@ -442,14 +449,23 @@ export default function AdminUsersPage() {
                   )
                 }
                 className="appearance-none bg-surface-container-lowest border border-text-media/10 rounded-lg px-2 py-1 text-xs text-primary cursor-pointer [&_option]:bg-[var(--surface-container-lowest)] [&_option]:text-[var(--on-surface)]"
-                aria-label={`Change tier for ${row.full_name}`}
-                title="Change subscription tier"
-              >
-                <option value="free">Free</option>
-                <option value="starter">Starter</option>
-                <option value="professional">Professional</option>
-                <option value="business">Business</option>
-                <option value="enterprise">Enterprise</option>
+              aria-label={`Change tier for ${row.full_name}`}
+              title="Change subscription tier"
+            >
+                {(planOptions.length > 0
+                  ? planOptions
+                  : [
+                      { tier: "free", name: "Free" },
+                      { tier: "starter", name: "Starter" },
+                      { tier: "professional", name: "Professional" },
+                      { tier: "business", name: "Business" },
+                      { tier: "enterprise", name: "Enterprise" },
+                    ]
+                ).map((plan) => (
+                  <option key={plan.tier} value={plan.tier}>
+                    {plan.name}
+                  </option>
+                ))}
               </select>
             )}
             {/* QA #40: admin can send a password-reset link to the user's

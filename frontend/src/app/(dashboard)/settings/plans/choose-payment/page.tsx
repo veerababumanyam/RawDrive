@@ -34,8 +34,9 @@ import {
 } from "lucide-react";
 import { ChevronLeft } from "@/components/icons";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { usePlanCatalog } from "@/hooks/use-plan-catalog";
 import { getStoredAccessToken } from "@/lib/auth";
-import { pricingPlans, viewportThemeColors } from "@/lib/tokens";
+import { viewportThemeColors } from "@/lib/tokens";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -133,10 +134,14 @@ function ChoosePaymentContent() {
   const tier = searchParams.get("tier") ?? "";
   const interval =
     searchParams.get("interval") === "annual" ? "annual" : "monthly";
+  const { plans } = usePlanCatalog();
 
   const plan = useMemo(
-    () => pricingPlans.find((p) => p.id === tier && p.id !== "free"),
-    [tier],
+    () =>
+      plans.find(
+        (p) => p.id === tier && p.id !== "free" && p.active && p.paid,
+      ),
+    [plans, tier],
   );
 
   // Remember the user's last choice for the "Last used" hint badge.

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Check, ChevronDown, Tag } from "lucide-react";
-import { pricingPlans } from "@/lib/tokens";
+import { usePlanCatalog } from "@/hooks/use-plan-catalog";
 
 const faqItems = [
   {
@@ -50,6 +50,8 @@ export function PricingContent() {
   const [isAnnual, setIsAnnual] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [coupon, setCoupon] = useState("");
+  const { plans } = usePlanCatalog();
+  const visiblePlans = plans.filter((plan) => plan.active && plan.selfServe);
 
   return (
     <div className="bg-surface text-text-primary">
@@ -136,7 +138,7 @@ export function PricingContent() {
 
       <section className="px-4 pb-16 lg:px-8">
         <div className="mx-auto grid max-w-7xl gap-6 sm:grid-cols-2 lg:grid-cols-5">
-          {pricingPlans.map((plan) => {
+          {visiblePlans.map((plan) => {
             const price = isAnnual ? plan.annualPrice : plan.monthlyPrice;
             const period =
               plan.id === "free" ? "/30 days" : isAnnual ? "/year" : "/month";

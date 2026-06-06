@@ -1355,6 +1355,7 @@ func main() {
 	// Construct this before email so SMTP follows the documented
 	// platform_settings -> environment -> fail lookup order.
 	platformSettingsRepo := repository.NewPlatformSettingsRepo(dbPool)
+	planCatalogSvc := service.NewPlanCatalogService(dbPool)
 	{
 		kekHex := os.Getenv("PLATFORM_SETTINGS_KEK")
 		if kekHex != "" {
@@ -1776,6 +1777,7 @@ func main() {
 	// immutable reference data seeded at migration 010.
 	statesHandler := handler.NewStatesHandler(handler.NewPgStatesRepo(dbPool))
 	r.Get("/api/v1/states", statesHandler.List)
+	handler.RegisterPlanCatalogRoutes(r, planCatalogSvc)
 
 	// F-007 (M17 wave 2): MFA public route. /auth/verify-totp uses the
 	// mfa_token issued by Login as its own credential, so it must NOT
@@ -2260,7 +2262,7 @@ func main() {
 				context.Background(),
 				dbPool,
 				&platformSettingsSMTPReader{repo: platformSettingsRepo},
-			).WithStorageAccounting(storageAccountingSvc),
+			).WithStorageAccounting(storageAccountingSvc).WithPlanCatalog(planCatalogSvc),
 			// M21: FaceSvc is nil here — wired post-hoc after AI init below.
 			// JobRepo is stateless (same pattern as FaceRepo).
 			FaceSvc: nil,
@@ -2833,12 +2835,13 @@ func main() {
 			// repo layer (UPDATE-only) writes no compensating audit row, so
 			// SOC2/DPDPA reconstruction of who suspended/deleted a workspace
 			// is lost. Mirrors workspacePolicySvc.WithAuditLog above.
-			WorkspaceSvc: newAdminWorkspaceService(adminWorkspaceRepo, auditLogSvc),
-			RevenueSvc:   adminRevenueSvc,
-			AnalyticsSvc: service.NewAdminAnalyticsService(adminAnalyticsRepo),
-			ExportSvc:    service.NewAdminExportService(adminUserRepo, adminRevenueRepo),
-			HealthSvc:    service.NewAdminHealthService(adminHealthRepo).WithDataplane(dbPool, valkeyCacheStatSource(valkeyClient)),
-			AuditLogSvc:  auditLogSvc,
+			WorkspaceSvc:   newAdminWorkspaceService(adminWorkspaceRepo, auditLogSvc),
+			RevenueSvc:     adminRevenueSvc,
+			AnalyticsSvc:   service.NewAdminAnalyticsService(adminAnalyticsRepo),
+			ExportSvc:      service.NewAdminExportService(adminUserRepo, adminRevenueRepo),
+			HealthSvc:      service.NewAdminHealthService(adminHealthRepo).WithDataplane(dbPool, valkeyCacheStatSource(valkeyClient)),
+			AuditLogSvc:    auditLogSvc,
+			PlanCatalogSvc: planCatalogSvc,
 			// M16 Tier D admin surfaces
 			WorkspacePolicySvc:  workspacePolicySvc,
 			UploadModerationSvc: uploadModerationSvc,
