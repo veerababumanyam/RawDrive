@@ -51,9 +51,10 @@ integrated with the live **pgBackRest PITR** layer.
 | app2 | `187.127.142.44` | etcd, haproxy, **patroni** (standby) |
 | db   | `187.127.142.46` | etcd, **patroni** (leader / today's primary) |
 
-Apps reach Postgres via `pgbouncer` (on `.42`/`.44`) → **local HAProxy `127.0.0.1:5432`** (write,
-always the current leader) / `:5433` (read, any replica). Failover is then transparent — pgbouncer
-never needs editing again.
+Apps reach Postgres via `pgbouncer` (on `.42`/`.44`) → **host-local HAProxy
+`host.docker.internal:5432`** (write, always the current leader) / `:5433`
+(read, any replica). Failover is then transparent — pgbouncer never needs
+editing again.
 
 ## Integration fixes that MUST be in place first (done — PR #196)
 The coded Patroni stack predated pgBackRest. Without these the daily B2 backup breaks under Patroni:
@@ -90,10 +91,17 @@ the live PGDATA (never re-inits).
    -f docker-compose.postgres-replica.override.yml`), `--profile patroni up -d patroni`, wait
    `:8008/replica` = 200 (rebuilds from leader via pgbackrest → basebackup).
 4. **HAProxy** up on `.42`/`.44`, verify each routes `:5432`→writable leader (`pg_is_in_recovery=f`).
-5. **Repoint pgbouncer** on `.42`/`.44`: `databases.ini` host → `127.0.0.1:5432`, restart pgbouncer.
+5. **Repoint pgbouncer** on `.42`/`.44`: allow the app bridge to HAProxy's private
+   host-network listeners (derive the subnet with
+   `docker network inspect rawdrive-app_default -f '{{(index .IPAM.Config 0).Subnet}}'`,
+   then `ufw allow in proto tcp from "$bridge_subnet" to any port 5432,5433
+   comment docker-bridge-haproxy`), set `databases.ini` to
+   `host=host.docker.internal port=5432`, recreate pgbouncer so Compose installs
+   the host-gateway mapping, then verify pgbouncer returns `pg_is_in_recovery=f`.
 
 ## Phase D — Post-cutover
-- Update committed `deploy/pgbouncer/databases.ini` → `127.0.0.1` (else a redeploy reverts it).
+- Update committed `deploy/pgbouncer/databases.ini` → `host.docker.internal`
+  (else a redeploy reverts it).
 - `patronictl list` shows 1 Leader + 1 Sync Standby; etcd 3/3; app + edge `200`; WAL still
   archiving; a daily pgbackrest backup runs (container now `deploy-patroni-1`).
 - Optional: `patronictl switchover` failover drill.

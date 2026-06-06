@@ -12,6 +12,12 @@
 
 set -euo pipefail
 
+if docker ps --format '{{.Names}}' | grep -qx 'deploy-patroni-1'; then
+    echo "FATAL: Patroni is active on this host. Do not manually promote Postgres."
+    echo "Use patronictl switchover/failover; see docs/runbooks/patroni-failover.md."
+    exit 1
+fi
+
 echo "==> PRE-FLIGHT CHECKS"
 docker exec deploy-postgres-replica-1 pg_isready -U rawdrive -d rawdrive \
     || { echo "FATAL: replica is not ready"; exit 1; }
@@ -37,7 +43,7 @@ docker exec deploy-postgres-replica-1 \
 echo "==> Promotion complete. NEXT STEPS:"
 echo "  1. On .42: edit /opt/rawdrive/app/deploy/pgbouncer/databases.ini → host=187.127.142.44"
 echo "  2. On .42: docker compose -f docker-compose.prod-app.yml restart pgbouncer"
-echo "  3. On .44: edit /opt/rawdrive/app/deploy/pgbouncer/databases.ini → host=127.0.0.1"
+echo "  3. On .44: edit /opt/rawdrive/app/deploy/pgbouncer/databases.ini → host=187.127.142.44"
 echo "  4. On .44: docker compose -f docker-compose.prod-app.yml restart pgbouncer"
 echo "  5. Verify writes work: curl https://api.rawdrive.in/api/v1/health/ready"
 echo ""

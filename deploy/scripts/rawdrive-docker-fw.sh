@@ -43,8 +43,10 @@ PEERS="187.127.142.42 187.127.142.44 187.127.142.46"
 # not 0.0.0.0, but that is still the internet-facing interface), so they MUST be
 # dropped here for non-peers — an open Patroni REST can be used to force a
 # failover/restart. Peer-mesh traffic RETURNs above this rule, so intra-cluster
-# etcd consensus + Patroni health checks are unaffected. HAProxy (5432/5433/7000)
-# binds loopback-only and needs no entry.
+# etcd consensus + Patroni health checks are unaffected. Host-networked HAProxy
+# also binds Docker gateway addresses for bridge pgbouncer; that path is host
+# INPUT, not DOCKER-USER, so UFW must separately allow the app bridge CIDR to
+# 5432/5433 (see docs/runbooks/patroni-failover.md).
 DATA_PORTS="5432,6379,4222,6222,8222,9000,9001,1025,8025,2379,2380,8008"
 # App origin ports — only the peer nginx backup-upstream + docker-internal use them.
 APP_PORTS="8080,3000"

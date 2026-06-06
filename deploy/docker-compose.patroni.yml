@@ -173,13 +173,9 @@ services:
         '$$PATRONI_SCOPE $$PATRONI_NAME $$PATRONI_NODE_IP $$ETCD_NODE_42_IP $$ETCD_NODE_44_IP $$ETCD_NODE_46_IP $$POSTGRES_USER $$POSTGRES_PASSWORD $$POSTGRES_REPLICATION_PASSWORD'
         < /etc/patroni/patroni.yml.template > /etc/patroni/patroni.yml &&
         exec patroni /etc/patroni/patroni.yml
-    ports:
-      # Postgres (5432) + Patroni REST API (8008), scoped to this host's IP —
-      # never 0.0.0.0. HAProxy on the app nodes health-checks :8008 and routes to
-      # :5432 cross-host; patronictl talks to :8008. UFW restricts both to the
-      # cluster hosts; pg_hba is defense-in-depth on 5432.
-      - "${PATRONI_NODE_IP}:5432:5432"
-      - "${PATRONI_NODE_IP}:8008:8008"
+    # Host networking ignores Compose `ports:`. Patroni/Postgres bind the exact
+    # host listeners from patroni.yml (`${PATRONI_NODE_IP}:5432` and
+    # `0.0.0.0:8008`), and UFW restricts them to the cluster hosts.
     # F-116: Postgres is the heaviest, most failure-sensitive service. Cap matches
     # the standalone postgres-replica's 2 vCPU / 2G in prod-app.yml so tuning
     # (shared_buffers=2GB) stays comfortably under the limit and a heavy query
@@ -214,6 +210,21 @@ services:
     image: haproxy:3.0.6-alpine
     container_name: deploy-haproxy-1
     restart: unless-stopped
+    # HAProxy must run on the host network on .44. When it runs in a Docker
+    # bridge, health checks to the local Patroni member via the host's public IP
+    # hairpin through Docker/NAT and time out, leaving the local read backend
+    # down and making a future .44 promotion unroutable from .44's own
+    # pgbouncer. Host networking lets HAProxy reach the local Patroni listener
+    # exactly like the host can, while haproxy.cfg binds only loopback plus
+    # Docker gateway addresses so the proxy remains private to this host and the
+    # local pgbouncer bridge.
+    network_mode: host
+    # The haproxy:*-alpine image's default USER is `haproxy` (non-root), so the
+    # entrypoint cannot write the rendered cfg into root-owned
+    # /usr/local/etc/haproxy or create the runtime stats socket in /var/run.
+    # Run the container as root; HAProxy itself drops privileges via the
+    # `user haproxy` directive in haproxy.cfg after binding.
+    user: "0:0"
     profiles:
       - haproxy
     env_file:
@@ -221,26 +232,24 @@ services:
         required: false
     volumes:
       - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg.template:ro
-    # Render the cfg (only the ETCD_NODE_*_IP member IPs) then exec haproxy.
-    # Same envsubst-then-exec pattern as nginx/etcd above.
+    # Render the member IPs and Docker bridge gateway addresses with busybox sed,
+    # which is always present in the Alpine image. Do not install gettext/envsubst
+    # at container start: HAProxy must not depend on apk network reachability just
+    # to boot. HOST_GATEWAY_IP is the target for Docker's host-gateway alias
+    # (`host.docker.internal` from pgbouncer); APP_BRIDGE_GATEWAY_IP is kept as a
+    # same-host bridge fallback.
     entrypoint:
       - /bin/sh
       - -c
       - >
-        apk add --no-cache gettext >/dev/null 2>&1 || true;
-        envsubst
-        '$$ETCD_NODE_44_IP $$ETCD_NODE_46_IP'
-        < /usr/local/etc/haproxy/haproxy.cfg.template > /usr/local/etc/haproxy/haproxy.cfg &&
+        : "$${HOST_GATEWAY_IP:=172.17.0.1}";
+        : "$${APP_BRIDGE_GATEWAY_IP:=172.18.0.1}";
+        sed -e "s|\$${ETCD_NODE_44_IP}|$$ETCD_NODE_44_IP|g"
+        -e "s|\$${ETCD_NODE_46_IP}|$$ETCD_NODE_46_IP|g"
+        -e "s|\$${HOST_GATEWAY_IP}|$$HOST_GATEWAY_IP|g"
+        -e "s|\$${APP_BRIDGE_GATEWAY_IP}|$$APP_BRIDGE_GATEWAY_IP|g"
+        /usr/local/etc/haproxy/haproxy.cfg.template > /usr/local/etc/haproxy/haproxy.cfg &&
         exec haproxy -f /usr/local/etc/haproxy/haproxy.cfg -db
-    ports:
-      # LOOPBACK ONLY — HAProxy's sole client is the local pgbouncer on the same
-      # app node, so it must NOT be reachable off-host. This is intentionally
-      # stricter than the host-IP scoping used for cross-host services: pgbouncer
-      # talks to 127.0.0.1:5432 (writes) / :5433 (reads); :7000 is the local
-      # stats dashboard.
-      - "127.0.0.1:5432:5432"
-      - "127.0.0.1:5433:5433"
-      - "127.0.0.1:7000:7000"
     # F-116: HAProxy is a thin TCP proxy — tiny footprint, bounded so a connection
     # storm can't pressure the shared app host (matches the pgbouncer cap).
     deploy:

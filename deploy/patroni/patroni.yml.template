@@ -18,13 +18,13 @@
 # -----------------------------------------------------------------------------
 # Patroni does NOT do shell-style env substitution on its own config. The
 # patroni service in deploy/docker-compose.patroni.yml renders this template
-# with `envsubst` (only the ${VARS} named here) into /etc/patroni/patroni.yml at
+# with `envsubst` (only the named vars here) into /etc/patroni/patroni.yml at
 # container start, then execs `patroni /etc/patroni/patroni.yml`. All secrets
-# (${POSTGRES_PASSWORD}, ${POSTGRES_REPLICATION_PASSWORD}) come from
+# (POSTGRES_PASSWORD, POSTGRES_REPLICATION_PASSWORD) come from
 # /opt/rawdrive/app/.env — NEVER hardcoded here. Per-node identity
-# (${PATRONI_NAME}, ${PATRONI_NODE_IP}) also comes from that env.
+# (PATRONI_NAME, PATRONI_NODE_IP) also comes from that env.
 #
-# Required ${VARS} (documented for .env.example in the integration notes):
+# Required vars (documented for .env.example in the integration notes):
 #   PATRONI_NAME                 unique member name: "pg-46", "pg-44"
 #   PATRONI_NODE_IP              this node's public IP (.46 / .44)
 #   PATRONI_SCOPE                cluster scope (default "rawdrive")
@@ -255,28 +255,24 @@ bootstrap:
       # keys on the ORIGINAL client IP (HAProxy in tcp mode does not rewrite the
       # source unless proxy-protocol is enabled, which we do not use here), so the
       # app-node CIDRs remain correct.
-      pg_hba:
-        # Container-local maintenance (Patroni runs psql locally).
-        # pgBackRest (scheduled `backup`, stanza-create, check) connects over the
-        # container-local Unix socket as the `rawdrive` superuser, so it needs a
-        # passwordless local path — exactly as deploy/postgres/pg_hba.conf grants
-        # in the standalone model. Scoped to rawdrive ONLY and only over the
-        # socket (a process already inside the container), so it adds no real
-        # exposure; everyone else local still needs scram. WITHOUT this line the
-        # daily incremental pgBackRest backup fails auth under Patroni.
-        - local   all             rawdrive                                trust
-        - local   all             all                                     scram-sha-256
-        - host    all             all             127.0.0.1/32            scram-sha-256
-        - host    all             all             ::1/128                 scram-sha-256
-        # App node 1 (.42) and app node 2 (.44) — the backend's pgbouncer pool.
-        - host    rawdrive        rawdrive        ${ETCD_NODE_42_IP}/32   scram-sha-256
-        - host    rawdrive        rawdrive        ${ETCD_NODE_44_IP}/32   scram-sha-256
-        # Replication: BOTH DB-capable nodes (.46 and .44) must be able to stream
-        # from whichever is currently primary, in EITHER direction. This is the
-        # key difference from the manual model, where replication only flowed
-        # .46 → .44. Patroni needs bidirectional eligibility.
-        - host    replication     replicator      ${ETCD_NODE_46_IP}/32   scram-sha-256
-        - host    replication     replicator      ${ETCD_NODE_44_IP}/32   scram-sha-256
+      # F-077 model — mirrors the standalone deploy/postgres/pg_hba.conf +
+      # pg_ident.conf hardening (PRs #200/#202): NO `trust` anywhere. Patroni
+      # rewrites pg_hba into PGDATA on adoption, so it MUST carry the same peer +
+      # ident model or the cutover would regress F-077. Validated end-to-end
+      # (incl. the docker-exec -U rawdrive ops path, pg_rewind, switchover,
+      # auto-failover) by the isolated rehearsal 2026-06-06
+      # (deploy/patroni/rehearsal/; see docs/runbooks/patroni-cutover-execution.md).
+      # NOTE: pg_hba / pg_ident are defined at the TOP-LEVEL `postgresql:` section
+      # below (Patroni applies those on EVERY start), NOT here under bootstrap.dcs.
+      # bootstrap.dcs is applied ONLY on the FIRST cluster initialization; on an
+      # ADOPT of an existing data directory Patroni skips bootstrap, so a
+      # bootstrap-only pg_hba is never written into the adopted PGDATA -> Patroni's
+      # local-replication timeline fetch FATALs "no pg_hba entry for replication
+      # connection from [local]" and the node never promotes (read-only deadlock).
+      # Putting pg_hba/pg_ident at top-level postgresql fixes the adopt path AND
+      # still seeds a fresh bootstrap. (Validated by the isolated adopt rehearsal,
+      # 2026-06-06: a stale pre-F-077 pg_hba in PGDATA is overwritten with F-077 on
+      # adopt and the node promotes.)
 
     # --- Replica-creation methods, in PRIORITY ORDER --------------------------
     # When Patroni needs to (re)build a standby — e.g. the old primary rejoins
@@ -301,16 +297,20 @@ bootstrap:
 # postgresql — this MEMBER's local Postgres settings (not cluster-wide).
 # -----------------------------------------------------------------------------
 postgresql:
-  # '*' binds BOTH IPv4 (0.0.0.0) and IPv6 ([::]) so Patroni's own local health
-  # connection to `localhost` (which resolves to ::1 first) succeeds. With
-  # `listen: 0.0.0.0:5432` Postgres bound IPv4 only, so Patroni's localhost(::1)
-  # probe was refused → it judged itself "not the healthiest node" and REFUSED to
-  # promote the adopted primary, leaving the cluster leaderless (read-only).
-  listen: "*:5432"
+  # Bind ONLY this node's public IP (NOT 0.0.0.0/* and NOT 127.0.0.1). On the app
+  # nodes (.44) HAProxy must own 127.0.0.1:5432 for the local pgbouncer; if Postgres
+  # bound *:5432 it would grab every local 5432 and HAProxy would fail
+  # "address already in use". Patroni reaches its LOCAL Postgres over the Unix
+  # socket (use_unix_socket below), NOT localhost TCP, so it does not need a
+  # loopback listener — this avoids the old bug-#6 localhost(::1) health-probe issue
+  # (which only bit the 0.0.0.0 IPv4-only + TCP-probe combo) while leaving the
+  # loopback free for HAProxy. Cross-host replication + HAProxy routing reach this
+  # node on PATRONI_NODE_IP:5432.
+  listen: ${PATRONI_NODE_IP}:5432
   # Patroni connects to its LOCAL Postgres over the Unix socket (not TCP), which
   # sidesteps the localhost/IPv6 resolution entirely and is authorised by the
-  # `local all rawdrive trust` line in the pg_hba above (same as the standalone
-  # model + the pgBackRest path). Belt-and-suspenders with the '*' listen.
+  # `local all postgres peer` line in the pg_hba above (F-077: peer, not trust;
+  # postgres OS user → postgres superuser).
   use_unix_socket: true
   use_unix_socket_repl: true
   # Address other members use to reach THIS node's Postgres for replication.
@@ -343,21 +343,59 @@ postgresql:
   # replication = the replicator role standbys stream with.
   # rewind reuses the superuser (Patroni needs a superuser-capable role for
   # pg_rewind on PG11+; we keep it the same role to avoid a third secret).
+  # Patroni connects to its LOCAL Postgres as the `postgres` superuser over the
+  # Unix socket. Under F-077 peer auth the postgres OS user (the image USER, uid
+  # 999, owns PGDATA) maps directly to the postgres role via `local all postgres
+  # peer` — no password, no pg_ident map, no trust. This keeps Patroni's core
+  # lifecycle working independently of the pg_ident map (which only the ops
+  # `-U rawdrive` path needs). The postgres superuser role already exists on the
+  # adopted .46 cluster (init/03-create-postgres-superuser.sh). The app role
+  # `rawdrive` is unchanged and used by clients over TCP (scram). rewind (PG11+
+  # needs a superuser) also uses postgres. password is still supplied (peer
+  # ignores it locally) so any non-socket path remains authenticated.
   authentication:
     superuser:
-      username: ${POSTGRES_USER}
+      username: postgres
       password: ${POSTGRES_PASSWORD}
     replication:
       username: replicator
       password: ${POSTGRES_REPLICATION_PASSWORD}
     rewind:
-      username: ${POSTGRES_USER}
+      username: postgres
       password: ${POSTGRES_PASSWORD}
 
   # Patroni-managed local parameters that can't live in the DCS (set per data
   # dir). shared_preload_libraries must match the DCS value above.
   parameters:
     shared_preload_libraries: pg_stat_statements
+
+  # TOP-LEVEL pg_hba / pg_ident (F-077). Patroni writes these into the data dir on
+  # EVERY start (incl. ADOPT of an existing primary), unlike bootstrap.dcs which
+  # only applies on the FIRST cluster init. This is what makes the adopt cutover
+  # work: without it Patroni keeps the adopted dir's stale pre-F-077 pg_hba (no
+  # `local replication`), its own replicator timeline-fetch FATALs, and it never
+  # promotes (read-only deadlock). NO trust anywhere; mirrors deploy/postgres/
+  # pg_hba.conf + pg_ident.conf (#200/#202). (Validated by the isolated adopt
+  # rehearsal 2026-06-06, incl. the docker-exec -U rawdrive peer+map ops path.)
+  pg_hba:
+    - local   all             postgres                                peer
+    - local   all             rawdrive                                peer            map=rawdrive_ops
+    - local   all             all                                     scram-sha-256
+    - local   replication     all                                     scram-sha-256
+    - host    all             all             127.0.0.1/32            scram-sha-256
+    - host    all             all             ::1/128                 scram-sha-256
+    # Patroni's superuser checks and pg_rewind use the postgres role over TCP
+    # when talking to the peer member. Allow both DB-capable nodes so the rule
+    # remains valid after a controlled switchover in either direction.
+    - host    all             postgres        ${ETCD_NODE_46_IP}/32   scram-sha-256
+    - host    all             postgres        ${ETCD_NODE_44_IP}/32   scram-sha-256
+    - host    rawdrive        rawdrive        ${ETCD_NODE_42_IP}/32   scram-sha-256
+    - host    rawdrive        rawdrive        ${ETCD_NODE_44_IP}/32   scram-sha-256
+    - host    replication     replicator      ${ETCD_NODE_46_IP}/32   scram-sha-256
+    - host    replication     replicator      ${ETCD_NODE_44_IP}/32   scram-sha-256
+  pg_ident:
+    - rawdrive_ops  root      rawdrive
+    - rawdrive_ops  postgres  rawdrive
 
   # callbacks: optional hooks Patroni runs on role change. Left commented — wire
   # a notify script here if you want a Slack/PagerDuty ping on promotion. Patroni

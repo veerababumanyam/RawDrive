@@ -45,6 +45,7 @@ PG_IMAGE=rawdrive-postgres:local
 VERIFY_CONTAINER="pgbackrest-verify-$$"
 VERIFY_PORT=55432            # deliberately NOT 5432 — no clash with the live primary
 RESTORE_DIR="$(mktemp -d /tmp/pgbackrest-verify.XXXXXX)"
+ENV_FILE="$(mktemp /tmp/pgbackrest-verify-env.XXXXXX)"
 
 # Logs to stdout only (cron captures). No local backup/log dir — backup
 # artifacts are strictly in B2; the restore drill is a transient /tmp operation.
@@ -59,9 +60,14 @@ fail() {
 
 cleanup() {
     local rc=$?
+    if [ "$rc" -ne 0 ]; then
+        log "failure diagnostics: tailing disposable postgres logs"
+        docker logs --tail 200 "$VERIFY_CONTAINER" 2>&1 || true
+    fi
     log "cleanup: removing verify container + temp restore dir"
     docker rm -f "$VERIFY_CONTAINER" >/dev/null 2>&1 || true
     rm -rf "$RESTORE_DIR" || true
+    rm -f "$ENV_FILE" || true
     if [ "$rc" -eq 0 ]; then
         log "restore-verify PASSED"
     else
@@ -74,40 +80,49 @@ trap cleanup EXIT
 # The repo cipher passphrase + B2 creds must be available to the ephemeral
 # pgBackRest invocation too. We read them from the LIVE container's environment
 # so this script never has to see or store the secrets itself.
+PG_CONTAINER="${PG_CONTAINER:-$(docker ps --format "{{.Names}}" | grep -xE "deploy-(patroni|postgres)-1" | head -1)}"
+PG_CONTAINER="${PG_CONTAINER:-deploy-postgres-1}"
+
 read_secret() {
-    docker exec deploy-postgres-1 printenv "$1" 2>/dev/null || true
+    docker exec "$PG_CONTAINER" printenv "$1" 2>/dev/null || true
 }
 
-log "restore-verify starting (stanza=$STANZA, image=$PG_IMAGE, port=$VERIFY_PORT)"
+log "restore-verify starting (stanza=$STANZA, image=$PG_IMAGE, live_container=$PG_CONTAINER, port=$VERIFY_PORT)"
 
 S3_KEY="$(read_secret PGBACKREST_REPO1_S3_KEY)"
 S3_SECRET="$(read_secret PGBACKREST_REPO1_S3_KEY_SECRET)"
 CIPHER_PASS="$(read_secret PGBACKREST_REPO1_CIPHER_PASS)"
 [ -n "$S3_KEY" ] && [ -n "$S3_SECRET" ] && [ -n "$CIPHER_PASS" ] \
-    || fail "could not read PGBACKREST_* secrets from deploy-postgres-1 — is the live stack up?"
+    || fail "could not read PGBACKREST_* secrets from $PG_CONTAINER — is the live stack up?"
+chmod 0600 "$ENV_FILE"
+{
+    printf 'PGBACKREST_REPO1_S3_KEY=%s\n' "$S3_KEY"
+    printf 'PGBACKREST_REPO1_S3_KEY_SECRET=%s\n' "$S3_SECRET"
+    printf 'PGBACKREST_REPO1_CIPHER_PASS=%s\n' "$CIPHER_PASS"
+} > "$ENV_FILE"
 
 # --- 1. Restore the latest backup into the throwaway dir ----------------------
 # We reuse the committed pgbackrest.conf (same repo/stanza), but point pg1-path
-# at the temp dir via --pg1-path so we never write into the live $PGDATA. The
-# ephemeral container mounts the temp dir and the config read-only.
+# at the same path the disposable Postgres container will use as PGDATA. That
+# keeps pgBackRest's generated restore_command valid during crash recovery while
+# still writing only into the host temp dir mounted inside this throwaway
+# container.
 log "restoring latest backup into $RESTORE_DIR (this downloads + decrypts from B2)…"
 docker run --rm \
     --name "${VERIFY_CONTAINER}-restore" \
-    -v "$RESTORE_DIR:/restore" \
+    -v "$RESTORE_DIR:/var/lib/postgresql/data" \
     -v "$(cd "$(dirname "$0")/../pgbackrest" && pwd)/pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro" \
-    -e PGBACKREST_REPO1_S3_KEY="$S3_KEY" \
-    -e PGBACKREST_REPO1_S3_KEY_SECRET="$S3_SECRET" \
-    -e PGBACKREST_REPO1_CIPHER_PASS="$CIPHER_PASS" \
+    --env-file "$ENV_FILE" \
     "$PG_IMAGE" \
-    pgbackrest --stanza="$STANZA" --pg1-path=/restore --delta restore \
+    pgbackrest --stanza="$STANZA" --pg1-path=/var/lib/postgresql/data --delta restore \
     || fail "pgbackrest restore failed — backup is NOT restorable"
 
 # pgBackRest writes recovery settings (restore_command + recovery_target) into
 # the restored cluster. With no explicit target it recovers to the END of the
 # backup's WAL, then we want it to come up read/write, so disable continued
 # archive recovery for this throwaway instance.
-docker run --rm -v "$RESTORE_DIR:/restore" "$PG_IMAGE" \
-    sh -c 'echo "recovery_target_action = '\''promote'\''" >> /restore/postgresql.auto.conf'
+docker run --rm -v "$RESTORE_DIR:/var/lib/postgresql/data" "$PG_IMAGE" \
+    sh -c 'echo "recovery_target_action = '\''promote'\''" >> /var/lib/postgresql/data/postgresql.auto.conf'
 
 # --- 2. Boot the ephemeral cluster --------------------------------------------
 # Start postgres directly on the restored datadir (it is already initialised, so
@@ -117,6 +132,8 @@ log "starting ephemeral postgres on the restored datadir…"
 docker run -d \
     --name "$VERIFY_CONTAINER" \
     -v "$RESTORE_DIR:/var/lib/postgresql/data" \
+    -v "$(cd "$(dirname "$0")/../pgbackrest" && pwd)/pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro" \
+    --env-file "$ENV_FILE" \
     -p "127.0.0.1:${VERIFY_PORT}:5432" \
     "$PG_IMAGE" \
     postgres >/dev/null \

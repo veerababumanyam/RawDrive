@@ -246,21 +246,31 @@ done
 #    After this, failover NEVER requires touching pgbouncer again.
 # =============================================================================
 log "STEP 5 — repoint pgbouncer at the local HAProxy on both app nodes"
-warn "This rewrites deploy/pgbouncer/databases.ini host → 127.0.0.1:5432 (local HAProxy)"
-warn "on .42 AND .44, then reloads pgbouncer. After this the manual databases.ini"
-warn "flip is GONE — HAProxy absorbs every future leader change automatically."
+warn "This rewrites deploy/pgbouncer/databases.ini host → host.docker.internal:5432"
+warn "on .42 AND .44, adds the app-bridge UFW allow to HAProxy's private"
+warn "host-network listeners, then recreates pgbouncer so the host-gateway alias"
+warn "is installed. After this the manual databases.ini flip is GONE — HAProxy"
+warn "absorbs every future leader change automatically."
 confirm "Repoint pgbouncer to HAProxy on .42 and .44 now"
 
 for ip in "$NODE_42" "$NODE_44"; do
-    log "5a. Backup + rewrite databases.ini on $ip"
+    log "5a. Allow the local app bridge to HAProxy on $ip"
+    ssh_node "$ip" "bridge_subnet=\$(docker network inspect rawdrive-app_default -f '{{(index .IPAM.Config 0).Subnet}}' 2>/dev/null || true); bridge_subnet=\${bridge_subnet:-172.18.0.0/16}; ufw allow in proto tcp from \$bridge_subnet to any port 5432,5433 comment docker-bridge-haproxy" \
+        || die "failed to add docker-bridge-haproxy UFW allow on $ip"
+
+    log "5b. Backup + rewrite databases.ini on $ip"
     ssh_node "$ip" "cp $COMPOSE_DIR/pgbouncer/databases.ini $COMPOSE_DIR/pgbouncer/databases.ini.pre-patroni.bak"
     # Replace the host=...:port=... target with the local HAProxy write port.
     # We rewrite the whole rawdrive line to be unambiguous regardless of the old IP.
-    ssh_node "$ip" "sed -i -E 's|^rawdrive *=.*|rawdrive = host=127.0.0.1 port=5432 dbname=${POSTGRES_DB:-rawdrive} auth_user=${POSTGRES_USER:-rawdrive}|' $COMPOSE_DIR/pgbouncer/databases.ini"
-    ssh_node "$ip" "grep -q 'host=127.0.0.1 port=5432' $COMPOSE_DIR/pgbouncer/databases.ini" \
+    ssh_node "$ip" "sed -i -E 's|^rawdrive *=.*|rawdrive = host=host.docker.internal port=5432 dbname=${POSTGRES_DB:-rawdrive} auth_user=${POSTGRES_USER:-rawdrive}|' $COMPOSE_DIR/pgbouncer/databases.ini"
+    ssh_node "$ip" "grep -q 'host=host.docker.internal port=5432' $COMPOSE_DIR/pgbouncer/databases.ini" \
         || die "databases.ini rewrite failed on $ip"
-    log "5b. Reload pgbouncer on $ip (restart picks up the new mounted file)"
-    ssh_node "$ip" "cd $COMPOSE_DIR && docker compose -f $APP_COMPOSE restart pgbouncer" || die "pgbouncer restart failed on $ip"
+
+    log "5c. Recreate pgbouncer on $ip (picks up databases.ini + host-gateway extra_hosts)"
+    ssh_node "$ip" "cd $COMPOSE_DIR && docker compose -f $APP_COMPOSE up -d --force-recreate pgbouncer" \
+        || die "pgbouncer recreate failed on $ip"
+    res="$(ssh_node "$ip" "docker run --rm --network host -e PGPASSWORD=\$(grep '^POSTGRES_PASSWORD=' /opt/rawdrive/app/.env | cut -d= -f2-) pgvector/pgvector:pg17 psql -h 127.0.0.1 -p 6432 -U ${POSTGRES_USER:-rawdrive} -d ${POSTGRES_DB:-rawdrive} -tAc 'SELECT pg_is_in_recovery();'" 2>/dev/null || echo ERR)"
+    [ "$res" = "f" ] || die "pgbouncer on $ip did NOT route to a writable primary through HAProxy (got '$res')."
     ok "pgbouncer on $ip now routes via local HAProxy"
 done
 

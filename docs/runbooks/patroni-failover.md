@@ -186,9 +186,11 @@ Ordered steps the script performs (each gated):
 5. **Start HAProxy** on `.42`/`.44`; verify `:5432` routes to a **writable**
    leader on each app node (refuses to continue otherwise).
 6. **Repoint pgbouncer at the local HAProxy** *(the one-time `databases.ini`
-   change)* — backs up `databases.ini`, rewrites `host=127.0.0.1 port=5432`,
-   restarts pgbouncer on both app nodes. **After this, failover never touches
-   pgbouncer again.**
+   change)* — first allow the app bridge to HAProxy's private host-network
+   listeners, then back up `databases.ini`, rewrite
+   `host=host.docker.internal port=5432`, and recreate pgbouncer on both app
+   nodes so Compose installs the `host.docker.internal:host-gateway` mapping.
+   **After this, failover never touches pgbouncer again.**
 7. **Validate** — `patronictl list` (one Leader + one Replica) and app health.
 
 ### Post-cutover verification
@@ -198,6 +200,24 @@ bash deploy/scripts/patroni-status.sh
 # Expect: one Leader, one Replica (Sync Standby), etcd 3/3 healthy,
 #         HAProxy pg_primary_backend has exactly ONE server UP.
 curl -fsS https://api.rawdrive.in/health/deep
+```
+
+PgBouncer is a bridge container, while HAProxy is host-networked. On each app
+node, UFW INPUT must allow the app Docker bridge CIDR to the private HAProxy
+listeners:
+
+```bash
+bridge_subnet="$(docker network inspect rawdrive-app_default -f '{{(index .IPAM.Config 0).Subnet}}')"
+ufw allow in proto tcp from "$bridge_subnet" to any port 5432,5433 comment docker-bridge-haproxy
+```
+
+Then prove the full local route:
+
+```bash
+docker exec deploy-pgbouncer-1 sh -c 'getent hosts host.docker.internal && nc -vz -w 3 host.docker.internal 5432'
+docker run --rm --network host -e PGPASSWORD="$POSTGRES_PASSWORD" pgvector/pgvector:pg17 \
+  psql -h 127.0.0.1 -p 6432 -U rawdrive -d rawdrive -tAc 'SELECT pg_is_in_recovery();'
+# expect: f
 ```
 
 ### Rollback **during the window** (if the cutover misbehaves)
@@ -244,9 +264,9 @@ No human action required:
 5. **HAProxy** on the app nodes marks `.46` DOWN, `.44` UP (`fall 3`/`rise 2`,
    plus `on-marked-down shutdown-sessions` kills stale connections), and routes
    `:5432` → `.44`.
-6. **pgbouncer is unaffected** — it still points at `127.0.0.1:5432` (local
-   HAProxy). The pool transparently reconnects to the new leader. **No
-   `databases.ini` edit, no pgbouncer restart, no human.**
+6. **pgbouncer is unaffected** — it still points at `host.docker.internal:5432`
+   (the host-local HAProxy). The pool transparently reconnects to the new
+   leader. **No `databases.ini` edit, no pgbouncer restart, no human.**
 
 Typical end-to-end: **~30–60 s** (TTL + a couple of HAProxy check intervals).
 
