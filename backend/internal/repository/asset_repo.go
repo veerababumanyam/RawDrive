@@ -546,6 +546,49 @@ func (r *AssetRepo) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// HardDelete permanently removes an asset row and every row that depends on it,
+// in a single transaction. It is the synchronous replacement for the old
+// soft-delete + 30-day AssetPurgeWorker: galleries are end-to-end encrypted, so
+// a deleted photo's ciphertext is unrecoverable and there is no reason to retain
+// the row (or its storage objects) for a recovery window.
+//
+// Most dependents are declared ON DELETE CASCADE and clean themselves up:
+// asset_derivatives, gallery_assets, proofing_selections, face cluster members,
+// duplicate group members, album_assets, gallery_favorites, gallery_asset_analytics,
+// burst_photos, etc. Two references are ON DELETE RESTRICT (no cascade) and would
+// otherwise make the DELETE fail, so they are cleared first — both columns are
+// nullable: gallery_products.asset_id (a sale product that featured this photo)
+// and burst_groups.best_pick_id (an AI-cull best pick). Columns declared
+// ON DELETE SET NULL (galleries.cover_asset_id / music_asset_id,
+// albums.cover_asset_id, workspaces.logo_asset_id, gallery_views.asset_id) are
+// nulled automatically by the DELETE.
+func (r *AssetRepo) HardDelete(ctx context.Context, id uuid.UUID) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("asset repo hard delete: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck — Commit() shadows; Rollback on error is best-effort
+
+	// Clear the two ON DELETE RESTRICT references before deleting the asset row.
+	if _, err := tx.Exec(ctx,
+		`UPDATE gallery_products SET asset_id = NULL WHERE asset_id = $1`, id); err != nil {
+		return fmt.Errorf("asset repo hard delete: clear gallery_product refs: %w", err)
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE burst_groups SET best_pick_id = NULL WHERE best_pick_id = $1`, id); err != nil {
+		return fmt.Errorf("asset repo hard delete: clear burst best-pick refs: %w", err)
+	}
+
+	tag, err := tx.Exec(ctx, `DELETE FROM assets WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("asset repo hard delete: delete asset: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("asset not found")
+	}
+	return tx.Commit(ctx)
+}
+
 // UpdateStatus changes the asset's status.
 func (r *AssetRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error {
 	_, err := r.pool.Exec(ctx,

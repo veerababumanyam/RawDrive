@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -100,7 +99,14 @@ func (s *AssetService) GetStorageReader(ctx context.Context, key string) (io.Rea
 	return s.storage.Get(ctx, key)
 }
 
-// SoftDelete marks an asset as deleted and removes from storage.
+// SoftDelete permanently deletes an asset. The name is retained for call-site
+// stability, but the behaviour is now a hard delete: every storage object
+// (original + WebP derivatives + thumbnails) is removed from object storage
+// synchronously, then the asset row and its dependents are hard-deleted. There
+// is no soft-delete/retention window — galleries are E2EE, so a deleted photo's
+// ciphertext is unrecoverable and retaining it only wastes B2 storage. If a
+// storage object cannot be deleted the row is left intact and the error is
+// returned, so the caller can retry rather than leaking an orphan.
 func (s *AssetService) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	asset, err := s.assetRepo.GetByID(ctx, id)
 	if err != nil {
@@ -109,19 +115,11 @@ func (s *AssetService) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	if asset == nil {
 		return ErrAssetNotFound
 	}
-
-	if err := s.assetRepo.SoftDelete(ctx, id); err != nil {
-		return err
-	}
-	if err := s.recordDelete(ctx, asset); err != nil {
-		return err
-	}
-
-	return nil
+	return s.purge(ctx, asset)
 }
 
-// SoftDeleteForWorkspace marks an asset as deleted only when it belongs to the
-// request workspace.
+// SoftDeleteForWorkspace permanently deletes an asset only when it belongs to the
+// request workspace. See SoftDelete for the hard-delete semantics.
 func (s *AssetService) SoftDeleteForWorkspace(ctx context.Context, id, workspaceID uuid.UUID) error {
 	asset, err := s.assetRepo.GetByIDAndWorkspace(ctx, id, workspaceID)
 	if err != nil {
@@ -130,14 +128,7 @@ func (s *AssetService) SoftDeleteForWorkspace(ctx context.Context, id, workspace
 	if asset == nil {
 		return ErrAssetNotFound
 	}
-
-	if err := s.assetRepo.SoftDelete(ctx, id); err != nil {
-		return err
-	}
-	if err := s.recordDelete(ctx, asset); err != nil {
-		return err
-	}
-	return nil
+	return s.purge(ctx, asset)
 }
 
 // SoftDeleteManyForWorkspace deletes every active workspace-owned asset it can
@@ -166,24 +157,43 @@ func (s *AssetService) SoftDeleteManyForWorkspace(ctx context.Context, ids []uui
 	return affected, nil
 }
 
-func (s *AssetService) recordDelete(ctx context.Context, asset *repository.Asset) error {
-	if s.storageSvc == nil || asset == nil {
-		if asset != nil {
-			s.deleteStorageObjectsAsync(s.assetStorageKeys(ctx, asset))
-		}
-		return nil
+// purge permanently removes an asset: it deletes every storage object
+// synchronously, then hard-deletes the row (FK cascade cleans dependents), then
+// records the reclaimed bytes against the workspace quota. Storage objects are
+// deleted BEFORE the rows so the derivative keys are still resolvable; if any
+// object delete fails the row is left intact and the error returned so the caller
+// can retry — nothing is orphaned in object storage.
+func (s *AssetService) purge(ctx context.Context, asset *repository.Asset) error {
+	if asset == nil {
+		return ErrAssetNotFound
 	}
+
+	// Capture the derivative byte total before the rows are deleted (accounting).
 	derivativeBytes := int64(0)
-	if s.derivativeRepo != nil {
+	if s.storageSvc != nil && s.derivativeRepo != nil {
 		total, err := s.derivativeRepo.TotalSizeByAsset(ctx, asset.ID)
 		if err != nil {
 			return fmt.Errorf("asset delete: derivative size lookup: %w", err)
 		}
 		derivativeBytes = total
 	}
-	s.deleteStorageObjectsAsync(s.assetStorageKeys(ctx, asset))
-	if err := s.storageSvc.RecordDelete(ctx, asset.WorkspaceID, asset.SizeBytes, derivativeBytes); err != nil {
-		return fmt.Errorf("asset delete: storage accounting: %w", err)
+
+	// Delete every storage object (original + derivatives + thumbnails). Keys are
+	// resolved while the derivative rows still exist.
+	if err := s.deleteStorageObjects(ctx, s.assetStorageKeys(ctx, asset)); err != nil {
+		return err
+	}
+
+	// Hard-delete the asset row and its dependents.
+	if err := s.assetRepo.HardDelete(ctx, asset.ID); err != nil {
+		return fmt.Errorf("asset delete: hard delete: %w", err)
+	}
+
+	// Record the reclaimed storage against the workspace quota.
+	if s.storageSvc != nil {
+		if err := s.storageSvc.RecordDelete(ctx, asset.WorkspaceID, asset.SizeBytes, derivativeBytes); err != nil {
+			return fmt.Errorf("asset delete: storage accounting: %w", err)
+		}
 	}
 	return nil
 }
@@ -246,17 +256,17 @@ func normalizeStorageKey(value string) string {
 	return key
 }
 
-func (s *AssetService) deleteStorageObjectsAsync(keys []string) {
+// deleteStorageObjects removes every key from object storage synchronously,
+// returning the first failure so the caller can abort the delete (leaving the row
+// intact for a retry) instead of leaking orphaned objects in B2.
+func (s *AssetService) deleteStorageObjects(ctx context.Context, keys []string) error {
 	if s.storage == nil || len(keys) == 0 {
-		return
+		return nil
 	}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-		for _, key := range keys {
-			if err := s.storage.Delete(ctx, key); err != nil {
-				log.Printf("asset delete: storage delete failed for %q: %v", key, err)
-			}
+	for _, key := range keys {
+		if err := s.storage.Delete(ctx, key); err != nil {
+			return fmt.Errorf("asset delete: storage delete failed for %q: %w", key, err)
 		}
-	}()
+	}
+	return nil
 }

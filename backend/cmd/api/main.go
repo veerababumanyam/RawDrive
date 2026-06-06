@@ -3364,8 +3364,10 @@ func main() {
 		thumbWorker = thumbWorker.WithFaceEnqueuer(faceEnqueueAdapter)
 	}
 	workerRegistry.Register("thumbnail", thumbWorker)
-	purgeWorker := worker.NewAssetPurgeWorker(dbPool, storageProvider)
-	workerRegistry.Register("asset-purge", purgeWorker)
+	// Asset deletion is synchronous and hard (see AssetService.SoftDelete →
+	// HardDelete): storage objects + rows are removed at delete time, so there is
+	// no deferred AssetPurgeWorker. Galleries are E2EE, so retaining a deleted
+	// photo's ciphertext serves no recovery purpose and only wastes B2 storage.
 	expiryWorker := worker.NewGalleryExpiryWorker(dbPool)
 	workerRegistry.Register("gallery-expiry", expiryWorker)
 	billingLifecycleWorker := worker.NewBillingLifecycleWorker(dbPool, notificationEmailSender, publicBaseURL)
@@ -3409,7 +3411,7 @@ func main() {
 	workerCtx, workerCancel := context.WithCancel(context.Background())
 	defer workerCancel()
 	workerRegistry.StartAll(workerCtx)
-	log.Println("Workers: all started (thumbnail, asset-purge, gallery-expiry, face-detection, ai-tagging, duplicate-scan, message-cleanup, moderation)")
+	log.Println("Workers: all started (thumbnail, gallery-expiry, face-detection, ai-tagging, duplicate-scan, message-cleanup, moderation)")
 
 	// Scheduler: start after workers so jobs run under the same cancellable context.
 	if m6Scheduler != nil {

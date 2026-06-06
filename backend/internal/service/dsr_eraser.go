@@ -26,9 +26,9 @@ package service
 //   * Erasure is a single logical operation but not a single transaction.
 //     R2 deletes are external side effects and cannot roll back, so we
 //     use the "delete objects first, delete rows second" order: a crash
-//     between the two steps leaves orphaned rows (which a separate
-//     asset-purge worker will reconcile) rather than orphaned objects
-//     (which leak storage indefinitely).
+//     between the two steps leaves a rare orphaned row whose objects are
+//     already gone (harmless, manually reconcilable) rather than orphaned
+//     objects that leak storage indefinitely.
 //
 //   * The eraser never hard-deletes workspace rows. A workspace might
 //     contain assets that belong to other subjects; tearing it down here
@@ -93,9 +93,9 @@ func (e *DSREraser) Erase(ctx context.Context, email string, userID *uuid.UUID) 
 
 	// Step 1 — if we have a userID, collect the storage keys for every
 	// asset the user uploaded and delete them from R2 BEFORE we touch
-	// the DB. The worst crash case this leaves is rows without objects
-	// (which a separate asset-purge worker reconciles) rather than
-	// objects without rows (which leak storage indefinitely).
+	// the DB. The worst crash case this leaves is a row without its
+	// objects (harmless, manually reconcilable) rather than objects
+	// without a row (which leak storage indefinitely).
 	if userID != nil {
 		keys, err := e.collectAssetKeysForUser(ctx, *userID)
 		if err != nil {
