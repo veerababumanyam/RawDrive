@@ -66,24 +66,26 @@ services:
     restart: unless-stopped
     profiles:
       - etcd
-    env_file:
-      - path: /opt/rawdrive/app/.env
-        required: false
+    # etcd is configured entirely via its NATIVE ETCD_* environment variables —
+    # no rendered config file, no shell. The quay.io/coreos/etcd image is
+    # DISTROLESS (no /bin/sh), so the previous `sh -c envsubst …` entrypoint
+    # could never start. We set ONLY the native etcd flags here, interpolated
+    # from the per-node ETCD_* identity vars in /opt/rawdrive/app/.env (via the
+    # deploy/.env symlink). We deliberately DON'T env_file the whole .env: that
+    # would inject ETCD_NODE_IP / ETCD_NODE_4x_IP (which are NOT real etcd flags)
+    # and etcd rejects unknown ETCD_* env vars on startup.
+    environment:
+      ETCD_NAME: ${ETCD_NAME}
+      ETCD_DATA_DIR: /var/lib/etcd
+      ETCD_INITIAL_CLUSTER_TOKEN: ${ETCD_INITIAL_CLUSTER_TOKEN}
+      ETCD_INITIAL_CLUSTER_STATE: new
+      ETCD_INITIAL_CLUSTER: etcd-42=http://${ETCD_NODE_42_IP}:2380,etcd-44=http://${ETCD_NODE_44_IP}:2380,etcd-46=http://${ETCD_NODE_46_IP}:2380
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://${ETCD_NODE_IP}:2380
+      ETCD_ADVERTISE_CLIENT_URLS: http://${ETCD_NODE_IP}:2379
     volumes:
       - etcd_data:/var/lib/etcd
-      - ./etcd/etcd.conf.yml.template:/etc/etcd/etcd.conf.yml.template:ro
-    # Render the per-host config from the template (only the named vars), then
-    # exec etcd against it. Pattern mirrors nginx's envsubst command in
-    # prod-app.yml.
-    entrypoint:
-      - /bin/sh
-      - -c
-      - >
-        apk add --no-cache gettext >/dev/null 2>&1 || true;
-        envsubst
-        '$$ETCD_NAME $$ETCD_NODE_IP $$ETCD_NODE_42_IP $$ETCD_NODE_44_IP $$ETCD_NODE_46_IP $$ETCD_INITIAL_CLUSTER_TOKEN'
-        < /etc/etcd/etcd.conf.yml.template > /etc/etcd/etcd.conf.yml &&
-        exec etcd --config-file /etc/etcd/etcd.conf.yml
     ports:
       # Scope client (2379) + peer (2380) to THIS host's IP — never 0.0.0.0 —
       # exactly like the postgres/valkey/nats publishes in prod-db.yml. Other
@@ -101,8 +103,9 @@ services:
         reservations:
           memory: 128M
     healthcheck:
-      # etcdctl talks to the local client URL; ETCDCTL_API=3 selects the v3 API.
-      test: ["CMD-SHELL", "ETCDCTL_API=3 etcdctl --endpoints=http://127.0.0.1:2379 endpoint health"]
+      # Exec form (no shell — distroless image). etcdctl in 3.5 defaults to the
+      # v3 API and the 127.0.0.1:2379 endpoint, so no env/flags needed.
+      test: ["CMD", "etcdctl", "endpoint", "health"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -128,6 +131,18 @@ services:
     restart: unless-stopped
     profiles:
       - patroni
+    # HOST networking (validated in the isolated self-test): a bridged patroni
+    # cannot reliably reach the etcd members published on the nodes' PUBLIC IPs
+    # (hairpin NAT to its own host times out → patroni loses the DCS → refuses to
+    # promote → cluster sits leaderless/read-only). On the host network patroni
+    # reaches every etcd endpoint exactly as the self-test did, binds Postgres on
+    # :5432 and the REST API on :8008 directly, and its localhost(unix-socket)
+    # health probe to Postgres works. The `ports:` block below is therefore a
+    # NO-OP under host mode and is kept only as documentation of the listeners.
+    # FIREWALL: host-network listeners hit UFW INPUT (not the DOCKER-USER chain),
+    # so peers need UFW allows for 5432 (already present) AND 8008 (Patroni REST,
+    # for cross-host HAProxy health checks) on .46/.44 — add before activation.
+    network_mode: host
     env_file:
       - path: /opt/rawdrive/app/.env
         required: false
@@ -142,8 +157,14 @@ services:
       # pgBackRest config from the parallel PITR subsystem — Patroni uses it for
       # the pgbackrest create_replica_method + archive_command.
       - ./pgbackrest/pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
-    # Render patroni.yml from the template (only named vars), then exec patroni
-    # as the postgres user. Overrides the image entrypoint entirely.
+    # Render patroni.yml from the template (only named vars), then exec patroni.
+    # The image's USER is `postgres`, so this entrypoint already runs as postgres
+    # (Dockerfile pre-creates /etc/patroni owned by postgres so the render can
+    # write there). We exec patroni DIRECTLY — the previous `su postgres -c …`
+    # failed with "Authentication failure" because `su` to the passwordless
+    # postgres account from a non-root user prompts for a password. No `su`
+    # needed: we are already postgres, and the env (PGBACKREST_*, POSTGRES_*) is
+    # inherited straight into patroni → the postgres backend → archive_command.
     entrypoint:
       - /bin/sh
       - -c
@@ -151,8 +172,7 @@ services:
         envsubst
         '$$PATRONI_SCOPE $$PATRONI_NAME $$PATRONI_NODE_IP $$ETCD_NODE_42_IP $$ETCD_NODE_44_IP $$ETCD_NODE_46_IP $$POSTGRES_USER $$POSTGRES_PASSWORD $$POSTGRES_REPLICATION_PASSWORD'
         < /etc/patroni/patroni.yml.template > /etc/patroni/patroni.yml &&
-        chown postgres:postgres /etc/patroni/patroni.yml &&
-        exec su postgres -c 'patroni /etc/patroni/patroni.yml'
+        exec patroni /etc/patroni/patroni.yml
     ports:
       # Postgres (5432) + Patroni REST API (8008), scoped to this host's IP —
       # never 0.0.0.0. HAProxy on the app nodes health-checks :8008 and routes to

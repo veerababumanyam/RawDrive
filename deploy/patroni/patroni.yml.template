@@ -301,7 +301,18 @@ bootstrap:
 # postgresql — this MEMBER's local Postgres settings (not cluster-wide).
 # -----------------------------------------------------------------------------
 postgresql:
-  listen: 0.0.0.0:5432
+  # '*' binds BOTH IPv4 (0.0.0.0) and IPv6 ([::]) so Patroni's own local health
+  # connection to `localhost` (which resolves to ::1 first) succeeds. With
+  # `listen: 0.0.0.0:5432` Postgres bound IPv4 only, so Patroni's localhost(::1)
+  # probe was refused → it judged itself "not the healthiest node" and REFUSED to
+  # promote the adopted primary, leaving the cluster leaderless (read-only).
+  listen: "*:5432"
+  # Patroni connects to its LOCAL Postgres over the Unix socket (not TCP), which
+  # sidesteps the localhost/IPv6 resolution entirely and is authorised by the
+  # `local all rawdrive trust` line in the pg_hba above (same as the standalone
+  # model + the pgBackRest path). Belt-and-suspenders with the '*' listen.
+  use_unix_socket: true
+  use_unix_socket_repl: true
   # Address other members use to reach THIS node's Postgres for replication.
   # Must be the routable host IP.
   connect_address: ${PATRONI_NODE_IP}:5432

@@ -84,7 +84,9 @@ RUN set -eux; \
         python3 \
         python3-pip \
         python3-setuptools \
-        ca-certificates; \
+        ca-certificates \
+        gettext-base \
+        curl; \
     pip3 install --no-cache-dir --break-system-packages \
         "patroni[etcd3]==4.0.4" \
         "psycopg2-binary==2.9.10" \
@@ -110,5 +112,11 @@ RUN set -eux; \
 # No HEALTHCHECK here — the compose file owns the healthcheck (GET /health on the
 # Patroni REST API) so it can be tuned without an image rebuild, matching the
 # house pattern in docker-compose.prod-*.yml.
+
+# The compose entrypoint runs as the `postgres` user (USER below) and renders the
+# config with `envsubst … > /etc/patroni/patroni.yml`. /etc/patroni is root-owned
+# by default, so that write fails with EACCES and Patroni never starts. Pre-create
+# it owned by postgres so the unprivileged entrypoint can render its config.
+RUN mkdir -p /etc/patroni && chown -R postgres:postgres /etc/patroni
 
 USER postgres
