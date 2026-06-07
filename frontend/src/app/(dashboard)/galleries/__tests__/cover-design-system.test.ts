@@ -25,7 +25,6 @@ describe("gallery cover page design-system contracts", () => {
     expect(source).toContain(
       'import { ToggleSwitch } from "@/components/ui/toggle-switch"',
     );
-    expect(source).toContain('className="input-base cover-header-select"');
     expect(source).toContain('className="glass-segmented cover-device-toggle"');
     expect(source).toContain('className="cover-font-trigger"');
     expect(source).toContain("COVER_TEXT_LANGUAGES");
@@ -39,7 +38,10 @@ describe("gallery cover page design-system contracts", () => {
     expect(source).toContain('className="cover-slot-tabs"');
     expect(source).toContain('className="cover-section cover-photo-picker"');
     expect(source).toContain('label: "Photos"');
-    expect(source).toContain('selectLabel: "Gallery Photos"');
+    expect(source).toContain("data-cover-editor-tab");
+    expect(source).not.toContain("cover-tab-select");
+    expect(source).not.toContain("cover-header-select");
+    expect(source).not.toContain("selectLabel");
     expect(source).toContain("PanelGalleryPhotos");
     expect(source).toContain("PanelBrand");
     expect(source).toContain('className="cover-upload-stack"');
@@ -112,7 +114,7 @@ describe("gallery cover page design-system contracts", () => {
     const css = read(globalsPath);
 
     expect(css).toContain(".selectable-tile__media");
-    expect(css).toContain(".cover-header-select");
+    expect(css).not.toContain(".cover-header-select");
     expect(css).toContain(".cover-font-trigger");
     expect(css).toContain(".cover-language-select");
     expect(css).toContain(".cover-text-style-toggle");

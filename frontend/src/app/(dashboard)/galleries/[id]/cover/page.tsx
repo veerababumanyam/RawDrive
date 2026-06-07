@@ -115,19 +115,13 @@ const EDITOR_TABS: Array<{
   id: TabId;
   label: string;
   mobileLabel: string;
-  selectLabel?: string;
 }> = [
   { id: "cover", label: "Cover", mobileLabel: "Cover" },
   { id: "text", label: "Text", mobileLabel: "Text" },
   { id: "media", label: "Media", mobileLabel: "Media" },
   { id: "brand", label: "Brand", mobileLabel: "Brand" },
   { id: "grid", label: "Grid", mobileLabel: "Grid" },
-  {
-    id: "photos",
-    label: "Photos",
-    mobileLabel: "Photos",
-    selectLabel: "Gallery Photos",
-  },
+  { id: "photos", label: "Photos", mobileLabel: "Photos" },
 ];
 
 type CoverPresetId =
@@ -2613,27 +2607,6 @@ export default function CoverDesignPage() {
         subtitle={gallery?.title || "Loading…"}
         actions={
           <>
-            {/* Section selector — replaces the horizontal tab strip that
-              used to sit under the preview. A dropdown is denser (one
-              element instead of five) and pairs naturally with the
-              Preview/Save buttons. Native <select> for predictable
-              keyboard nav + iOS picker UX; styled to match the dark
-              theme rather than rebuilt as a custom popover. */}
-            <label htmlFor="cover-tab-select" className="sr-only">
-              Editor section
-            </label>
-            <select
-              id="cover-tab-select"
-              value={tab}
-              onChange={(e) => setTab(e.target.value as TabId)}
-              className="input-base cover-header-select"
-            >
-              {EDITOR_TABS.map((editorTab) => (
-                <option key={editorTab.id} value={editorTab.id}>
-                  {editorTab.selectLabel || editorTab.label}
-                </option>
-              ))}
-            </select>
             <GlassButton
               type="button"
               variant="surface"

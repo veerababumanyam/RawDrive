@@ -2871,10 +2871,6 @@ body[data-chrome="marketing"] {
   transform: scale(1.08);
 }
 
-.cover-header-select {
-  min-width: calc(var(--space-20) * 2);
-}
-
 .cover-header-action {
   color: var(--text-accent);
   text-decoration: none;
@@ -4052,10 +4048,6 @@ body[data-chrome="marketing"] {
 }
 
 @media (max-width: 767px) {
-  .cover-header-select {
-    display: none;
-  }
-
   .cover-header-action {
     min-height: var(--touch-target-min);
     padding-inline: var(--space-3);
