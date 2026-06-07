@@ -26,16 +26,19 @@
         ▼
   GitHub squash-merges into main + deletes the branch    ← automatic, no clicks
         │
-        ▼   (when YOU decide to release)
-  npm run deploy:prod
+        ▼
+  production-gates on main passes
+        │
+        ▼
+  cd-production deploys from the self-hosted rawdrive-prod runner
         │   guards: on main · clean tree · local main == origin/main
         ▼
   rolling deploy: Node .42 → health check → Node .44      ← reuses deploy-prod.sh
 ```
 
-**GitHub side = fully automatic and self-cleaning. Production = a deliberate one
-command you run when ready.** There is no staging environment, so the deploy stays
-in human hands on purpose.
+**GitHub merge and production release are automatic when the GitHub runner path is
+healthy.** The local `npm run deploy:prod` command remains the manual break-glass
+release path and uses the same guarded rolling deploy engine.
 
 ---
 
@@ -68,7 +71,15 @@ Useful flags:
 
 ### 2. Release to production
 
-When `main` has the changes you want live:
+The default production path is automatic:
+
+1. A PR squash-merges into `main`.
+2. `production-gates` runs on the main push.
+3. When those gates pass, `cd-production` deploys the exact main SHA from the
+   self-hosted `rawdrive-prod` runner.
+
+Manual deploy remains available when GitHub Actions is down or when an operator
+needs to redeploy/rollback deliberately:
 
 ```bash
 npm run deploy:prod              # rolling deploy of GitHub main
@@ -172,25 +183,24 @@ npm install                       # runs the prepare hook → installs git hooks
 bash scripts/setup-repo-hygiene.sh  # gh must be authed as the repo admin
 ```
 
-That's everything for the **local-deploy** model you chose. The local
-`npm run deploy:prod` needs no GitHub infrastructure.
+### GitHub production deploy runner (`cd-production.yml`)
 
-### Optional: the GitHub "deploy" button (`cd-production.yml`)
-
-If you later want to deploy/rollback from the GitHub UI (e.g. from a phone), the
-`cd-production.yml` workflow is ready but **inert** until:
+The automatic production path requires:
 
 1. **Register a self-hosted runner on Node .42** labelled `rawdrive-prod`
    (Settings → Actions → Runners → New self-hosted runner; run it as a non-root
    user). GitHub-hosted runners egress from rotating IPs and usually cannot reach
    an SSH-allowlisted VPS — a self-hosted runner keeps the key on your box and
    deploys over the internal network.
-2. **Create a `production` Environment** (Settings → Environments) with yourself as
-   a **required reviewer** → this is the one-click approval gate.
+2. **Create a `production` Environment** (Settings → Environments). Add a required
+   reviewer only if you want a human approval pause; omit the reviewer for fully
+   automatic deploys after green `production-gates`.
 3. **Add the Environment secret** `RAWDRIVE_DEPLOY_SSH_KEY` = the private half of
    `~/.ssh/rawdrive_hostinger`.
 
-Then: Actions → `cd-production` → Run workflow → approve when prompted.
+Automatic deploys trigger from `workflow_run` after `production-gates` succeeds
+on a `main` push. Manual deploys and rollbacks are still available from
+Actions → `cd-production` → Run workflow.
 
 ---
 
