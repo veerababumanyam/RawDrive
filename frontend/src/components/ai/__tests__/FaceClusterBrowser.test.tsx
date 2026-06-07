@@ -31,6 +31,52 @@ describe("FaceClusterBrowser", () => {
     });
   });
 
+  it("distinguishes a fetch error from the empty state", async () => {
+    mockGetFaceClusters.mockRejectedValue(new Error("network is down"));
+    render(<FaceClusterBrowser token="test" />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toBeTruthy();
+    });
+    // The error must NOT be masked as the 'no people' empty state.
+    expect(screen.queryByText(/No people detected/)).toBeNull();
+    expect(screen.getByText(/network is down/)).toBeTruthy();
+  });
+
+  it("falls back to a generic error message when the error has no message", async () => {
+    mockGetFaceClusters.mockRejectedValue(new Error(""));
+    render(<FaceClusterBrowser token="test" />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toBeTruthy();
+    });
+    expect(screen.queryByText(/No people detected/)).toBeNull();
+  });
+
+  it("renders each cluster card as a button with an accessible label", async () => {
+    mockGetFaceClusters.mockResolvedValue([
+      {
+        cluster_label: "c1",
+        cluster_name: "Bride",
+        face_count: 10,
+        asset_count: 8,
+        sample_asset_id: "a1",
+      },
+    ]);
+    render(<FaceClusterBrowser token="test" />);
+
+    const card = await screen.findByRole("button", {
+      name: /View photos of Bride/i,
+    });
+    expect(card).toBeTruthy();
+    // No raw unlabelled buttons on the surface.
+    for (const button of screen.getAllByRole("button")) {
+      const label =
+        button.getAttribute("aria-label") || button.textContent?.trim();
+      expect(label).toBeTruthy();
+    }
+  });
+
   it("renders cluster cards with names and counts", async () => {
     mockGetFaceClusters.mockResolvedValue([
       {
