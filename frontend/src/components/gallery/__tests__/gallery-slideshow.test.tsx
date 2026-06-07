@@ -6,12 +6,47 @@ let fullscreenElement: Element | null = null;
 let webkitFullscreenElement: Element | null = null;
 let requestFullscreenMock: ReturnType<typeof vi.fn>;
 let exitFullscreenMock: ReturnType<typeof vi.fn>;
+let visualViewportState: {
+  height: number;
+  width: number;
+  offsetTop: number;
+  offsetLeft: number;
+};
+let visualViewportTarget: EventTarget;
 
 // jsdom doesn't implement media playback — stub so the audio-sync effect is inert.
 beforeEach(() => {
   vi.useFakeTimers();
   window.HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
   window.HTMLMediaElement.prototype.pause = vi.fn();
+  Object.defineProperty(window, "scrollTo", {
+    configurable: true,
+    value: vi.fn(),
+  });
+  Object.defineProperty(window, "scrollY", {
+    configurable: true,
+    value: 144,
+  });
+  visualViewportState = {
+    height: 701,
+    width: 393,
+    offsetTop: 17,
+    offsetLeft: 0,
+  };
+  visualViewportTarget = new EventTarget();
+  Object.defineProperties(visualViewportTarget, {
+    height: { configurable: true, get: () => visualViewportState.height },
+    width: { configurable: true, get: () => visualViewportState.width },
+    offsetTop: { configurable: true, get: () => visualViewportState.offsetTop },
+    offsetLeft: {
+      configurable: true,
+      get: () => visualViewportState.offsetLeft,
+    },
+  });
+  Object.defineProperty(window, "visualViewport", {
+    configurable: true,
+    value: visualViewportTarget,
+  });
   fullscreenElement = null;
   webkitFullscreenElement = null;
   requestFullscreenMock = vi.fn(() => {
@@ -44,6 +79,10 @@ beforeEach(() => {
 afterEach(() => {
   vi.runOnlyPendingTimers();
   vi.useRealTimers();
+  document.body.style.overflow = "";
+  document.documentElement.style.overflow = "";
+  document.body.style.overscrollBehavior = "";
+  document.documentElement.style.overscrollBehavior = "";
 });
 
 const IMAGES = ["/img/a.webp", "/img/b.webp", "/img/c.webp"];
@@ -52,7 +91,7 @@ function setup(
   props: Partial<React.ComponentProps<typeof GallerySlideshow>> = {},
 ) {
   const onClose = vi.fn();
-  render(
+  const result = render(
     <GallerySlideshow
       images={IMAGES}
       intervalMs={1000}
@@ -60,7 +99,7 @@ function setup(
       {...props}
     />,
   );
-  return { onClose };
+  return { onClose, ...result };
 }
 
 describe("GallerySlideshow", () => {
@@ -111,6 +150,38 @@ describe("GallerySlideshow", () => {
     expect(screen.getByRole("button", { name: "Pause slideshow" })).toHaveClass(
       "gallery-slideshow__primary-control",
     );
+  });
+
+  it("locks scroll and sizes the shell to the visual viewport", () => {
+    const { unmount } = setup();
+    const dialog = screen.getByRole("dialog", { name: "Gallery slideshow" });
+
+    expect(dialog).toHaveClass("immersive-viewer-shell");
+    expect(dialog.style.getPropertyValue("--immersive-viewer-height")).toBe(
+      "701px",
+    );
+    expect(dialog.style.getPropertyValue("--immersive-viewer-width")).toBe(
+      "393px",
+    );
+    expect(dialog.style.getPropertyValue("--immersive-viewer-top")).toBe(
+      "17px",
+    );
+    expect(document.body.style.overflow).toBe("hidden");
+    expect(document.documentElement.style.overflow).toBe("hidden");
+
+    visualViewportState.height = 640;
+    visualViewportTarget.dispatchEvent(new Event("resize"));
+    expect(dialog.style.getPropertyValue("--immersive-viewer-height")).toBe(
+      "640px",
+    );
+
+    unmount();
+    expect(document.body.style.overflow).toBe("");
+    expect(document.documentElement.style.overflow).toBe("");
+    expect(window.scrollTo).toHaveBeenCalledWith({
+      top: 144,
+      behavior: "instant",
+    });
   });
 
   it("auto-advances to the next slide after the interval", () => {

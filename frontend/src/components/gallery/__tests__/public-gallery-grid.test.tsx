@@ -31,6 +31,51 @@ const mockedRemove = vi.mocked(favoritesApi.removePublicFavorite);
 const mockedList = vi.mocked(favoritesApi.listPublicFavoriteAssetIds);
 
 const widePhoto = "/tests/photos/Wedding (42).jpg";
+let visualViewportState: {
+  height: number;
+  width: number;
+  offsetTop: number;
+  offsetLeft: number;
+};
+let visualViewportTarget: EventTarget;
+
+beforeEach(() => {
+  Object.defineProperty(window, "scrollTo", {
+    configurable: true,
+    value: vi.fn(),
+  });
+  Object.defineProperty(window, "scrollY", {
+    configurable: true,
+    value: 96,
+  });
+  visualViewportState = {
+    height: 704,
+    width: 393,
+    offsetTop: 13,
+    offsetLeft: 0,
+  };
+  visualViewportTarget = new EventTarget();
+  Object.defineProperties(visualViewportTarget, {
+    height: { configurable: true, get: () => visualViewportState.height },
+    width: { configurable: true, get: () => visualViewportState.width },
+    offsetTop: { configurable: true, get: () => visualViewportState.offsetTop },
+    offsetLeft: {
+      configurable: true,
+      get: () => visualViewportState.offsetLeft,
+    },
+  });
+  Object.defineProperty(window, "visualViewport", {
+    configurable: true,
+    value: visualViewportTarget,
+  });
+});
+
+afterEach(() => {
+  document.body.style.overflow = "";
+  document.documentElement.style.overflow = "";
+  document.body.style.overscrollBehavior = "";
+  document.documentElement.style.overscrollBehavior = "";
+});
 
 function galleryAsset(overrides: Partial<PublicAsset> = {}): PublicAsset {
   return {
@@ -354,6 +399,24 @@ describe("PublicGalleryGrid", () => {
     const lightboxImage = within(dialog).getByRole("img", {
       name: "Wedding (42).jpg",
     });
+
+    expect(dialog).toHaveClass("immersive-viewer-shell", "media-viewer-shell");
+    expect(dialog).toHaveAttribute("data-immersive-viewer", "true");
+    expect(dialog.style.getPropertyValue("--immersive-viewer-height")).toBe(
+      "704px",
+    );
+    expect(dialog.style.getPropertyValue("--immersive-viewer-width")).toBe(
+      "393px",
+    );
+    expect(dialog.style.getPropertyValue("--immersive-viewer-top")).toBe(
+      "13px",
+    );
+    expect(document.body.style.overflow).toBe("hidden");
+    visualViewportState.height = 648;
+    visualViewportTarget.dispatchEvent(new Event("scroll"));
+    expect(dialog.style.getPropertyValue("--immersive-viewer-height")).toBe(
+      "648px",
+    );
 
     // The <img> fills its box and preserves aspect ratio via object-contain.
     expect(lightboxImage).toHaveClass("h-full", "w-full", "object-contain");

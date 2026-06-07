@@ -49,12 +49,20 @@ import {
   GRID_SIZES,
 } from "@/lib/media-encryption/asset-srcset";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
+import { useImmersiveViewerSurface } from "@/hooks/use-immersive-viewer";
 import { decryptBlobWithAvailableMediaKeys } from "@/lib/media-encryption/media-key-store";
 import { publicMediaErrorMessage } from "@/lib/media-encryption/public-media-error";
 import {
   appendCurrentGalleryKeyFragment,
   setUrlSearchParamBeforeFragment,
 } from "@/lib/media-encryption/share-url";
+import {
+  addFullscreenListeners,
+  exitFullscreenDocument,
+  getFullscreenElement,
+  isFullscreenSupportedForElement,
+  requestElementFullscreen,
+} from "@/lib/browser-fullscreen";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { LockedMediaFallback } from "@/components/gallery/media-key-recovery";
 import {
@@ -1168,6 +1176,7 @@ export function PublicGalleryGrid({
   // when it opens, trap Tab within it, and restore focus to the trigger tile
   // on close. Engaged only while a photo is open (lightboxIdx !== null).
   useFocusTrap(lightboxRef, lightboxIdx !== null);
+  useImmersiveViewerSurface(lightboxRef, lightboxIdx !== null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [chromeVisible, setChromeVisible] = useState(true);
   const chromeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1232,19 +1241,38 @@ export function PublicGalleryGrid({
   );
 
   const toggleFullscreen = useCallback(() => {
-    if (!lightboxRef.current) return;
-    if (!document.fullscreenElement) {
-      lightboxRef.current.requestFullscreen().catch(() => {});
-    } else {
-      document.exitFullscreen().catch(() => {});
+    if (getFullscreenElement(document)) {
+      const request = exitFullscreenDocument(document);
+      if (request && typeof request.catch === "function") request.catch(() => {});
+      return;
+    }
+
+    const target = lightboxRef.current;
+    if (!isFullscreenSupportedForElement(target, document)) return;
+
+    try {
+      const request = requestElementFullscreen(target, {
+        navigationUI: "hide",
+      });
+      if (request && typeof request.catch === "function") {
+        request.catch(() => {});
+      }
+    } catch {
+      // Native fullscreen is progressive enhancement for phone browsers.
     }
   }, []);
 
   // Sync fullscreen state with browser
   useEffect(() => {
-    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
+    const syncFullscreenState = () => {
+      setIsFullscreen(Boolean(getFullscreenElement(document)));
+    };
+    syncFullscreenState();
+    return addFullscreenListeners(
+      document,
+      syncFullscreenState,
+      syncFullscreenState,
+    );
   }, []);
 
   // Reveal the fullscreen chrome the moment we enter fullscreen, via the
@@ -1278,8 +1306,9 @@ export function PublicGalleryGrid({
 
   // Exit fullscreen when lightbox closes
   useEffect(() => {
-    if (lightboxIdx === null && document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {});
+    if (lightboxIdx === null && getFullscreenElement(document)) {
+      const request = exitFullscreenDocument(document);
+      if (request && typeof request.catch === "function") request.catch(() => {});
     }
   }, [lightboxIdx]);
 
@@ -1568,10 +1597,8 @@ export function PublicGalleryGrid({
       }
     }
     document.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
     };
   }, [
     goToPhoto,
@@ -2033,7 +2060,8 @@ export function PublicGalleryGrid({
           return (
             <div
               ref={lightboxRef}
-              className="media-viewer-shell fixed inset-0 z-50 flex flex-col"
+              className="immersive-viewer-shell media-viewer-shell fixed inset-0 z-50 flex flex-col"
+              data-immersive-viewer="true"
               onClick={handleLightboxSurfaceClick}
               onMouseMove={resetChromeTimer}
               onPointerDown={() => {
@@ -2046,7 +2074,7 @@ export function PublicGalleryGrid({
             >
               {/* Toolbar — auto-hides in fullscreen after 3s idle */}
               <div
-                className={`${isFullscreen ? "absolute left-0 right-0 top-0" : ""} ${fullscreenChromeClass} z-20 flex shrink-0 items-center justify-between px-4 py-3 transition-opacity duration-300`}
+                className={`public-lightbox-toolbar ${isFullscreen ? "absolute left-0 right-0 top-0" : ""} ${fullscreenChromeClass} z-20 flex shrink-0 items-center justify-between px-4 py-3 transition-opacity duration-300`}
                 onMouseEnter={isFullscreen ? revealChrome : undefined}
                 onMouseLeave={isFullscreen ? resetChromeTimer : undefined}
                 onFocus={isFullscreen ? revealChrome : undefined}
@@ -2160,7 +2188,7 @@ export function PublicGalleryGrid({
 
               {/* Image */}
               <div
-                className={`${isFullscreen ? "absolute inset-0 p-2" : "relative flex-1 p-4"} flex min-h-0 min-w-0 items-center justify-center overflow-hidden`}
+                className={`public-lightbox-stage ${isFullscreen ? "absolute inset-0 p-2" : "relative flex-1 p-4"} flex min-h-0 min-w-0 items-center justify-center overflow-hidden`}
                 onClick={handleLightboxSurfaceClick}
               >
                 {lightboxIdx > 0 && (
@@ -2197,7 +2225,7 @@ export function PublicGalleryGrid({
               {/* Filmstrip — scrollable thumbnail strip for quick navigation, auto-hides in fullscreen */}
               {visibleAssets.length > 1 && (
                 <div
-                  className={`${isFullscreen ? "absolute bottom-4 left-0 right-0" : ""} ${fullscreenChromeClass} z-20 flex shrink-0 gap-1.5 overflow-x-auto scroll-smooth px-4 py-2 transition-opacity duration-300`}
+                  className={`public-lightbox-filmstrip ${isFullscreen ? "absolute bottom-4 left-0 right-0" : ""} ${fullscreenChromeClass} z-20 flex shrink-0 gap-1.5 overflow-x-auto scroll-smooth px-4 py-2 transition-opacity duration-300`}
                   role="tablist"
                   aria-label="Photo filmstrip"
                   onMouseEnter={isFullscreen ? revealChrome : undefined}

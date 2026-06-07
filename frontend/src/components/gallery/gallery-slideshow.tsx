@@ -9,6 +9,7 @@ import {
 } from "react";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
+import { useImmersiveViewerSurface } from "@/hooks/use-immersive-viewer";
 import {
   addFullscreenListeners,
   exitFullscreenDocument,
@@ -117,6 +118,7 @@ export function GallerySlideshow({
   // the trap is engaged for the whole lifetime.
   const containerRef = useRef<HTMLDivElement>(null);
   useFocusTrap(containerRef, true);
+  useImmersiveViewerSurface(containerRef, count > 0);
 
   const next = useCallback(
     () => setIndex((i) => (count ? (i + 1) % count : 0)),
@@ -349,7 +351,7 @@ export function GallerySlideshow({
       data-fullscreen={isFullscreen ? "true" : "false"}
       data-fullscreen-unavailable={fullscreenUnavailable ? "true" : "false"}
       data-chrome-hidden={fullscreenChromeHidden ? "true" : "false"}
-      className="gallery-slideshow"
+      className="immersive-viewer-shell gallery-slideshow"
       onFocusCapture={resetChromeTimer}
       onMouseMove={resetChromeTimer}
       onPointerDown={resetChromeTimer}
