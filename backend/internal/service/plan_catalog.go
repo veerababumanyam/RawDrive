@@ -14,23 +14,34 @@ import (
 // storage quota, and display metadata. Prices are paise (INR x 100); quota is
 // bytes. The package-level helpers below intentionally keep a static fallback
 // so billing/storage paths remain safe before migration 168 is applied.
+//
+// The snake_case json tags are load-bearing: this struct is marshaled verbatim
+// as the plans[] of the public /api/v1/pricing-catalog response (see
+// PricingCatalogResponse.Plans). The frontend (frontend/src/lib/plans.ts
+// normalizeApiPlan + ApiPlan) reads snake_case keys (tier, paid,
+// monthly_price_paise, ...). Without these tags Go marshals PascalCase
+// (Tier, Paid, ...), every field reads back undefined, normalizeApiPlan
+// produces id:"" + paid:false, and PricingContent's `plan.paid` /
+// `id==="free"|"pay_per_event"` filters drop EVERY plan — the live pricing
+// page silently loses all tier cards after client hydration overwrites the
+// SSR fallback. Do not remove the tags.
 type PlanCatalogEntry struct {
-	Tier              string
-	Name              string
-	Description       string
-	Currency          string
-	MonthlyPricePaise int64
-	AnnualPricePaise  int64
-	QuotaBytes        int64
-	GalleryLimit      int
-	ClientLimit       int
-	Features          []string
-	Popular           bool
-	Rank              int
-	Paid              bool
-	Active            bool
-	SelfServe         bool
-	TrialDays         int
+	Tier              string   `json:"tier"`
+	Name              string   `json:"name"`
+	Description       string   `json:"description"`
+	Currency          string   `json:"currency"`
+	MonthlyPricePaise int64    `json:"monthly_price_paise"`
+	AnnualPricePaise  int64    `json:"annual_price_paise"`
+	QuotaBytes        int64    `json:"quota_bytes"`
+	GalleryLimit      int      `json:"gallery_limit"`
+	ClientLimit       int      `json:"client_limit"`
+	Features          []string `json:"features"`
+	Popular           bool     `json:"popular"`
+	Rank              int      `json:"rank"`
+	Paid              bool     `json:"paid"`
+	Active            bool     `json:"active"`
+	SelfServe         bool     `json:"self_serve"`
+	TrialDays         int      `json:"trial_days"`
 }
 
 var planCatalog = []PlanCatalogEntry{
