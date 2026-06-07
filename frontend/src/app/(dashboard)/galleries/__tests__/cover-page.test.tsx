@@ -8,7 +8,11 @@ import {
   waitFor,
 } from "@testing-library/react";
 import CoverDesignPage from "../[id]/cover/page";
-import { listGalleryAssets, updateGalleryDesign } from "@/lib/api/galleries";
+import {
+  getGallery,
+  listGalleryAssets,
+  updateGalleryDesign,
+} from "@/lib/api/galleries";
 import type { Asset } from "@/lib/api/assets";
 import type { PublicAsset } from "@/lib/api/galleries";
 
@@ -195,13 +199,6 @@ describe("CoverDesignPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /photo grid/i }));
 
     fireEvent.change(screen.getByLabelText("Editor section"), {
-      target: { value: "scenes" },
-    });
-    fireEvent.click(
-      screen.getByRole("switch", { name: /haldi scene header/i }),
-    );
-
-    fireEvent.change(screen.getByLabelText("Editor section"), {
       target: { value: "brand" },
     });
     fireEvent.change(screen.getByLabelText(/monogram/i), {
@@ -257,11 +254,7 @@ describe("CoverDesignPage", () => {
         watermarkOpacity: 45,
       },
     });
-    expect(savedConfig.sceneHeaders).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: "haldi", label: "Haldi", enabled: true }),
-      ]),
-    );
+    expect(savedConfig.sceneHeaders).toEqual([]);
   }, 10000);
 
   it("offers a compact mobile section rail for cover editing", async () => {
@@ -274,6 +267,12 @@ describe("CoverDesignPage", () => {
     expect(
       within(mobileRail).getByRole("button", { name: "Cover" }),
     ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      within(mobileRail).queryByRole("button", { name: "Scenes" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Editor section")).not.toHaveTextContent(
+      "Scenes",
+    );
 
     fireEvent.click(within(mobileRail).getByRole("button", { name: "Text" }));
 
@@ -286,6 +285,55 @@ describe("CoverDesignPage", () => {
 
     expect(screen.getByLabelText("Editor section")).toHaveValue("brand");
     expect(await screen.findByLabelText(/monogram/i)).toBeInTheDocument();
+  });
+
+  it("preserves legacy scene headers without exposing scene editing controls", async () => {
+    vi.mocked(getGallery).mockResolvedValueOnce({
+      id: "gallery-1",
+      workspace_id: "workspace-1",
+      title: "Asha & Ravi",
+      slug: "asha-ravi",
+      description: "Wedding highlights",
+      cover_asset_id: "asset-cover",
+      gallery_type: "delivery",
+      is_published: true,
+      max_selections: 0,
+      status: "published",
+      created_at: "2026-04-01T00:00:00Z",
+      updated_at: "2026-04-01T00:00:00Z",
+      settings: {
+        design_config: {
+          sceneHeaders: [
+            {
+              id: "haldi",
+              label: "Haldi",
+              enabled: true,
+              assetId: "asset-2",
+            },
+          ],
+        },
+      },
+    });
+    await renderPage();
+
+    expect(screen.queryByText("Scene headers")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("switch", { name: /haldi scene header/i }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /save cover and design/i }),
+    );
+
+    await waitFor(() => {
+      expect(updateGalleryDesign).toHaveBeenCalled();
+    });
+
+    const savedConfig = vi.mocked(updateGalleryDesign).mock
+      .calls[0]?.[2] as Record<string, unknown>;
+    expect(savedConfig.sceneHeaders).toEqual([
+      { id: "haldi", label: "Haldi", enabled: true, assetId: "asset-2" },
+    ]);
   });
 
   it("saves cover visual treatments and manual art-direction overrides", async () => {

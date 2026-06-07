@@ -18,7 +18,7 @@
  *
  * UX shape:
  *   - Mobile-first. Live preview at top, tab bar at bottom.
- *   - 6 sections: Cover / Text / Media / Scenes / Brand / Grid.
+ *   - 5 sections: Cover / Text / Media / Brand / Grid.
  *   - All interactions land on the same preview — no separate "preview"
  *     screen. Desktop/phone preview and undo/redo keep the editor fast
  *     without opening a second design studio surface.
@@ -104,7 +104,7 @@ import type {
 type ThemeVariant = "light" | "dark" | "auto";
 type GridLayout = "masonry" | "grid" | "justified" | "carousel";
 type TextAlign = "left" | "center" | "right";
-type TabId = "cover" | "text" | "media" | "scenes" | "brand" | "grid";
+type TabId = "cover" | "text" | "media" | "brand" | "grid";
 type PreviewDevice = CoverDevice;
 
 const EDITOR_TABS: Array<{ id: TabId; label: string; mobileLabel: string }> = [
@@ -113,7 +113,6 @@ const EDITOR_TABS: Array<{ id: TabId; label: string; mobileLabel: string }> = [
   { id: "media", label: "Media", mobileLabel: "Media" },
   { id: "brand", label: "Brand", mobileLabel: "Brand" },
   { id: "grid", label: "Grid", mobileLabel: "Grid" },
-  { id: "scenes", label: "Scenes", mobileLabel: "Scenes" },
 ];
 
 type CoverPresetId =
@@ -897,20 +896,6 @@ const COVER_TREATMENTS: Array<{
   },
 ];
 
-const DEFAULT_SCENE_HEADERS: SceneHeaderConfig[] = [
-  { id: "haldi", label: "Haldi", enabled: false, assetId: null },
-  { id: "mehendi", label: "Mehendi", enabled: false, assetId: null },
-  { id: "wedding", label: "Wedding", enabled: false, assetId: null },
-  { id: "reception", label: "Reception", enabled: false, assetId: null },
-  { id: "family", label: "Family", enabled: false, assetId: null },
-  {
-    id: "couple-portraits",
-    label: "Couple Portraits",
-    enabled: false,
-    assetId: null,
-  },
-];
-
 const LOGO_PLACEMENTS: Array<{ id: LogoPlacement; label: string }> = [
   { id: "hidden", label: "Hidden" },
   { id: "top-left", label: "Top Left" },
@@ -975,7 +960,7 @@ const DEFAULT_CONFIG: DesignConfig = {
     mobileSubtitleSize: 15,
   },
   grid: { layout: "grid", columns: 3, gap: DEFAULT_GRID_GAP, showInfo: false },
-  sceneHeaders: DEFAULT_SCENE_HEADERS,
+  sceneHeaders: [],
   branding: {
     logoPlacement: "top-left",
     monogram: "",
@@ -1027,6 +1012,25 @@ function clampCoverZoom(value: unknown, fallback = COVER_SLOT_ZOOM_MIN) {
 function readSavedSlotZooms(value: unknown): number[] {
   if (!Array.isArray(value)) return [];
   return value.map((entry) => clampCoverZoom(entry));
+}
+
+function readLegacySceneHeaders(value: unknown): SceneHeaderConfig[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const scene = entry as Record<string, unknown>;
+    const id = typeof scene.id === "string" ? scene.id : "";
+    const label = typeof scene.label === "string" ? scene.label : "";
+    if (!id || !label) return [];
+    return [
+      {
+        id,
+        label,
+        enabled: scene.enabled === true,
+        assetId: typeof scene.assetId === "string" ? scene.assetId : null,
+      },
+    ];
+  });
 }
 
 function normalizeSavedCoverProfile(
@@ -1670,19 +1674,7 @@ function configFromGallery(gallery: Gallery): DesignConfig {
     if (typo) Object.assign(merged.typography, typo);
     const grid = raw.grid as Partial<DesignConfig["grid"]> | undefined;
     if (grid) Object.assign(merged.grid, grid);
-    const sceneHeaders = raw.sceneHeaders as SceneHeaderConfig[] | undefined;
-    if (Array.isArray(sceneHeaders)) {
-      const byId = new Map(
-        DEFAULT_SCENE_HEADERS.map((scene) => [scene.id, { ...scene }]),
-      );
-      for (const scene of sceneHeaders) {
-        if (!scene || typeof scene !== "object") continue;
-        const fallback = byId.get(scene.id);
-        if (!fallback) continue;
-        byId.set(scene.id, { ...fallback, ...scene });
-      }
-      merged.sceneHeaders = Array.from(byId.values());
-    }
+    merged.sceneHeaders = readLegacySceneHeaders(raw.sceneHeaders);
     const branding = raw.branding as
       | Partial<DesignConfig["branding"]>
       | undefined;
@@ -2987,13 +2979,6 @@ export default function CoverDesignPage() {
                 setConfig={updateConfig}
                 assets={assets}
                 previewDevice={previewDevice}
-              />
-            )}
-            {tab === "scenes" && (
-              <PanelScenes
-                config={config}
-                setConfig={updateConfig}
-                assets={assets}
               />
             )}
             {tab === "brand" && (
@@ -4879,91 +4864,6 @@ function PanelMedia({
         {activeMediaMode === "photo-grid" &&
           "Photo grid mode opens with a 2x2 collage using the cover plus the next gallery images."}
       </div>
-    </div>
-  );
-}
-
-function PanelScenes({
-  config,
-  setConfig,
-  assets,
-}: {
-  config: DesignConfig;
-  setConfig: React.Dispatch<React.SetStateAction<DesignConfig>>;
-  assets: Asset[];
-}) {
-  return (
-    <div className="space-y-4">
-      <div>
-        <h3 className="text-sm font-semibold">Scene headers</h3>
-        <p className="text-xs text-on-surface-variant">
-          Prepare mini-cover moments for the rituals and story sections
-          photographers deliver most often.
-        </p>
-      </div>
-      <div className="cover-option-grid cover-option-grid--2">
-        {config.sceneHeaders.map((scene) => (
-          <div
-            key={scene.id}
-            className="cover-control-card cover-scene-card"
-            data-state={scene.enabled ? "active" : "idle"}
-          >
-            <div className="cover-control-card__header">
-              <span className="cover-scene-card__copy">
-                <span className="cover-scene-card__title">{scene.label}</span>
-                <span className="cover-helper-text">Scene header</span>
-              </span>
-              <ToggleSwitch
-                checked={scene.enabled}
-                label={`${scene.label} scene header`}
-                checkedLabel="On"
-                uncheckedLabel="Off"
-                className="cover-scene-card__toggle"
-                onCheckedChange={(checked) =>
-                  setConfig((c) => ({
-                    ...c,
-                    sceneHeaders: c.sceneHeaders.map((item) =>
-                      item.id === scene.id
-                        ? { ...item, enabled: checked }
-                        : item,
-                    ),
-                  }))
-                }
-              />
-            </div>
-            <label className="cover-field-stack">
-              <span className="form-label">Mini-cover</span>
-              <select
-                value={scene.assetId || ""}
-                disabled={!scene.enabled}
-                onChange={(e) =>
-                  setConfig((c) => ({
-                    ...c,
-                    sceneHeaders: c.sceneHeaders.map((item) =>
-                      item.id === scene.id
-                        ? { ...item, assetId: e.target.value || null }
-                        : item,
-                    ),
-                  }))
-                }
-                aria-label={`${scene.label} mini-cover`}
-                className={COVER_FIELD_CLASS}
-              >
-                <option value="">Use gallery cover</option>
-                {assets.map((asset) => (
-                  <option key={asset.id} value={asset.id}>
-                    {asset.filename}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        ))}
-      </div>
-      <p className="cover-helper-text">
-        Enabled scenes are saved with this cover design and can power future
-        album/ritual section headers.
-      </p>
     </div>
   );
 }
