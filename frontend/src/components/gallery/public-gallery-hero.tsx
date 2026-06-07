@@ -41,11 +41,60 @@ import { LockedMediaFallback } from "@/components/gallery/media-key-recovery";
 import { Camera, Play } from "@/components/icons";
 
 const API_BASE = getApiBaseUrl();
+type CoverBrandingConfig = NonNullable<PublicDesignConfig["branding"]>;
 
 function absoluteApiUrl(url?: string | null) {
   if (!url) return "";
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
   return `${API_BASE}${url}`;
+}
+
+function hasMeaningfulCoverBranding(
+  branding?: PublicDesignConfig["branding"],
+): branding is CoverBrandingConfig {
+  if (!branding) return false;
+  if (branding.monogram?.trim()) return true;
+  if (branding.brandColor?.trim()) return true;
+  if (branding.watermarkText?.trim()) return true;
+  if (branding.watermarkStyle && branding.watermarkStyle !== "none") {
+    return true;
+  }
+  if (branding.logoPlacement && branding.logoPlacement !== "top-left") {
+    return true;
+  }
+  if (typeof branding.logoSize === "number" && branding.logoSize !== 40) {
+    return true;
+  }
+  if (
+    typeof branding.logoOpacity === "number" &&
+    branding.logoOpacity !== 100
+  ) {
+    return true;
+  }
+  if (
+    typeof branding.watermarkOpacity === "number" &&
+    branding.watermarkOpacity !== 70
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function coverBrandingFromWorkspaceDefaults(
+  branding?: GalleryBranding | null,
+): CoverBrandingConfig | undefined {
+  const defaults = branding?.gallery_branding_defaults;
+  if (!defaults) return undefined;
+  return {
+    logoPlacement: defaults.logo_placement || "top-left",
+    monogram: defaults.monogram || "",
+    brandColor: branding?.accent_color || "",
+    watermarkStyle: defaults.watermark_style || "none",
+    logoSize: defaults.logo_size ?? 40,
+    logoOpacity: defaults.logo_opacity ?? 100,
+    watermarkText: defaults.watermark_text || "",
+    watermarkOpacity: defaults.watermark_opacity ?? 70,
+  };
 }
 
 // Cover image is rendered as a plain <img src> in the hero, so the URL
@@ -720,6 +769,9 @@ export function PublicGalleryHero({
   const brandName = canUseStudioBrand ? branding?.brand_name?.trim() || "" : "";
   const logoUrl = canUseStudioBrand ? absoluteApiUrl(branding?.logo_url) : "";
   const studioAccent = canUseStudioBrand ? branding?.accent_color || "" : "";
+  const workspaceCoverBranding = canUseStudioBrand
+    ? coverBrandingFromWorkspaceDefaults(branding)
+    : undefined;
   const photoSearchSlug = slug || gallery.slug;
   // "Find me" photo-search CTA gating. It sits last in the hero CTA row, after
   // Play and View Gallery, and links to /g/{slug}/photo-search.
@@ -881,18 +933,89 @@ export function PublicGalleryHero({
       resolvedDesignCoverAsset?.content_type?.startsWith("video/");
     const showSlideshow =
       mediaMode === "slideshow" && photoGridAssets.length > 1;
-    const activeLogoPlacement = design.branding?.logoPlacement;
+    const coverBranding = hasMeaningfulCoverBranding(design.branding)
+      ? design.branding
+      : workspaceCoverBranding;
+    const activeLogoPlacement = coverBranding?.logoPlacement;
     const showBrandChip =
       activeLogoPlacement !== "hidden" &&
-      (logoUrl || brandName || design.branding?.monogram);
-    const monogram = design.branding?.monogram?.trim();
+      (logoUrl || brandName || coverBranding?.monogram);
+    const monogram = coverBranding?.monogram?.trim();
     const brandColor =
-      design.branding?.brandColor || accent || textColor || "var(--text-media)";
-    const logoSize = design.branding?.logoSize ?? 40;
-    const logoOpacity = (design.branding?.logoOpacity ?? 100) / 100;
-    const watermarkOpacity = (design.branding?.watermarkOpacity ?? 70) / 100;
+      coverBranding?.brandColor || accent || textColor || "var(--text-media)";
+    const logoSize = coverBranding?.logoSize ?? 40;
+    const logoOpacity = (coverBranding?.logoOpacity ?? 100) / 100;
+    const watermarkOpacity = (coverBranding?.watermarkOpacity ?? 70) / 100;
     const watermarkText =
-      design.branding?.watermarkText?.trim() || monogram || brandName || "";
+      coverBranding?.watermarkText?.trim() || monogram || brandName || "";
+    const designBrandChip = showBrandChip ? (
+      <div
+        className={`absolute z-20 flex items-center gap-3 ${placementClass(activeLogoPlacement)}`}
+        style={{
+          color: textColor || "var(--text-media)",
+          textShadow,
+        }}
+      >
+        {logoUrl && (
+          <img
+            src={logoUrl}
+            alt={brandName ? `${brandName} logo` : "Studio logo"}
+            className="h-10 w-10 rounded-full bg-surface-raised object-contain p-1"
+            style={{
+              width: `${logoSize}px`,
+              height: `${logoSize}px`,
+              opacity: logoOpacity,
+            }}
+          />
+        )}
+        {brandName && <span className="media-label">{brandName}</span>}
+        {monogram && (
+          <span
+            className="cover-brand-mark inline-flex h-10 min-w-10 items-center justify-center rounded-full px-2 text-sm font-semibold"
+            style={{
+              color: brandColor,
+              borderColor: brandColor,
+              width: `${logoSize}px`,
+              minWidth: `${logoSize}px`,
+              height: `${logoSize}px`,
+              opacity: logoOpacity,
+            }}
+          >
+            {monogram}
+          </span>
+        )}
+      </div>
+    ) : null;
+    const designWatermark =
+      coverBranding?.watermarkStyle &&
+      coverBranding.watermarkStyle !== "none" &&
+      watermarkText ? (
+        <div
+          className={`cover-watermark-public cover-watermark-public--${coverBranding.watermarkStyle} pointer-events-none absolute font-semibold`}
+          style={{
+            color: brandColor,
+            opacity: watermarkOpacity,
+            textShadow,
+            bottom:
+              coverBranding.watermarkStyle === "tiled"
+                ? undefined
+                : enabledScenes.length > 0
+                  ? "var(--space-24)"
+                  : "var(--space-5)",
+            left:
+              coverBranding.watermarkStyle === "tiled"
+                ? undefined
+                : "var(--space-6)",
+          }}
+          aria-hidden
+        >
+          {coverBranding.watermarkStyle === "tiled"
+            ? Array.from({ length: 8 }, (_, index) => (
+                <span key={index}>{watermarkText}</span>
+              ))
+            : watermarkText}
+        </div>
+      ) : null;
     // Title and subtitle are anchored at their CENTER regardless of
     // textAlign — matches the Cover & Design editor's drag behavior
     // (Canva/Figma-style: object grabbed at visual middle). textAlign
@@ -969,6 +1092,7 @@ export function PublicGalleryHero({
             data-testid="gallery-cover-scrim"
           />
         )}
+        {designBrandChip}
 
         {useDragLayout ? (
           // Drag-positioned overlay — title and subtitle are absolutely
@@ -1032,73 +1156,6 @@ export function PublicGalleryHero({
                 {subtitle}
               </p>
             )}
-            {showBrandChip && (
-              <div
-                className={`absolute flex items-center gap-3 ${placementClass(activeLogoPlacement)}`}
-                style={{
-                  color: textColor || "var(--text-media)",
-                  textShadow,
-                }}
-              >
-                {logoUrl && (
-                  <img
-                    src={logoUrl}
-                    alt={brandName ? `${brandName} logo` : "Studio logo"}
-                    className="h-10 w-10 rounded-full bg-surface-raised object-contain p-1"
-                    style={{
-                      width: `${logoSize}px`,
-                      height: `${logoSize}px`,
-                      opacity: logoOpacity,
-                    }}
-                  />
-                )}
-                {brandName && <span className="media-label">{brandName}</span>}
-                {monogram && (
-                  <span
-                    className="cover-brand-mark inline-flex h-10 min-w-10 items-center justify-center rounded-full px-2 text-sm font-semibold"
-                    style={{
-                      color: brandColor,
-                      borderColor: brandColor,
-                      width: `${logoSize}px`,
-                      minWidth: `${logoSize}px`,
-                      height: `${logoSize}px`,
-                      opacity: logoOpacity,
-                    }}
-                  >
-                    {monogram}
-                  </span>
-                )}
-              </div>
-            )}
-            {design.branding?.watermarkStyle &&
-              design.branding.watermarkStyle !== "none" &&
-              watermarkText && (
-                <div
-                  className={`cover-watermark-public cover-watermark-public--${design.branding.watermarkStyle} pointer-events-none absolute font-semibold`}
-                  style={{
-                    color: brandColor,
-                    opacity: watermarkOpacity,
-                    textShadow,
-                    bottom:
-                      design.branding.watermarkStyle === "tiled"
-                        ? undefined
-                        : enabledScenes.length > 0
-                          ? "var(--space-24)"
-                          : "var(--space-5)",
-                    left:
-                      design.branding.watermarkStyle === "tiled"
-                        ? undefined
-                        : "var(--space-6)",
-                  }}
-                  aria-hidden
-                >
-                  {design.branding.watermarkStyle === "tiled"
-                    ? Array.from({ length: 8 }, (_, index) => (
-                        <span key={index}>{watermarkText}</span>
-                      ))
-                    : watermarkText}
-                </div>
-              )}
             {enabledScenes.length > 0 && (
               <div
                 className="absolute bottom-6 left-6 right-40 flex gap-2 overflow-x-auto pb-1"
@@ -1147,37 +1204,6 @@ export function PublicGalleryHero({
           <div
             className={`relative z-10 mx-auto flex w-full max-w-3xl flex-col justify-end px-6 py-16 ${textAlignClass}`}
           >
-            {(logoUrl || brandName) && (
-              <div
-                className="mb-6 flex items-center gap-3"
-                style={{
-                  justifyContent:
-                    effectiveAlign === "center"
-                      ? "center"
-                      : effectiveAlign === "right"
-                        ? "flex-end"
-                        : "flex-start",
-                }}
-              >
-                {logoUrl && (
-                  <img
-                    src={logoUrl}
-                    alt={brandName ? `${brandName} logo` : "Studio logo"}
-                    className="h-10 w-10 rounded-full bg-surface-raised object-contain p-1"
-                    style={{
-                      width: `${logoSize}px`,
-                      height: `${logoSize}px`,
-                      opacity: logoOpacity,
-                    }}
-                  />
-                )}
-                {brandName && (
-                  <span className="media-label text-text-inverse">
-                    {brandName}
-                  </span>
-                )}
-              </div>
-            )}
             {title && (
               <h1
                 className="font-semibold tracking-tight text-text-inverse"
@@ -1286,6 +1312,7 @@ export function PublicGalleryHero({
             </div>
           </div>
         )}
+        {designWatermark}
         {slideshowOverlay}
       </section>
     );

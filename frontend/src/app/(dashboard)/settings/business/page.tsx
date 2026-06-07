@@ -11,8 +11,10 @@ import {
 } from "@/components/icons";
 import {
   EMPTY_WORKSPACE_PROFILE,
+  EMPTY_GALLERY_BRANDING_DEFAULTS,
   getWorkspaceProfile,
   updateWorkspaceProfile,
+  type GalleryBrandingDefaults,
   type WorkspaceProfile,
 } from "@/lib/api/workspace-profile";
 import { viewportThemeColors } from "@/lib/tokens";
@@ -30,6 +32,31 @@ import { WorkspaceBrandIdentityHeader } from "./_components/workspace-brand-iden
 const LOGO_CONTROL_ID = "studio-logo-control";
 
 const inputClass = "input-base settings-input";
+const logoPlacementOptions: Array<{
+  value: GalleryBrandingDefaults["logo_placement"];
+  label: string;
+}> = [
+  { value: "hidden", label: "Hidden" },
+  { value: "top-left", label: "Top left" },
+  { value: "top-right", label: "Top right" },
+  { value: "bottom-left", label: "Bottom left" },
+  { value: "bottom-right", label: "Bottom right" },
+];
+const watermarkStyleOptions: Array<{
+  value: GalleryBrandingDefaults["watermark_style"];
+  label: string;
+}> = [
+  { value: "none", label: "None" },
+  { value: "subtle-corner", label: "Subtle corner" },
+  { value: "center-mark", label: "Center mark" },
+  { value: "tiled", label: "Tiled" },
+];
+
+function clampNumberInput(value: string, min: number, max: number) {
+  const next = Number(value);
+  if (!Number.isFinite(next)) return min;
+  return Math.max(min, Math.min(max, Math.round(next)));
+}
 
 export default function BusinessProfilePage() {
   const [profile, setProfile] = useState<WorkspaceProfile>(
@@ -73,10 +100,26 @@ export default function BusinessProfilePage() {
     (key: keyof WorkspaceProfile) =>
     (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setProfile((current) => ({ ...current, [key]: event.target.value }));
+  const setGalleryBrandingDefault = <K extends keyof GalleryBrandingDefaults>(
+    key: K,
+    value: GalleryBrandingDefaults[K],
+  ) =>
+    setProfile((current) => ({
+      ...current,
+      gallery_branding_defaults: {
+        ...EMPTY_GALLERY_BRANDING_DEFAULTS,
+        ...current.gallery_branding_defaults,
+        [key]: value,
+      },
+    }));
 
   const studioBrandName = profile.brand_name || profile.name || "Your Studio";
   const accentColor =
     profile.brand_accent_color || viewportThemeColors.publicGallery;
+  const galleryBrandingDefaults = {
+    ...EMPTY_GALLERY_BRANDING_DEFAULTS,
+    ...profile.gallery_branding_defaults,
+  };
 
   if (loading) {
     return (
@@ -270,6 +313,134 @@ export default function BusinessProfilePage() {
               onNotice={(message) => setSavedNotice(message || null)}
             />
           </div>
+        </div>
+      </SettingsPanel>
+
+      <SettingsPanel
+        title="Gallery Branding Defaults"
+        description="Set the studio mark and watermark behavior public galleries inherit by default."
+        icon={<Palette />}
+      >
+        <div className="settings-form-grid settings-form-grid--two">
+          <label className="settings-form-field">
+            Default monogram
+            <input
+              type="text"
+              value={galleryBrandingDefaults.monogram}
+              onChange={(event) =>
+                setGalleryBrandingDefault(
+                  "monogram",
+                  event.target.value.toUpperCase().slice(0, 4),
+                )
+              }
+              className={`${inputClass} uppercase`}
+              placeholder="AR"
+              maxLength={4}
+            />
+          </label>
+          <label className="settings-form-field">
+            Default logo placement
+            <select
+              value={galleryBrandingDefaults.logo_placement}
+              onChange={(event) =>
+                setGalleryBrandingDefault(
+                  "logo_placement",
+                  event.target
+                    .value as GalleryBrandingDefaults["logo_placement"],
+                )
+              }
+              className={inputClass}
+            >
+              {logoPlacementOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="settings-form-field">
+            Default logo size
+            <input
+              type="number"
+              min={28}
+              max={96}
+              value={galleryBrandingDefaults.logo_size}
+              onChange={(event) =>
+                setGalleryBrandingDefault(
+                  "logo_size",
+                  clampNumberInput(event.target.value, 28, 96),
+                )
+              }
+              className={inputClass}
+            />
+          </label>
+          <label className="settings-form-field">
+            Default logo opacity
+            <input
+              type="number"
+              min={20}
+              max={100}
+              value={galleryBrandingDefaults.logo_opacity}
+              onChange={(event) =>
+                setGalleryBrandingDefault(
+                  "logo_opacity",
+                  clampNumberInput(event.target.value, 20, 100),
+                )
+              }
+              className={inputClass}
+            />
+          </label>
+          <label className="settings-form-field">
+            Default watermark style
+            <select
+              value={galleryBrandingDefaults.watermark_style}
+              onChange={(event) =>
+                setGalleryBrandingDefault(
+                  "watermark_style",
+                  event.target
+                    .value as GalleryBrandingDefaults["watermark_style"],
+                )
+              }
+              className={inputClass}
+            >
+              {watermarkStyleOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="settings-form-field">
+            Default watermark opacity
+            <input
+              type="number"
+              min={10}
+              max={100}
+              value={galleryBrandingDefaults.watermark_opacity}
+              onChange={(event) =>
+                setGalleryBrandingDefault(
+                  "watermark_opacity",
+                  clampNumberInput(event.target.value, 10, 100),
+                )
+              }
+              className={inputClass}
+            />
+          </label>
+          <label className="settings-form-field settings-form-field--full">
+            Default watermark text
+            <input
+              type="text"
+              value={galleryBrandingDefaults.watermark_text}
+              onChange={(event) =>
+                setGalleryBrandingDefault(
+                  "watermark_text",
+                  event.target.value,
+                )
+              }
+              className={inputClass}
+              placeholder={galleryBrandingDefaults.monogram || studioBrandName}
+            />
+          </label>
         </div>
       </SettingsPanel>
 

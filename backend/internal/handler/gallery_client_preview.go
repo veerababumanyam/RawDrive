@@ -271,14 +271,15 @@ func (h *GalleryHandler) clientPreviewBranding(ctx context.Context, gallery *rep
 	}
 
 	return &brandingResponse{
-		TierSlug:              tier,
-		CanCustomize:          canCustomize,
-		BrandName:             brandName,
-		LogoURL:               logoURL,
-		LogoAssetID:           logoAssetID,
-		AccentColor:           accentColor,
-		HideFooter:            tier == "enterprise" || tier == "elite_studio",
-		PublicBrandingEnabled: workspaceBranding.PublicBrandingEnabled,
+		TierSlug:                tier,
+		CanCustomize:            canCustomize,
+		BrandName:               brandName,
+		LogoURL:                 logoURL,
+		LogoAssetID:             logoAssetID,
+		AccentColor:             accentColor,
+		HideFooter:              tier == "enterprise" || tier == "elite_studio",
+		PublicBrandingEnabled:   workspaceBranding.PublicBrandingEnabled,
+		GalleryBrandingDefaults: workspaceBranding.GalleryBrandingDefaults,
 	}
 }
 

@@ -44,7 +44,7 @@ describe("gallery cover page design-system contracts", () => {
     expect(source).toContain("className={COVER_COLOR_CLASS}");
     expect(
       source.match(/<SelectableTile/g)?.length ?? 0,
-    ).toBeGreaterThanOrEqual(6);
+    ).toBeGreaterThanOrEqual(5);
     expect(source.match(/<ToggleSwitch/g)?.length ?? 0).toBeGreaterThan(2);
     expect(source.match(/<GlassButton/g)?.length ?? 0).toBeGreaterThan(4);
   });

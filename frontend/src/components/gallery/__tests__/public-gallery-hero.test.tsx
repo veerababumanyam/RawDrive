@@ -75,6 +75,15 @@ const branding: GalleryBranding = {
   accent_color: "#B7791F",
   hide_footer: false,
   public_branding_enabled: true,
+  gallery_branding_defaults: {
+    logo_placement: "top-left",
+    monogram: "",
+    watermark_style: "none",
+    logo_size: 40,
+    logo_opacity: 100,
+    watermark_text: "",
+    watermark_opacity: 70,
+  },
 };
 
 function setMobileViewport(matches: boolean) {
@@ -202,6 +211,43 @@ describe("PublicGalleryHero", () => {
     expect(
       screen.queryByRole("img", { name: /logo$/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it("uses Business Profile gallery branding defaults when the cover design has no branding override", () => {
+    render(
+      <PublicGalleryHero
+        gallery={gallery}
+        assets={[coverAsset]}
+        branding={{
+          ...branding,
+          gallery_branding_defaults: {
+            logo_placement: "bottom-right",
+            monogram: "KS",
+            watermark_style: "subtle-corner",
+            logo_size: 52,
+            logo_opacity: 88,
+            watermark_text: "Studio Proof",
+            watermark_opacity: 60,
+          },
+        }}
+        design={{
+          cover: {
+            assetId: "asset-cover",
+            styleId: "modern-grid",
+            mediaMode: "single-photo",
+            title: "Asha & Ravi",
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("KS")).toHaveStyle({
+      height: "52px",
+      opacity: "0.88",
+    });
+    expect(screen.getByText("Studio Proof")).toHaveStyle({
+      opacity: "0.6",
+    });
   });
 
   it("honors the expanded cover experience settings on the public hero", () => {

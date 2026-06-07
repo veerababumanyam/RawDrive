@@ -57,6 +57,24 @@ vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: vi.fn(() => "token-1"),
 }));
 
+vi.mock("@/lib/api/workspace-profile", () => ({
+  getWorkspaceProfile: vi.fn(async () => ({
+    name: "Kaveri Weddings",
+    brand_name: "Kaveri Stories",
+    brand_accent_color: "#B7791F",
+    public_branding_enabled: true,
+    gallery_branding_defaults: {
+      logo_placement: "top-left",
+      monogram: "KS",
+      watermark_style: "subtle-corner",
+      logo_size: 44,
+      logo_opacity: 90,
+      watermark_text: "Kaveri Stories",
+      watermark_opacity: 55,
+    },
+  })),
+}));
+
 vi.mock("@/hooks/use-upload", () => ({
   useUpload: mocks.useUpload,
 }));
@@ -198,26 +216,6 @@ describe("CoverDesignPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /photo grid/i }));
 
-    fireEvent.change(screen.getByLabelText("Editor section"), {
-      target: { value: "brand" },
-    });
-    fireEvent.change(screen.getByLabelText(/monogram/i), {
-      target: { value: "AR" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /top right/i }));
-    fireEvent.change(screen.getByLabelText("Watermark text"), {
-      target: { value: "Asha Ravi Studio" },
-    });
-    fireEvent.change(screen.getByLabelText("Logo size"), {
-      target: { value: "56" },
-    });
-    fireEvent.change(screen.getByLabelText("Logo opacity"), {
-      target: { value: "82" },
-    });
-    fireEvent.change(screen.getByLabelText("Watermark opacity"), {
-      target: { value: "45" },
-    });
-
     fireEvent.click(
       screen.getByRole("button", { name: /save cover and design/i }),
     );
@@ -245,15 +243,8 @@ describe("CoverDesignPage", () => {
           }),
         },
       },
-      branding: {
-        logoPlacement: "top-right",
-        monogram: "AR",
-        logoSize: 56,
-        logoOpacity: 82,
-        watermarkText: "Asha Ravi Studio",
-        watermarkOpacity: 45,
-      },
     });
+    expect(savedConfig).not.toHaveProperty("branding");
     expect(savedConfig.sceneHeaders).toEqual([]);
   }, 10000);
 
@@ -273,6 +264,15 @@ describe("CoverDesignPage", () => {
     expect(screen.getByLabelText("Editor section")).not.toHaveTextContent(
       "Scenes",
     );
+    expect(
+      within(mobileRail).queryByRole("button", { name: "Brand" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Editor section")).not.toHaveTextContent(
+      "Brand",
+    );
+    expect(
+      screen.getByRole("link", { name: /brand defaults/i }),
+    ).toHaveAttribute("href", "/settings/business");
 
     fireEvent.click(within(mobileRail).getByRole("button", { name: "Text" }));
 
@@ -281,10 +281,67 @@ describe("CoverDesignPage", () => {
       await screen.findByPlaceholderText("Your gallery title"),
     ).toBeInTheDocument();
 
-    fireEvent.click(within(mobileRail).getByRole("button", { name: "Brand" }));
+    fireEvent.click(within(mobileRail).getByRole("button", { name: "Grid" }));
 
-    expect(screen.getByLabelText("Editor section")).toHaveValue("brand");
-    expect(await screen.findByLabelText(/monogram/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Editor section")).toHaveValue("grid");
+    expect(await screen.findByText("Filename captions")).toBeInTheDocument();
+  });
+
+  it("preserves legacy branding without exposing brand editing controls", async () => {
+    vi.mocked(getGallery).mockResolvedValueOnce({
+      id: "gallery-1",
+      workspace_id: "workspace-1",
+      title: "Asha & Ravi",
+      slug: "asha-ravi",
+      description: "Wedding highlights",
+      cover_asset_id: "asset-cover",
+      gallery_type: "delivery",
+      is_published: true,
+      max_selections: 0,
+      status: "published",
+      created_at: "2026-04-01T00:00:00Z",
+      updated_at: "2026-04-01T00:00:00Z",
+      settings: {
+        design_config: {
+          branding: {
+            logoPlacement: "top-right",
+            monogram: "AR",
+            brandColor: "#B7791F",
+            watermarkStyle: "subtle-corner",
+            logoSize: 56,
+            logoOpacity: 82,
+            watermarkText: "Asha Ravi Studio",
+            watermarkOpacity: 45,
+          },
+        },
+      },
+    });
+    await renderPage();
+
+    expect(screen.queryByText("Studio branding")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/monogram/i)).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /save cover and design/i }),
+    );
+
+    await waitFor(() => {
+      expect(updateGalleryDesign).toHaveBeenCalled();
+    });
+
+    const savedConfig = vi.mocked(updateGalleryDesign).mock
+      .calls[0]?.[2] as Record<string, unknown>;
+    expect(savedConfig.branding).toEqual({
+      logoPlacement: "top-right",
+      monogram: "AR",
+      brandColor: "#B7791F",
+      watermarkStyle: "subtle-corner",
+      logoSize: 56,
+      logoOpacity: 82,
+      watermarkText: "Asha Ravi Studio",
+      watermarkOpacity: 45,
+      applyToAll: false,
+    });
   });
 
   it("preserves legacy scene headers without exposing scene editing controls", async () => {

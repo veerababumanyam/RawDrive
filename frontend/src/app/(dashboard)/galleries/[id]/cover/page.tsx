@@ -18,7 +18,7 @@
  *
  * UX shape:
  *   - Mobile-first. Live preview at top, tab bar at bottom.
- *   - 5 sections: Cover / Text / Media / Brand / Grid.
+ *   - 4 sections: Cover / Text / Media / Grid.
  *   - All interactions land on the same preview — no separate "preview"
  *     screen. Desktop/phone preview and undo/redo keep the editor fast
  *     without opening a second design studio surface.
@@ -55,6 +55,10 @@ import {
   updateGalleryDesign,
   type Gallery,
 } from "@/lib/api/galleries";
+import {
+  getWorkspaceProfile,
+  type WorkspaceProfile,
+} from "@/lib/api/workspace-profile";
 import { getAsset, type Asset } from "@/lib/api/assets";
 import { useUpload } from "@/hooks/use-upload";
 import {
@@ -104,14 +108,13 @@ import type {
 type ThemeVariant = "light" | "dark" | "auto";
 type GridLayout = "masonry" | "grid" | "justified" | "carousel";
 type TextAlign = "left" | "center" | "right";
-type TabId = "cover" | "text" | "media" | "brand" | "grid";
+type TabId = "cover" | "text" | "media" | "grid";
 type PreviewDevice = CoverDevice;
 
 const EDITOR_TABS: Array<{ id: TabId; label: string; mobileLabel: string }> = [
   { id: "cover", label: "Cover", mobileLabel: "Cover" },
   { id: "text", label: "Text", mobileLabel: "Text" },
   { id: "media", label: "Media", mobileLabel: "Media" },
-  { id: "brand", label: "Brand", mobileLabel: "Brand" },
   { id: "grid", label: "Grid", mobileLabel: "Grid" },
 ];
 
@@ -239,6 +242,7 @@ interface DesignConfig {
     watermarkOpacity: number;
     applyToAll: boolean;
   };
+  legacyBranding: boolean;
   version: number;
 }
 
@@ -896,21 +900,6 @@ const COVER_TREATMENTS: Array<{
   },
 ];
 
-const LOGO_PLACEMENTS: Array<{ id: LogoPlacement; label: string }> = [
-  { id: "hidden", label: "Hidden" },
-  { id: "top-left", label: "Top Left" },
-  { id: "top-right", label: "Top Right" },
-  { id: "bottom-left", label: "Bottom Left" },
-  { id: "bottom-right", label: "Bottom Right" },
-];
-
-const WATERMARK_STYLES: Array<{ id: WatermarkStyle; label: string }> = [
-  { id: "none", label: "None" },
-  { id: "subtle-corner", label: "Subtle Corner" },
-  { id: "center-mark", label: "Center Mark" },
-  { id: "tiled", label: "Tiled" },
-];
-
 const DEFAULT_CONFIG: DesignConfig = {
   theme: { id: "liquid-glass", variant: "dark", accentColor: "" },
   cover: {
@@ -972,6 +961,7 @@ const DEFAULT_CONFIG: DesignConfig = {
     watermarkOpacity: 70,
     applyToAll: false,
   },
+  legacyBranding: false,
   version: 4,
 };
 
@@ -1031,6 +1021,64 @@ function readLegacySceneHeaders(value: unknown): SceneHeaderConfig[] {
       },
     ];
   });
+}
+
+function isMeaningfulBrandingConfig(
+  value: Partial<DesignConfig["branding"]> | undefined,
+): boolean {
+  if (!value || typeof value !== "object") return false;
+  if (typeof value.monogram === "string" && value.monogram.trim()) return true;
+  if (typeof value.brandColor === "string" && value.brandColor.trim()) {
+    return true;
+  }
+  if (
+    typeof value.watermarkText === "string" &&
+    value.watermarkText.trim()
+  ) {
+    return true;
+  }
+  if (value.watermarkStyle && value.watermarkStyle !== "none") return true;
+  if (value.logoPlacement && value.logoPlacement !== "top-left") return true;
+  if (typeof value.logoSize === "number" && value.logoSize !== 40) return true;
+  if (
+    typeof value.logoOpacity === "number" &&
+    value.logoOpacity !== 100
+  ) {
+    return true;
+  }
+  if (
+    typeof value.watermarkOpacity === "number" &&
+    value.watermarkOpacity !== 70
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function workspaceProfileBranding(
+  profile: WorkspaceProfile | null,
+): DesignConfig["branding"] {
+  const defaults = profile?.gallery_branding_defaults;
+  if (!profile?.public_branding_enabled || !defaults) {
+    return {
+      ...DEFAULT_CONFIG.branding,
+      logoPlacement: "hidden",
+      watermarkStyle: "none",
+    };
+  }
+  return {
+    ...DEFAULT_CONFIG.branding,
+    logoPlacement: defaults.logo_placement || "top-left",
+    monogram: defaults.monogram || "",
+    brandColor: profile.brand_accent_color || "",
+    watermarkStyle: defaults.watermark_style || "none",
+    logoSize: defaults.logo_size ?? DEFAULT_CONFIG.branding.logoSize,
+    logoOpacity: defaults.logo_opacity ?? DEFAULT_CONFIG.branding.logoOpacity,
+    watermarkText: defaults.watermark_text || "",
+    watermarkOpacity:
+      defaults.watermark_opacity ?? DEFAULT_CONFIG.branding.watermarkOpacity,
+    applyToAll: true,
+  };
 }
 
 function normalizeSavedCoverProfile(
@@ -1678,7 +1726,10 @@ function configFromGallery(gallery: Gallery): DesignConfig {
     const branding = raw.branding as
       | Partial<DesignConfig["branding"]>
       | undefined;
-    if (branding) Object.assign(merged.branding, branding);
+    if (isMeaningfulBrandingConfig(branding)) {
+      Object.assign(merged.branding, branding);
+      merged.legacyBranding = true;
+    }
   }
 
   merged.cover.assetSlots = readSavedAssetSlots(merged.cover.assetSlots);
@@ -1899,7 +1950,7 @@ function coverTreatmentMatches(
 function prepareDesignConfigForSave(config: DesignConfig): DesignConfig {
   const desktop = profileFromConfig(config, "desktop");
   const phone = profileFromConfig(config, "phone");
-  return {
+  const payload: DesignConfig = {
     ...config,
     cover: {
       ...config.cover,
@@ -1963,6 +2014,11 @@ function prepareDesignConfigForSave(config: DesignConfig): DesignConfig {
         phone.typography?.subtitleSize || config.typography.mobileSubtitleSize,
     }),
   };
+  delete (payload as { legacyBranding?: boolean }).legacyBranding;
+  if (!config.legacyBranding) {
+    delete (payload as Partial<DesignConfig>).branding;
+  }
+  return payload;
 }
 
 function coverScrimStyle(
@@ -2078,6 +2134,8 @@ export default function CoverDesignPage() {
   const [gallery, setGallery] = useState<Gallery | null>(null);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [config, setConfig] = useState<DesignConfig>(DEFAULT_CONFIG);
+  const [workspaceProfile, setWorkspaceProfile] =
+    useState<WorkspaceProfile | null>(null);
   const [tab, setTab] = useState<TabId>("cover");
   const [previewDevice, setPreviewDevice] = useState<PreviewDevice>("desktop");
   const [activeText, setActiveText] = useState<"title" | "subtitle">("title");
@@ -2162,16 +2220,18 @@ export default function CoverDesignPage() {
     let cancelled = false;
     (async () => {
       try {
-        const [g, galleryAssets] = await Promise.all([
+        const [g, galleryAssets, profile] = await Promise.all([
           getGallery(token, galleryId),
           // PERF-23: ask the server to embed each asset in one bulk query so we
           // skip the per-asset getAsset() fan-out (the gallery detail page does
           // the same). The loop below remains the fallback for an older server
           // or a degraded include response.
           listGalleryAssets(token, galleryId, { includeAssets: true }),
+          getWorkspaceProfile(token).catch(() => null),
         ]);
         if (cancelled) return;
         setGallery(g);
+        setWorkspaceProfile(profile);
 
         const realAssets = await hydrateGalleryAssets(token, galleryAssets);
         if (cancelled) return;
@@ -2508,8 +2568,11 @@ export default function CoverDesignPage() {
   const activeTypographyProfile =
     activeCoverProfile.typography ||
     desktopTypographyProfile(config.typography);
+  const effectiveBranding = config.legacyBranding
+    ? config.branding
+    : workspaceProfileBranding(workspaceProfile);
   const watermarkLabel =
-    config.branding.watermarkText.trim() || config.branding.monogram;
+    effectiveBranding.watermarkText.trim() || effectiveBranding.monogram;
 
   // ───────────── Render ─────────────
 
@@ -2571,6 +2634,12 @@ export default function CoverDesignPage() {
                 Preview
               </Link>
             )}
+            <Link
+              href="/settings/business"
+              className="glass-button glass-button--surface glass-button--md cover-header-action"
+            >
+              Brand defaults
+            </Link>
             {/* Save button — three visual states that give the user
               concrete feedback at every step of the save cycle:
                 1. Idle (clean)   — neutral primary gradient, "Save"
@@ -2866,43 +2935,43 @@ export default function CoverDesignPage() {
               </div>
             )}
 
-            {config.branding.logoPlacement !== "hidden" &&
-              config.branding.monogram && (
+            {effectiveBranding.logoPlacement !== "hidden" &&
+              effectiveBranding.monogram && (
                 <div
                   className={`cover-brand-mark pointer-events-none absolute z-20 inline-flex h-10 min-w-10 items-center justify-center rounded-full px-2 text-sm font-semibold ${
-                    config.branding.logoPlacement === "top-right"
+                    effectiveBranding.logoPlacement === "top-right"
                       ? "right-4 top-4"
-                      : config.branding.logoPlacement === "bottom-left"
+                      : effectiveBranding.logoPlacement === "bottom-left"
                         ? "bottom-4 left-4"
-                        : config.branding.logoPlacement === "bottom-right"
+                        : effectiveBranding.logoPlacement === "bottom-right"
                           ? "bottom-4 right-4"
                           : "left-4 top-4"
                   }`}
                   style={{
-                    color: config.branding.brandColor || undefined,
-                    borderColor: config.branding.brandColor || undefined,
-                    width: `${config.branding.logoSize}px`,
-                    minWidth: `${config.branding.logoSize}px`,
-                    height: `${config.branding.logoSize}px`,
-                    opacity: config.branding.logoOpacity / 100,
+                    color: effectiveBranding.brandColor || undefined,
+                    borderColor: effectiveBranding.brandColor || undefined,
+                    width: `${effectiveBranding.logoSize}px`,
+                    minWidth: `${effectiveBranding.logoSize}px`,
+                    height: `${effectiveBranding.logoSize}px`,
+                    opacity: effectiveBranding.logoOpacity / 100,
                   }}
                 >
-                  {config.branding.monogram}
+                  {effectiveBranding.monogram}
                 </div>
               )}
-            {config.branding.watermarkStyle !== "none" && watermarkLabel && (
+            {effectiveBranding.watermarkStyle !== "none" && watermarkLabel && (
               <div
-                className={`cover-watermark-preview cover-watermark-preview--${config.branding.watermarkStyle}`}
+                className={`cover-watermark-preview cover-watermark-preview--${effectiveBranding.watermarkStyle}`}
                 style={{
                   color:
-                    config.branding.brandColor ||
+                    effectiveBranding.brandColor ||
                     config.cover.textColor ||
                     undefined,
-                  opacity: config.branding.watermarkOpacity / 100,
+                  opacity: effectiveBranding.watermarkOpacity / 100,
                 }}
                 aria-hidden
               >
-                {config.branding.watermarkStyle === "tiled"
+                {effectiveBranding.watermarkStyle === "tiled"
                   ? Array.from({ length: 6 }, (_, index) => (
                       <span key={index}>{watermarkLabel}</span>
                     ))
@@ -2965,14 +3034,6 @@ export default function CoverDesignPage() {
                 setTab={setTab}
               />
             )}
-            {tab === "grid" && (
-              <PanelGrid
-                config={config}
-                setConfig={updateConfig}
-                assets={assets}
-                token={token}
-              />
-            )}
             {tab === "media" && (
               <PanelMedia
                 config={config}
@@ -2981,8 +3042,13 @@ export default function CoverDesignPage() {
                 previewDevice={previewDevice}
               />
             )}
-            {tab === "brand" && (
-              <PanelBrand config={config} setConfig={updateConfig} />
+            {tab === "grid" && (
+              <PanelGrid
+                config={config}
+                setConfig={updateConfig}
+                assets={assets}
+                token={token}
+              />
             )}
           </Card>
         </section>
@@ -4058,14 +4124,6 @@ function PanelText({
           >
             Subtitle
           </GlassButton>
-          <GlassButton
-            type="button"
-            variant="surface"
-            onClick={() => setTab("brand")}
-            className="cover-layer-button"
-          >
-            Logo & watermark
-          </GlassButton>
         </div>
         <div className="cover-layer-toggle-grid">
           <ToggleSwitch
@@ -4089,36 +4147,6 @@ function PanelText({
               setConfig((c) => ({
                 ...c,
                 cover: { ...c.cover, subtitleVisible: checked },
-              }))
-            }
-          />
-          <ToggleSwitch
-            checked={config.branding.logoPlacement !== "hidden"}
-            label="Show logo layer"
-            checkedLabel="Logo on"
-            uncheckedLabel="Logo off"
-            onCheckedChange={(checked) =>
-              setConfig((c) => ({
-                ...c,
-                branding: {
-                  ...c.branding,
-                  logoPlacement: checked ? "top-left" : "hidden",
-                },
-              }))
-            }
-          />
-          <ToggleSwitch
-            checked={config.branding.watermarkStyle !== "none"}
-            label="Show watermark layer"
-            checkedLabel="Watermark on"
-            uncheckedLabel="Watermark off"
-            onCheckedChange={(checked) =>
-              setConfig((c) => ({
-                ...c,
-                branding: {
-                  ...c.branding,
-                  watermarkStyle: checked ? "subtle-corner" : "none",
-                },
               }))
             }
           />
@@ -4863,254 +4891,6 @@ function PanelMedia({
           "Short video mode plays the selected video cover when the cover asset is video."}
         {activeMediaMode === "photo-grid" &&
           "Photo grid mode opens with a 2x2 collage using the cover plus the next gallery images."}
-      </div>
-    </div>
-  );
-}
-
-function PanelBrand({
-  config,
-  setConfig,
-}: {
-  config: DesignConfig;
-  setConfig: React.Dispatch<React.SetStateAction<DesignConfig>>;
-}) {
-  return (
-    <div className="space-y-5">
-      <div>
-        <h3 className="text-sm font-semibold">Studio branding</h3>
-        <p className="text-xs text-on-surface-variant">
-          Add a monogram, brand tint, watermark behavior, and placement for the
-          public cover.
-        </p>
-      </div>
-
-      <div className="cover-field-grid cover-field-grid--2">
-        <label className="cover-field-stack">
-          <span className="form-label">Monogram</span>
-          <input
-            value={config.branding.monogram}
-            onChange={(e) =>
-              setConfig((c) => ({
-                ...c,
-                branding: {
-                  ...c.branding,
-                  monogram: e.target.value.toUpperCase().slice(0, 4),
-                },
-              }))
-            }
-            placeholder="AR"
-            className={`${COVER_FIELD_CLASS} uppercase`}
-            aria-label="Monogram"
-          />
-        </label>
-        <label className="cover-field-stack">
-          <span className="form-label">Brand color</span>
-          <input
-            type="color"
-            value={
-              config.branding.brandColor ||
-              config.theme.accentColor ||
-              COVER_COLORS.textMedia
-            }
-            onChange={(e) =>
-              setConfig((c) => ({
-                ...c,
-                branding: { ...c.branding, brandColor: e.target.value },
-                theme: { ...c.theme, accentColor: e.target.value },
-              }))
-            }
-            className={COVER_COLOR_CLASS}
-            aria-label="Brand color"
-          />
-        </label>
-      </div>
-
-      <section className="cover-control-card">
-        <div className="cover-control-card__header">
-          <h4 className="form-label">Logo preview</h4>
-          <Badge variant="neutral">{config.branding.logoSize}px</Badge>
-        </div>
-        <div className="cover-range-color-grid">
-          <div className="cover-field-stack">
-            <div className="cover-field-row">
-              <label htmlFor="cover-logo-size" className="form-label">
-                Logo size
-              </label>
-              <span className="cover-range-value">
-                {config.branding.logoSize}px
-              </span>
-            </div>
-            <input
-              id="cover-logo-size"
-              type="range"
-              min={LOGO_SIZE_MIN}
-              max={LOGO_SIZE_MAX}
-              step={1}
-              value={config.branding.logoSize}
-              onChange={(event) =>
-                setConfig((c) => ({
-                  ...c,
-                  branding: {
-                    ...c.branding,
-                    logoSize: clampTextSizeInput(
-                      event.target.value,
-                      LOGO_SIZE_MIN,
-                      LOGO_SIZE_MAX,
-                    ),
-                  },
-                }))
-              }
-              className={COVER_RANGE_CLASS}
-            />
-          </div>
-          <div className="cover-field-stack">
-            <div className="cover-field-row">
-              <label htmlFor="cover-logo-opacity" className="form-label">
-                Logo opacity
-              </label>
-              <span className="cover-range-value">
-                {config.branding.logoOpacity}%
-              </span>
-            </div>
-            <input
-              id="cover-logo-opacity"
-              type="range"
-              min={20}
-              max={100}
-              step={1}
-              value={config.branding.logoOpacity}
-              onChange={(event) =>
-                setConfig((c) => ({
-                  ...c,
-                  branding: {
-                    ...c.branding,
-                    logoOpacity: clampPercentInput(event.target.value),
-                  },
-                }))
-              }
-              className={COVER_RANGE_CLASS}
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="cover-control-card">
-        <h4 className="form-label">Logo placement</h4>
-        <div className="cover-option-grid cover-option-grid--3">
-          {LOGO_PLACEMENTS.map((placement) => {
-            const active = config.branding.logoPlacement === placement.id;
-            return (
-              <SelectableTile
-                key={placement.id}
-                onClick={() =>
-                  setConfig((c) => ({
-                    ...c,
-                    branding: { ...c.branding, logoPlacement: placement.id },
-                  }))
-                }
-                selected={active}
-                title={placement.label}
-                className="cover-compact-tile"
-              />
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="cover-control-card">
-        <div className="cover-control-card__header">
-          <h4 className="form-label">Watermark</h4>
-          <Badge variant="neutral">{config.branding.watermarkOpacity}%</Badge>
-        </div>
-        <label className="cover-field-stack">
-          <span className="form-label">Watermark text</span>
-          <input
-            value={config.branding.watermarkText}
-            onChange={(event) =>
-              setConfig((c) => ({
-                ...c,
-                branding: {
-                  ...c.branding,
-                  watermarkText: event.target.value,
-                },
-              }))
-            }
-            placeholder={config.branding.monogram || "Studio mark"}
-            className={COVER_FIELD_CLASS}
-            aria-label="Watermark text"
-          />
-        </label>
-        <div className="cover-option-grid cover-option-grid--2">
-          {WATERMARK_STYLES.map((watermark) => {
-            const active = config.branding.watermarkStyle === watermark.id;
-            return (
-              <SelectableTile
-                key={watermark.id}
-                onClick={() =>
-                  setConfig((c) => ({
-                    ...c,
-                    branding: { ...c.branding, watermarkStyle: watermark.id },
-                  }))
-                }
-                selected={active}
-                title={watermark.label}
-                className="cover-compact-tile"
-              />
-            );
-          })}
-        </div>
-        <div className="cover-field-stack">
-          <div className="cover-field-row">
-            <label htmlFor="cover-watermark-opacity" className="form-label">
-              Watermark opacity
-            </label>
-            <span className="cover-range-value">
-              {config.branding.watermarkOpacity}%
-            </span>
-          </div>
-          <input
-            id="cover-watermark-opacity"
-            type="range"
-            min={10}
-            max={100}
-            step={1}
-            value={config.branding.watermarkOpacity}
-            onChange={(event) =>
-              setConfig((c) => ({
-                ...c,
-                branding: {
-                  ...c.branding,
-                  watermarkOpacity: clampPercentInput(event.target.value),
-                },
-              }))
-            }
-            className={COVER_RANGE_CLASS}
-          />
-        </div>
-      </section>
-
-      <div className="cover-panel-divider cover-toggle-row">
-        <span className="cover-toggle-row__copy">
-          <span className="cover-scene-card__title">
-            Apply this look to all galleries
-          </span>
-          <span className="cover-helper-text">
-            Saved as intent for the studio design system.
-          </span>
-        </span>
-        <ToggleSwitch
-          checked={config.branding.applyToAll}
-          label="Apply this look to all galleries"
-          checkedLabel="On"
-          uncheckedLabel="Off"
-          onCheckedChange={(checked) =>
-            setConfig((c) => ({
-              ...c,
-              branding: { ...c.branding, applyToAll: checked },
-            }))
-          }
-        />
       </div>
     </div>
   );

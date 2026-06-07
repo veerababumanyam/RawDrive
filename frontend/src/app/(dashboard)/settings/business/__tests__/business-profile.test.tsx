@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import BusinessProfilePage from "../page";
 
@@ -23,6 +23,15 @@ beforeEach(() => {
         filename: "studio-logo.webp",
         storage_key: "workspaces/logo.webp",
       },
+      gallery_branding_defaults: {
+        logo_placement: "top-right",
+        monogram: "KS",
+        watermark_style: "subtle-corner",
+        logo_size: 48,
+        logo_opacity: 92,
+        watermark_text: "Kaveri Stories",
+        watermark_opacity: 58,
+      },
       business_profile_slug: "kaveri-stories",
       business_unique_code: "a1b2c3d4",
     }),
@@ -42,6 +51,16 @@ describe("BusinessProfilePage studio identity", () => {
 
     expect(screen.getByLabelText(/public brand name/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/brand accent color/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/default monogram/i)).toHaveValue("KS");
+    expect(screen.getByLabelText(/default logo placement/i)).toHaveValue(
+      "top-right",
+    );
+    expect(screen.getByLabelText(/default watermark style/i)).toHaveValue(
+      "subtle-corner",
+    );
+    expect(screen.getByLabelText(/default watermark text/i)).toHaveValue(
+      "Kaveri Stories",
+    );
     expect(
       screen.getByLabelText(/show studio branding on public galleries/i),
     ).toBeInTheDocument();
@@ -68,5 +87,48 @@ describe("BusinessProfilePage studio identity", () => {
     ]) {
       expect(screen.getByText(preview)).toBeInTheDocument();
     }
+  });
+
+  it("saves gallery branding defaults through Business Profile", async () => {
+    render(<BusinessProfilePage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Business Profile" }),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/default monogram/i), {
+      target: { value: "AR" },
+    });
+    fireEvent.change(screen.getByLabelText(/default logo placement/i), {
+      target: { value: "bottom-right" },
+    });
+    fireEvent.change(screen.getByLabelText(/default watermark style/i), {
+      target: { value: "tiled" },
+    });
+    fireEvent.change(screen.getByLabelText(/default watermark text/i), {
+      target: { value: "Asha Ravi Studio" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/workspaces/current/profile"),
+        expect.objectContaining({ method: "PUT" }),
+      );
+    });
+
+    const saveCall = fetchMock.mock.calls.find(
+      ([, init]) => init && (init as RequestInit).method === "PUT",
+    );
+    const body = JSON.parse((saveCall?.[1] as RequestInit).body as string);
+    expect(body.gallery_branding_defaults).toMatchObject({
+      logo_placement: "bottom-right",
+      monogram: "AR",
+      watermark_style: "tiled",
+      watermark_text: "Asha Ravi Studio",
+    });
   });
 });

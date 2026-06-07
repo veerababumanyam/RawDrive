@@ -218,6 +218,15 @@ export interface GalleryBranding {
   accent_color?: string | null;
   hide_footer: boolean;
   public_branding_enabled?: boolean;
+  gallery_branding_defaults?: {
+    logo_placement?: "hidden" | "top-left" | "top-right" | "bottom-left" | "bottom-right";
+    monogram?: string;
+    watermark_style?: "none" | "subtle-corner" | "center-mark" | "tiled";
+    logo_size?: number;
+    logo_opacity?: number;
+    watermark_text?: string;
+    watermark_opacity?: number;
+  } | null;
 }
 
 function appendQueryParam(

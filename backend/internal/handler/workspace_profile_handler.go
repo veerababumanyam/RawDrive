@@ -40,28 +40,29 @@ type WorkspaceProfileHandler struct {
 // name/GSTIN fields that already existed. All fields are optional on
 // write — missing fields are left unchanged.
 type WorkspaceProfile struct {
-	Name              *string `json:"name,omitempty"`
-	GSTIN             *string `json:"gstin,omitempty"`
-	AddressLine1      *string `json:"address_line1,omitempty"`
-	AddressLine2      *string `json:"address_line2,omitempty"`
-	City              *string `json:"city,omitempty"`
-	PostalCode        *string `json:"postal_code,omitempty"`
-	Phone             *string `json:"phone,omitempty"`
-	Email             *string `json:"email,omitempty"`
-	Website           *string `json:"website,omitempty"`
-	LogoURL           *string `json:"logo_url,omitempty"`
-	BrandName         *string `json:"brand_name,omitempty"`
-	BrandAccentColor  *string `json:"brand_accent_color,omitempty"`
-	PublicBranding    *bool   `json:"public_branding_enabled,omitempty"`
-	LogoAssetID       *string `json:"logo_asset_id,omitempty"`
-	BankName          *string `json:"bank_name,omitempty"`
-	BankAccountHolder *string `json:"bank_account_holder,omitempty"`
-	BankAccountNumber *string `json:"bank_account_number,omitempty"`
-	BankIFSC          *string `json:"bank_ifsc,omitempty"`
-	BankBranch        *string `json:"bank_branch,omitempty"`
-	SignatureName     *string `json:"signature_name,omitempty"`
-	InvoiceTerms      *string `json:"invoice_terms,omitempty"`
-	InvoiceFooter     *string `json:"invoice_footer,omitempty"`
+	Name              *string                  `json:"name,omitempty"`
+	GSTIN             *string                  `json:"gstin,omitempty"`
+	AddressLine1      *string                  `json:"address_line1,omitempty"`
+	AddressLine2      *string                  `json:"address_line2,omitempty"`
+	City              *string                  `json:"city,omitempty"`
+	PostalCode        *string                  `json:"postal_code,omitempty"`
+	Phone             *string                  `json:"phone,omitempty"`
+	Email             *string                  `json:"email,omitempty"`
+	Website           *string                  `json:"website,omitempty"`
+	LogoURL           *string                  `json:"logo_url,omitempty"`
+	BrandName         *string                  `json:"brand_name,omitempty"`
+	BrandAccentColor  *string                  `json:"brand_accent_color,omitempty"`
+	PublicBranding    *bool                    `json:"public_branding_enabled,omitempty"`
+	LogoAssetID       *string                  `json:"logo_asset_id,omitempty"`
+	GalleryBranding   *GalleryBrandingDefaults `json:"gallery_branding_defaults,omitempty"`
+	BankName          *string                  `json:"bank_name,omitempty"`
+	BankAccountHolder *string                  `json:"bank_account_holder,omitempty"`
+	BankAccountNumber *string                  `json:"bank_account_number,omitempty"`
+	BankIFSC          *string                  `json:"bank_ifsc,omitempty"`
+	BankBranch        *string                  `json:"bank_branch,omitempty"`
+	SignatureName     *string                  `json:"signature_name,omitempty"`
+	InvoiceTerms      *string                  `json:"invoice_terms,omitempty"`
+	InvoiceFooter     *string                  `json:"invoice_footer,omitempty"`
 	// M23 additions (migration 073)
 	UPIID           *string `json:"upi_id,omitempty"`
 	PANNumber       *string `json:"pan_number,omitempty"`
@@ -72,6 +73,29 @@ type WorkspaceProfile struct {
 	// to build public gallery URLs.
 	BusinessProfileSlug *string `json:"business_profile_slug,omitempty"`
 	BusinessUniqueCode  *string `json:"business_unique_code,omitempty"`
+}
+
+// GalleryBrandingDefaults are workspace-level defaults for public gallery
+// brand overlays. They live inside workspaces.gallery_defaults->studio_branding
+// so cover designs do not need to duplicate the same studio identity per album.
+type GalleryBrandingDefaults struct {
+	LogoPlacement    string `json:"logo_placement"`
+	Monogram         string `json:"monogram"`
+	WatermarkStyle   string `json:"watermark_style"`
+	LogoSize         int    `json:"logo_size"`
+	LogoOpacity      int    `json:"logo_opacity"`
+	WatermarkText    string `json:"watermark_text"`
+	WatermarkOpacity int    `json:"watermark_opacity"`
+}
+
+var defaultGalleryBrandingDefaults = GalleryBrandingDefaults{
+	LogoPlacement:    "top-left",
+	Monogram:         "",
+	WatermarkStyle:   "none",
+	LogoSize:         40,
+	LogoOpacity:      100,
+	WatermarkText:    "",
+	WatermarkOpacity: 70,
 }
 
 // GetProfile returns the current workspace's business profile. Any NULL
@@ -112,6 +136,7 @@ func (h *WorkspaceProfileHandler) loadWorkspaceProfile(ctx context.Context, wsID
 			COALESCE(public_branding_enabled, true),
 			COALESCE(logo_asset_id::text, ''),
 			COALESCE(logo_metadata, '{}'::jsonb),
+			COALESCE(gallery_defaults, '{}'::jsonb),
 			COALESCE(bank_name, ''),
 			COALESCE(bank_account_holder, ''),
 			COALESCE(bank_account_number, ''),
@@ -132,47 +157,49 @@ func (h *WorkspaceProfileHandler) loadWorkspaceProfile(ctx context.Context, wsID
 		brandName, brandAccent, logoAssetID                                  string
 		publicBranding                                                       bool
 		logoMetadata                                                         map[string]interface{}
+		galleryDefaults                                                      map[string]interface{}
 		bankName, bankHolder, bankAcc, ifsc, branch, sig, terms, footer      string
 		upiID, panNumber, instaHandle, stateCode                             string
 		businessSlug, businessCode                                           string
 	)
 	if err := row.Scan(&name, &gstin, &addr1, &addr2, &city, &postal, &phone, &email, &website, &logo,
-		&brandName, &brandAccent, &publicBranding, &logoAssetID, &logoMetadata,
+		&brandName, &brandAccent, &publicBranding, &logoAssetID, &logoMetadata, &galleryDefaults,
 		&bankName, &bankHolder, &bankAcc, &ifsc, &branch, &sig, &terms, &footer,
 		&upiID, &panNumber, &instaHandle, &stateCode,
 		&businessSlug, &businessCode); err != nil {
 		return nil, err
 	}
 	return map[string]any{
-		"name":                    name,
-		"gstin":                   gstin,
-		"address_line1":           addr1,
-		"address_line2":           addr2,
-		"city":                    city,
-		"postal_code":             postal,
-		"phone":                   phone,
-		"email":                   email,
-		"website":                 website,
-		"logo_url":                logo,
-		"brand_name":              brandName,
-		"brand_accent_color":      brandAccent,
-		"public_branding_enabled": publicBranding,
-		"logo_asset_id":           logoAssetID,
-		"logo_metadata":           logoMetadata,
-		"bank_name":               bankName,
-		"bank_account_holder":     bankHolder,
-		"bank_account_number":     bankAcc,
-		"bank_ifsc":               ifsc,
-		"bank_branch":             branch,
-		"signature_name":          sig,
-		"invoice_terms":           terms,
-		"invoice_footer":          footer,
-		"upi_id":                  upiID,
-		"pan_number":              panNumber,
-		"instagram_handle":        instaHandle,
-		"state_code":              stateCode,
-		"business_profile_slug":   businessSlug,
-		"business_unique_code":    businessCode,
+		"name":                      name,
+		"gstin":                     gstin,
+		"address_line1":             addr1,
+		"address_line2":             addr2,
+		"city":                      city,
+		"postal_code":               postal,
+		"phone":                     phone,
+		"email":                     email,
+		"website":                   website,
+		"logo_url":                  logo,
+		"brand_name":                brandName,
+		"brand_accent_color":        brandAccent,
+		"public_branding_enabled":   publicBranding,
+		"logo_asset_id":             logoAssetID,
+		"logo_metadata":             logoMetadata,
+		"gallery_branding_defaults": galleryBrandingDefaultsFromGalleryDefaults(galleryDefaults),
+		"bank_name":                 bankName,
+		"bank_account_holder":       bankHolder,
+		"bank_account_number":       bankAcc,
+		"bank_ifsc":                 ifsc,
+		"bank_branch":               branch,
+		"signature_name":            sig,
+		"invoice_terms":             terms,
+		"invoice_footer":            footer,
+		"upi_id":                    upiID,
+		"pan_number":                panNumber,
+		"instagram_handle":          instaHandle,
+		"state_code":                stateCode,
+		"business_profile_slug":     businessSlug,
+		"business_unique_code":      businessCode,
 	}, nil
 }
 
@@ -191,6 +218,11 @@ func (h *WorkspaceProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.R
 		return
 	}
 	if err := validateBrandAccentColor(p.BrandAccentColor); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+	normalizedGalleryBranding, err := normalizeGalleryBrandingDefaults(p.GalleryBranding)
+	if err != nil {
 		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
 		return
 	}
@@ -229,6 +261,19 @@ func (h *WorkspaceProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.R
 		}
 		addCastAny(col, raw, "jsonb")
 	}
+	addGalleryBrandingDefaults := func(v GalleryBrandingDefaults) {
+		if encodeErr != nil {
+			return
+		}
+		raw, err := workspaceProfileJSONBValue(v)
+		if err != nil {
+			encodeErr = err
+			return
+		}
+		sets = append(sets, fmt.Sprintf("gallery_defaults=jsonb_set(COALESCE(gallery_defaults, '{}'::jsonb), '{studio_branding}', $%d::jsonb, true)", idx))
+		args = append(args, raw)
+		idx++
+	}
 	addBool := func(col string, v *bool) {
 		if v != nil {
 			addAny(col, *v)
@@ -246,6 +291,9 @@ func (h *WorkspaceProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.R
 	add("brand_name", p.BrandName)
 	add("brand_accent_color", p.BrandAccentColor)
 	addBool("public_branding_enabled", p.PublicBranding)
+	if p.GalleryBranding != nil {
+		addGalleryBrandingDefaults(normalizedGalleryBranding)
+	}
 	add("bank_name", p.BankName)
 	add("bank_account_holder", p.BankAccountHolder)
 	add("bank_account_number", p.BankAccountNumber)
@@ -310,6 +358,80 @@ func workspaceProfileJSONBValue(v any) (string, error) {
 		return "", err
 	}
 	return string(raw), nil
+}
+
+func galleryBrandingDefaultsFromGalleryDefaults(galleryDefaults map[string]interface{}) GalleryBrandingDefaults {
+	if galleryDefaults == nil {
+		return defaultGalleryBrandingDefaults
+	}
+	raw, ok := galleryDefaults["studio_branding"]
+	if !ok {
+		return defaultGalleryBrandingDefaults
+	}
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		return defaultGalleryBrandingDefaults
+	}
+	var defaults GalleryBrandingDefaults
+	if err := json.Unmarshal(encoded, &defaults); err != nil {
+		return defaultGalleryBrandingDefaults
+	}
+	normalized, err := normalizeGalleryBrandingDefaults(&defaults)
+	if err != nil {
+		return defaultGalleryBrandingDefaults
+	}
+	return normalized
+}
+
+func normalizeGalleryBrandingDefaults(input *GalleryBrandingDefaults) (GalleryBrandingDefaults, error) {
+	result := defaultGalleryBrandingDefaults
+	if input == nil {
+		return result, nil
+	}
+	logoPlacement := strings.TrimSpace(input.LogoPlacement)
+	if logoPlacement != "" {
+		switch logoPlacement {
+		case "hidden", "top-left", "top-right", "bottom-left", "bottom-right":
+			result.LogoPlacement = logoPlacement
+		default:
+			return result, fmt.Errorf("gallery_branding_defaults.logo_placement is invalid")
+		}
+	}
+	watermarkStyle := strings.TrimSpace(input.WatermarkStyle)
+	if watermarkStyle != "" {
+		switch watermarkStyle {
+		case "none", "subtle-corner", "center-mark", "tiled":
+			result.WatermarkStyle = watermarkStyle
+		default:
+			return result, fmt.Errorf("gallery_branding_defaults.watermark_style is invalid")
+		}
+	}
+	monogram := []rune(strings.ToUpper(strings.TrimSpace(input.Monogram)))
+	if len(monogram) > 4 {
+		monogram = monogram[:4]
+	}
+	result.Monogram = string(monogram)
+	result.WatermarkText = strings.TrimSpace(input.WatermarkText)
+	if input.LogoSize > 0 {
+		result.LogoSize = clampInt(input.LogoSize, 28, 96)
+	}
+	if input.LogoOpacity > 0 {
+		result.LogoOpacity = clampInt(input.LogoOpacity, 0, 100)
+	}
+	if input.WatermarkOpacity > 0 {
+		result.WatermarkOpacity = clampInt(input.WatermarkOpacity, 0, 100)
+	}
+	return result, nil
+}
+
+func clampInt(value, lo, hi int) int {
+	if value < lo {
+		return lo
+	}
+	if value > hi {
+		return hi
+	}
+	return value
 }
 
 func validateBrandAccentColor(value *string) error {

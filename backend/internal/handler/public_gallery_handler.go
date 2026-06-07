@@ -1251,14 +1251,15 @@ func (h *PublicGalleryHandler) VerifyPIN(w http.ResponseWriter, r *http.Request)
 // gallery shell — tier, platform brand defaults, and a can_customize flag
 // the frontend uses to decide whether to apply studio-level overrides.
 type brandingResponse struct {
-	TierSlug              string  `json:"tier_slug"`     // free, creator, pro_photographer, studio, elite_studio
-	CanCustomize          bool    `json:"can_customize"` // true when tier supports white-label overrides
-	BrandName             string  `json:"brand_name"`
-	LogoURL               *string `json:"logo_url,omitempty"`
-	LogoAssetID           *string `json:"logo_asset_id,omitempty"`
-	AccentColor           *string `json:"accent_color,omitempty"`
-	HideFooter            bool    `json:"hide_footer"` // enterprise-only: hide "Powered by RawDrive"
-	PublicBrandingEnabled bool    `json:"public_branding_enabled"`
+	TierSlug                string                  `json:"tier_slug"`     // free, creator, pro_photographer, studio, elite_studio
+	CanCustomize            bool                    `json:"can_customize"` // true when tier supports white-label overrides
+	BrandName               string                  `json:"brand_name"`
+	LogoURL                 *string                 `json:"logo_url,omitempty"`
+	LogoAssetID             *string                 `json:"logo_asset_id,omitempty"`
+	AccentColor             *string                 `json:"accent_color,omitempty"`
+	HideFooter              bool                    `json:"hide_footer"` // enterprise-only: hide "Powered by RawDrive"
+	PublicBrandingEnabled   bool                    `json:"public_branding_enabled"`
+	GalleryBrandingDefaults GalleryBrandingDefaults `json:"gallery_branding_defaults"`
 }
 
 // canCustomizeForTier returns true for tiers that may override platform
@@ -1318,14 +1319,15 @@ func (h *PublicGalleryHandler) GetBranding(w http.ResponseWriter, r *http.Reques
 	}
 
 	respondJSON(w, http.StatusOK, brandingResponse{
-		TierSlug:              tier,
-		CanCustomize:          canCustomize,
-		BrandName:             brandName,
-		LogoURL:               logoURL,
-		LogoAssetID:           logoAssetID,
-		AccentColor:           accentColor,
-		HideFooter:            tier == "enterprise" || tier == "elite_studio",
-		PublicBrandingEnabled: workspaceBranding.PublicBrandingEnabled,
+		TierSlug:                tier,
+		CanCustomize:            canCustomize,
+		BrandName:               brandName,
+		LogoURL:                 logoURL,
+		LogoAssetID:             logoAssetID,
+		AccentColor:             accentColor,
+		HideFooter:              tier == "enterprise" || tier == "elite_studio",
+		PublicBrandingEnabled:   workspaceBranding.PublicBrandingEnabled,
+		GalleryBrandingDefaults: workspaceBranding.GalleryBrandingDefaults,
 	})
 }
 
@@ -1361,33 +1363,41 @@ func (h *PublicGalleryHandler) lookupWorkspaceTier(ctx context.Context, workspac
 }
 
 type publicWorkspaceBranding struct {
-	WorkspaceName         string
-	BrandName             string
-	BrandAccentColor      string
-	PublicBrandingEnabled bool
-	LogoAssetID           string
+	WorkspaceName           string
+	BrandName               string
+	BrandAccentColor        string
+	PublicBrandingEnabled   bool
+	LogoAssetID             string
+	GalleryBrandingDefaults GalleryBrandingDefaults
 }
 
 func (h *PublicGalleryHandler) lookupWorkspaceBranding(ctx context.Context, workspaceID uuid.UUID) publicWorkspaceBranding {
-	result := publicWorkspaceBranding{PublicBrandingEnabled: true}
+	result := publicWorkspaceBranding{
+		PublicBrandingEnabled:   true,
+		GalleryBrandingDefaults: defaultGalleryBrandingDefaults,
+	}
 	if h.pool == nil {
 		return result
 	}
 
-	err := h.pool.QueryRow(ctx, `
+	row := h.pool.QueryRow(ctx, `
 		SELECT
 			COALESCE(name, ''),
 			COALESCE(brand_name, ''),
 			COALESCE(brand_accent_color, ''),
 			COALESCE(public_branding_enabled, true),
-			COALESCE(logo_asset_id::text, '')
+			COALESCE(logo_asset_id::text, ''),
+			COALESCE(gallery_defaults, '{}'::jsonb)
 		FROM workspaces
 		WHERE id = $1`,
 		workspaceID,
-	).Scan(&result.WorkspaceName, &result.BrandName, &result.BrandAccentColor, &result.PublicBrandingEnabled, &result.LogoAssetID)
+	)
+	var galleryDefaults map[string]interface{}
+	err := row.Scan(&result.WorkspaceName, &result.BrandName, &result.BrandAccentColor, &result.PublicBrandingEnabled, &result.LogoAssetID, &galleryDefaults)
 	if err != nil {
-		return publicWorkspaceBranding{PublicBrandingEnabled: true}
+		return result
 	}
+	result.GalleryBrandingDefaults = galleryBrandingDefaultsFromGalleryDefaults(galleryDefaults)
 	return result
 }
 

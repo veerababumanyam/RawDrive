@@ -44,3 +44,35 @@ func TestWorkspaceProfileJSONBValue_EncodesLogoMetadataAsJSONText(t *testing.T) 
 	assert.Equal(t, "image/jpeg", decoded["content_type"])
 	assert.Equal(t, "s3", decoded["storage_driver"])
 }
+
+func TestGalleryBrandingDefaultsFromGalleryDefaults_NormalizesStudioBranding(t *testing.T) {
+	defaults := galleryBrandingDefaultsFromGalleryDefaults(map[string]interface{}{
+		"studio_branding": map[string]interface{}{
+			"logo_placement":    "bottom-right",
+			"monogram":          "asharavi",
+			"watermark_style":   "tiled",
+			"logo_size":         float64(120),
+			"logo_opacity":      float64(92),
+			"watermark_text":    "Asha Ravi Studio",
+			"watermark_opacity": float64(8),
+		},
+	})
+
+	assert.Equal(t, "bottom-right", defaults.LogoPlacement)
+	assert.Equal(t, "ASHA", defaults.Monogram)
+	assert.Equal(t, "tiled", defaults.WatermarkStyle)
+	assert.Equal(t, 96, defaults.LogoSize)
+	assert.Equal(t, 92, defaults.LogoOpacity)
+	assert.Equal(t, "Asha Ravi Studio", defaults.WatermarkText)
+	assert.Equal(t, 8, defaults.WatermarkOpacity)
+}
+
+func TestGalleryBrandingDefaultsFromGalleryDefaults_InvalidFallsBack(t *testing.T) {
+	defaults := galleryBrandingDefaultsFromGalleryDefaults(map[string]interface{}{
+		"studio_branding": map[string]interface{}{
+			"logo_placement": "middle",
+		},
+	})
+
+	assert.Equal(t, defaultGalleryBrandingDefaults, defaults)
+}

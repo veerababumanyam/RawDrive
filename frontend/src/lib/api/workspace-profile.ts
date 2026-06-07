@@ -26,6 +26,39 @@ export interface WorkspaceLogoMetadata {
   crop?: WorkspaceLogoCropPosition;
 }
 
+export type GalleryLogoPlacement =
+  | "hidden"
+  | "top-left"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-right";
+
+export type GalleryWatermarkStyle =
+  | "none"
+  | "subtle-corner"
+  | "center-mark"
+  | "tiled";
+
+export interface GalleryBrandingDefaults {
+  logo_placement: GalleryLogoPlacement;
+  monogram: string;
+  watermark_style: GalleryWatermarkStyle;
+  logo_size: number;
+  logo_opacity: number;
+  watermark_text: string;
+  watermark_opacity: number;
+}
+
+export const EMPTY_GALLERY_BRANDING_DEFAULTS: GalleryBrandingDefaults = {
+  logo_placement: "top-left",
+  monogram: "",
+  watermark_style: "none",
+  logo_size: 40,
+  logo_opacity: 100,
+  watermark_text: "",
+  watermark_opacity: 70,
+};
+
 export interface WorkspaceProfile {
   name: string;
   gstin: string;
@@ -42,6 +75,7 @@ export interface WorkspaceProfile {
   public_branding_enabled: boolean;
   logo_asset_id: string;
   logo_metadata: WorkspaceLogoMetadata;
+  gallery_branding_defaults: GalleryBrandingDefaults;
   bank_name: string;
   bank_account_holder: string;
   bank_account_number: string;
@@ -72,6 +106,7 @@ export const EMPTY_WORKSPACE_PROFILE: WorkspaceProfile = {
   public_branding_enabled: true,
   logo_asset_id: "",
   logo_metadata: {},
+  gallery_branding_defaults: EMPTY_GALLERY_BRANDING_DEFAULTS,
   bank_name: "",
   bank_account_holder: "",
   bank_account_number: "",
@@ -82,6 +117,21 @@ export const EMPTY_WORKSPACE_PROFILE: WorkspaceProfile = {
   invoice_footer: "",
 };
 
+function normalizeWorkspaceProfile(body: Partial<WorkspaceProfile>): WorkspaceProfile {
+  return {
+    ...EMPTY_WORKSPACE_PROFILE,
+    ...body,
+    gallery_branding_defaults: {
+      ...EMPTY_GALLERY_BRANDING_DEFAULTS,
+      ...(body.gallery_branding_defaults ?? {}),
+    },
+    logo_metadata: {
+      ...EMPTY_WORKSPACE_PROFILE.logo_metadata,
+      ...(body.logo_metadata ?? {}),
+    },
+  };
+}
+
 export async function getWorkspaceProfile(
   token: string,
 ): Promise<WorkspaceProfile> {
@@ -91,7 +141,7 @@ export async function getWorkspaceProfile(
   if (!res.ok)
     throw new Error(`Failed to load workspace profile: ${res.status}`);
   const body = await res.json();
-  return { ...EMPTY_WORKSPACE_PROFILE, ...body };
+  return normalizeWorkspaceProfile(body);
 }
 
 export async function updateWorkspaceProfile(
@@ -156,7 +206,7 @@ export async function uploadWorkspaceLogoCrop(
     throw new Error(text || `Failed to upload studio logo: ${res.status}`);
   }
   const body = await res.json();
-  return { ...EMPTY_WORKSPACE_PROFILE, ...body };
+  return normalizeWorkspaceProfile(body);
 }
 
 // cropWorkspaceLogo re-renders the workspace's stored ORIGINAL logo at a new
@@ -176,5 +226,5 @@ export async function cropWorkspaceLogo(
     throw new Error(text || `Failed to crop studio logo: ${res.status}`);
   }
   const body = await res.json();
-  return { ...EMPTY_WORKSPACE_PROFILE, ...body };
+  return normalizeWorkspaceProfile(body);
 }
