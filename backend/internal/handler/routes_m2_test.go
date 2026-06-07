@@ -101,6 +101,7 @@ func TestM2Routes_DashboardEndpoints(t *testing.T) {
 
 func TestM2Routes_PublicEndpoints(t *testing.T) {
 	r := setupM2Router()
+	assert.True(t, routeExists(r, "POST", "/api/public-gallery-session"), "POST public gallery session bridge")
 	assert.True(t, routeExists(r, "GET", "/api/v1/public/studios/test-a1b2c3d4"), "GET retired studio landing")
 	assert.True(t, routeExists(r, "GET", "/api/v1/public/studios/test-a1b2c3d4/logo"), "GET retired studio logo")
 	assert.True(t, routeExists(r, "GET", "/api/v1/public/galleries/test-slug"), "GET public gallery")

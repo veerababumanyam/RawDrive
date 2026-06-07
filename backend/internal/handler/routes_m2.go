@@ -467,6 +467,8 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 		WithGalleryAccessService(deps.GalleryAccessSvc).
 		WithShareLinkService(deps.ShareLinkService)
 
+	r.Post("/api/public-gallery-session", HandlePublicGallerySessionBridge)
+
 	r.Route("/api/v1/public", func(r chi.Router) {
 		r.Get("/studios/{subdomain}", publicHandler.GetStudioLanding)
 		r.Get("/studios/{subdomain}/logo", publicHandler.GetStudioLogo)
