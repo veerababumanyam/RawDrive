@@ -158,16 +158,36 @@ func (r *FaceRepo) FindSimilarFacesScored(ctx context.Context, embedding []float
 // FindSimilarFacesInGallery matches an embedding against faces scoped to a single gallery.
 // Used by FaceID gallery entry (GAL-FR-107/108): a client uploads a selfie embedding,
 // we return matching asset IDs that appear only inside this gallery.
+//
+// Slice 3h (B-D1): this path now shares ONE candidate contract with the
+// PhotoSearch path (FindSimilarFacesInGalleryScored) so the two public
+// biometric endpoints in one gallery search the same candidate set:
+//
+//   - gallery scope resolves through gallery_assets (the source of truth for
+//     asset → gallery membership), NOT the denormalized face_clusters.gallery_id
+//     column, which is frequently NULL when the asset was detected via the
+//     thumbnail-worker auto-enqueue path. Filtering on the denormalized column
+//     silently dropped legitimately-in-gallery candidates that the Scored path
+//     (which already JOINs gallery_assets) returned.
+//   - only clustered candidates participate (cluster_label IS NOT NULL):
+//     unclustered noise faces carry no confirmed identity, so they were never
+//     legitimate FaceMatch candidates.
+//
+// Cross-tenant safety is preserved: gallery_assets membership is itself
+// workspace-bounded (a gallery belongs to exactly one workspace), so scoping by
+// gallery_id can never surface another tenant's faces.
 func (r *FaceRepo) FindSimilarFacesInGallery(ctx context.Context, embedding []float32, galleryID uuid.UUID, threshold float64, limit int) ([]*FaceCluster, error) {
 	maxDistance := 1.0 - threshold
 
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, workspace_id, asset_id, gallery_id, face_index, bounding_box,
-		 cluster_label, cluster_name, confidence, source, created_at, updated_at
-		 FROM face_clusters
-		 WHERE gallery_id = $1
-		   AND (embedding <=> $2) <= $3
-		 ORDER BY embedding <=> $2 ASC
+		`SELECT fc.id, fc.workspace_id, fc.asset_id, fc.gallery_id, fc.face_index, fc.bounding_box,
+		 fc.cluster_label, fc.cluster_name, fc.confidence, fc.source, fc.created_at, fc.updated_at
+		 FROM face_clusters fc
+		 INNER JOIN gallery_assets ga ON ga.asset_id = fc.asset_id
+		 WHERE ga.gallery_id = $1
+		   AND fc.cluster_label IS NOT NULL
+		   AND (fc.embedding <=> $2) <= $3
+		 ORDER BY fc.embedding <=> $2 ASC
 		 LIMIT $4`,
 		galleryID, pgvector.NewVector(embedding), maxDistance, limit)
 	if err != nil {

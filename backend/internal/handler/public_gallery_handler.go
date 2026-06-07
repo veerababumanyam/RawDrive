@@ -1635,7 +1635,7 @@ func (h *PublicGalleryHandler) GetStudioLogo(w http.ResponseWriter, r *http.Requ
 type faceMatchRequest struct {
 	Embedding    []float32 `json:"embedding"`
 	ConsentGiven bool      `json:"consent_given"`
-	Threshold    *float64  `json:"threshold,omitempty"` // clamped 0.3–0.95, default 0.6
+	Threshold    *float64  `json:"threshold,omitempty"` // clamped 0.3–0.95; default = configured faceThresholds.RetrievalFloor (slice 3h)
 }
 
 type faceMatchResponse struct {
@@ -1646,6 +1646,28 @@ type faceMatchResponse struct {
 	FallbackAvailable bool     `json:"fallback_available"` // GAL-FR-109 — always true
 }
 
+// resolveFaceMatchThreshold returns the cosine-similarity acceptance gate for
+// FaceMatch, drawn from the SAME configurable source PhotoSearch uses — the
+// injected faceThresholds (platform_settings(ai.face_*) → env → defaults),
+// specifically its RetrievalFloor. This replaces the old hardcoded 0.6 so the
+// two public biometric endpoints in a gallery share one behavioral contract
+// (slice 3h / B-D1). An explicit per-request override is still honoured but
+// clamped to the historical [0.3, 0.95] safety band so a caller can never widen
+// the gate to "match everything" or narrow it to "match nothing".
+func (h *PublicGalleryHandler) resolveFaceMatchThreshold(override *float64) float64 {
+	threshold := h.faceThresholds.RetrievalFloor
+	if override != nil {
+		threshold = *override
+		if threshold < 0.3 {
+			threshold = 0.3
+		}
+		if threshold > 0.95 {
+			threshold = 0.95
+		}
+	}
+	return threshold
+}
+
 // FaceMatch handles POST /api/v1/public/galleries/{slug}/face-match
 // (GAL-FR-107/108/109).
 //
@@ -1653,7 +1675,9 @@ type faceMatchResponse struct {
 //   - gallery.settings.faceid_enabled = true (opt-in per gallery)
 //   - explicit consent_given = true in request body (GAL-FR-107)
 //   - matches are strictly gallery-scoped via FindSimilarFacesInGallery
-//     (GAL-FR-108 — cross-gallery leakage impossible at the SQL layer)
+//     (GAL-FR-108 — cross-gallery leakage impossible at the SQL layer), using
+//     the SAME clustered-only candidate set + configurable threshold source as
+//     PhotoSearch (slice 3h / B-D1)
 //   - fallback_available = true in every response so zero-match selfies
 //     don't trap the user (GAL-FR-109 — frontend always shows "Browse all")
 func (h *PublicGalleryHandler) FaceMatch(w http.ResponseWriter, r *http.Request) {
@@ -1711,16 +1735,7 @@ func (h *PublicGalleryHandler) FaceMatch(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	threshold := 0.6
-	if req.Threshold != nil {
-		threshold = *req.Threshold
-		if threshold < 0.3 {
-			threshold = 0.3
-		}
-		if threshold > 0.95 {
-			threshold = 0.95
-		}
-	}
+	threshold := h.resolveFaceMatchThreshold(req.Threshold)
 
 	matches, err := h.faceRepo.FindSimilarFacesInGallery(r.Context(), req.Embedding, gallery.ID, threshold, 200)
 	if err != nil {
