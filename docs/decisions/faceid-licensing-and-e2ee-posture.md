@@ -147,8 +147,21 @@ under true E2EE; the seamless fix is client-side embedding at upload).
   consent capture + audit (slice 3b) and the honest "indexing unavailable" state (slices
   3d/3e/3i), and the flag contract is unified so the two endpoints stop diverging.
 
-A separate runtime slice must implement whichever disposition the owner ratifies; this record
-is the decision it cites.
+**UPDATE — guard disposition IMPLEMENTED (runtime slice):** `StoreIndexImage` is now gated
+behind its own kill switch **`server_face_index_plaintext`** (default **OFF**, precedence
+`platform_settings` → env `FEATURE_SERVER_FACE_INDEX_PLAINTEXT` → default-off, mirroring
+`client_face_index`). The handler **fails closed** — a disclosure-safe **404** before any
+request body is read — when the flag is absent or disabled, so the server no longer accepts a
+decrypted frame by default and the E2EE contract holds. This implements the **guarded** branch
+of the disposition above without choosing between retire-vs-keep: the path is dormant until an
+operator deliberately enables it, and stays the interim posture-(a) mechanism only while
+enabled. Files: `backend/internal/featureflag/server_plaintext_face_index.go`,
+`backend/internal/handler/face_embeddings_handler.go` (`WithPlaintextFaceIndexGate`,
+`StoreIndexImage`), wired in `backend/cmd/api/main.go`. Full retirement and the single unified
+flag+consent contract for both endpoints remain a follow-up under the ratified target posture (b).
+
+A separate runtime slice must implement whichever final disposition the owner ratifies; this
+record is the decision it cites, and the guard above is its first landed increment.
 
 ## Consequences
 
@@ -158,9 +171,12 @@ is the decision it cites.
 - Slice 2b stays owner-blocked on licensing + model hosting + the parity gate; no code changes
   until those clear.
 - The `/face-index-image` vs `/face-embeddings` flag/contract reconciliation is a tracked
-  follow-up, not a dropped blocker.
-- No runtime/model change ships with this record. The slice-3a code comments
-  (`face_service.go`, `workspace_face_recognition_handler.go`) now resolve to a real document.
+  follow-up, not a dropped blocker. **First increment landed:** `/face-index-image` is now
+  guarded behind the default-off `server_face_index_plaintext` kill switch and fails closed, so
+  the live plaintext-frame path is dormant by default (§4 UPDATE). Full retirement + a single
+  unified flag/consent contract remain the follow-up under the ratified target posture (b).
+- The slice-3a code comments (`face_service.go`, `workspace_face_recognition_handler.go`) now
+  resolve to a real document.
 
 ## Alternatives considered (and why not now)
 
