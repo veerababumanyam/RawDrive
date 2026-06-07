@@ -26,18 +26,12 @@ import {
   getPublicGalleryBranding,
   type GalleryBranding,
 } from "@/lib/api/galleries";
-import { FaceIDGate } from "./faceid-gate";
+import { withPublicScope } from "@/lib/api/ai";
 
 interface Props {
   slug: string;
   /** Face ID is only offered when the gallery has faceid_enabled=true. */
   faceIdEnabled?: boolean;
-  /**
-   * Gallery is end-to-end encrypted — the server has no face index, so the
-   * FaceID gate shows an honest "not available yet" state instead of a
-   * misleading match. See FaceIDGate.
-   */
-  encrypted?: boolean;
   initialBranding?: GalleryBranding | null;
   previewMode?: boolean;
 }
@@ -50,30 +44,41 @@ interface Props {
 export function PublicGalleryEnhancements({
   slug,
   faceIdEnabled = false,
-  encrypted = false,
   initialBranding = null,
   previewMode = false,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const queryString = searchParams?.toString() ?? "";
   const faceIdParam = searchParams?.get("faceid") ?? "";
   const modeParam = searchParams?.get("mode") ?? "";
   const fromParam = searchParams?.get("from") ?? "";
-  // Share-link access scope (#175): forwarded to the FaceID gate so the
-  // photo-search POST self-authorizes on a no-PIN share arrival even when the
-  // gallery_session cookie is absent.
+  // Share-link access scope (#175): forwarded onto the standalone Find-Me route
+  // so the photo-search POST self-authorizes on a no-PIN share arrival even when
+  // the gallery_session cookie is absent.
   const shareParam = searchParams?.get("share") ?? "";
   const wsParam = searchParams?.get("ws") ?? "";
   const [branding, setBranding] = useState<GalleryBranding | null>(
     initialBranding,
   );
-  const [faceIdDismissed, setFaceIdDismissed] = useState(false);
-  const [facePinnedAssetIds, setFacePinnedAssetIds] = useState<string[] | null>(
-    null,
-  );
-  const faceIdOpen =
-    !previewMode && faceIdParam === "1" && faceIdEnabled && !faceIdDismissed;
+
+  // 3i convergence: the public Find-Me experience is the standalone
+  // /g/{slug}/photo-search surface — the only capable implementation
+  // (secure-context detection, the camera-error classifier, the
+  // faces_detected===0 vs index_status==="empty" distinction, decrypted
+  // result thumbnails, and the GAL-FR-107 consent step). The weaker in-page
+  // FaceIDGate modal (which dropped the `encrypted` prop and never reached its
+  // honest "unavailable" state) was removed; the legacy `?faceid=1` entry now
+  // routes into that single flow instead of opening a divergent modal.
+  useEffect(() => {
+    if (previewMode) return;
+    if (faceIdParam !== "1" || !faceIdEnabled) return;
+    router.replace(
+      withPublicScope(`/g/${slug}/photo-search`, {
+        shareToken: shareParam || null,
+        ws: wsParam || null,
+      }),
+    );
+  }, [faceIdParam, faceIdEnabled, previewMode, router, slug, shareParam, wsParam]);
 
   // GAL-FR-118: View-as-Client mode — applies a body class the CSS can hook
   // into (`.view-as-client` selector) so the same component tree reads as
@@ -113,34 +118,6 @@ export function PublicGalleryEnhancements({
     };
   }, [slug, initialBranding, previewMode]);
 
-  const onFaceMatched = (assetIds: string[]) => {
-    // Dispatch a window event that PublicGalleryGrid listens to. The grid
-    // filters the rendered assets to the matched set — the filter chip
-    // below is purely cosmetic, the grid is the source of truth.
-    setFacePinnedAssetIds(assetIds);
-    setFaceIdDismissed(true);
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(
-        new CustomEvent("rawdrive:face-filter", { detail: { assetIds } }),
-      );
-    }
-  };
-
-  const onFaceFallback = () => {
-    if (previewMode) return;
-    // GAL-FR-109: full browsing fallback — close the gate, clear the grid
-    // filter via the clear event, strip ?faceid=1 from the URL so reloads
-    // don't reopen the modal.
-    setFaceIdDismissed(true);
-    setFacePinnedAssetIds(null);
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("rawdrive:face-filter-clear"));
-    }
-    const params = new URLSearchParams(queryString);
-    params.delete("faceid");
-    router.replace(`/g/${slug}${params.toString() ? `?${params}` : ""}`);
-  };
-
   return (
     <>
       {/* GAL-FR-117: public profile → gallery bridge breadcrumb */}
@@ -165,33 +142,10 @@ export function PublicGalleryEnhancements({
           galleries.face_detection_enabled gate now drives the hero's
           faceDetectionEnabled prop instead. */}
 
-      {/* GAL-FR-107/108/109: FaceID entry modal */}
-      {faceIdOpen && (
-        <FaceIDGate
-          slug={slug}
-          encrypted={encrypted}
-          shareToken={shareParam || null}
-          ws={wsParam || null}
-          onMatched={onFaceMatched}
-          onFallback={onFaceFallback}
-        />
-      )}
-
-      {/* Face filter indicator (GAL-FR-109 fallback affordance always visible) */}
-      {facePinnedAssetIds !== null && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 rounded-full bg-accent-primary/90 glass-blur-subtle px-4 py-2 text-xs text-text-inverse">
-          <span>
-            Showing {facePinnedAssetIds.length} photos matching your face
-          </span>
-          <button
-            type="button"
-            onClick={onFaceFallback}
-            className="rounded-full border border-text-inverse/30 px-2 py-0.5 hover:bg-text-inverse/10"
-          >
-            Browse all
-          </button>
-        </div>
-      )}
+      {/* GAL-FR-107/108/109: the public Find-Me entry is the standalone
+          /g/{slug}/photo-search surface. The legacy `?faceid=1` query param is
+          redirected there by the effect above instead of opening a divergent
+          in-page modal (3i convergence). */}
     </>
   );
 }

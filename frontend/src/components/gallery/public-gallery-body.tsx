@@ -164,9 +164,6 @@ export function PublicGalleryBody({
       <PublicGalleryEnhancements
         slug={slug}
         faceIdEnabled={Boolean(gallery.faceid_enabled)}
-        encrypted={Boolean(
-          gallery.cover_asset?.is_encrypted || designCoverAsset?.is_encrypted,
-        )}
         initialBranding={branding}
         previewMode={previewMode}
       />

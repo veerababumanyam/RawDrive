@@ -25,6 +25,9 @@ import {
   listPublicPeople,
   listPublicPersonPhotos,
   searchPublicFaceInGallery,
+  isPhotoSearchDisabledError,
+  isPhotoSearchUnavailableError,
+  PhotoSearchUnavailableError,
   unlinkClusterContact,
 } from "../ai";
 import { persistAuthTokens, clearAuthTokens } from "@/lib/auth";
@@ -516,6 +519,62 @@ describe("Public face/people API client (gallery-session credential)", () => {
     const init = mockFetch.mock.calls[0][1];
     expect(init.body).toBeInstanceOf(FormData);
     expect((init.body as FormData).get("consent_given")).toBeNull();
+  });
+
+  // FE-5: "feature not available right now" is classified from the HTTP STATUS
+  // CODE (not a regex on the error copy), so a backend wording change cannot
+  // silently break the friendly disabled/unavailable panels.
+  it("searchPublicFaceInGallery throws PhotoSearchUnavailableError on 503 (typed, status-keyed)", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      // Deliberately DIFFERENT copy than the page ever regex-matched — proves
+      // detection keys on the status code, not the text.
+      text: () =>
+        Promise.resolve(
+          JSON.stringify({ error: "completely reworded service message" }),
+        ),
+    });
+    const blob = new Blob([new Uint8Array([1])], { type: "image/jpeg" });
+    await expect(
+      searchPublicFaceInGallery("wedding-abcd1234", blob),
+    ).rejects.toBeInstanceOf(PhotoSearchUnavailableError);
+  });
+
+  it("searchPublicFaceInGallery throws PhotoSearchDisabledError on 403 disabled (typed, status-keyed)", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      text: () =>
+        Promise.resolve(
+          JSON.stringify({ error: "photo search disabled for this gallery" }),
+        ),
+    });
+    const blob = new Blob([new Uint8Array([1])], { type: "image/jpeg" });
+    const err = await searchPublicFaceInGallery(
+      "wedding-abcd1234",
+      blob,
+    ).catch((e) => e);
+    expect(isPhotoSearchDisabledError(err)).toBe(true);
+    expect(isPhotoSearchUnavailableError(err)).toBe(false);
+  });
+
+  it("searchPublicFaceInGallery does NOT classify a 403 biometric_consent_required as disabled", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      text: () =>
+        Promise.resolve(JSON.stringify({ error: "biometric_consent_required" })),
+    });
+    const blob = new Blob([new Uint8Array([1])], { type: "image/jpeg" });
+    const err = await searchPublicFaceInGallery(
+      "wedding-abcd1234",
+      blob,
+    ).catch((e) => e);
+    // Consent is enforced pre-capture in the standalone flow; mislabeling it as
+    // "disabled" would be wrong, so it falls through to a generic Error.
+    expect(isPhotoSearchDisabledError(err)).toBe(false);
+    expect(err).toBeInstanceOf(Error);
   });
 });
 

@@ -19,6 +19,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Camera, ChevronLeft, RefreshCw, Search } from "lucide-react";
 import {
+  isPhotoSearchDisabledError,
+  isPhotoSearchUnavailableError,
   searchPublicFaceInGallery,
   withPublicScope,
   type PublicFaceSearchResponse,
@@ -321,12 +323,14 @@ export default function PublicPhotoSearchPage({
       stopCamera();
       setStage("result-found");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      // Backend sends specific status codes for the two
-      // "feature not available right now" cases. Detect those from
-      // the error body and route to a friendlier panel instead of a
-      // raw error toast.
-      if (/photo search disabled/i.test(msg)) {
+      // FE-5: the backend sends distinct HTTP status codes for the two "feature
+      // not available right now" cases (403 disabled / 503 unavailable).
+      // searchPublicFaceInGallery turns those into TYPED errors keyed on the
+      // status code (and the structured `error` body field) — not a regex on the
+      // error copy — so a backend wording change can't silently break this
+      // friendly panel. Route them to the friendlier panel instead of a raw
+      // error toast.
+      if (isPhotoSearchDisabledError(err)) {
         stopCamera();
         setFeatureDisabled({
           reason: "disabled",
@@ -335,7 +339,7 @@ export default function PublicPhotoSearchPage({
         setStage("camera-error");
         return;
       }
-      if (/photo search not available/i.test(msg)) {
+      if (isPhotoSearchUnavailableError(err)) {
         stopCamera();
         setFeatureDisabled({
           reason: "unavailable",
@@ -344,6 +348,7 @@ export default function PublicPhotoSearchPage({
         setStage("camera-error");
         return;
       }
+      const msg = err instanceof Error ? err.message : String(err);
       setErrorDetail(msg);
       setStage("preview");
     }

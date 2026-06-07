@@ -21,6 +21,48 @@ export function isFaceIndexUnavailableError(
   return err instanceof FaceIndexUnavailableError;
 }
 
+// Public photo-search "feature not available right now" errors.
+//
+// FE-5: these are thrown by searchPublicFaceInGallery from the HTTP STATUS CODE
+// (with the structured `error` field of the JSON body as the message) — never
+// from a regex on free-text copy. The backend
+// (public_gallery_handler.PhotoSearch) returns:
+//   - 403 {"error":"photo search disabled for this gallery"} → studio turned the
+//         per-gallery face_detection_enabled flag OFF              → DISABLED
+//   - 503 {"error":"photo search not available"}              → the deployment
+//         has no face-svc client wired (FACE_SVC_URL unset)        → UNAVAILABLE
+// A backend copy change to either message can no longer silently break the
+// friendly panel, because detection keys on the status code, not the text.
+
+// PhotoSearchDisabledError — 403: this gallery has photo search switched off.
+export class PhotoSearchDisabledError extends Error {
+  constructor(message = "photo search disabled for this gallery") {
+    super(message);
+    this.name = "PhotoSearchDisabledError";
+  }
+}
+
+// PhotoSearchUnavailableError — 503: the face-search service is not available
+// right now (deployment has no face-svc client wired).
+export class PhotoSearchUnavailableError extends Error {
+  constructor(message = "photo search not available") {
+    super(message);
+    this.name = "PhotoSearchUnavailableError";
+  }
+}
+
+export function isPhotoSearchDisabledError(
+  err: unknown,
+): err is PhotoSearchDisabledError {
+  return err instanceof PhotoSearchDisabledError;
+}
+
+export function isPhotoSearchUnavailableError(
+  err: unknown,
+): err is PhotoSearchUnavailableError {
+  return err instanceof PhotoSearchUnavailableError;
+}
+
 // SampleBoundingBox mirrors the backend ai.BoundingBox shape (pixels of
 // the original image — sourced from face_clusters.bounding_box JSONB).
 // PR-3 people tab uses this to crop the cluster cover thumbnail to just
@@ -556,9 +598,40 @@ export async function searchPublicFaceInGallery(
   );
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(text || `Photo search failed: ${res.status}`);
+    // FE-5: classify the "feature not available right now" cases from the HTTP
+    // STATUS CODE plus the structured `error` field of the JSON body — never a
+    // regex on free-text copy. A backend wording change can no longer silently
+    // break the friendly panel.
+    const errorCode = parseErrorCode(text);
+    // 503 → the deployment has no face-svc client wired.
+    if (res.status === 503) {
+      throw new PhotoSearchUnavailableError(errorCode || undefined);
+    }
+    // 403 carries two distinct cases: the per-gallery feature flag is OFF
+    // (`photo search disabled…`) vs. the GAL-FR-107 consent precondition
+    // (`biometric_consent_required`). Only the former is the "disabled" panel;
+    // the consent case is reached pre-capture in this flow, so fall through to a
+    // generic error rather than mislabeling it as "disabled".
+    if (res.status === 403 && errorCode !== "biometric_consent_required") {
+      throw new PhotoSearchDisabledError(errorCode || undefined);
+    }
+    throw new Error(errorCode || text || `Photo search failed: ${res.status}`);
   }
   return res.json();
+}
+
+// parseErrorCode extracts the structured `error` field from a JSON error body
+// (the shape every public_gallery_handler error uses: `{"error":"..."}`),
+// returning "" when the body is not JSON or has no `error` field. Callers key
+// behavior on the HTTP status first and use this only as the structured detail.
+function parseErrorCode(body: string): string {
+  if (!body) return "";
+  try {
+    const parsed = JSON.parse(body) as { error?: unknown };
+    return typeof parsed.error === "string" ? parsed.error : "";
+  } catch {
+    return "";
+  }
 }
 
 // ---- Client-computed face-embedding ingest (E2EE face-search epic) ----
