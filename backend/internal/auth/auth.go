@@ -429,10 +429,12 @@ type JWTService interface {
 	ParseAccessToken(ctx context.Context, tokenStr string) (*TokenClaims, error)
 	GenerateRefreshToken(ctx context.Context, userID, familyID string) (string, error)
 	GenerateRefreshTokenWithClaims(ctx context.Context, userID, familyID, workspaceID, role, platformRole, stateID string) (string, error)
+	GenerateRefreshTokenWithClaimsReplacingOldest(ctx context.Context, userID, familyID, workspaceID, role, platformRole, stateID string) (string, error)
 	// F-007 (M17 wave 2): variant that persists the mfa_verified state
 	// of the minting login. RotateRefreshToken carries this forward so
 	// refreshed access tokens keep their MFA state.
 	GenerateRefreshTokenWithMFA(ctx context.Context, userID, familyID, workspaceID, role, platformRole, stateID string, mfaVerified bool) (string, error)
+	GenerateRefreshTokenWithMFAReplacingOldest(ctx context.Context, userID, familyID, workspaceID, role, platformRole, stateID string, mfaVerified bool) (string, error)
 	RotateRefreshToken(ctx context.Context, oldToken string) (newAccess string, newRefresh string, err error)
 	InspectRefreshToken(ctx context.Context, tokenStr string) (*RefreshTokenInfo, error)
 	RevokeSession(ctx context.Context, familyID string) error
@@ -634,6 +636,10 @@ func (s *jwtService) GenerateRefreshTokenWithClaims(ctx context.Context, userID,
 	return s.GenerateRefreshTokenWithMFA(ctx, userID, familyID, workspaceID, role, platformRole, stateID, false)
 }
 
+func (s *jwtService) GenerateRefreshTokenWithClaimsReplacingOldest(ctx context.Context, userID, familyID, workspaceID, role, platformRole, stateID string) (string, error) {
+	return s.GenerateRefreshTokenWithMFAReplacingOldest(ctx, userID, familyID, workspaceID, role, platformRole, stateID, false)
+}
+
 // GenerateRefreshTokenWithMFA is the F-007 variant that persists the
 // mfa_verified state of the minting login. The VerifyTOTP handler calls
 // this with mfaVerified=true after a successful second-factor check so
@@ -662,6 +668,21 @@ func (s *jwtService) GenerateRefreshTokenWithMFA(ctx context.Context, userID, fa
 		return "", fmt.Errorf("refresh store: create: %w", err)
 	}
 	return tokenStr, nil
+}
+
+func (s *jwtService) GenerateRefreshTokenWithMFAReplacingOldest(ctx context.Context, userID, familyID, workspaceID, role, platformRole, stateID string, mfaVerified bool) (string, error) {
+	tokenStr, err := s.GenerateRefreshTokenWithMFA(ctx, userID, familyID, workspaceID, role, platformRole, stateID, mfaVerified)
+	if err == nil || !errors.Is(err, ErrMaxConcurrentSessions) {
+		return tokenStr, err
+	}
+
+	if _, ok, revokeErr := s.refreshStore.RevokeOldestFamilyForUser(ctx, userID); revokeErr != nil {
+		return "", fmt.Errorf("refresh store: revoke oldest family: %w", revokeErr)
+	} else if !ok {
+		return "", err
+	}
+
+	return s.GenerateRefreshTokenWithMFA(ctx, userID, familyID, workspaceID, role, platformRole, stateID, mfaVerified)
 }
 
 func (s *jwtService) RotateRefreshToken(ctx context.Context, oldToken string) (string, string, error) {

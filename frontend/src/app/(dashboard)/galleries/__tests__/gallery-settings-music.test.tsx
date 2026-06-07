@@ -540,6 +540,110 @@ describe("Gallery settings — slideshow music", () => {
     expect(saved.logo_url).toBeUndefined();
   });
 
+  it("persists Logo + Text and free-form text layer placement", async () => {
+    mocks.getWorkspaceProfile.mockResolvedValue(
+      workspaceProfile({
+        logo_asset_id: "logo-asset-1",
+        logo_url: "data:image/png;base64,logo",
+        logo_metadata: {
+          filename: "studio-logo.webp",
+          storage_key: "workspaces/logo.webp",
+        },
+      }),
+    );
+    mocks.getGallery.mockResolvedValue(
+      gallery({
+        watermark_config: {
+          enabled: true,
+          mode: "logo",
+          logo_source: "business_profile",
+          text: "Kaveri Stories",
+          position: "bottom-right",
+          placement: { x: 84, y: 84 },
+          opacity: 55,
+          scale: 100,
+        },
+      }),
+    );
+    mocks.updateGallerySettings.mockImplementation(
+      async (_token, _id, payload) =>
+        gallery(payload as Record<string, unknown>),
+    );
+
+    await renderPage();
+    await waitFor(() => screen.getByRole("heading", { name: "Watermark" }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Logo + text" }));
+    });
+
+    await waitFor(() =>
+      expect(
+        mocks.updateGallerySettings.mock.calls.at(-1)?.[2]?.watermark_config,
+      ).toEqual(
+        expect.objectContaining({
+          mode: "both",
+          logo_source: "business_profile",
+          layers: expect.objectContaining({
+            logo: expect.objectContaining({
+              position: "bottom-right",
+              placement: { x: 84, y: 84 },
+            }),
+            text: expect.objectContaining({
+              position: "top-left",
+              placement: { x: 16, y: 16 },
+            }),
+          }),
+        }),
+      ),
+    );
+
+    await act(async () => {
+      fireEvent.click(
+        within(
+          screen.getByRole("group", { name: "Watermark layer" }),
+        ).getByRole("button", { name: "Text" }),
+      );
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Free form" }));
+    });
+    await waitFor(() =>
+      expect(
+        mocks.updateGallerySettings.mock.calls.at(-1)?.[2]?.watermark_config
+          ?.layers?.text,
+      ).toEqual(
+        expect.objectContaining({
+          position: "custom",
+          placement: { x: 16, y: 16 },
+        }),
+      ),
+    );
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/Horizontal/), {
+        target: { value: "24" },
+      });
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/Vertical/), {
+        target: { value: "62" },
+      });
+    });
+
+    await waitFor(() =>
+      expect(
+        mocks.updateGallerySettings.mock.calls.at(-1)?.[2]?.watermark_config
+          ?.layers?.text,
+      ).toEqual(
+        expect.objectContaining({
+          position: "custom",
+          placement: { x: 24, y: 62 },
+        }),
+      ),
+    );
+  });
+
   it("toggles automated client emails off", async () => {
     mocks.updateGallerySettings.mockResolvedValue(
       gallery({ email_automation_enabled: false }),

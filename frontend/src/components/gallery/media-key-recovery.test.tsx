@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  LockedMediaFallback,
   MediaKeyRecoveryBanner,
   useLockedMediaRecoverySummary,
 } from "./media-key-recovery";
@@ -115,5 +116,22 @@ describe("media key recovery UI", () => {
     await waitFor(() => {
       expect(screen.getByTestId("summary")).toHaveTextContent("none");
     });
+  });
+
+  it("uses caller-provided copy for compact fallback tiles", () => {
+    render(
+      <LockedMediaFallback
+        asset={encryptedAsset("asset-1", "gallery:gallery-1")}
+        error="Encrypted media fetch failed: 404"
+        message="Preview unavailable. Refresh or regenerate thumbnails."
+        mode="compact"
+        allowRecovery={false}
+      />,
+    );
+
+    expect(
+      screen.getByText("Preview unavailable. Refresh or regenerate thumbnails."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Key needed")).not.toBeInTheDocument();
   });
 });

@@ -21,6 +21,8 @@ const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "CDN-Cache-Control", value: "no-transform" },
+  { key: "Cloudflare-CDN-Cache-Control", value: "no-transform" },
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
   {
     // Permissions-Policy — F-010 baseline locks every powerful feature to

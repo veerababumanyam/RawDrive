@@ -10,7 +10,7 @@ import (
 // finding F-012 (Google OAuth Login Bypasses TOTP Step-Up).
 //
 // Root cause: OAuthGoogleCallback resolved the user and went straight to
-// GenerateRefreshTokenWithClaims, never consulting the MFA enrollment store.
+// full-session refresh-token issuance, never consulting the MFA enrollment store.
 // A user who had enrolled (and verified) TOTP could log in via Google and
 // receive a full session with mfa_verified=false, never being prompted for
 // their second factor — while the password Login path correctly gates on the
@@ -92,10 +92,10 @@ func TestF012_OAuthGoogleCallbackEnforcesMFAStepUp(t *testing.T) {
 
 	// The gate must come BEFORE the full-session refresh token is issued —
 	// otherwise the enrolled user would already hold a valid session.
-	refreshIdx := strings.Index(body, "GenerateRefreshTokenWithClaims(")
+	refreshIdx := strings.Index(body, "GenerateRefreshTokenWithClaimsReplacingOldest(")
 	if refreshIdx < 0 {
 		t.Fatalf("F-012 regression: OAuthGoogleCallback no longer issues a " +
-			"refresh token via GenerateRefreshTokenWithClaims — the test's " +
+			"refresh token via GenerateRefreshTokenWithClaimsReplacingOldest — the test's " +
 			"ordering assumption is stale and must be revisited.")
 	}
 	if gateIdx > refreshIdx {

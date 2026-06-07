@@ -78,7 +78,9 @@ export interface CoverDeviceProfile {
   layoutPreset?: CoverPresetId;
   mediaMode?: CoverMediaMode;
   focalPoint?: CoverPoint;
+  zoom?: number;
   slotFocalPoints?: CoverPoint[];
+  slotZooms?: number[];
   aspectRatio?: string;
   title?: string;
   subtitle?: string;
@@ -120,8 +122,12 @@ export interface PublicDesignConfig {
     mediaMode?: CoverMediaMode;
     focalPoint?: CoverPoint;
     mobileFocalPoint?: CoverPoint;
+    zoom?: number;
+    mobileZoom?: number;
     slotFocalPoints?: CoverPoint[];
     mobileSlotFocalPoints?: CoverPoint[];
+    slotZooms?: number[];
+    mobileSlotZooms?: number[];
     mobileAspectRatio?: string;
     title?: string;
     subtitle?: string;
@@ -272,6 +278,8 @@ const WATERMARK_STYLES = [
   "center-mark",
   "tiled",
 ] as const;
+const COVER_ZOOM_MIN = 1;
+const COVER_ZOOM_MAX = 3;
 
 function readPoint(value: unknown, fallbackY: number) {
   const point = asObject(value);
@@ -292,6 +300,21 @@ function readPointList(raw: unknown): CoverPoint[] | undefined {
   if (!Array.isArray(raw)) return undefined;
   const points = raw.map((entry) => readPoint(entry, 50) || { x: 50, y: 50 });
   return points.length > 0 ? points : undefined;
+}
+
+function readCoverZoom(raw: unknown): number | undefined {
+  const zoom = asNumber(raw);
+  if (zoom === undefined) return undefined;
+  return (
+    Math.round(Math.min(COVER_ZOOM_MAX, Math.max(COVER_ZOOM_MIN, zoom)) * 100) /
+    100
+  );
+}
+
+function readCoverZoomList(raw: unknown): number[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const zooms = raw.map((entry) => readCoverZoom(entry) ?? COVER_ZOOM_MIN);
+  return zooms.length > 0 ? zooms : undefined;
 }
 
 function readOptionalAssetId(
@@ -334,7 +357,9 @@ function readCoverDeviceProfile(raw: unknown): CoverDeviceProfile | undefined {
     layoutPreset: asOneOf(profile.layoutPreset, COVER_PRESETS),
     mediaMode: asOneOf(profile.mediaMode, MEDIA_MODES),
     focalPoint: readPoint(profile.focalPoint, 50),
+    zoom: readCoverZoom(profile.zoom),
     slotFocalPoints: readPointList(profile.slotFocalPoints),
+    slotZooms: readCoverZoomList(profile.slotZooms),
     aspectRatio: asString(profile.aspectRatio),
     title: asString(profile.title),
     subtitle: asString(profile.subtitle),
@@ -438,8 +463,12 @@ export function readPublicDesignConfig(
               }
             : undefined,
           mobileFocalPoint: readPoint(coverRaw.mobileFocalPoint, 50),
+          zoom: readCoverZoom(coverRaw.zoom),
+          mobileZoom: readCoverZoom(coverRaw.mobileZoom),
           slotFocalPoints: readPointList(coverRaw.slotFocalPoints),
           mobileSlotFocalPoints: readPointList(coverRaw.mobileSlotFocalPoints),
+          slotZooms: readCoverZoomList(coverRaw.slotZooms),
+          mobileSlotZooms: readCoverZoomList(coverRaw.mobileSlotZooms),
           mobileAspectRatio: asString(coverRaw.mobileAspectRatio),
           title: asString(coverRaw.title),
           subtitle: asString(coverRaw.subtitle),
@@ -587,7 +616,9 @@ function legacyDesktopProfile(
     layoutPreset: cover?.layoutPreset,
     mediaMode: cover?.mediaMode,
     focalPoint: cover?.focalPoint,
+    zoom: cover?.zoom,
     slotFocalPoints: cover?.slotFocalPoints,
+    slotZooms: cover?.slotZooms,
     aspectRatio: cover?.aspectRatio,
     title: cover?.title,
     subtitle: cover?.subtitle,
@@ -625,7 +656,9 @@ function legacyPhoneProfile(
   return {
     ...desktop,
     focalPoint: cover?.mobileFocalPoint || desktop.focalPoint,
+    zoom: cover?.mobileZoom || desktop.zoom,
     slotFocalPoints: cover?.mobileSlotFocalPoints || desktop.slotFocalPoints,
+    slotZooms: cover?.mobileSlotZooms || desktop.slotZooms,
     aspectRatio: cover?.mobileAspectRatio || desktop.aspectRatio,
     titlePosition: cover?.mobileTitlePosition || desktop.titlePosition,
     subtitlePosition: cover?.mobileSubtitlePosition || desktop.subtitlePosition,

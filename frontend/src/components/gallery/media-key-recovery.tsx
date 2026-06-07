@@ -235,6 +235,7 @@ export function LockedMediaFallback({
       ? "Encrypted photo needs one of several gallery keys"
       : "Encrypted photo locked"
     : message || error || "Preview unavailable";
+  const compactLabel = message || (recoverable ? "Key needed" : label);
 
   return (
     <>
@@ -269,7 +270,7 @@ export function LockedMediaFallback({
             aria-hidden
           />
         )}
-        <span>{mode === "compact" ? "Key needed" : label}</span>
+        <span>{mode === "compact" ? compactLabel : label}</span>
         {recoverable && keyGroupCount > 1 && mode !== "compact" ? (
           <span className="max-w-xs text-2xs text-text-tertiary">
             Restore one matching key now; other key groups may stay locked.

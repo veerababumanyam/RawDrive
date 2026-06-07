@@ -139,7 +139,7 @@ func NewAdminUserRepo(pool *pgxpool.Pool) *AdminUserRepo {
 const adminUserSelectColumns = `
 		u.id,
 		COALESCE(u.display_name, '') AS full_name,
-		u.email,
+		COALESCE(u.email, '') AS email,
 		u.phone,
 		u.platform_role,
 		u.status,

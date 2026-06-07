@@ -100,6 +100,50 @@ describe("PublicGalleryGrid", () => {
     expect(logo?.parentElement?.style.transform).toContain("scale(1.4)");
   });
 
+  it("renders Logo + Text watermark layers with independent placement", () => {
+    const { container } = render(
+      <PublicGalleryGrid
+        slug="wedding-gallery"
+        assets={[galleryAsset()]}
+        watermarkLogoUrl="data:image/png;base64,logo"
+        watermark={{
+          enabled: true,
+          mode: "both",
+          logo_source: "business_profile",
+          text: "Kaveri Stories",
+          layers: {
+            logo: {
+              position: "top-right",
+              placement: { x: 84, y: 16 },
+              opacity: 60,
+              scale: 110,
+            },
+            text: {
+              position: "custom",
+              placement: { x: 24, y: 62 },
+              opacity: 45,
+              scale: 130,
+            },
+          },
+        }}
+      />,
+    );
+
+    const logo = container.querySelector(
+      'img[src="data:image/png;base64,logo"]',
+    );
+    expect(logo?.parentElement).toHaveStyle({
+      left: "84%",
+      top: "16%",
+      opacity: "0.6",
+    });
+    expect(screen.getByText("Kaveri Stories")).toHaveStyle({
+      left: "24%",
+      top: "62%",
+      opacity: "0.45",
+    });
+  });
+
   it("keeps public download controls available on touch screens", () => {
     render(
       <PublicGalleryGrid slug="wedding-gallery" assets={[galleryAsset()]} />,

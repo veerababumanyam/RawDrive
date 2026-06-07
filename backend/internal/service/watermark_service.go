@@ -16,6 +16,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"image"
 	"image/color"
@@ -34,10 +35,17 @@ import (
 
 // WatermarkConfig controls watermark appearance.
 type WatermarkConfig struct {
-	Text     string  `json:"text"`
-	Position string  `json:"position"` // "center", "bottom-right", "bottom-left", "diagonal" (tiled rotated grid). "tiled" accepted as alias for "diagonal".
-	Opacity  float64 `json:"opacity"`  // 0.0-1.0
-	FontSize int     `json:"font_size"`
+	Text      string              `json:"text"`
+	Position  string              `json:"position"` // "center", "top-right", "top-left", "bottom-right", "bottom-left", "custom", "diagonal" (tiled rotated grid). "tiled" accepted as alias for "diagonal".
+	Opacity   float64             `json:"opacity"`  // 0.0-1.0
+	FontSize  int                 `json:"font_size"`
+	Scale     float64             `json:"scale"` // 100 = default size.
+	Placement *WatermarkPlacement `json:"placement,omitempty"`
+}
+
+type WatermarkPlacement struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
 }
 
 // DefaultWatermarkConfig returns a sensible default config.
@@ -47,6 +55,7 @@ func DefaultWatermarkConfig() WatermarkConfig {
 		Position: "center",
 		Opacity:  0.4,
 		FontSize: 48,
+		Scale:    100,
 	}
 }
 
@@ -86,6 +95,17 @@ func (s *WatermarkService) Apply(_ context.Context, src io.Reader, cfg Watermark
 	if position == "" {
 		position = "bottom-right"
 	}
+	scale := cfg.Scale
+	if scale <= 0 {
+		scale = 100
+	}
+	scaledTarget := func(base int) int {
+		target := int(float64(base) * scale / 100)
+		if target < 40 {
+			target = 40
+		}
+		return target
+	}
 
 	srcBounds := srcImg.Bounds()
 	srcW, srcH := srcBounds.Dx(), srcBounds.Dy()
@@ -96,7 +116,7 @@ func (s *WatermarkService) Apply(_ context.Context, src io.Reader, cfg Watermark
 	case "center":
 		// Large rotated banner across the middle. Target width ~70% of the
 		// shorter side so it stays legible without overflowing.
-		target := minInt(srcW, srcH) * 7 / 10
+		target := scaledTarget(minInt(srcW, srcH) * 7 / 10)
 		tile := buildTextTile(text, target, opacity)
 		// Rotate -30° to match the CSS overlay's transform.
 		rotated := imageops.Rotate(tile, 30, color.NRGBA{0, 0, 0, 0})
@@ -109,7 +129,7 @@ func (s *WatermarkService) Apply(_ context.Context, src io.Reader, cfg Watermark
 		// Repeating rotated tile. Step is sized so adjacent tiles don't
 		// overlap horizontally but cover the whole frame after rotation.
 		// Each tile is rendered once then stamped across the canvas.
-		target := minInt(srcW, srcH) / 4
+		target := scaledTarget(minInt(srcW, srcH) / 4)
 		if target < 80 {
 			target = 80
 		}
@@ -144,9 +164,14 @@ func (s *WatermarkService) Apply(_ context.Context, src io.Reader, cfg Watermark
 			}
 		}
 
-	case "bottom-left", "bottom-right":
+	case "custom":
+		target := scaledTarget(minInt(srcW, srcH) / 5)
+		tile := buildTextTile(text, target, opacity)
+		drawTileAtPlacement(overlay, tile, srcW, srcH, cfg.Placement)
+
+	case "top-left", "top-right", "bottom-left", "bottom-right":
 		// Corner mark. Smaller — ~20% of the shorter side, no rotation.
-		target := minInt(srcW, srcH) / 5
+		target := scaledTarget(minInt(srcW, srcH) / 5)
 		if target < 80 {
 			target = 80
 		}
@@ -154,10 +179,13 @@ func (s *WatermarkService) Apply(_ context.Context, src io.Reader, cfg Watermark
 		tb := tile.Bounds()
 		pad := 24
 		offsetX := srcW - tb.Dx() - pad
-		if position == "bottom-left" {
+		if position == "bottom-left" || position == "top-left" {
 			offsetX = pad
 		}
 		offsetY := srcH - tb.Dy() - pad
+		if position == "top-left" || position == "top-right" {
+			offsetY = pad
+		}
 		draw.Draw(overlay, tb.Add(image.Point{X: offsetX, Y: offsetY}), tile, tb.Min, draw.Over)
 
 	default:
@@ -238,6 +266,28 @@ func encodeJPEG(img image.Image) (io.Reader, error) {
 	return buf, nil
 }
 
+func drawTileAtPlacement(overlay draw.Image, tile image.Image, srcW, srcH int, placement *WatermarkPlacement) {
+	tb := tile.Bounds()
+	xPct, yPct := 50.0, 50.0
+	if placement != nil {
+		xPct = clampWatermarkFloat(placement.X, 0, 100)
+		yPct = clampWatermarkFloat(placement.Y, 0, 100)
+	}
+	offsetX := int((xPct/100)*float64(srcW)) - tb.Dx()/2
+	offsetY := int((yPct/100)*float64(srcH)) - tb.Dy()/2
+	draw.Draw(overlay, tb.Add(image.Point{X: offsetX, Y: offsetY}), tile, tb.Min, draw.Over)
+}
+
+func clampWatermarkFloat(v, lo, hi float64) float64 {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
 func minInt(a, b int) int {
 	if a < b {
 		return a
@@ -268,13 +318,21 @@ func ConfigFromMap(cfg map[string]interface{}) WatermarkConfig {
 	if cfg == nil {
 		return out
 	}
+	source := cfg
+	if mode, _ := cfg["mode"].(string); mode == "text" || mode == "both" {
+		if layers, ok := cfg["layers"].(map[string]interface{}); ok {
+			if textLayer, ok := layers["text"].(map[string]interface{}); ok {
+				source = mergeWatermarkLayer(cfg, textLayer)
+			}
+		}
+	}
 	if text, ok := cfg["text"].(string); ok {
 		out.Text = text
 	}
-	if pos, ok := cfg["position"].(string); ok && pos != "" {
+	if pos, ok := source["position"].(string); ok && pos != "" {
 		out.Position = pos
 	}
-	if op, ok := cfg["opacity"].(float64); ok {
+	if op, ok := numericWatermarkValue(source["opacity"]); ok {
 		// Settings UI stores opacity as 10..90 (integer percent); also accept
 		// 0..1 floats so direct API calls keep working.
 		if op > 1 {
@@ -286,5 +344,56 @@ func ConfigFromMap(cfg map[string]interface{}) WatermarkConfig {
 	if fs, ok := cfg["font_size"].(float64); ok && fs > 0 {
 		out.FontSize = int(fs)
 	}
+	if scale, ok := numericWatermarkValue(source["scale"]); ok && scale > 0 {
+		out.Scale = scale
+	}
+	if placement, ok := readWatermarkPlacementFromMap(source["placement"]); ok {
+		out.Placement = placement
+	}
 	return out
+}
+
+func mergeWatermarkLayer(root, layer map[string]interface{}) map[string]interface{} {
+	merged := make(map[string]interface{}, len(root)+len(layer))
+	for k, v := range root {
+		merged[k] = v
+	}
+	for k, v := range layer {
+		merged[k] = v
+	}
+	return merged
+}
+
+func numericWatermarkValue(v interface{}) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case float32:
+		return float64(n), true
+	case int:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case json.Number:
+		f, err := n.Float64()
+		return f, err == nil
+	default:
+		return 0, false
+	}
+}
+
+func readWatermarkPlacementFromMap(v interface{}) (*WatermarkPlacement, bool) {
+	raw, ok := v.(map[string]interface{})
+	if !ok {
+		return nil, false
+	}
+	x, okX := numericWatermarkValue(raw["x"])
+	y, okY := numericWatermarkValue(raw["y"])
+	if !okX || !okY {
+		return nil, false
+	}
+	return &WatermarkPlacement{
+		X: clampWatermarkFloat(x, 0, 100),
+		Y: clampWatermarkFloat(y, 0, 100),
+	}, true
 }

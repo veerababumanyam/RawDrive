@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import { SafeEmailLink } from "@/components/marketing/SafeEmailLink";
+import { RAWDRIVE_CONTACT_EMAILS } from "@/lib/contact-email";
 import { createPageMetadata } from "@/lib/seo";
 
 export const metadata: Metadata = createPageMetadata("legal");
@@ -12,9 +14,9 @@ const legalDetails = [
 ];
 
 const contactChannels = [
-  { label: "Product information", email: "info@rawdrive.in" },
-  { label: "Support", email: "support@rawdrive.in" },
-  { label: "General contact", email: "contactus@rawdrive.in" },
+  { label: "Product information", email: RAWDRIVE_CONTACT_EMAILS.info },
+  { label: "Support", email: RAWDRIVE_CONTACT_EMAILS.support },
+  { label: "General contact", email: RAWDRIVE_CONTACT_EMAILS.contactus },
 ];
 
 export default function LegalPage() {
@@ -71,18 +73,24 @@ export default function LegalPage() {
           </h2>
           <div className="mt-5 grid gap-4 md:grid-cols-3">
             {contactChannels.map((channel) => (
-              <a
-                key={channel.email}
-                href={`mailto:${channel.email}`}
+              <SafeEmailLink
+                key={channel.label}
+                localPart={channel.email.localPart}
+                domain={channel.email.domain}
                 className="rounded-2xl border border-border bg-surface p-5 transition-colors hover:bg-surface-container-high"
+                ariaLabel={`Email RawDrive ${channel.label}`}
               >
-                <p className="text-xs font-bold uppercase tracking-wider text-text-tertiary">
-                  {channel.label}
-                </p>
-                <p className="mt-2 break-words text-sm font-semibold text-accent">
-                  {channel.email}
-                </p>
-              </a>
+                {(display) => (
+                  <>
+                    <p className="text-xs font-bold uppercase tracking-wider text-text-tertiary">
+                      {channel.label}
+                    </p>
+                    <p className="mt-2 break-words text-sm font-semibold text-accent">
+                      {display}
+                    </p>
+                  </>
+                )}
+              </SafeEmailLink>
             ))}
           </div>
         </section>

@@ -8,6 +8,7 @@ import {
   buildFaqJsonLd,
   buildLlmsTxt,
   buildMarketingSitemap,
+  buildSiteJsonLd,
   createPageMetadata,
   PUBLIC_PAGES,
 } from "@/lib/seo";
@@ -54,20 +55,34 @@ describe("public SEO metadata", () => {
 
     expect(llms).toContain("## Public pages");
     expect(llms).toContain(absoluteUrl("/features"));
-    expect(llms).toContain("Dashboard routes, auth routes, shortlinks, streams, and client gallery share links");
+    expect(llms).toContain(
+      "Dashboard routes, auth routes, shortlinks, streams, and client gallery share links",
+    );
     expect(llms).not.toContain("https://rawdrive.in/g/");
   });
 });
 
 describe("AI crawler policy", () => {
   it("allows search/answer + user bots (citation eligibility)", () => {
-    for (const bot of ["OAI-SearchBot", "Claude-SearchBot", "PerplexityBot", "Bingbot", "Applebot"]) {
+    for (const bot of [
+      "OAI-SearchBot",
+      "Claude-SearchBot",
+      "PerplexityBot",
+      "Bingbot",
+      "Applebot",
+    ]) {
       expect(AI_ALLOW_CRAWLERS as readonly string[]).toContain(bot);
     }
   });
 
   it("disallows training crawlers and training opt-out tokens", () => {
-    for (const bot of ["GPTBot", "ClaudeBot", "Google-Extended", "Applebot-Extended", "CCBot"]) {
+    for (const bot of [
+      "GPTBot",
+      "ClaudeBot",
+      "Google-Extended",
+      "Applebot-Extended",
+      "CCBot",
+    ]) {
       expect(AI_DISALLOW_CRAWLERS as readonly string[]).toContain(bot);
     }
   });
@@ -100,7 +115,8 @@ describe("AI crawler policy", () => {
     expect(star?.allow).toBe("/");
 
     const allowGroup = rules.find(
-      (r) => Array.isArray(r.userAgent) && r.userAgent.includes("OAI-SearchBot"),
+      (r) =>
+        Array.isArray(r.userAgent) && r.userAgent.includes("OAI-SearchBot"),
     );
     expect(allowGroup?.allow).toBe("/");
 
@@ -124,7 +140,9 @@ describe("structured-data builders", () => {
     expect(ld["@type"]).toBe("BreadcrumbList");
     expect(ld.itemListElement).toHaveLength(2);
     expect(ld.itemListElement[0]).toMatchObject({ position: 1, name: "Home" });
-    expect(ld.itemListElement[1].item).toBe(absoluteUrl("/solutions/galleries"));
+    expect(ld.itemListElement[1].item).toBe(
+      absoluteUrl("/solutions/galleries"),
+    );
   });
 
   it("builds a FAQPage with Question/Answer entities", () => {
@@ -135,5 +153,13 @@ describe("structured-data builders", () => {
       name: "How much?",
       acceptedAnswer: { "@type": "Answer", text: "From ₹0." },
     });
+  });
+
+  it("keeps site JSON-LD free of literal RawDrive emails", () => {
+    const json = JSON.stringify(buildSiteJsonLd());
+
+    expect(json).toContain(absoluteUrl("/contact"));
+    expect(json).not.toMatch(/[A-Za-z0-9._%+-]+@rawdrive\.in/);
+    expect(json).not.toMatch(/mailto:/i);
   });
 });

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { renderToStaticMarkup } from "react-dom/server";
 import PrivacyPage from "@/app/privacy/page";
 import TermsPage from "@/app/terms/page";
 import RefundPage from "@/app/refund/page";
@@ -16,9 +17,13 @@ describe("Legal Notice Page", () => {
 
   it("uses the approved public contact addresses", () => {
     render(<LegalPage />);
-    expect(screen.getByText("info@rawdrive.in")).toBeInTheDocument();
-    expect(screen.getByText("support@rawdrive.in")).toBeInTheDocument();
-    expect(screen.getByText("contactus@rawdrive.in")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Email RawDrive Product information"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Email RawDrive Support")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Email RawDrive General contact"),
+    ).toBeInTheDocument();
   });
 });
 
@@ -33,6 +38,23 @@ describe("Contact Page", () => {
       "tel:+919010012299",
     );
     expect(screen.queryByText(/contact:\+91/)).not.toBeInTheDocument();
+  });
+
+  it("keeps public contact/legal SSR HTML safe from edge email obfuscation", () => {
+    const pages = [
+      <ContactPage key="contact" />,
+      <LegalPage key="legal" />,
+      <PrivacyPage key="privacy" />,
+      <RefundPage key="refund" />,
+      <TermsPage key="terms" />,
+    ];
+
+    for (const page of pages) {
+      const html = renderToStaticMarkup(page);
+
+      expect(html).not.toMatch(/[A-Za-z0-9._%+-]+@rawdrive\.in/);
+      expect(html).not.toMatch(/mailto:[^"]*rawdrive/i);
+    }
   });
 });
 

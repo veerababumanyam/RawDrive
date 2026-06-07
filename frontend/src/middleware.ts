@@ -26,6 +26,24 @@ function generateNonce(): string {
   return btoa(binary);
 }
 
+export function appendNoTransform(cacheControl: string | null): string {
+  if (!cacheControl) return "no-transform";
+  const directives = cacheControl
+    .split(",")
+    .map((part) => part.trim().toLowerCase());
+  if (directives.includes("no-transform")) return cacheControl;
+  return `${cacheControl}, no-transform`;
+}
+
+function applySecurityHeaders(res: NextResponse, csp: string): NextResponse {
+  res.headers.set("Content-Security-Policy", csp);
+  res.headers.set(
+    "Cache-Control",
+    appendNoTransform(res.headers.get("Cache-Control")),
+  );
+  return res;
+}
+
 export function middleware(req: NextRequest) {
   // F-098: build the nonced CSP once per request. The nonce is forwarded on the
   // REQUEST headers so Next.js stamps it onto its framework/bootstrap scripts
@@ -50,16 +68,14 @@ export function middleware(req: NextRequest) {
   // Forward the request (carrying the nonce) and stamp the CSP on the response.
   const pass = () => {
     const res = NextResponse.next({ request: { headers: requestHeaders } });
-    res.headers.set("Content-Security-Policy", csp);
-    return res;
+    return applySecurityHeaders(res, csp);
   };
 
   if (isDisabledRawDriveSubdomain(req.headers.get("host"))) {
     const res = new NextResponse("RawDrive studio subdomains are disabled.", {
       status: 410,
     });
-    res.headers.set("Content-Security-Policy", csp);
-    return res;
+    return applySecurityHeaders(res, csp);
   }
 
   return pass();

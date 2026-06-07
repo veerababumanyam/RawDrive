@@ -54,6 +54,7 @@ function MetricCard({
 // ─── Row types cast-compatible with DataTable's Record<string, unknown> constraint ──
 
 type StateBreakdownRow = {
+  state_key: string;
   state_name: string;
   revenue_paisa: number;
   subscriber_count: number;
@@ -163,6 +164,45 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+function stateNameKey(name: string): string {
+  return name.trim().toLowerCase() || "unknown";
+}
+
+function uniqueStatesByName(states: StateRef[]): StateRef[] {
+  const seen = new Set<string>();
+  const unique: StateRef[] = [];
+  for (const state of states) {
+    const key = stateNameKey(state.name);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(state);
+  }
+  return unique;
+}
+
+function normalizeStateBreakdown(
+  rows: RevenueData["state_breakdown"] | null | undefined,
+): StateBreakdownRow[] {
+  const byName = new Map<string, StateBreakdownRow>();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const name = row.state_name?.trim() || "Unknown";
+    const key = stateNameKey(name);
+    const existing = byName.get(key);
+    if (existing) {
+      existing.revenue_paisa += row.revenue_paisa ?? 0;
+      existing.subscriber_count += row.subscriber_count ?? 0;
+      continue;
+    }
+    byName.set(key, {
+      state_key: key,
+      state_name: name,
+      revenue_paisa: row.revenue_paisa ?? 0,
+      subscriber_count: row.subscriber_count ?? 0,
+    });
+  }
+  return Array.from(byName.values());
+}
+
 export default function AdminRevenuePage() {
   const router = useRouter();
   const [revenue, setRevenue] = useState<RevenueData | null>(null);
@@ -252,9 +292,11 @@ export default function AdminRevenuePage() {
     };
   }, []);
 
+  const uniqueStates = useMemo(() => uniqueStatesByName(states), [states]);
+
   // Memoize data arrays so DataTable doesn't re-render on every parent render
   const stateBreakdownData = useMemo<StateBreakdownRow[]>(
-    () => (revenue?.state_breakdown ?? []) as StateBreakdownRow[],
+    () => normalizeStateBreakdown(revenue?.state_breakdown),
     [revenue],
   );
   const timeSeriesData = useMemo<TimeSeriesRow[]>(
@@ -262,8 +304,10 @@ export default function AdminRevenuePage() {
     [timeSeries],
   );
   const selectedState = useMemo(
-    () => states.find((state) => String(state.id) === selectedStateId) ?? null,
-    [states, selectedStateId],
+    () =>
+      uniqueStates.find((state) => String(state.id) === selectedStateId) ??
+      null,
+    [uniqueStates, selectedStateId],
   );
   const districtOptions = useMemo(
     () => getDistrictsForState(selectedState?.name ?? ""),
@@ -448,7 +492,7 @@ export default function AdminRevenuePage() {
               className="input-base min-h-11 w-full cursor-pointer"
             >
               <option value="">Select state</option>
-              {states.map((state) => (
+              {uniqueStates.map((state) => (
                 <option key={state.id} value={state.id}>
                   {state.name}
                 </option>
@@ -573,7 +617,7 @@ export default function AdminRevenuePage() {
         <DataTable<StateBreakdownRow>
           columns={stateBreakdownColumns}
           data={stateBreakdownData}
-          rowKey={(row) => row.state_name}
+          rowKey={(row) => row.state_key}
           searchable
           searchKeys={["state_name"]}
           searchPlaceholder="Search states..."

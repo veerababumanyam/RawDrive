@@ -1,10 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { config, isDisabledRawDriveSubdomain } from "@/middleware";
+import {
+  appendNoTransform,
+  config,
+  isDisabledRawDriveSubdomain,
+} from "@/middleware";
 
 describe("disabled RawDrive subdomain middleware routing", () => {
   it("fails closed for deprecated workspace and gallery subdomains", () => {
-    expect(isDisabledRawDriveSubdomain("kaveri-stories-a1b2c3d4.rawdrive.in")).toBe(true);
-    expect(isDisabledRawDriveSubdomain("legacy-studio-bf998927.rawdrive.in")).toBe(true);
+    expect(
+      isDisabledRawDriveSubdomain("kaveri-stories-a1b2c3d4.rawdrive.in"),
+    ).toBe(true);
+    expect(
+      isDisabledRawDriveSubdomain("legacy-studio-bf998927.rawdrive.in"),
+    ).toBe(true);
     expect(isDisabledRawDriveSubdomain("wedding-veera.rawdrive.in")).toBe(true);
   });
 
@@ -28,5 +36,15 @@ describe("disabled RawDrive subdomain middleware routing", () => {
     expect(matcher.test("/")).toBe(true);
     expect(matcher.test("/wedding-veera")).toBe(true);
     expect(matcher.test("/wedding-veera/photo/asset-123")).toBe(true);
+  });
+
+  it("adds no-transform without dropping existing cache directives", () => {
+    expect(appendNoTransform(null)).toBe("no-transform");
+    expect(appendNoTransform("private, max-age=0")).toBe(
+      "private, max-age=0, no-transform",
+    );
+    expect(appendNoTransform("private, no-transform")).toBe(
+      "private, no-transform",
+    );
   });
 });

@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 
 // revenue/page.tsx calls useRouter() from next/navigation (for router.refresh()
 // on the Refresh button). Without the app-router context the hook throws
@@ -174,6 +180,47 @@ describe("AdminRevenuePage", () => {
       expect(screen.getAllByText("Karnataka").length).toBeGreaterThan(0);
       expect(screen.getAllByText("Maharashtra").length).toBeGreaterThan(0);
     });
+  });
+
+  it("dedupes duplicate state names before rendering dashboard tables", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    mockRevenue.mockResolvedValue({
+      ...sampleRevenue,
+      state_breakdown: [
+        {
+          state_name: "Brownfield Test A",
+          revenue_paisa: 100,
+          subscriber_count: 1,
+        },
+        {
+          state_name: "Brownfield Test A",
+          revenue_paisa: 200,
+          subscriber_count: 2,
+        },
+      ],
+    });
+    mockGetStates.mockResolvedValue([
+      { id: 101, name: "Brownfield Test A" },
+      { id: 102, name: "Brownfield Test A" },
+    ]);
+
+    render(<AdminRevenuePage />);
+
+    const stateSelect = await screen.findByLabelText("State");
+    await waitFor(() => {
+      expect(
+        within(stateSelect).getAllByRole("option", {
+          name: "Brownfield Test A",
+        }),
+      ).toHaveLength(1);
+    });
+    expect(consoleError).not.toHaveBeenCalledWith(
+      expect.stringContaining("same key"),
+      expect.anything(),
+    );
+    consoleError.mockRestore();
   });
 
   it("shows loading state", () => {

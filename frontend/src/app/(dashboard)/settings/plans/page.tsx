@@ -11,8 +11,10 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Check, Crown, HardDrive, Zap } from "lucide-react";
+import { SafeEmailLink } from "@/components/marketing/SafeEmailLink";
 import { usePlanCatalog } from "@/hooks/use-plan-catalog";
-import { getStoredAccessToken } from "@/lib/auth";
+import { getStoredAccessToken, getStoredPlatformRole } from "@/lib/auth";
+import { RAWDRIVE_CONTACT_EMAILS } from "@/lib/contact-email";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -28,6 +30,8 @@ type BillingInterval = "monthly" | "annual";
 function PlansPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams() ?? new URLSearchParams();
+  const redirectingToAdmin =
+    typeof window !== "undefined" && getStoredPlatformRole() === "super_admin";
   const upgradeTo = searchParams.get("upgrade_to") ?? "";
   // Set when the user returns from a successful payment (chooser page
   // redirects here with ?success=1&tier=...).
@@ -43,7 +47,10 @@ function PlansPageContent() {
       plans
         .filter(
           (plan) =>
-            plan.id !== "free" && plan.active && plan.paid && plan.selfServe,
+            plan.id !== "free" &&
+            plan.id !== "pay_per_event" &&
+            plan.active &&
+            plan.paid,
         )
         .map((plan) => ({
           tier: plan.id,
@@ -54,6 +61,7 @@ function PlansPageContent() {
           features: [...plan.features],
           highlighted: plan.popular,
           bestValue: plan.id === "studio",
+          selfServe: plan.selfServe,
           rank: plan.rank,
         })),
     [plans],
@@ -72,8 +80,14 @@ function PlansPageContent() {
   });
   const autoUpgradeTriggered = useRef(false);
 
+  useEffect(() => {
+    if (!redirectingToAdmin) return;
+    router.replace("/admin/plans");
+  }, [redirectingToAdmin, router]);
+
   // Fetch current subscription tier.
   useEffect(() => {
+    if (redirectingToAdmin) return;
     const token = getStoredAccessToken();
     if (!token) return;
     fetch(`${API_BASE}/api/v1/workspace/subscription`, {
@@ -85,7 +99,7 @@ function PlansPageContent() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [redirectingToAdmin]);
 
   // Navigate to the chooser page. Replacing the previous in-page payment
   // flow — the chooser owns all payment orchestration so this page stays
@@ -101,17 +115,28 @@ function PlansPageContent() {
 
   // Auto-trigger upgrade when arriving from onboarding with upgrade_to param.
   useEffect(() => {
+    if (redirectingToAdmin) return;
     if (!upgradeTo || loading || autoUpgradeTriggered.current) return;
     const target = upgradePlans.find((p) => p.tier === upgradeTo);
-    if (!target) return;
+    if (!target || !target.selfServe) return;
     autoUpgradeTriggered.current = true;
     handleUpgrade(target.tier);
-  }, [upgradeTo, loading, handleUpgrade, upgradePlans]);
+  }, [redirectingToAdmin, upgradeTo, loading, handleUpgrade, upgradePlans]);
 
   const isOnboardingUpgrade = Boolean(upgradeTo);
   const successPlanName = successTier
     ? (upgradePlans.find((p) => p.tier === successTier)?.name ?? successTier)
     : "";
+
+  if (redirectingToAdmin) {
+    return (
+      <div className="max-w-6xl mx-auto space-y-10 p-8">
+        <div className="rounded-xl border border-border-subtle bg-surface-container-low p-8 text-center text-text-secondary text-sm">
+          Opening admin plan catalog…
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto space-y-10 p-8">
@@ -297,7 +322,7 @@ function PlansPageContent() {
                 </ul>
 
                 {/* CTA */}
-                {isCurrent ? (
+                {isCurrent && plan.selfServe ? (
                   <button
                     type="button"
                     onClick={() => handleUpgrade(plan.tier)}
@@ -306,6 +331,13 @@ function PlansPageContent() {
                     <Zap className="h-4 w-4" />
                     Renew {plan.name}
                   </button>
+                ) : !plan.selfServe ? (
+                  <Link
+                    href="/contact"
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition-opacity hover:opacity-90"
+                  >
+                    Talk to sales
+                  </Link>
                 ) : isUpgrade ? (
                   <button
                     type="button"
@@ -331,12 +363,14 @@ function PlansPageContent() {
         {billingInterval === "annual" ? "annually" : "monthly"}. 18% GST
         applicable. Payments processed via Razorpay or PhonePe. Elite Studio
         sales:{" "}
-        <a
-          href="mailto:info@rawdrive.in"
+        <SafeEmailLink
+          localPart={RAWDRIVE_CONTACT_EMAILS.info.localPart}
+          domain={RAWDRIVE_CONTACT_EMAILS.info.domain}
           className="underline underline-offset-2 hover:text-text-secondary"
+          ariaLabel="Email RawDrive sales"
         >
-          info@rawdrive.in
-        </a>
+          {(display) => display}
+        </SafeEmailLink>
       </p>
     </div>
   );

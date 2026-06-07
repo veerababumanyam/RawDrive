@@ -65,6 +65,12 @@ type RefreshSessionStore interface {
 	// the given family. The session-limit check uses this so a rotate
 	// within an existing family does not count as a new session.
 	UserHasFamily(ctx context.Context, userID, familyID string) (bool, error)
+
+	// RevokeOldestFamilyForUser revokes the oldest active family for a user.
+	// Login flows use this only after the user has already proven identity, so
+	// a returning user can recover from a full session cap without weakening the
+	// cap itself.
+	RevokeOldestFamilyForUser(ctx context.Context, userID string) (familyID string, ok bool, err error)
 }
 
 // ErrRefreshNotFound is returned by RefreshSessionStore.Get when the
@@ -100,6 +106,7 @@ type RefreshSessionEntry struct {
 	// session to mfa_verified=false. Default false for legacy rows.
 	MFAVerified bool
 	ExpiresAt   time.Time
+	CreatedAt   time.Time
 	Revoked     bool
 	Used        bool
 }
@@ -144,6 +151,9 @@ func (s *inMemoryRefreshStore) Create(_ context.Context, entry RefreshSessionEnt
 	defer s.mu.Unlock()
 
 	hash := HashToken(entry.RawToken)
+	if entry.CreatedAt.IsZero() {
+		entry.CreatedAt = time.Now()
+	}
 	// Clear RawToken before storing so it never leaks out via Get.
 	stored := entry
 	stored.RawToken = ""
@@ -256,26 +266,52 @@ func (s *inMemoryRefreshStore) CountActiveFamiliesForUser(_ context.Context, use
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	families, ok := s.userFamilies[userID]
-	if !ok {
-		return 0, nil
-	}
-	count := 0
-	for fid, active := range families {
-		if active && !s.revokedFamily[fid] {
-			count++
-		}
-	}
-	return count, nil
+	return len(s.activeFamiliesForUserLocked(userID)), nil
 }
 
 func (s *inMemoryRefreshStore) UserHasFamily(_ context.Context, userID, familyID string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	families, ok := s.userFamilies[userID]
-	if !ok {
-		return false, nil
+	_, ok := s.activeFamiliesForUserLocked(userID)[familyID]
+	return ok, nil
+}
+
+func (s *inMemoryRefreshStore) RevokeOldestFamilyForUser(_ context.Context, userID string) (string, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	families := s.activeFamiliesForUserLocked(userID)
+	if len(families) == 0 {
+		return "", false, nil
 	}
-	return families[familyID], nil
+
+	var oldestFamily string
+	var oldestCreatedAt time.Time
+	for familyID, createdAt := range families {
+		if oldestFamily == "" || createdAt.Before(oldestCreatedAt) || (createdAt.Equal(oldestCreatedAt) && familyID < oldestFamily) {
+			oldestFamily = familyID
+			oldestCreatedAt = createdAt
+		}
+	}
+	s.revokeFamilyLocked(oldestFamily)
+	return oldestFamily, true, nil
+}
+
+func (s *inMemoryRefreshStore) activeFamiliesForUserLocked(userID string) map[string]time.Time {
+	now := time.Now()
+	families := make(map[string]time.Time)
+	for _, entry := range s.byHash {
+		if entry.Sub != userID || entry.Revoked || s.revokedFamily[entry.FamilyID] || !entry.ExpiresAt.After(now) {
+			continue
+		}
+		createdAt := entry.CreatedAt
+		if createdAt.IsZero() {
+			createdAt = entry.ExpiresAt
+		}
+		if existing, ok := families[entry.FamilyID]; !ok || createdAt.Before(existing) {
+			families[entry.FamilyID] = createdAt
+		}
+	}
+	return families
 }

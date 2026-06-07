@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -190,6 +191,32 @@ func TestAdminUserRow_JSONFieldNames(t *testing.T) {
 	for _, key := range expected {
 		assert.Contains(t, decoded, key, "expected snake_case JSON key %q on AdminUserRow", key)
 	}
+}
+
+func TestAdminUserRepo_ListToleratesNullEmailRows(t *testing.T) {
+	pool := getRetryTestPool(t)
+	ctx := context.Background()
+	repo := NewAdminUserRepo(pool)
+	userID := uuid.New()
+	displayName := "Nullemailadmintest " + userID.String()
+
+	_, err := pool.Exec(ctx,
+		`INSERT INTO users (id, display_name, email, platform_role, status, created_at, updated_at)
+		 VALUES ($1, $2, NULL, 'photographer', 'active', NOW(), NOW())`,
+		userID, displayName)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), `DELETE FROM users WHERE id = $1`, userID)
+	})
+
+	result, err := repo.List(ctx, AdminUserFilter{
+		Search: "Nullemailadmintest",
+		Limit:  5,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Items)
+	assert.Equal(t, "", result.Items[0].Email)
+	assert.Equal(t, displayName, result.Items[0].FullName)
 }
 
 // ──────────────────────── AdminUserDetail ────────────────────────

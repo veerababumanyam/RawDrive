@@ -2778,6 +2778,11 @@ body[data-chrome="marketing"] {
   max-height: 85vh;
 }
 
+.cover-hero-frame[data-cover-experience="design"] {
+  min-height: 0;
+  max-height: none;
+}
+
 .cover-preview-safe-zone {
   border: 1px dashed color-mix(in srgb, var(--text-media) 58%, transparent);
   background: color-mix(in srgb, var(--surface-scrim) 8%, transparent);
@@ -2910,11 +2915,23 @@ body[data-chrome="marketing"] {
   min-width: calc(var(--space-20) + var(--space-4));
 }
 
+.cover-mobile-task-tabs {
+  display: none;
+}
+
 .cover-editor-stage {
   border: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
   border-radius: var(--radius-2xl);
   background: var(--surface-container);
   box-shadow: var(--shadow-lg);
+}
+
+.cover-editor-stage--desktop {
+  max-height: min(78vh, calc(var(--space-20) * 10));
+}
+
+.cover-editor-stage--phone {
+  max-height: min(78vh, calc(var(--space-20) * 9.5));
 }
 
 .cover-preview-fallback {
@@ -3284,41 +3301,29 @@ body[data-chrome="marketing"] {
   flex-shrink: 0;
 }
 
-.cover-preset-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2);
-}
-
-@media (min-width: 1024px) {
-  .cover-preset-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-.cover-template-grid {
+.cover-design-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2);
 }
 
 @media (min-width: 768px) {
-  .cover-template-grid {
+  .cover-design-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 1280px) {
-  .cover-template-grid {
+  .cover-design-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
 
-.cover-template-tile {
+.cover-design-tile {
   gap: var(--space-2);
 }
 
-.cover-template-tile .selectable-tile__media {
+.cover-design-tile .selectable-tile__media {
   aspect-ratio: 16 / 10;
 }
 
@@ -3816,6 +3821,203 @@ body[data-chrome="marketing"] {
   pointer-events: none;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (max-width: 767px) {
+  .cover-header-select {
+    display: none;
+  }
+
+  .cover-header-action {
+    min-height: var(--touch-target-min);
+    padding-inline: var(--space-3);
+  }
+
+  .cover-editor-layout {
+    gap: var(--space-3);
+  }
+
+  .cover-preview-section {
+    position: sticky;
+    top: calc(var(--navbar-height-mobile) + var(--space-1));
+    z-index: var(--z-sticky);
+    margin-inline: calc(var(--space-2) * -1);
+    border-radius: var(--radius-2xl);
+    background: color-mix(in srgb, var(--surface-base) 92%, transparent);
+    box-shadow: var(--shadow-sm);
+    padding: var(--space-2);
+    backdrop-filter: blur(calc(var(--glass-blur) * 0.55))
+      saturate(var(--glass-saturation));
+    -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.55))
+      saturate(var(--glass-saturation));
+  }
+
+  .cover-preview-toolbar {
+    margin-bottom: var(--space-2);
+    gap: var(--space-2);
+  }
+
+  .cover-preview-toolbar > .flex {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .cover-preview-toolbar p {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .cover-device-toggle {
+    width: 100%;
+  }
+
+  .cover-device-toggle .glass-segmented-option {
+    min-width: 0;
+  }
+
+  .cover-editor-stage {
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-md);
+  }
+
+  .cover-editor-stage--desktop {
+    max-height: min(42vh, calc(var(--space-20) * 5));
+  }
+
+  .cover-editor-stage--phone {
+    max-height: min(50vh, calc(var(--space-20) * 6));
+  }
+
+  .cover-preview-drag-hint {
+    max-width: calc(100% - var(--space-6));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cover-mobile-task-tabs {
+    display: flex;
+    min-width: 0;
+    gap: var(--space-2);
+    overflow-x: auto;
+    border: 1px solid color-mix(in srgb, var(--outline-variant) 14%, transparent);
+    border-radius: var(--radius-full);
+    background: color-mix(in srgb, var(--surface-container-low) 88%, transparent);
+    padding: var(--space-1);
+    scrollbar-width: none;
+  }
+
+  .cover-mobile-task-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .cover-mobile-task-tab {
+    min-height: var(--touch-target-min);
+    flex: 0 0 auto;
+    border-radius: var(--radius-full);
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+    font-size: var(--type-xs);
+    font-weight: 800;
+    line-height: var(--leading-xs);
+    padding: var(--space-2) var(--space-4);
+    transition:
+      background-color var(--duration-fast) var(--easing-default),
+      border-color var(--duration-fast) var(--easing-default),
+      color var(--duration-fast) var(--easing-default);
+  }
+
+  .cover-mobile-task-tab[data-state="active"] {
+    border-color: color-mix(in srgb, var(--accent-primary) 48%, transparent);
+    background: linear-gradient(
+      135deg,
+      var(--button-primary-from),
+      var(--button-primary-to)
+    );
+    color: var(--button-primary-foreground);
+  }
+
+  .cover-mobile-task-tab:focus-visible {
+    outline: var(--focus-ring-width) solid var(--border-focus);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .cover-editor-panel {
+    padding: var(--space-3);
+  }
+
+  .cover-panel-stack {
+    gap: var(--space-3);
+  }
+
+  .cover-control-card,
+  .cover-photo-picker,
+  .cover-slot-controls,
+  .cover-treatment-section {
+    border-radius: var(--radius-lg);
+    padding: var(--space-3);
+  }
+
+  .cover-section-copy {
+    display: none;
+  }
+
+  .cover-design-grid,
+  .cover-treatment-grid {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: var(--space-1);
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  .cover-design-grid::-webkit-scrollbar,
+  .cover-treatment-grid::-webkit-scrollbar,
+  .cover-slot-tabs::-webkit-scrollbar,
+  .cover-photo-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .cover-design-tile,
+  .cover-treatment-tile {
+    flex: 0 0 min(calc(var(--space-20) * 3 + var(--space-8)), 78%);
+    scroll-snap-align: start;
+  }
+
+  .cover-treatment-controls {
+    gap: var(--space-2);
+  }
+
+  .cover-slot-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: var(--space-1);
+    scrollbar-width: none;
+  }
+
+  .cover-slot-tab {
+    flex: 0 0 auto;
+  }
+
+  .cover-photo-grid {
+    display: flex;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-block: var(--space-1);
+    padding-inline-end: 0;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  .cover-photo-tile {
+    flex: 0 0 min(calc(var(--space-20) * 2 + var(--space-6)), 58%);
+    scroll-snap-align: start;
+  }
+
+  .cover-layer-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .cover-panel-divider {

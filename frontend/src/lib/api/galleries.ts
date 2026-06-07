@@ -29,12 +29,35 @@ export interface Gallery {
   // M13 deferred-FR fields (optional)
   watermark_config?: {
     enabled?: boolean;
-    mode?: "text" | "logo" | string;
+    mode?: "text" | "logo" | "both" | string;
     text?: string;
-    position?: "center" | "tiled" | "bottom-right" | "bottom-left" | "diagonal";
+    position?:
+      | "center"
+      | "tiled"
+      | "top-right"
+      | "top-left"
+      | "bottom-right"
+      | "bottom-left"
+      | "diagonal"
+      | "custom"
+      | string;
     opacity?: number; // 0.0–1.0
     scale?: number;
     placement?: { x?: number; y?: number };
+    layers?: {
+      logo?: {
+        position?: string;
+        opacity?: number;
+        scale?: number;
+        placement?: { x?: number; y?: number };
+      };
+      text?: {
+        position?: string;
+        opacity?: number;
+        scale?: number;
+        placement?: { x?: number; y?: number };
+      };
+    };
     logo_source?: "business_profile" | "custom" | string;
     logo_asset_id?: string;
     logo_url?: string;

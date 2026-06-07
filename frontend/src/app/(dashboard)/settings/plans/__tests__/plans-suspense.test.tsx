@@ -14,6 +14,8 @@ import { render, screen, waitFor } from "@testing-library/react";
 // Suspense fallback shows first, then the resolved content renders.
 
 const pushMock = vi.fn();
+const replaceMock = vi.fn();
+let mockPlatformRole = "photographer";
 
 // A one-shot resource that suspends on first read, exactly like Next's
 // useSearchParams() does during prerender before params are available.
@@ -34,7 +36,7 @@ function suspendOnce() {
 }
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: pushMock, back: vi.fn() }),
+  useRouter: () => ({ push: pushMock, replace: replaceMock, back: vi.fn() }),
   useSearchParams: () => {
     suspendOnce();
     return new URLSearchParams("");
@@ -45,12 +47,16 @@ vi.mock("next/navigation", () => ({
 // not-loading state, keeping the test free of network/DB concerns.
 vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: () => null,
+  getStoredPlatformRole: () => mockPlatformRole,
 }));
 
 import PlansPage from "../page";
 
 afterEach(() => {
   vi.restoreAllMocks();
+  pushMock.mockReset();
+  replaceMock.mockReset();
+  mockPlatformRole = "photographer";
   resolved = false;
   pending = null;
 });
@@ -67,5 +73,33 @@ describe("PlansPage (/settings/plans) Suspense boundary — F-048", () => {
     await waitFor(() => {
       expect(screen.getByText("Choose a Plan")).toBeInTheDocument();
     });
+
+    expect(
+      screen.getByRole("heading", { name: "Creator" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Pro Photographer" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Studio" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Elite Studio" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Talk to sales" }),
+    ).toHaveAttribute("href", "/contact");
+  });
+
+  it("redirects super admins to the admin plan catalog", async () => {
+    mockPlatformRole = "super_admin";
+
+    render(<PlansPage />);
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith("/admin/plans");
+    });
+    expect(
+      await screen.findByText("Opening admin plan catalog…"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Choose a Plan")).not.toBeInTheDocument();
   });
 });

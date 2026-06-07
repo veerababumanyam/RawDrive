@@ -34,8 +34,8 @@ describe("gallery cover page design-system contracts", () => {
     expect(source).toContain("cover-text-style-toggle");
     expect(source).toContain('className="cover-control-card"');
     expect(source).toContain('className="cover-panel-stack"');
-    expect(source).toContain('className="cover-template-grid"');
-    expect(source).toContain('className="cover-template-tile"');
+    expect(source).toContain('className="cover-design-grid"');
+    expect(source).toContain('className="cover-design-tile"');
     expect(source).toContain('className="cover-slot-tabs"');
     expect(source).toContain('className="cover-section cover-photo-picker"');
     expect(source).toContain('className="cover-upload-stack"');
@@ -94,7 +94,7 @@ describe("gallery cover page design-system contracts", () => {
     expect(css).toContain(".cover-panel-stack");
     expect(css).toContain(".cover-section-header");
     expect(css).toContain(".cover-template-layout");
-    expect(css).toContain(".cover-template-grid");
+    expect(css).toContain(".cover-design-grid");
     expect(css).toContain(".cover-template-mini");
     expect(css).toContain(".cover-slot-controls");
     expect(css).toContain(".cover-photo-picker");

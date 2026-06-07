@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { SafeEmailLink } from "@/components/marketing/SafeEmailLink";
+import { RAWDRIVE_CONTACT_EMAILS, safeEmailDisplay } from "@/lib/contact-email";
 import { createPageMetadata } from "@/lib/seo";
 
 export const metadata: Metadata = createPageMetadata("privacy");
@@ -9,6 +11,8 @@ export const metadata: Metadata = createPageMetadata("privacy");
 // imply the policy was revised on every page view.
 const LAST_UPDATED = "April 2026";
 const EFFECTIVE_DATE = "April 2026";
+const CONTACTUS_EMAIL = RAWDRIVE_CONTACT_EMAILS.contactus;
+const CONTACTUS_DISPLAY = safeEmailDisplay(CONTACTUS_EMAIL);
 
 const sections = [
   {
@@ -48,8 +52,7 @@ const sections = [
   },
   {
     title: "8. Your Rights (DPDPA)",
-    content:
-      "Under the DPDPA, you have the right to: access your personal data, correct inaccurate data, erase your data (right to be forgotten), withdraw consent, and file grievances with our Data Protection Officer. To exercise these rights, contact our DPO at contactus@rawdrive.in.",
+    content: `Under the DPDPA, you have the right to: access your personal data, correct inaccurate data, erase your data (right to be forgotten), withdraw consent, and file grievances with our Data Protection Officer. To exercise these rights, contact our DPO at ${CONTACTUS_DISPLAY}.`,
   },
   {
     title: "9. Your Rights (GDPR)",
@@ -63,13 +66,11 @@ const sections = [
   },
   {
     title: "11. Children's Privacy",
-    content:
-      "RawDrive is not intended for individuals under 18 years of age. We do not knowingly collect personal data from minors. If you believe we have collected data from a minor, please contact us immediately at contactus@rawdrive.in.",
+    content: `RawDrive is not intended for individuals under 18 years of age. We do not knowingly collect personal data from minors. If you believe we have collected data from a minor, please contact us immediately at ${CONTACTUS_DISPLAY}.`,
   },
   {
     title: "12. Changes to This Policy",
-    content:
-      `We may update this Privacy Policy from time to time. We will notify you of material changes via email or through a prominent notice on our platform. Continued use of our services after changes constitutes acceptance of the updated policy. Last updated: ${LAST_UPDATED}.`,
+    content: `We may update this Privacy Policy from time to time. We will notify you of material changes via email or through a prominent notice on our platform. Continued use of our services after changes constitutes acceptance of the updated policy. Last updated: ${LAST_UPDATED}.`,
   },
 ];
 
@@ -99,12 +100,14 @@ export default function PrivacyPage() {
           </h2>
           <p className="mt-2 text-sm text-text-secondary">
             For any privacy-related inquiries, contact our DPO at{" "}
-            <a
-              href="mailto:contactus@rawdrive.in"
+            <SafeEmailLink
+              localPart={CONTACTUS_EMAIL.localPart}
+              domain={CONTACTUS_EMAIL.domain}
               className="text-accent hover:text-accent-hover"
+              ariaLabel="Email RawDrive Data Protection Officer"
             >
-              contactus@rawdrive.in
-            </a>
+              {(display) => display}
+            </SafeEmailLink>
           </p>
         </div>
       </div>

@@ -649,7 +649,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	refreshToken, err := h.jwt.GenerateRefreshTokenWithClaims(r.Context(), userID, "family-"+uuid.New().String(), wsID, role, platformRole, stateID)
+	refreshToken, err := h.jwt.GenerateRefreshTokenWithClaimsReplacingOldest(r.Context(), userID, "family-"+uuid.New().String(), wsID, role, platformRole, stateID)
 	if err != nil {
 		if errors.Is(err, ErrMaxConcurrentSessions) {
 			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": tooManyActiveSessionsMessage})
@@ -731,7 +731,7 @@ func (h *Handler) VerifyOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	refreshToken, err := h.jwt.GenerateRefreshTokenWithClaims(r.Context(), userID, "family-"+uuid.New().String(), wsID, role, platformRole, stateID)
+	refreshToken, err := h.jwt.GenerateRefreshTokenWithClaimsReplacingOldest(r.Context(), userID, "family-"+uuid.New().String(), wsID, role, platformRole, stateID)
 	if err != nil {
 		if errors.Is(err, ErrMaxConcurrentSessions) {
 			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": tooManyActiveSessionsMessage})
@@ -990,7 +990,7 @@ func (h *Handler) OAuthGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	refreshToken, err := h.jwt.GenerateRefreshTokenWithClaims(r.Context(), user.ID, "family-"+uuid.New().String(), oauthWsID, oauthRole, oauthPlatformRole, oauthStateID)
+	refreshToken, err := h.jwt.GenerateRefreshTokenWithClaimsReplacingOldest(r.Context(), user.ID, "family-"+uuid.New().String(), oauthWsID, oauthRole, oauthPlatformRole, oauthStateID)
 	if err != nil {
 		if errors.Is(err, ErrMaxConcurrentSessions) {
 			http.Redirect(
@@ -1039,13 +1039,33 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Re-resolve workspace claims from DB so post-onboarding refresh
-	// picks up the newly created workspace instead of "pending-onboarding".
+	// Re-resolve workspace claims from DB so post-onboarding refresh picks up the
+	// newly created workspace instead of "pending-onboarding", and so admin role
+	// changes are reflected without forcing a full logout/login cycle.
 	if h.workspaces != nil {
 		claims, parseErr := h.jwt.ParseAccessToken(r.Context(), newAccess)
 		if parseErr == nil && claims.Sub != "" {
 			wsID, stateID, role, platformRole, _ := h.workspaces.GetUserWorkspace(r.Context(), claims.Sub)
-			if wsID != "" && wsID != claims.WorkspaceID {
+			nextWSID := claims.WorkspaceID
+			nextStateID := claims.StateID
+			nextRole := claims.Role
+			nextPlatformRole := claims.PlatformRole
+			if wsID != "" {
+				nextWSID = wsID
+			}
+			if stateID != "" {
+				nextStateID = stateID
+			}
+			if role != "" {
+				nextRole = role
+			}
+			if platformRole != "" {
+				nextPlatformRole = platformRole
+			}
+			if nextWSID != claims.WorkspaceID ||
+				nextStateID != claims.StateID ||
+				nextRole != claims.Role ||
+				nextPlatformRole != claims.PlatformRole {
 				// Claims changed — regenerate access token with fresh data.
 				// Carry MFAVerified forward from the rotated token so a
 				// post-onboarding refresh never silently downgrades a
@@ -1053,10 +1073,10 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 				// preserves mfa_verified").
 				freshAccess, genErr := h.jwt.GenerateAccessToken(r.Context(), TokenClaims{
 					Sub:          claims.Sub,
-					WorkspaceID:  wsID,
-					Role:         role,
-					PlatformRole: platformRole,
-					StateID:      stateID,
+					WorkspaceID:  nextWSID,
+					Role:         nextRole,
+					PlatformRole: nextPlatformRole,
+					StateID:      nextStateID,
 					MFAVerified:  claims.MFAVerified,
 				})
 				if genErr == nil {

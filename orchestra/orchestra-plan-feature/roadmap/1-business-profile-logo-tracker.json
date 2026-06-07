@@ -1,0 +1,95 @@
+{
+  "schema": "plan-tracker/v1",
+  "feature": {
+    "title": "Business profile logo: prominent top placement + crop/adjust-on-upload at /settings/business matching SaaS standards",
+    "slug": "business-profile-logo",
+    "umbrella": 1
+  },
+  "subFeatures": [
+    {
+      "ref": "1a",
+      "slug": "workspace-logo-crop-backend",
+      "title": "Backend: workspace logo upload + server-side crop render endpoints",
+      "priority": "P1",
+      "size": "M",
+      "deps": [],
+      "paths": [],
+      "doc": "orchestra/orchestra-plan-feature/roadmap/1a-workspace-logo-crop-backend.md",
+      "sourceRowDoc": null,
+      "status": "merged",
+      "issue": 240,
+      "branch": "cta/workspace-logo-crop-backend",
+      "pr": 242,
+      "mergedSha": "6d25ff80",
+      "note": null,
+      "startedAt": "2026-06-06T23:50:55.589Z",
+      "updatedAt": "2026-06-07T00:15:43.497Z"
+    },
+    {
+      "ref": "1b",
+      "slug": "workspace-logo-crop-frontend",
+      "title": "Frontend: crop/zoom/pan adjust-on-upload for the business logo",
+      "priority": "P1",
+      "size": "M",
+      "deps": [
+        "1a"
+      ],
+      "paths": [],
+      "doc": "orchestra/orchestra-plan-feature/roadmap/1b-workspace-logo-crop-frontend.md",
+      "sourceRowDoc": null,
+      "status": "merged",
+      "issue": 243,
+      "branch": "cta/workspace-logo-crop-frontend",
+      "pr": 244,
+      "mergedSha": "ac5c7103",
+      "note": null,
+      "startedAt": "2026-06-07T00:17:20.477Z",
+      "updatedAt": "2026-06-07T00:31:55.917Z"
+    },
+    {
+      "ref": "1c",
+      "slug": "business-logo-top-identity-header",
+      "title": "Frontend: prominent studio-logo brand header at the top of /settings/business",
+      "priority": "P2",
+      "size": "S",
+      "deps": [
+        "1b"
+      ],
+      "paths": [],
+      "doc": "orchestra/orchestra-plan-feature/roadmap/1c-business-logo-top-identity-header.md",
+      "sourceRowDoc": null,
+      "status": "merged",
+      "issue": 245,
+      "branch": "cta/business-logo-top-identity-header",
+      "pr": 246,
+      "mergedSha": "21be7fc1",
+      "note": null,
+      "startedAt": "2026-06-07T00:32:23.785Z",
+      "updatedAt": "2026-06-07T00:39:51.951Z"
+    }
+  ],
+  "metadata": {
+    "created": "2026-06-06T23:47:26.343Z",
+    "lastUpdated": "2026-06-07T00:39:51.951Z",
+    "version": "1",
+    "total": 3,
+    "summary": {
+      "byStatus": {
+        "pending": 0,
+        "in_progress": 0,
+        "merged": 3,
+        "released": 0,
+        "blocked": 0,
+        "superseded": 0
+      },
+      "byPriority": {
+        "P1": 2,
+        "P2": 1
+      },
+      "shipped": 3,
+      "total": 3,
+      "percentComplete": 100,
+      "ready": []
+    }
+  }
+}

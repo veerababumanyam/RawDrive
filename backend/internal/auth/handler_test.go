@@ -985,6 +985,69 @@ func TestOAuthGoogleCallback_MaxSessionsRedirectsToLoginError(t *testing.T) {
 	assert.NotContains(t, resp.Header.Get("Content-Type"), "application/json")
 }
 
+func TestOAuthGoogleCallback_ReplacesOldestSessionWhenCapReached(t *testing.T) {
+	t.Setenv("FRONTEND_URL", "http://localhost:3000")
+
+	otpSvc := auth.NewOTPService(auth.OTPConfig{
+		CodeLength:      6,
+		Expiry:          5 * time.Minute,
+		MaxAttempts:     5,
+		RateLimitMax:    10,
+		RateLimitWindow: time.Minute,
+	})
+	jwtSvc := auth.NewJWTService(auth.JWTConfig{
+		AccessTokenExpiry:  15 * time.Minute,
+		RefreshTokenExpiry: 7 * 24 * time.Hour,
+		MaxSessions:        1,
+	})
+
+	const userID = "oauth-session-recovery-user"
+	const providerID = "google-oauth-session-recovery"
+	oldRefresh, err := jwtSvc.GenerateRefreshTokenWithClaims(context.Background(), userID, "family-old", "pending-onboarding", "Owner", "photographer", "pending-onboarding")
+	require.NoError(t, err)
+
+	profile := &auth.OAuthProfile{
+		Email:         "oauth-recovery@example.com",
+		EmailVerified: true,
+		DisplayName:   "OAuth Recovery",
+		ProviderID:    providerID,
+	}
+	store := &mockUserStore{
+		users: map[string]*auth.User{
+			profile.Email: {ID: userID, Email: profile.Email, EmailVerified: true},
+		},
+		links: map[string]string{linkKey("google", providerID): userID},
+	}
+	oauthSvc, state, cookieValue := newAuthorizedService(t, newMockProvider(profile), store)
+	handler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, newMockUserService())
+
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/auth/oauth/google/callback?code=valid-code&state="+url.QueryEscape(state), nil)
+	require.NoError(t, err)
+	req.AddCookie(oauthStateCookie(cookieValue))
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusFound, resp.StatusCode)
+	location, err := url.Parse(resp.Header.Get("Location"))
+	require.NoError(t, err)
+	assert.Equal(t, "1", location.Query().Get("authenticated"))
+	assert.Empty(t, location.Query().Get("error"))
+	newRefresh := refreshCookieFromResponse(t, resp).Value
+	require.NotEmpty(t, newRefresh)
+
+	_, _, err = jwtSvc.RotateRefreshToken(context.Background(), oldRefresh)
+	require.Error(t, err, "old session family should be revoked to make room for the OAuth session")
+	_, _, err = jwtSvc.RotateRefreshToken(context.Background(), newRefresh)
+	require.NoError(t, err, "new OAuth session should be usable")
+}
+
 func TestOAuthGoogleCallback_UnactivatedAccountRedirectIncludesActivationEmail(t *testing.T) {
 	t.Setenv("FRONTEND_URL", "http://localhost:3000")
 
@@ -1411,6 +1474,56 @@ func TestRefreshToken_PreservesMFAVerifiedAfterWorkspaceChange(t *testing.T) {
 	assert.True(t, claims.MFAVerified,
 		"F-011: post-onboarding refresh must NOT downgrade mfa_verified — "+
 			"the regenerated access token must preserve MFAVerified=true")
+}
+
+func TestRefreshToken_ReresolvesPlatformRoleChange(t *testing.T) {
+	jwtSvc := auth.NewJWTService(auth.JWTConfig{
+		AccessTokenExpiry:  15 * time.Minute,
+		RefreshTokenExpiry: 7 * 24 * time.Hour,
+		MaxSessions:        5,
+	})
+
+	refreshToken, err := jwtSvc.GenerateRefreshTokenWithMFA(
+		context.Background(),
+		"00000000-0000-0000-0000-000000000002",
+		"family-role-refresh",
+		"11111111-1111-1111-1111-111111111111",
+		"Owner",
+		"photographer",
+		"state-1",
+		true,
+	)
+	require.NoError(t, err)
+
+	handler := auth.NewHandler(nil, jwtSvc, nil, nil).
+		WithWorkspaceLookup(stubWorkspaceLookup{
+			wsID:         "11111111-1111-1111-1111-111111111111",
+			stateID:      "state-1",
+			role:         "Owner",
+			platformRole: "super_admin",
+		})
+
+	ts := newTestServer(handler)
+	defer ts.Close()
+
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/auth/refresh", nil)
+	require.NoError(t, err)
+	req.AddCookie(&http.Cookie{Name: "refresh_token", Value: refreshToken})
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]string
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	require.NotEmpty(t, result["access_token"])
+
+	claims, err := jwtSvc.ParseAccessToken(context.Background(), result["access_token"])
+	require.NoError(t, err)
+	assert.Equal(t, "super_admin", claims.PlatformRole)
+	assert.Equal(t, "11111111-1111-1111-1111-111111111111", claims.WorkspaceID)
+	assert.True(t, claims.MFAVerified)
 }
 
 // ─────────────────────────── F-056: max password length at registration ───────────────────────────

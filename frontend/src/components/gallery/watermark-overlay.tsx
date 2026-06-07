@@ -61,22 +61,117 @@ function readWatermarkPlacement(
   };
 }
 
+function readWatermarkRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function readWatermarkLayer(
+  config: Gallery["watermark_config"],
+  layer: "logo" | "text",
+  fallback: {
+    opacity: number;
+    position: string;
+    placement: { x: number; y: number } | null;
+    scale: number;
+  },
+) {
+  const layers = readWatermarkRecord(config?.layers);
+  const raw = readWatermarkRecord(layers[layer]);
+  const position =
+    typeof raw.position === "string" && raw.position
+      ? raw.position
+      : fallback.position;
+  return {
+    opacity:
+      typeof raw.opacity === "number" && Number.isFinite(raw.opacity)
+        ? raw.opacity
+        : fallback.opacity,
+    position,
+    placement: readWatermarkPlacement(raw.placement) ?? fallback.placement,
+    scale:
+      typeof raw.scale === "number" && Number.isFinite(raw.scale)
+        ? raw.scale
+        : fallback.scale,
+  };
+}
+
+type ResolvedWatermarkLayer = {
+  kind: "logo" | "text";
+  text: string;
+  opacity: number;
+  position: string;
+  placement: { x: number; y: number } | null;
+  scale: number;
+  logoUrl: string;
+};
+
 export function WatermarkOverlay({ config, logoUrl: logoUrlOverride }: Props) {
   if (!config) return null;
 
+  const mode =
+    config.mode === "logo" || config.mode === "both" ? config.mode : "text";
   const rawOpacity = config.opacity ?? 30;
-  const opacity = Math.max(
-    0,
-    Math.min(1, rawOpacity > 1 ? rawOpacity / 100 : rawOpacity),
-  );
   const text = config.text ?? "";
   const position = config.position ?? "center";
   const logoUrl = absoluteApiUrl(logoUrlOverride || config.logo_url);
-  const scale =
+  const rawScale =
     typeof config.scale === "number" && Number.isFinite(config.scale)
-      ? config.scale / 100
-      : 1;
+      ? config.scale
+      : 100;
   const placement = readWatermarkPlacement(config.placement);
+  const fallback = {
+    opacity: rawOpacity,
+    position,
+    placement,
+    scale: rawScale,
+  };
+  const logoLayer = readWatermarkLayer(config, "logo", fallback);
+  const textLayer = readWatermarkLayer(config, "text", fallback);
+  const toDisplayLayer = (
+    kind: "logo" | "text",
+    layer: typeof logoLayer,
+  ): ResolvedWatermarkLayer => {
+    const layerOpacity =
+      layer.opacity > 1
+        ? Math.max(0, Math.min(1, layer.opacity / 100))
+        : Math.max(0, Math.min(1, layer.opacity));
+    return {
+      kind,
+      text,
+      opacity: layerOpacity,
+      position: layer.position,
+      placement: layer.placement,
+      scale: layer.scale / 100,
+      logoUrl,
+    };
+  };
+  const layers: ResolvedWatermarkLayer[] =
+    mode === "both"
+      ? [
+          ...(logoUrl ? [toDisplayLayer("logo", logoLayer)] : []),
+          ...(text.trim() ? [toDisplayLayer("text", textLayer)] : []),
+        ]
+      : mode === "logo"
+        ? logoUrl
+          ? [toDisplayLayer("logo", logoLayer)]
+          : []
+        : text.trim()
+          ? [toDisplayLayer("text", textLayer)]
+          : [];
+
+  return layers.length > 0 ? (
+    <>
+      {layers.map((layer) => (
+        <WatermarkLayerOverlay key={layer.kind} layer={layer} />
+      ))}
+    </>
+  ) : null;
+}
+
+function WatermarkLayerOverlay({ layer }: { layer: ResolvedWatermarkLayer }) {
+  const { kind, text, opacity, position, placement, scale, logoUrl } = layer;
 
   if (placement) {
     const transformParts = [
@@ -91,7 +186,7 @@ export function WatermarkOverlay({ config, logoUrl: logoUrlOverride }: Props) {
       transform: transformParts.join(" "),
       textShadow: "var(--cover-text-shadow)",
     };
-    if (config.mode === "logo" && logoUrl) {
+    if (kind === "logo" && logoUrl) {
       return (
         <div
           aria-hidden
@@ -114,13 +209,17 @@ export function WatermarkOverlay({ config, logoUrl: logoUrlOverride }: Props) {
     );
   }
 
-  if (config.mode === "logo" && logoUrl) {
+  if (kind === "logo" && logoUrl) {
     const corner =
       position === "bottom-left"
         ? "bottom-4 left-4"
-        : position === "center"
-          ? "inset-0 flex items-center justify-center"
-          : "bottom-4 right-4";
+        : position === "top-left"
+          ? "top-4 left-4"
+          : position === "top-right"
+            ? "top-4 right-4"
+            : position === "center"
+              ? "inset-0 flex items-center justify-center"
+              : "bottom-4 right-4";
     return (
       <div
         aria-hidden
@@ -129,7 +228,13 @@ export function WatermarkOverlay({ config, logoUrl: logoUrlOverride }: Props) {
           opacity,
           transform: `scale(${scale})`,
           transformOrigin:
-            position === "bottom-left" ? "bottom left" : "bottom right",
+            position === "bottom-left"
+              ? "bottom left"
+              : position === "top-left"
+                ? "top left"
+                : position === "top-right"
+                  ? "top right"
+                  : "bottom right",
         }}
       >
         <img
@@ -194,7 +299,11 @@ export function WatermarkOverlay({ config, logoUrl: logoUrlOverride }: Props) {
       ? "bottom-4 right-4"
       : position === "bottom-left"
         ? "bottom-4 left-4"
-        : "bottom-4 right-4";
+        : position === "top-left"
+          ? "top-4 left-4"
+          : position === "top-right"
+            ? "top-4 right-4"
+            : "bottom-4 right-4";
   return (
     <div
       aria-hidden
@@ -203,7 +312,13 @@ export function WatermarkOverlay({ config, logoUrl: logoUrlOverride }: Props) {
         opacity,
         transform: `scale(${scale})`,
         transformOrigin:
-          position === "bottom-left" ? "bottom left" : "bottom right",
+          position === "bottom-left"
+            ? "bottom left"
+            : position === "top-left"
+              ? "top left"
+              : position === "top-right"
+                ? "top right"
+                : "bottom right",
       }}
     >
       <span className="text-sm font-semibold uppercase tracking-wider text-text-media">

@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PublicGalleryHero } from "../public-gallery-hero";
@@ -26,6 +28,8 @@ vi.mock("@/lib/media-encryption/use-decrypted-asset-url", () => ({
 }));
 
 const weddingPhoto = "/tests/photos/Wedding (42).jpg";
+const publicHeroPath = path.resolve(__dirname, "../public-gallery-hero.tsx");
+const globalsPath = path.resolve(__dirname, "../../../app/globals.css");
 
 const gallery: Gallery = {
   id: "gallery-1",
@@ -97,6 +101,17 @@ describe("PublicGalleryHero", () => {
     // play()/pause() on the <audio> element when music is wired.
     window.HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
     window.HTMLMediaElement.prototype.pause = vi.fn();
+  });
+
+  it("keeps saved cover design frames aspect-ratio-bound instead of viewport-clamped", () => {
+    const source = fs.readFileSync(publicHeroPath, "utf8");
+    const css = fs.readFileSync(globalsPath, "utf8");
+
+    expect(source).toContain('data-cover-experience="design"');
+    expect(css).toContain('.cover-hero-frame[data-cover-experience="design"]');
+    expect(css).toMatch(
+      /\.cover-hero-frame\[data-cover-experience="design"\]\s*{[^}]*min-height:\s*0;[^}]*max-height:\s*none;/s,
+    );
   });
 
   it("renders studio identity and cover photo on the public gallery hero", () => {
@@ -204,6 +219,7 @@ describe("PublicGalleryHero", () => {
           { x: 50, y: 50 },
           { x: 63, y: 32 },
         ],
+        slotZooms: [1, 1.4],
         title: "Asha & Ravi",
         subtitle: "Haldi to reception",
         titlePosition: { x: 50, y: 58 },
@@ -247,7 +263,7 @@ describe("PublicGalleryHero", () => {
       version: 8,
     };
 
-    render(
+    const { container } = render(
       <PublicGalleryHero
         gallery={gallery}
         assets={[coverAsset, secondaryAsset]}
@@ -256,6 +272,13 @@ describe("PublicGalleryHero", () => {
       />,
     );
 
+    const heroFrame = container.querySelector(".cover-hero-frame");
+    expect(heroFrame).toHaveAttribute("data-cover-experience", "design");
+    expect(heroFrame?.getAttribute("style")).toContain("aspect-ratio: 16/9");
+    expect(heroFrame).toHaveStyle({
+      minHeight: "0",
+      maxHeight: "none",
+    });
     expect(screen.getByTestId("gallery-cover-photo-grid")).toBeInTheDocument();
     expect(screen.getByTestId("gallery-cover-photo-grid")).toHaveAttribute(
       "data-cover-template",
@@ -268,6 +291,8 @@ describe("PublicGalleryHero", () => {
     );
     expect(secondSlot.querySelector("img")).toHaveStyle({
       objectPosition: "63% 32%",
+      transform: "scale(1.4)",
+      transformOrigin: "63% 32%",
     });
     expect(screen.getByTestId("gallery-cover-scrim")).toHaveStyle({
       background:

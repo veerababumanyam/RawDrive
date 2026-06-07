@@ -243,6 +243,7 @@ func (r *RefreshSessionRepo) UserHasFamily(ctx context.Context, userID, familyID
 		     WHERE sub = $1 AND family_id = $2
 		       AND revoked = FALSE
 		       AND family_revoked = FALSE
+		       AND expires_at > now()
 		 )`,
 		userID, familyID,
 	).Scan(&exists)
@@ -250,4 +251,39 @@ func (r *RefreshSessionRepo) UserHasFamily(ctx context.Context, userID, familyID
 		return false, fmt.Errorf("refresh session repo: user has family: %w", err)
 	}
 	return exists, nil
+}
+
+// RevokeOldestFamilyForUser revokes one active family, choosing the oldest
+// family by the earliest row creation time. The caller has already authenticated
+// the user and will retry token creation once.
+func (r *RefreshSessionRepo) RevokeOldestFamilyForUser(ctx context.Context, userID string) (string, bool, error) {
+	var familyID string
+	err := r.pool.QueryRow(ctx,
+		`WITH oldest AS (
+		     SELECT family_id
+		     FROM refresh_sessions
+		     WHERE sub = $1
+		       AND revoked = FALSE
+		       AND family_revoked = FALSE
+		       AND expires_at > now()
+		     GROUP BY family_id
+		     ORDER BY MIN(created_at), MIN(expires_at), family_id
+		     LIMIT 1
+		 ), revoked AS (
+		     UPDATE refresh_sessions
+		     SET family_revoked = TRUE, revoked = TRUE
+		     WHERE sub = $1
+		       AND family_id = (SELECT family_id FROM oldest)
+		     RETURNING family_id
+		 )
+		 SELECT family_id FROM revoked LIMIT 1`,
+		userID,
+	).Scan(&familyID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("refresh session repo: revoke oldest family: %w", err)
+	}
+	return familyID, true, nil
 }

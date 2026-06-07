@@ -495,7 +495,7 @@ func (h *MFAHandler) VerifyTOTP(w http.ResponseWriter, r *http.Request) {
 	// family, so a single logout / token-reuse revocation would kill all of
 	// them and the MaxSessions accounting would mis-count the second login as
 	// the same family. Per-session families restore session isolation.
-	refreshToken, err := h.jwt.GenerateRefreshTokenWithMFA(r.Context(), claims.Sub, "family-"+uuid.New().String(), wsID, role, platformRole, stateID, true)
+	refreshToken, err := h.jwt.GenerateRefreshTokenWithMFAReplacingOldest(r.Context(), claims.Sub, "family-"+uuid.New().String(), wsID, role, platformRole, stateID, true)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "refresh token generation failed"})
 		return
@@ -634,7 +634,7 @@ func (h *MFAHandler) VerifyRecoveryCode(w http.ResponseWriter, r *http.Request) 
 	// VerifyTOTP and the password/OAuth Login paths. See the comment on the
 	// VerifyTOTP call site for why a deterministic family ID breaks session
 	// isolation and MaxSessions accounting.
-	refreshToken, err := h.jwt.GenerateRefreshTokenWithMFA(r.Context(), claims.Sub, "family-"+uuid.New().String(), wsID, role, platformRole, stateID, true)
+	refreshToken, err := h.jwt.GenerateRefreshTokenWithMFAReplacingOldest(r.Context(), claims.Sub, "family-"+uuid.New().String(), wsID, role, platformRole, stateID, true)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "refresh token generation failed"})
 		return

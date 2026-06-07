@@ -182,6 +182,33 @@ func TestConcurrentSessionLimit(t *testing.T) {
 	assert.Error(t, err, "6th session should be rejected (max 5)")
 }
 
+func TestGenerateRefreshTokenReplacingOldest_ReclaimsSessionSlot(t *testing.T) {
+	svc := auth.NewJWTService(auth.JWTConfig{
+		AccessTokenExpiry:  15 * time.Minute,
+		RefreshTokenExpiry: 30 * 24 * time.Hour,
+		MaxSessions:        1,
+	})
+	ctx := context.Background()
+
+	oldRefresh, err := svc.GenerateRefreshTokenWithClaims(ctx, "user-uuid-123", "family-old", "ws-uuid-456", "Owner", "photographer", "state-uuid-789")
+	require.NoError(t, err)
+
+	_, err = svc.GenerateRefreshTokenWithClaims(ctx, "user-uuid-123", "family-blocked", "ws-uuid-456", "Owner", "photographer", "state-uuid-789")
+	require.Error(t, err, "plain refresh token creation must still enforce the session cap")
+
+	newRefresh, err := svc.GenerateRefreshTokenWithClaimsReplacingOldest(ctx, "user-uuid-123", "family-new", "ws-uuid-456", "Owner", "photographer", "state-uuid-789")
+	require.NoError(t, err)
+	require.NotEmpty(t, newRefresh)
+
+	_, _, err = svc.RotateRefreshToken(ctx, oldRefresh)
+	require.Error(t, err, "oldest family should be revoked before issuing the replacement session")
+
+	newAccess, rotatedRefresh, err := svc.RotateRefreshToken(ctx, newRefresh)
+	require.NoError(t, err, "replacement session should remain usable")
+	assert.NotEmpty(t, newAccess)
+	assert.NotEmpty(t, rotatedRefresh)
+}
+
 func TestTokenTampering(t *testing.T) {
 	svc := newTestJWTService(t)
 	ctx := context.Background()

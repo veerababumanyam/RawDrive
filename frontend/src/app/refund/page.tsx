@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { SafeEmailLink } from "@/components/marketing/SafeEmailLink";
+import { RAWDRIVE_CONTACT_EMAILS, safeEmailDisplay } from "@/lib/contact-email";
 import { createPageMetadata } from "@/lib/seo";
 
 export const metadata: Metadata = createPageMetadata("refund");
@@ -9,6 +11,10 @@ export const metadata: Metadata = createPageMetadata("refund");
 // imply the policy was revised on every page view.
 const LAST_UPDATED = "April 2026";
 const EFFECTIVE_DATE = "April 2026";
+const SUPPORT_EMAIL = RAWDRIVE_CONTACT_EMAILS.support;
+const CONTACTUS_EMAIL = RAWDRIVE_CONTACT_EMAILS.contactus;
+const SUPPORT_DISPLAY = safeEmailDisplay(SUPPORT_EMAIL);
+const CONTACTUS_DISPLAY = safeEmailDisplay(CONTACTUS_EMAIL);
 
 const sections = [
   {
@@ -33,8 +39,7 @@ const sections = [
   },
   {
     title: "5. How to Request a Refund",
-    content:
-      "To request a refund, email support@rawdrive.in with your account email, transaction ID, and reason for the refund. You may also submit a request through your account dashboard under Settings > Billing > Request Refund. We aim to acknowledge all refund requests within 24 hours.",
+    content: `To request a refund, email ${SUPPORT_DISPLAY} with your account email, transaction ID, and reason for the refund. You may also submit a request through your account dashboard under Settings > Billing > Request Refund. We aim to acknowledge all refund requests within 24 hours.`,
   },
   {
     title: "6. Refund Processing",
@@ -48,8 +53,7 @@ const sections = [
   },
   {
     title: "8. Contact Information",
-    content:
-      `For refund inquiries, contact our support team at support@rawdrive.in. For escalations, contact our Customer Success team at contactus@rawdrive.in. Last updated: ${LAST_UPDATED}.`,
+    content: `For refund inquiries, contact our support team at ${SUPPORT_DISPLAY}. For escalations, contact our Customer Success team at ${CONTACTUS_DISPLAY}. Last updated: ${LAST_UPDATED}.`,
   },
 ];
 
@@ -76,12 +80,14 @@ export default function RefundPage() {
         <div className="mt-12 rounded-xl border border-border bg-surface-elevated p-6">
           <p className="text-sm text-text-secondary">
             Need help with a refund? Contact{" "}
-            <a
-              href="mailto:support@rawdrive.in"
+            <SafeEmailLink
+              localPart={SUPPORT_EMAIL.localPart}
+              domain={SUPPORT_EMAIL.domain}
               className="text-accent hover:text-accent-hover"
+              ariaLabel="Email RawDrive support"
             >
-              support@rawdrive.in
-            </a>
+              {(display) => display}
+            </SafeEmailLink>
           </p>
         </div>
       </div>

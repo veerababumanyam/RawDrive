@@ -1,7 +1,13 @@
 import type { Metadata } from "next";
+import { SafeEmailLink } from "@/components/marketing/SafeEmailLink";
+import { RAWDRIVE_CONTACT_EMAILS, safeEmailDisplay } from "@/lib/contact-email";
 import { createPageMetadata } from "@/lib/seo";
 
 export const metadata: Metadata = createPageMetadata("terms");
+
+const SUPPORT_EMAIL = RAWDRIVE_CONTACT_EMAILS.support;
+const CONTACTUS_EMAIL = RAWDRIVE_CONTACT_EMAILS.contactus;
+const SUPPORT_DISPLAY = safeEmailDisplay(SUPPORT_EMAIL);
 
 const sections = [
   {
@@ -16,8 +22,7 @@ const sections = [
   },
   {
     title: "3. Account Registration",
-    content:
-      "You must provide accurate, complete information during registration. You are responsible for maintaining the confidentiality of your credentials and for all activity under your account. Notify us immediately of unauthorized access at support@rawdrive.in.",
+    content: `You must provide accurate, complete information during registration. You are responsible for maintaining the confidentiality of your credentials and for all activity under your account. Notify us immediately of unauthorized access at ${SUPPORT_DISPLAY}.`,
   },
   {
     title: "4. Service Description",
@@ -96,12 +101,14 @@ export default function TermsPage() {
         <div className="mt-12 rounded-xl border border-border bg-surface-elevated p-6">
           <p className="text-sm text-text-secondary">
             Questions about these terms? Contact us at{" "}
-            <a
-              href="mailto:contactus@rawdrive.in"
+            <SafeEmailLink
+              localPart={CONTACTUS_EMAIL.localPart}
+              domain={CONTACTUS_EMAIL.domain}
               className="text-accent hover:text-accent-hover"
+              ariaLabel="Email RawDrive legal contact"
             >
-              contactus@rawdrive.in
-            </a>
+              {(display) => display}
+            </SafeEmailLink>
           </p>
         </div>
       </div>

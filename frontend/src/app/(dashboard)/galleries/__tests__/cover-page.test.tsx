@@ -167,11 +167,24 @@ describe("CoverDesignPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("button", { name: /haldi warm/i }),
+        screen.getByRole("button", { name: /use haldi warm design/i }),
       ).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /haldi warm/i }));
+    expect(
+      screen.getByRole("heading", { name: "Cover designs" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Design presets")).not.toBeInTheDocument();
+    expect(screen.queryByText("Cover templates")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /use stamp design/i }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /use haldi warm design/i,
+      }),
+    );
     fireEvent.click(screen.getByRole("button", { name: /phone preview/i }));
 
     expect(screen.getByLabelText(/mobile safe zone/i)).toBeInTheDocument();
@@ -250,6 +263,30 @@ describe("CoverDesignPage", () => {
       ]),
     );
   }, 10000);
+
+  it("offers a compact mobile section rail for cover editing", async () => {
+    await renderPage();
+
+    const mobileRail = await screen.findByRole("group", {
+      name: "Mobile cover editor sections",
+    });
+
+    expect(
+      within(mobileRail).getByRole("button", { name: "Cover" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(within(mobileRail).getByRole("button", { name: "Text" }));
+
+    expect(screen.getByLabelText("Editor section")).toHaveValue("text");
+    expect(
+      await screen.findByPlaceholderText("Your gallery title"),
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(mobileRail).getByRole("button", { name: "Brand" }));
+
+    expect(screen.getByLabelText("Editor section")).toHaveValue("brand");
+    expect(await screen.findByLabelText(/monogram/i)).toBeInTheDocument();
+  });
 
   it("saves cover visual treatments and manual art-direction overrides", async () => {
     await renderPage();
@@ -358,17 +395,27 @@ describe("CoverDesignPage", () => {
 
     await renderPage();
 
+    const choices = await screen.findByRole("group", {
+      name: "Cover photo choices",
+    });
+    expect(
+      await within(choices).findAllByText(/Preview unavailable/i),
+    ).not.toHaveLength(0);
+    expect(within(choices).queryByText(/Key needed/i)).not.toBeInTheDocument();
+
     fireEvent.change(await screen.findByLabelText("Editor section"), {
       target: { value: "grid" },
     });
 
-    expect(
-      await screen.findAllByText(/Preview unavailable/i),
-    ).not.toHaveLength(0);
+    expect(await screen.findAllByText(/Preview unavailable/i)).not.toHaveLength(
+      0,
+    );
     expect(
       screen.queryByText(/Encrypted media fetch failed: 404/i),
     ).not.toBeInTheDocument();
-    expect(screen.queryByText(/Media fetch failed: 404/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Media fetch failed: 404/i),
+    ).not.toBeInTheDocument();
   });
 
   it("always shows drag/drop and browse upload in the Cover photo picker", async () => {
@@ -662,7 +709,7 @@ describe("CoverDesignPage", () => {
 
     fireEvent.click(
       await screen.findByRole("button", {
-        name: /use four grid cover template/i,
+        name: /use proofing first design/i,
       }),
     );
 
@@ -683,11 +730,26 @@ describe("CoverDesignPage", () => {
       }),
     );
 
-    fireEvent.change(screen.getByLabelText("Horizontal focal"), {
+    fireEvent.change(screen.getByLabelText("Move left/right"), {
       target: { value: "64" },
     });
-    fireEvent.change(screen.getByLabelText("Vertical focal"), {
+    fireEvent.change(screen.getByLabelText("Move up/down"), {
       target: { value: "31" },
+    });
+    fireEvent.change(screen.getByLabelText("Photo zoom"), {
+      target: { value: "145" },
+    });
+
+    const stage = screen.getByLabelText(/Cover preview/i);
+    const secondTemplateSlot = within(stage).getByRole("button", {
+      name: "Cover template photo 2",
+    });
+    expect(
+      within(secondTemplateSlot).getByAltText("Wedding (43).jpg"),
+    ).toHaveStyle({
+      objectPosition: "64% 31%",
+      transform: "scale(1.45)",
+      transformOrigin: "64% 31%",
     });
 
     fireEvent.click(
@@ -705,6 +767,10 @@ describe("CoverDesignPage", () => {
       mediaMode?: string;
       assetSlots?: Array<string | null>;
       slotFocalPoints?: Array<{ x: number; y: number }>;
+      slotZooms?: number[];
+      deviceProfiles?: {
+        desktop?: { slotZooms?: number[] };
+      };
     };
     expect(savedCover.styleId).toBe("modern-grid");
     expect(savedCover.mediaMode).toBe("photo-grid");
@@ -715,6 +781,8 @@ describe("CoverDesignPage", () => {
       "asset-4",
     ]);
     expect(savedCover.slotFocalPoints?.[1]).toEqual({ x: 64, y: 31 });
+    expect(savedCover.slotZooms?.[1]).toBe(1.45);
+    expect(savedCover.deviceProfiles?.desktop?.slotZooms?.[1]).toBe(1.45);
   });
 
   it("pushes the selected gallery photo into the active cover template slot preview", async () => {
@@ -722,7 +790,7 @@ describe("CoverDesignPage", () => {
 
     fireEvent.click(
       await screen.findByRole("button", {
-        name: /use four grid cover template/i,
+        name: /use proofing first design/i,
       }),
     );
 
@@ -757,7 +825,7 @@ describe("CoverDesignPage", () => {
 
     fireEvent.click(
       await screen.findByRole("button", {
-        name: /use four grid cover template/i,
+        name: /use proofing first design/i,
       }),
     );
 

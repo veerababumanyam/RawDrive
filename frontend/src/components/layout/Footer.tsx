@@ -1,6 +1,11 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Envelope, Phone } from "@/components/icons";
+import { SafeEmailLink } from "@/components/marketing/SafeEmailLink";
+import {
+  RAWDRIVE_CONTACT_EMAILS,
+  type RawDriveContactEmail,
+} from "@/lib/contact-email";
 
 const solutionsLinks = [
   { href: "/solutions/galleries", label: "Client Galleries" },
@@ -47,10 +52,34 @@ const footerLinkGroups = [
   },
 ];
 
-const contactLinks = [
-  { href: "mailto:info@rawdrive.in", label: "info@rawdrive.in" },
-  { href: "mailto:support@rawdrive.in", label: "support@rawdrive.in" },
-  { href: "mailto:contactus@rawdrive.in", label: "contactus@rawdrive.in" },
+type FooterContactLink =
+  | {
+      type: "email";
+      email: RawDriveContactEmail;
+      label: string;
+    }
+  | {
+      type: "phone";
+      href: string;
+      label: string;
+    };
+
+const contactLinks: FooterContactLink[] = [
+  {
+    type: "email",
+    email: RAWDRIVE_CONTACT_EMAILS.info,
+    label: "Product information",
+  },
+  {
+    type: "email",
+    email: RAWDRIVE_CONTACT_EMAILS.support,
+    label: "Support",
+  },
+  {
+    type: "email",
+    email: RAWDRIVE_CONTACT_EMAILS.contactus,
+    label: "General contact",
+  },
   {
     href: "tel:+91928112993",
     label: "+91 92811 2993",
@@ -125,7 +154,9 @@ export function Footer() {
               />
               <div>
                 <span className="site-footer__brand-name">RawDrive</span>
-                <span className="site-footer__brand-origin">Built in India</span>
+                <span className="site-footer__brand-origin">
+                  Built in India
+                </span>
               </div>
             </Link>
             <p className="site-footer__summary">
@@ -134,23 +165,37 @@ export function Footer() {
             </p>
             <ul className="site-footer__contact-list">
               {contactLinks.map((link) => (
-                <li key={link.href}>
-                  <a href={link.href} className="site-footer__contact-link">
-                    {link.type === "phone" ? (
+                <li key={link.type === "phone" ? link.href : link.label}>
+                  {link.type === "phone" ? (
+                    <a href={link.href} className="site-footer__contact-link">
                       <Phone
                         className="site-footer__contact-icon"
                         aria-hidden="true"
                       />
-                    ) : (
-                      <Envelope
-                        className="site-footer__contact-icon"
-                        aria-hidden="true"
-                      />
-                    )}
-                    <span className="site-footer__contact-label">
-                      {link.label}
-                    </span>
-                  </a>
+                      <span className="site-footer__contact-label">
+                        {link.label}
+                      </span>
+                    </a>
+                  ) : (
+                    <SafeEmailLink
+                      localPart={link.email.localPart}
+                      domain={link.email.domain}
+                      className="site-footer__contact-link"
+                      ariaLabel={`Email ${link.label}`}
+                    >
+                      {(display) => (
+                        <>
+                          <Envelope
+                            className="site-footer__contact-icon"
+                            aria-hidden="true"
+                          />
+                          <span className="site-footer__contact-label">
+                            {display}
+                          </span>
+                        </>
+                      )}
+                    </SafeEmailLink>
+                  )}
                 </li>
               ))}
             </ul>
@@ -180,6 +225,7 @@ export function Footer() {
             target="_blank"
             rel="noopener noreferrer"
             className="site-footer__partner-link"
+            aria-label="Powered by CoBolt"
           >
             <span>Powered by</span>
             <Image

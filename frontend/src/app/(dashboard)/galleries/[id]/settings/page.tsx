@@ -50,21 +50,32 @@ const WATERMARK_PREVIEW_VARIANTS = [
 const WATERMARK_SCALE_DEFAULT = 100;
 const WATERMARK_POSITION_PRESETS = [
   { id: "center", label: "Center", x: 50, y: 50 },
+  { id: "top-right", label: "Top right", x: 84, y: 16 },
+  { id: "top-left", label: "Top left", x: 16, y: 16 },
   { id: "bottom-right", label: "Bottom right", x: 84, y: 84 },
   { id: "bottom-left", label: "Bottom left", x: 16, y: 84 },
   { id: "diagonal", label: "Diagonal", x: 50, y: 50 },
+  { id: "custom", label: "Free form", x: 50, y: 50 },
 ] as const;
 type DownloadQuality = "webp" | "thumbnail" | "original";
 type WatermarkPlacement = { x: number; y: number };
-type WatermarkDraft = {
-  enabled: boolean;
-  mode: "text" | "logo";
-  text: string;
-  logoUrl: string;
+type WatermarkLayerKind = "logo" | "text";
+type WatermarkMode = "text" | "logo" | "both";
+type WatermarkPosition = (typeof WATERMARK_POSITION_PRESETS)[number]["id"];
+type WatermarkLayerDraft = {
   opacity: number;
   scale: number;
-  position: string;
+  position: WatermarkPosition;
   placement: WatermarkPlacement;
+};
+type WatermarkDraft = {
+  enabled: boolean;
+  mode: WatermarkMode;
+  text: string;
+  logoUrl: string;
+  activeLayer: WatermarkLayerKind;
+  logoLayer: WatermarkLayerDraft;
+  textLayer: WatermarkLayerDraft;
 };
 
 const BUSINESS_PROFILE_LOGO_SOURCE = "business_profile";
@@ -203,22 +214,32 @@ function clampPercent(value: unknown, fallback: number): number {
   return Math.min(100, Math.max(0, n));
 }
 
-function placementFromPosition(position: string): WatermarkPlacement {
+function normalizeWatermarkPosition(value: unknown): WatermarkPosition {
+  if (
+    typeof value === "string" &&
+    WATERMARK_POSITION_PRESETS.some((p) => p.id === value)
+  ) {
+    return value as WatermarkPosition;
+  }
+  return "bottom-right";
+}
+
+function placementFromPosition(
+  position: string,
+  fallback: WatermarkPlacement = { x: 84, y: 84 },
+): WatermarkPlacement {
   const preset = WATERMARK_POSITION_PRESETS.find((p) => p.id === position);
   if (preset) return { x: preset.x, y: preset.y };
-  return { x: 84, y: 84 };
+  return fallback;
 }
 
 function readWatermarkPlacement(
   watermark: Record<string, unknown>,
+  fallbackPosition: string,
 ): WatermarkPlacement {
   const raw = watermark.placement;
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    return placementFromPosition(
-      typeof watermark.position === "string"
-        ? watermark.position
-        : "bottom-right",
-    );
+    return placementFromPosition(fallbackPosition);
   }
   const placement = raw as Record<string, unknown>;
   return {
@@ -227,21 +248,111 @@ function readWatermarkPlacement(
   };
 }
 
+function readRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function defaultWatermarkLayer(
+  position: WatermarkPosition,
+): WatermarkLayerDraft {
+  return {
+    opacity: 40,
+    scale: WATERMARK_SCALE_DEFAULT,
+    position,
+    placement: placementFromPosition(position),
+  };
+}
+
+function legacyWatermarkLayer(
+  watermark: Record<string, unknown>,
+  fallbackPosition: WatermarkPosition,
+): WatermarkLayerDraft {
+  const position = normalizeWatermarkPosition(
+    typeof watermark.position === "string" && watermark.position
+      ? watermark.position
+      : fallbackPosition,
+  );
+  return {
+    opacity: clampPercent(watermark.opacity, 40),
+    scale:
+      clampPercent(watermark.scale, WATERMARK_SCALE_DEFAULT) ||
+      WATERMARK_SCALE_DEFAULT,
+    position,
+    placement: readWatermarkPlacement(watermark, position),
+  };
+}
+
+function readWatermarkLayer(
+  watermark: Record<string, unknown>,
+  layer: WatermarkLayerKind,
+  fallback: WatermarkLayerDraft,
+): WatermarkLayerDraft {
+  const layers = readRecord(watermark.layers);
+  const raw = readRecord(layers[layer]);
+  const position = normalizeWatermarkPosition(
+    typeof raw.position === "string" && raw.position
+      ? raw.position
+      : fallback.position,
+  );
+  return {
+    opacity: clampPercent(raw.opacity, fallback.opacity),
+    scale: clampPercent(raw.scale, fallback.scale) || WATERMARK_SCALE_DEFAULT,
+    position,
+    placement: readWatermarkPlacement(raw, position),
+  };
+}
+
+function visibleWatermarkLayer(mode: WatermarkMode): WatermarkLayerKind {
+  return mode === "text" ? "text" : "logo";
+}
+
+function watermarkLayer(
+  draft: WatermarkDraft,
+  layer: WatermarkLayerKind,
+): WatermarkLayerDraft {
+  return layer === "logo" ? draft.logoLayer : draft.textLayer;
+}
+
+function withWatermarkLayer(
+  draft: WatermarkDraft,
+  layer: WatermarkLayerKind,
+  patch: Partial<WatermarkLayerDraft>,
+): WatermarkDraft {
+  if (layer === "logo") {
+    return { ...draft, logoLayer: { ...draft.logoLayer, ...patch } };
+  }
+  return { ...draft, textLayer: { ...draft.textLayer, ...patch } };
+}
+
 function readWatermarkDraft(
   watermark: Record<string, unknown>,
   gallery: Gallery,
   profile: WorkspaceProfile | null,
   businessLogoPreviewUrl: string,
 ): WatermarkDraft {
-  const position =
+  const mode =
+    watermark.mode === "both"
+      ? "both"
+      : watermark.mode === "logo" ||
+          (!watermark.mode && hasBusinessProfileLogo(profile))
+        ? "logo"
+        : "text";
+  const legacyPosition = normalizeWatermarkPosition(
     typeof watermark.position === "string" && watermark.position
       ? watermark.position
-      : "bottom-right";
-  const mode =
-    watermark.mode === "logo" ||
-    (!watermark.mode && hasBusinessProfileLogo(profile))
-      ? "logo"
-      : "text";
+      : "bottom-right",
+  );
+  const legacyLayer = legacyWatermarkLayer(watermark, legacyPosition);
+  const logoFallback =
+    mode === "logo" || mode === "both"
+      ? legacyLayer
+      : defaultWatermarkLayer("bottom-right");
+  const textFallback =
+    mode === "text"
+      ? legacyLayer
+      : defaultWatermarkLayer(mode === "both" ? "top-left" : "bottom-right");
   const text =
     typeof watermark.text === "string" && watermark.text.trim()
       ? watermark.text
@@ -258,12 +369,9 @@ function readWatermarkDraft(
       businessLogoPreviewUrl ||
       legacyLogoUrl ||
       logoWatermarkURL(gallery, profile),
-    opacity: clampPercent(watermark.opacity, 40),
-    scale:
-      clampPercent(watermark.scale, WATERMARK_SCALE_DEFAULT) ||
-      WATERMARK_SCALE_DEFAULT,
-    position,
-    placement: readWatermarkPlacement(watermark),
+    activeLayer: visibleWatermarkLayer(mode),
+    logoLayer: readWatermarkLayer(watermark, "logo", logoFallback),
+    textLayer: readWatermarkLayer(watermark, "text", textFallback),
   };
 }
 
@@ -271,19 +379,25 @@ function watermarkDraftToConfig(
   draft: WatermarkDraft,
   current: Record<string, unknown>,
 ): Record<string, unknown> {
+  const primaryLayer = watermarkLayer(draft, visibleWatermarkLayer(draft.mode));
   const config: Record<string, unknown> = {
     ...current,
     enabled: draft.enabled,
     mode: draft.mode,
     text: draft.text,
-    opacity: draft.opacity,
-    scale: draft.scale,
-    position: draft.position,
-    placement: draft.placement,
+    opacity: primaryLayer.opacity,
+    scale: primaryLayer.scale,
+    position: primaryLayer.position,
+    placement: primaryLayer.placement,
+    layers: {
+      ...readRecord(current.layers),
+      logo: draft.logoLayer,
+      text: draft.textLayer,
+    },
   };
   delete config.logo_url;
   delete config.logo_asset_id;
-  if (draft.mode === "logo") {
+  if (draft.mode === "logo" || draft.mode === "both") {
     config.logo_source = BUSINESS_PROFILE_LOGO_SOURCE;
   } else {
     delete config.logo_source;
@@ -342,6 +456,8 @@ export default function GallerySettingsPage({
   const [watermarkDraft, setWatermarkDraft] = useState<WatermarkDraft | null>(
     null,
   );
+  const [watermarkPanelLayer, setWatermarkPanelLayer] =
+    useState<WatermarkLayerKind>("logo");
 
   useEffect(() => {
     let cancelled = false;
@@ -624,10 +740,13 @@ export default function GallerySettingsPage({
     }
   };
 
-  const saveWatermarkMode = async (mode: "text" | "logo") => {
+  const saveWatermarkMode = async (mode: WatermarkMode) => {
     const token = getStoredAccessToken();
     if (!token || !gallery) return;
-    if (mode === "logo" && !hasBusinessProfileLogo(workspaceProfile)) {
+    if (
+      (mode === "logo" || mode === "both") &&
+      !hasBusinessProfileLogo(workspaceProfile)
+    ) {
       setError(
         "Upload a Business Profile logo before using logo watermarking.",
       );
@@ -635,19 +754,33 @@ export default function GallerySettingsPage({
     }
 
     const current = (gallery.watermark_config as Record<string, unknown>) || {};
-    const config = watermarkDraftToConfig(
-      readWatermarkDraft(
-        {
-          ...current,
-          enabled: true,
-          mode,
-        },
-        gallery,
-        workspaceProfile,
-        logoPreviewURL(workspaceProfile, token),
-      ),
-      current,
+    const currentDraft = readWatermarkDraft(
+      { ...current, enabled: true },
+      gallery,
+      workspaceProfile,
+      logoPreviewURL(workspaceProfile, token),
     );
+    const nextActiveLayer = visibleWatermarkLayer(mode);
+    const currentLayers = readRecord(current.layers);
+    const hasSavedTextLayer =
+      Object.keys(readRecord(currentLayers.text)).length > 0;
+    const hasSavedLogoLayer =
+      Object.keys(readRecord(currentLayers.logo)).length > 0;
+    const nextDraft: WatermarkDraft = {
+      ...currentDraft,
+      enabled: true,
+      mode,
+      activeLayer: nextActiveLayer,
+      textLayer:
+        mode === "both" && currentDraft.mode === "logo" && !hasSavedTextLayer
+          ? defaultWatermarkLayer("top-left")
+          : currentDraft.textLayer,
+      logoLayer:
+        mode === "both" && currentDraft.mode === "text" && !hasSavedLogoLayer
+          ? defaultWatermarkLayer("bottom-right")
+          : currentDraft.logoLayer,
+    };
+    const config = watermarkDraftToConfig(nextDraft, current);
 
     setSaving(true);
     setError("");
@@ -660,7 +793,9 @@ export default function GallerySettingsPage({
       setSaveMsg(
         mode === "logo"
           ? "Business Profile logo watermark enabled"
-          : "Text watermark enabled",
+          : mode === "both"
+            ? "Logo and text watermark enabled"
+            : "Text watermark enabled",
       );
       setTimeout(() => setSaveMsg(""), 2000);
     } catch (err) {
@@ -669,6 +804,57 @@ export default function GallerySettingsPage({
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveWatermarkText = async (text: string) => {
+    const token = getStoredAccessToken();
+    if (!token || !gallery) return;
+    const current = (gallery.watermark_config as Record<string, unknown>) || {};
+    const draft = readWatermarkDraft(
+      current,
+      gallery,
+      workspaceProfile,
+      logoPreviewURL(workspaceProfile, token),
+    );
+    const config = watermarkDraftToConfig({ ...draft, text }, current);
+    try {
+      const updated = await updateGallerySettings(token, id, {
+        watermark_config: config,
+      });
+      setGallery(updated);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to update watermark text",
+      );
+    }
+  };
+
+  const saveWatermarkLayerPatch = async (
+    layer: WatermarkLayerKind,
+    patch: Partial<WatermarkLayerDraft>,
+  ) => {
+    const token = getStoredAccessToken();
+    if (!token || !gallery) return;
+    const current = (gallery.watermark_config as Record<string, unknown>) || {};
+    const draft = readWatermarkDraft(
+      current,
+      gallery,
+      workspaceProfile,
+      logoPreviewURL(workspaceProfile, token),
+    );
+    const nextDraft = withWatermarkLayer(draft, layer, patch);
+    try {
+      const updated = await updateGallerySettings(token, id, {
+        watermark_config: watermarkDraftToConfig(nextDraft, current),
+      });
+      setGallery(updated);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to update watermark placement",
+      );
     }
   };
 
@@ -741,6 +927,29 @@ export default function GallerySettingsPage({
   const businessProfileLogoAvailable = hasBusinessProfileLogo(workspaceProfile);
   const currentWatermark =
     (gallery.watermark_config as Record<string, unknown>) || {};
+  const currentWatermarkDraft = readWatermarkDraft(
+    currentWatermark,
+    gallery,
+    workspaceProfile,
+    studioLogoPreviewUrl,
+  );
+  const activeWatermarkLayer =
+    currentWatermarkDraft.mode === "both"
+      ? watermarkPanelLayer
+      : visibleWatermarkLayer(currentWatermarkDraft.mode);
+  const activeWatermarkLayerDraft = watermarkLayer(
+    currentWatermarkDraft,
+    activeWatermarkLayer,
+  );
+  const watermarkTypeOptions: Array<{
+    mode: WatermarkMode;
+    label: string;
+    requiresLogo: boolean;
+  }> = [
+    { mode: "logo", label: "Logo", requiresLogo: true },
+    { mode: "text", label: "Text", requiresLogo: false },
+    { mode: "both", label: "Logo + text", requiresLogo: true },
+  ];
 
   return (
     <GalleryPageShell galleryId={id} className="pb-24 overflow-y-auto">
@@ -996,22 +1205,20 @@ export default function GallerySettingsPage({
               const token = getStoredAccessToken();
               if (!token || !gallery) return;
               const preferredMode =
-                currentWatermark.mode === "text"
-                  ? "text"
-                  : hasBusinessProfileLogo(workspaceProfile)
-                    ? "logo"
-                    : "text";
+                currentWatermarkDraft.mode === "both"
+                  ? "both"
+                  : currentWatermarkDraft.mode === "text"
+                    ? "text"
+                    : hasBusinessProfileLogo(workspaceProfile)
+                      ? "logo"
+                      : "text";
               const config = watermarkDraftToConfig(
-                readWatermarkDraft(
-                  {
-                    ...currentWatermark,
-                    enabled: v,
-                    mode: preferredMode,
-                  },
-                  gallery,
-                  workspaceProfile,
-                  studioLogoPreviewUrl,
-                ),
+                {
+                  ...currentWatermarkDraft,
+                  enabled: v,
+                  mode: preferredMode,
+                  activeLayer: visibleWatermarkLayer(preferredMode),
+                },
                 currentWatermark,
               );
               try {
@@ -1086,64 +1293,68 @@ export default function GallerySettingsPage({
                 <span className="text-sm font-medium text-text-primary">
                   Watermark type
                 </span>
-                <div className="grid grid-cols-2 gap-2 sm:max-w-md">
-                  <button
-                    type="button"
-                    disabled={saving || !businessProfileLogoAvailable}
-                    onClick={() => void saveWatermarkMode("logo")}
-                    className={presetButtonClass(
-                      currentWatermark.mode === "logo",
-                    )}
-                  >
-                    Logo
-                  </button>
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void saveWatermarkMode("text")}
-                    className={presetButtonClass(
-                      currentWatermark.mode !== "logo",
-                    )}
-                  >
-                    Text
-                  </button>
+                <div className="grid grid-cols-1 gap-2 sm:max-w-2xl sm:grid-cols-3">
+                  {watermarkTypeOptions.map((option) => (
+                    <button
+                      key={option.mode}
+                      type="button"
+                      disabled={
+                        saving ||
+                        (option.requiresLogo && !businessProfileLogoAvailable)
+                      }
+                      onClick={() => void saveWatermarkMode(option.mode)}
+                      className={presetButtonClass(
+                        currentWatermarkDraft.mode === option.mode,
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
                 {!businessProfileLogoAvailable && (
                   <p className="text-xs text-text-secondary">
-                    Upload a Business Profile logo to use logo watermarking.
+                    Upload a Business Profile logo to use logo watermarking or
+                    Logo + Text.
                   </p>
                 )}
               </div>
+              {currentWatermarkDraft.mode === "both" && (
+                <div className="space-y-1">
+                  <span className="text-sm font-medium text-text-primary">
+                    Adjust layer
+                  </span>
+                  <div
+                    className="grid grid-cols-2 gap-2 sm:max-w-md"
+                    role="group"
+                    aria-label="Watermark layer"
+                  >
+                    {(["logo", "text"] as const).map((layer) => (
+                      <button
+                        key={layer}
+                        type="button"
+                        disabled={saving}
+                        onClick={() => setWatermarkPanelLayer(layer)}
+                        className={presetButtonClass(
+                          activeWatermarkLayer === layer,
+                        )}
+                      >
+                        {layer === "logo" ? "Logo" : "Text"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="space-y-1">
                 <label className="text-sm font-medium text-text-primary">
-                  {currentWatermark.mode === "logo"
+                  {currentWatermarkDraft.mode === "logo"
                     ? "Fallback watermark text"
                     : "Watermark text"}
                 </label>
                 <input
                   type="text"
                   placeholder="Studio Name"
-                  value={String(currentWatermark.text || "")}
-                  onBlur={async (e) => {
-                    const config = {
-                      ...currentWatermark,
-                      text: e.target.value,
-                    };
-                    const token = getStoredAccessToken();
-                    if (!token || !gallery) return;
-                    try {
-                      const updated = await updateGallerySettings(token, id, {
-                        watermark_config: config,
-                      });
-                      setGallery(updated);
-                    } catch (err) {
-                      setError(
-                        err instanceof Error
-                          ? err.message
-                          : "Failed to update watermark text",
-                      );
-                    }
-                  }}
+                  value={currentWatermarkDraft.text}
+                  onBlur={(e) => void saveWatermarkText(e.target.value)}
                   onChange={(e) => {
                     setGallery({
                       ...gallery,
@@ -1158,68 +1369,38 @@ export default function GallerySettingsPage({
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium text-text-primary">
-                  Opacity — {Number(currentWatermark.opacity) || 40}%
+                  Opacity — {activeWatermarkLayerDraft.opacity}%
                 </label>
                 <input
                   type="range"
                   min={10}
                   max={90}
                   step={5}
-                  value={Number(currentWatermark.opacity) || 40}
-                  onChange={async (e) => {
-                    const config = {
-                      ...currentWatermark,
+                  value={activeWatermarkLayerDraft.opacity}
+                  onChange={(e) =>
+                    void saveWatermarkLayerPatch(activeWatermarkLayer, {
                       opacity: Number(e.target.value),
-                      placement: readWatermarkPlacement(currentWatermark),
-                      scale:
-                        typeof currentWatermark.scale === "number"
-                          ? currentWatermark.scale
-                          : WATERMARK_SCALE_DEFAULT,
-                    };
-                    const token = getStoredAccessToken();
-                    if (!token || !gallery) return;
-                    try {
-                      const updated = await updateGallerySettings(token, id, {
-                        watermark_config: config,
-                      });
-                      setGallery(updated);
-                    } catch {
-                      /* non-critical */
-                    }
-                  }}
+                    })
+                  }
                   className="w-full accent-accent-primary"
                 />
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium text-text-primary">
-                  {currentWatermark.mode === "logo" ? "Logo size" : "Text size"}{" "}
-                  — {Number(currentWatermark.scale) || WATERMARK_SCALE_DEFAULT}%
+                  {activeWatermarkLayer === "logo" ? "Logo size" : "Text size"}{" "}
+                  — {activeWatermarkLayerDraft.scale}%
                 </label>
                 <input
                   type="range"
                   min={60}
                   max={180}
                   step={5}
-                  value={
-                    Number(currentWatermark.scale) || WATERMARK_SCALE_DEFAULT
-                  }
-                  onChange={async (e) => {
-                    const config = {
-                      ...currentWatermark,
+                  value={activeWatermarkLayerDraft.scale}
+                  onChange={(e) =>
+                    void saveWatermarkLayerPatch(activeWatermarkLayer, {
                       scale: Number(e.target.value),
-                      placement: readWatermarkPlacement(currentWatermark),
-                    };
-                    const token = getStoredAccessToken();
-                    if (!token || !gallery) return;
-                    try {
-                      const updated = await updateGallerySettings(token, id, {
-                        watermark_config: config,
-                      });
-                      setGallery(updated);
-                    } catch {
-                      /* non-critical */
-                    }
-                  }}
+                    })
+                  }
                   className="w-full accent-accent-primary"
                 />
               </div>
@@ -1228,55 +1409,80 @@ export default function GallerySettingsPage({
                   Position
                 </span>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {(
-                    [
-                      "center",
-                      "bottom-right",
-                      "bottom-left",
-                      "diagonal",
-                    ] as const
-                  ).map((pos) => (
+                  {WATERMARK_POSITION_PRESETS.map((preset) => (
                     <button
-                      key={pos}
+                      key={preset.id}
                       type="button"
-                      onClick={async () => {
-                        const config = {
-                          ...currentWatermark,
-                          position: pos,
-                          placement: placementFromPosition(pos),
-                          scale:
-                            typeof currentWatermark.scale === "number"
-                              ? currentWatermark.scale
-                              : WATERMARK_SCALE_DEFAULT,
-                        };
-                        const token = getStoredAccessToken();
-                        if (!token || !gallery) return;
-                        try {
-                          const updated = await updateGallerySettings(
-                            token,
-                            id,
-                            {
-                              watermark_config: config,
-                            },
-                          );
-                          setGallery(updated);
-                        } catch {
-                          /* non-critical */
-                        }
-                      }}
+                      onClick={() =>
+                        void saveWatermarkLayerPatch(activeWatermarkLayer, {
+                          position: preset.id,
+                          placement:
+                            preset.id === "custom"
+                              ? activeWatermarkLayerDraft.placement
+                              : { x: preset.x, y: preset.y },
+                        })
+                      }
                       className={`touch-min rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
-                        currentWatermark.position === pos
+                        activeWatermarkLayerDraft.position === preset.id
                           ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
                           : "border-border-default bg-surface-sunken text-text-secondary hover:bg-surface-container-low"
                       }`}
                     >
-                      {pos
-                        .replace("-", " ")
-                        .replace(/\b\w/g, (c) => c.toUpperCase())}
+                      {preset.label}
                     </button>
                   ))}
                 </div>
               </div>
+              {activeWatermarkLayerDraft.position === "custom" && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="space-y-1 text-sm font-medium text-text-primary">
+                    <span>
+                      Horizontal —{" "}
+                      {Math.round(activeWatermarkLayerDraft.placement.x)}%
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={activeWatermarkLayerDraft.placement.x}
+                      onChange={(e) =>
+                        void saveWatermarkLayerPatch(activeWatermarkLayer, {
+                          position: "custom",
+                          placement: {
+                            ...activeWatermarkLayerDraft.placement,
+                            x: Number(e.target.value),
+                          },
+                        })
+                      }
+                      className="w-full accent-accent-primary"
+                    />
+                  </label>
+                  <label className="space-y-1 text-sm font-medium text-text-primary">
+                    <span>
+                      Vertical —{" "}
+                      {Math.round(activeWatermarkLayerDraft.placement.y)}%
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={activeWatermarkLayerDraft.placement.y}
+                      onChange={(e) =>
+                        void saveWatermarkLayerPatch(activeWatermarkLayer, {
+                          position: "custom",
+                          placement: {
+                            ...activeWatermarkLayerDraft.placement,
+                            y: Number(e.target.value),
+                          },
+                        })
+                      }
+                      className="w-full accent-accent-primary"
+                    />
+                  </label>
+                </div>
+              )}
             </div>
           )}
         </section>
@@ -1518,27 +1724,45 @@ function WatermarkPreviewModal({
   const [dragging, setDragging] = useState(false);
   const activeAsset = assets[activeIndex] ?? null;
   const canCycle = assets.length > 1;
+  const previewLayer: WatermarkLayerKind | null = draft
+    ? draft.mode === "both"
+      ? draft.activeLayer
+      : visibleWatermarkLayer(draft.mode)
+    : null;
+  const previewLayerDraft =
+    draft && previewLayer ? watermarkLayer(draft, previewLayer) : null;
 
   const updatePlacementFromPointer = (
     event: ReactPointerEvent<HTMLDivElement>,
   ) => {
     const rect = frameRef.current?.getBoundingClientRect();
-    if (!draft || !rect || rect.width <= 0 || rect.height <= 0) return;
+    if (
+      !draft ||
+      !previewLayer ||
+      !previewLayerDraft ||
+      !rect ||
+      rect.width <= 0 ||
+      rect.height <= 0
+    )
+      return;
     const x = clampPercent(
       ((event.clientX - rect.left) / rect.width) * 100,
-      draft.placement.x,
+      previewLayerDraft.placement.x,
     );
     const y = clampPercent(
       ((event.clientY - rect.top) / rect.height) * 100,
-      draft.placement.y,
+      previewLayerDraft.placement.y,
     );
     onDraftChange((current) =>
       current
-        ? {
-            ...current,
-            position: "custom",
-            placement: { x, y },
-          }
+        ? withWatermarkLayer(
+            { ...current, activeLayer: previewLayer },
+            previewLayer,
+            {
+              position: "custom",
+              placement: { x, y },
+            },
+          )
         : current,
     );
   };
@@ -1649,6 +1873,34 @@ function WatermarkPreviewModal({
         </div>
 
         <div className="space-y-4 rounded-xl border border-border-default bg-surface-sunken p-4">
+          {draft?.mode === "both" && (
+            <div className="space-y-2">
+              <span className="text-sm font-semibold text-text-primary">
+                Adjust layer
+              </span>
+              <div
+                className="grid grid-cols-2 gap-2"
+                role="group"
+                aria-label="Preview watermark layer"
+              >
+                {(["logo", "text"] as const).map((layer) => (
+                  <button
+                    key={layer}
+                    type="button"
+                    disabled={!draft}
+                    onClick={() =>
+                      onDraftChange((current) =>
+                        current ? { ...current, activeLayer: layer } : current,
+                      )
+                    }
+                    className={presetButtonClass(draft.activeLayer === layer)}
+                  >
+                    {layer === "logo" ? "Logo" : "Text"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="space-y-2">
             <span className="text-sm font-semibold text-text-primary">
               Position
@@ -1661,17 +1913,19 @@ function WatermarkPreviewModal({
                   disabled={!draft}
                   onClick={() =>
                     onDraftChange((current) =>
-                      current
-                        ? {
-                            ...current,
+                      current && previewLayer && previewLayerDraft
+                        ? withWatermarkLayer(current, previewLayer, {
                             position: preset.id,
-                            placement: { x: preset.x, y: preset.y },
-                          }
+                            placement:
+                              preset.id === "custom"
+                                ? previewLayerDraft.placement
+                                : { x: preset.x, y: preset.y },
+                          })
                         : current,
                     )
                   }
                   className={`touch-min rounded-lg border px-3 py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                    draft?.position === preset.id
+                    previewLayerDraft?.position === preset.id
                       ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
                       : "border-border-default bg-surface-container text-text-secondary hover:bg-surface-container-low"
                   }`}
@@ -1681,13 +1935,71 @@ function WatermarkPreviewModal({
               ))}
             </div>
           </div>
+          {previewLayerDraft?.position === "custom" && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-sm font-semibold text-text-primary">
+                <span>
+                  Horizontal — {Math.round(previewLayerDraft.placement.x)}%
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={previewLayerDraft.placement.x}
+                  disabled={!draft || !previewLayer}
+                  onChange={(event) =>
+                    onDraftChange((current) =>
+                      current && previewLayer && previewLayerDraft
+                        ? withWatermarkLayer(current, previewLayer, {
+                            position: "custom",
+                            placement: {
+                              ...previewLayerDraft.placement,
+                              x: Number(event.target.value),
+                            },
+                          })
+                        : current,
+                    )
+                  }
+                  className="w-full accent-accent-primary disabled:opacity-50"
+                />
+              </label>
+              <label className="space-y-1 text-sm font-semibold text-text-primary">
+                <span>
+                  Vertical — {Math.round(previewLayerDraft.placement.y)}%
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={previewLayerDraft.placement.y}
+                  disabled={!draft || !previewLayer}
+                  onChange={(event) =>
+                    onDraftChange((current) =>
+                      current && previewLayer && previewLayerDraft
+                        ? withWatermarkLayer(current, previewLayer, {
+                            position: "custom",
+                            placement: {
+                              ...previewLayerDraft.placement,
+                              y: Number(event.target.value),
+                            },
+                          })
+                        : current,
+                    )
+                  }
+                  className="w-full accent-accent-primary disabled:opacity-50"
+                />
+              </label>
+            </div>
+          )}
 
           <div className="space-y-2">
             <label
               htmlFor="watermark-preview-opacity"
               className="text-sm font-semibold text-text-primary"
             >
-              Opacity — {draft?.opacity ?? 40}%
+              Opacity — {previewLayerDraft?.opacity ?? 40}%
             </label>
             <input
               id="watermark-preview-opacity"
@@ -1695,12 +2007,14 @@ function WatermarkPreviewModal({
               min={10}
               max={90}
               step={5}
-              value={draft?.opacity ?? 40}
+              value={previewLayerDraft?.opacity ?? 40}
               disabled={!draft}
               onChange={(event) =>
                 onDraftChange((current) =>
-                  current
-                    ? { ...current, opacity: Number(event.target.value) }
+                  current && previewLayer
+                    ? withWatermarkLayer(current, previewLayer, {
+                        opacity: Number(event.target.value),
+                      })
                     : current,
                 )
               }
@@ -1713,8 +2027,8 @@ function WatermarkPreviewModal({
               htmlFor="watermark-preview-scale"
               className="text-sm font-semibold text-text-primary"
             >
-              {draft?.mode === "logo" ? "Logo size" : "Text size"} —{" "}
-              {draft?.scale ?? WATERMARK_SCALE_DEFAULT}%
+              {previewLayer === "logo" ? "Logo size" : "Text size"} —{" "}
+              {previewLayerDraft?.scale ?? WATERMARK_SCALE_DEFAULT}%
             </label>
             <input
               id="watermark-preview-scale"
@@ -1722,12 +2036,14 @@ function WatermarkPreviewModal({
               min={60}
               max={180}
               step={5}
-              value={draft?.scale ?? WATERMARK_SCALE_DEFAULT}
+              value={previewLayerDraft?.scale ?? WATERMARK_SCALE_DEFAULT}
               disabled={!draft}
               onChange={(event) =>
                 onDraftChange((current) =>
-                  current
-                    ? { ...current, scale: Number(event.target.value) }
+                  current && previewLayer
+                    ? withWatermarkLayer(current, previewLayer, {
+                        scale: Number(event.target.value),
+                      })
                     : current,
                 )
               }
@@ -1735,7 +2051,7 @@ function WatermarkPreviewModal({
             />
           </div>
 
-          {draft?.mode === "text" ? (
+          {draft?.mode === "text" || draft?.mode === "both" ? (
             <div className="space-y-2">
               <label
                 htmlFor="watermark-preview-text"
@@ -1801,21 +2117,65 @@ function WatermarkPreviewPhoto({
 }
 
 function WatermarkPreviewOverlay({ draft }: { draft: WatermarkDraft }) {
-  const opacity = Math.max(0.1, Math.min(0.9, draft.opacity / 100));
+  const layers: Array<{
+    kind: WatermarkLayerKind;
+    layer: WatermarkLayerDraft;
+  }> =
+    draft.mode === "both"
+      ? [
+          { kind: "logo", layer: draft.logoLayer },
+          { kind: "text", layer: draft.textLayer },
+        ]
+      : [
+          {
+            kind: visibleWatermarkLayer(draft.mode),
+            layer: watermarkLayer(draft, visibleWatermarkLayer(draft.mode)),
+          },
+        ];
+
+  return (
+    <>
+      {layers.map(({ kind, layer }) => (
+        <WatermarkPreviewLayer
+          key={kind}
+          kind={kind}
+          layer={layer}
+          text={draft.text}
+          logoUrl={draft.logoUrl}
+        />
+      ))}
+    </>
+  );
+}
+
+function WatermarkPreviewLayer({
+  kind,
+  layer,
+  text,
+  logoUrl,
+}: {
+  kind: WatermarkLayerKind;
+  layer: WatermarkLayerDraft;
+  text: string;
+  logoUrl: string;
+}) {
+  if (kind === "logo" && !logoUrl) return null;
+  if (kind === "text" && !text.trim()) return null;
+  const opacity = Math.max(0.1, Math.min(0.9, layer.opacity / 100));
   const transformParts = [
     "translate(-50%, -50%)",
-    draft.position === "diagonal" ? "rotate(-30deg)" : "",
-    `scale(${draft.scale / 100})`,
+    layer.position === "diagonal" ? "rotate(-30deg)" : "",
+    `scale(${layer.scale / 100})`,
   ].filter(Boolean);
   const style: CSSProperties = {
-    left: `${draft.placement.x}%`,
-    top: `${draft.placement.y}%`,
+    left: `${layer.placement.x}%`,
+    top: `${layer.placement.y}%`,
     opacity,
     transform: transformParts.join(" "),
     textShadow: "var(--cover-text-shadow)",
   };
 
-  if (draft.mode === "logo" && draft.logoUrl) {
+  if (kind === "logo") {
     return (
       <div
         aria-hidden="true"
@@ -1823,7 +2183,7 @@ function WatermarkPreviewOverlay({ draft }: { draft: WatermarkDraft }) {
         style={style}
       >
         <img
-          src={draft.logoUrl}
+          src={logoUrl}
           alt=""
           className="h-16 w-16 object-contain sm:h-20 sm:w-20"
         />
@@ -1837,7 +2197,7 @@ function WatermarkPreviewOverlay({ draft }: { draft: WatermarkDraft }) {
       className="pointer-events-none absolute select-none whitespace-nowrap text-base font-semibold uppercase tracking-widest text-text-media sm:text-lg"
       style={style}
     >
-      {draft.text}
+      {text}
     </div>
   );
 }

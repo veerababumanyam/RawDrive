@@ -50,6 +50,20 @@ func differs(a, b color.NRGBA) bool {
 		abs(int(a.B)-int(b.B)) > tol
 }
 
+func hasDiffInRect(img image.Image, rect image.Rectangle, base color.NRGBA) bool {
+	nrgba := imageops.Clone(img)
+	b := img.Bounds()
+	rect = rect.Intersect(b)
+	for y := rect.Min.Y; y < rect.Max.Y; y++ {
+		for x := rect.Min.X; x < rect.Max.X; x++ {
+			if differs(nrgba.NRGBAAt(x, y), base) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func TestWatermarkApply_BottomRightWritesPixels(t *testing.T) {
 	svc := NewWatermarkService()
 	src := newSolidJPEG(t, 800, 600, color.NRGBA{200, 50, 50, 255})
@@ -92,6 +106,31 @@ func TestWatermarkApply_BottomRightWritesPixels(t *testing.T) {
 			t.Fatal("expected modified pixels in the bottom-right strip, found none — watermark did not draw")
 		}
 		return
+	}
+}
+
+func TestWatermarkApply_TopRightWritesPixels(t *testing.T) {
+	svc := NewWatermarkService()
+	base := color.NRGBA{40, 80, 120, 255}
+	src := newSolidJPEG(t, 800, 600, base)
+
+	out, err := svc.Apply(context.Background(), bytes.NewReader(src), WatermarkConfig{
+		Text:     "STUDIO",
+		Position: "top-right",
+		Opacity:  0.8,
+		Scale:    120,
+	})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	img := decodeJPEG(t, out)
+	b := img.Bounds()
+	if !hasDiffInRect(
+		img,
+		image.Rect(b.Max.X-240, b.Min.Y+10, b.Max.X-10, b.Min.Y+140),
+		base,
+	) {
+		t.Fatal("expected modified pixels in the top-right strip, found none")
 	}
 }
 
@@ -183,5 +222,43 @@ func TestConfigFromMap_PercentOpacityConvertedToFraction(t *testing.T) {
 	}
 	if cfg.Position != "diagonal" {
 		t.Errorf("position = %v, want diagonal", cfg.Position)
+	}
+}
+
+func TestConfigFromMap_UsesLayeredTextPlacementForBothMode(t *testing.T) {
+	cfg := ConfigFromMap(map[string]interface{}{
+		"enabled":  true,
+		"mode":     "both",
+		"text":     "Kaveri Stories",
+		"position": "bottom-right",
+		"opacity":  float64(55),
+		"scale":    float64(100),
+		"layers": map[string]interface{}{
+			"logo": map[string]interface{}{
+				"position":  "top-right",
+				"placement": map[string]interface{}{"x": float64(84), "y": float64(16)},
+				"opacity":   float64(60),
+				"scale":     float64(110),
+			},
+			"text": map[string]interface{}{
+				"position":  "custom",
+				"placement": map[string]interface{}{"x": float64(22), "y": float64(68)},
+				"opacity":   float64(45),
+				"scale":     float64(130),
+			},
+		},
+	})
+
+	if cfg.Position != "custom" {
+		t.Fatalf("position = %q, want custom", cfg.Position)
+	}
+	if cfg.Placement == nil || cfg.Placement.X != 22 || cfg.Placement.Y != 68 {
+		t.Fatalf("placement = %#v, want 22/68", cfg.Placement)
+	}
+	if cfg.Opacity != 0.45 {
+		t.Fatalf("opacity = %v, want 0.45", cfg.Opacity)
+	}
+	if cfg.Scale != 130 {
+		t.Fatalf("scale = %v, want 130", cfg.Scale)
 	}
 }

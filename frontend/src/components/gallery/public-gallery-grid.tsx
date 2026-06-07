@@ -101,7 +101,9 @@ function clampWatermarkPercent(value: unknown, fallback: number): number {
   return Math.min(100, Math.max(0, n));
 }
 
-function readWatermarkPlacement(value: unknown): WatermarkDisplay["placement"] {
+function readWatermarkPlacement(
+  value: unknown,
+): { x: number; y: number } | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const raw = value as Record<string, unknown>;
   return {
@@ -110,13 +112,53 @@ function readWatermarkPlacement(value: unknown): WatermarkDisplay["placement"] {
   };
 }
 
+function readWatermarkRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function readWatermarkLayer(
+  watermark: Record<string, unknown>,
+  layer: "logo" | "text",
+  fallback: {
+    opacity: number;
+    position: string;
+    placement: { x: number; y: number } | null;
+    scale: number;
+  },
+) {
+  const layers = readWatermarkRecord(watermark.layers);
+  const raw = readWatermarkRecord(layers[layer]);
+  const position =
+    typeof raw.position === "string" && raw.position
+      ? raw.position
+      : fallback.position;
+  return {
+    opacity:
+      typeof raw.opacity === "number" && Number.isFinite(raw.opacity)
+        ? raw.opacity
+        : fallback.opacity,
+    position,
+    placement: readWatermarkPlacement(raw.placement) ?? fallback.placement,
+    scale:
+      typeof raw.scale === "number" && Number.isFinite(raw.scale)
+        ? raw.scale
+        : fallback.scale,
+  };
+}
+
 type WatermarkDisplay = {
+  layers: WatermarkLayerDisplay[];
+};
+
+type WatermarkLayerDisplay = {
+  kind: "text" | "logo";
   text: string;
   opacity: number;
   position: string;
   placement: { x: number; y: number } | null;
   scale: number;
-  mode: "text" | "logo";
   logoUrl: string;
 };
 
@@ -320,15 +362,9 @@ function PublicLightboxImage({
           className="pointer-events-none absolute inset-0"
           style={{ transform: `scale(${zoom})`, transformOrigin: "center" }}
         >
-          <WatermarkOverlay
-            text={watermarkOverlay.text}
-            opacity={watermarkOverlay.opacity}
-            position={watermarkOverlay.position}
-            placement={watermarkOverlay.placement}
-            scale={watermarkOverlay.scale}
-            mode={watermarkOverlay.mode}
-            logoUrl={watermarkOverlay.logoUrl}
-          />
+          {watermarkOverlay.layers.map((layer) => (
+            <WatermarkOverlay key={layer.kind} {...layer} />
+          ))}
         </div>
       )}
     </div>
@@ -867,22 +903,24 @@ function designGridItemStyle(
 // user-select:none prevent the watermark text from being selected
 // and copied separately from the image.
 function WatermarkOverlay({
+  kind,
   text,
   opacity,
   position,
   placement,
   scale,
-  mode,
   logoUrl,
 }: {
+  kind: "text" | "logo";
   text: string;
   opacity: number;
   position: string;
   placement: { x: number; y: number } | null;
   scale: number;
-  mode?: "text" | "logo";
   logoUrl?: string;
 }) {
+  if (kind === "logo" && !logoUrl) return null;
+  if (kind === "text" && !text.trim()) return null;
   const shared =
     "pointer-events-none absolute select-none font-semibold tracking-widest uppercase text-text-media";
   // text-shadow on both axes survives both bright and dark photos
@@ -905,7 +943,7 @@ function WatermarkOverlay({
       top: `${placement.y}%`,
       transform: transformParts.join(" "),
     };
-    if (mode === "logo" && logoUrl) {
+    if (kind === "logo" && logoUrl) {
       return (
         <div
           aria-hidden
@@ -931,18 +969,28 @@ function WatermarkOverlay({
     );
   }
 
-  if (mode === "logo" && logoUrl) {
+  if (kind === "logo" && logoUrl) {
     const corner =
       position === "bottom-left"
         ? "bottom-3 left-3"
-        : position === "center"
-          ? "inset-0 flex items-center justify-center"
-          : "bottom-3 right-3";
+        : position === "top-left"
+          ? "top-3 left-3"
+          : position === "top-right"
+            ? "top-3 right-3"
+            : position === "center"
+              ? "inset-0 flex items-center justify-center"
+              : "bottom-3 right-3";
     const logoStyle: React.CSSProperties = {
       opacity,
       transform: scaleTransform,
       transformOrigin:
-        position === "bottom-left" ? "bottom left" : "bottom right",
+        position === "bottom-left"
+          ? "bottom left"
+          : position === "top-left"
+            ? "top left"
+            : position === "top-right"
+              ? "top right"
+              : "bottom right",
     };
     return (
       <div
@@ -992,7 +1040,13 @@ function WatermarkOverlay({
   // bottom-left / bottom-right (default). Padded inward from the
   // edge so the text doesn't bleed against the tile's rounded corner.
   const corner =
-    position === "bottom-left" ? "bottom-3 left-3" : "bottom-3 right-3";
+    position === "bottom-left"
+      ? "bottom-3 left-3"
+      : position === "top-left"
+        ? "top-3 left-3"
+        : position === "top-right"
+          ? "top-3 right-3"
+          : "bottom-3 right-3";
   return (
     <div
       aria-hidden
@@ -1000,7 +1054,13 @@ function WatermarkOverlay({
         ...style,
         transform: scaleTransform,
         transformOrigin:
-          position === "bottom-left" ? "bottom left" : "bottom right",
+          position === "bottom-left"
+            ? "bottom left"
+            : position === "top-left"
+              ? "top left"
+              : position === "top-right"
+                ? "top right"
+                : "bottom right",
       }}
       className={`${shared} ${corner} text-xs sm:text-sm`}
     >
@@ -1034,19 +1094,16 @@ export function PublicGalleryGrid({
     if (!watermark || watermark.enabled !== true) return null;
     const rawText =
       typeof watermark.text === "string" ? watermark.text.trim() : "";
-    const mode: WatermarkDisplay["mode"] =
-      watermark.mode === "logo" ? "logo" : "text";
+    const mode =
+      watermark.mode === "logo" || watermark.mode === "both"
+        ? watermark.mode
+        : "text";
     const legacyLogoUrl =
       typeof watermark.logo_url === "string" ? watermark.logo_url : "";
-    const logoUrl =
-      mode === "logo" ? absoluteApiUrl(watermarkLogoUrl || legacyLogoUrl) : "";
+    const logoUrl = absoluteApiUrl(watermarkLogoUrl || legacyLogoUrl);
     if (rawText.length === 0 && !logoUrl) return null;
     const rawOpacity =
       typeof watermark.opacity === "number" ? watermark.opacity : 40;
-    // Settings UI stores opacity as 10..90 (integer percent); clamp +
-    // convert to a CSS 0..1 number. Caps at 0.9 because a fully-
-    // opaque overlay defeats the point of seeing the photo.
-    const opacity = Math.max(0.1, Math.min(0.9, rawOpacity / 100));
     const position =
       typeof watermark.position === "string"
         ? watermark.position
@@ -1054,16 +1111,45 @@ export function PublicGalleryGrid({
     const placement = readWatermarkPlacement(watermark.placement);
     const rawScale =
       typeof watermark.scale === "number" ? watermark.scale : 100;
-    const scale = Math.max(60, Math.min(180, rawScale));
-    return {
-      text: rawText,
-      opacity,
+    const fallback = {
+      opacity: rawOpacity,
       position,
       placement,
-      scale,
-      mode,
-      logoUrl,
+      scale: rawScale,
     };
+    const logoLayer = readWatermarkLayer(watermark, "logo", fallback);
+    const textLayer = readWatermarkLayer(watermark, "text", fallback);
+    // Settings UI stores opacity as 10..90 (integer percent); clamp and
+    // convert to a CSS 0..1 number. Caps at 0.9 so the photo remains visible.
+    const toDisplayLayer = (
+      kind: "logo" | "text",
+      layer: typeof logoLayer,
+    ): WatermarkLayerDisplay => ({
+      kind,
+      text: rawText,
+      opacity:
+        layer.opacity > 1
+          ? Math.max(0.1, Math.min(0.9, layer.opacity / 100))
+          : Math.max(0.1, Math.min(0.9, layer.opacity)),
+      position: layer.position,
+      placement: layer.placement,
+      scale: Math.max(60, Math.min(180, layer.scale)),
+      logoUrl,
+    });
+    const layers: WatermarkLayerDisplay[] =
+      mode === "both"
+        ? [
+            ...(logoUrl ? [toDisplayLayer("logo", logoLayer)] : []),
+            ...(rawText ? [toDisplayLayer("text", textLayer)] : []),
+          ]
+        : mode === "logo"
+          ? logoUrl
+            ? [toDisplayLayer("logo", logoLayer)]
+            : []
+          : rawText
+            ? [toDisplayLayer("text", textLayer)]
+            : [];
+    return layers.length > 0 ? { layers } : null;
   })();
   // viewMode + the Grid/Map toggle were removed 2026-05-19. The grid is
   // now the only render path; see the file header for context.
@@ -1142,7 +1228,7 @@ export function PublicGalleryGrid({
       setFavoriteNotice("");
       toggleFavorite(assetId);
     },
-    [favoritesDisabledReason, toggleFavorite],
+    [favoritesDisabledReason, setFavoriteNotice, toggleFavorite],
   );
 
   const toggleFullscreen = useCallback(() => {
@@ -1221,7 +1307,7 @@ export function PublicGalleryGrid({
         return next;
       });
     },
-    [maxSelections],
+    [maxSelections, setSelectedIds],
   );
 
   const handleSubmitSelections = async () => {
@@ -1400,7 +1486,7 @@ export function PublicGalleryGrid({
       setZoom(1);
       resetChromeTimer();
     },
-    [resetChromeTimer],
+    [resetChromeTimer, setLightboxIdx, setZoom],
   );
 
   // Prev/Next click handlers are hoisted to stable callbacks (rather than
@@ -1504,7 +1590,7 @@ export function PublicGalleryGrid({
       }
       setLightboxIdx(null);
     },
-    [chromeVisible, isFullscreen, resetChromeTimer],
+    [chromeVisible, isFullscreen, resetChromeTimer, setLightboxIdx],
   );
 
   const fullscreenChromeClass =
@@ -1725,21 +1811,21 @@ export function PublicGalleryGrid({
                           key={format}
                           type="button"
                           role="menuitem"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (publicActionsDisabledReason) {
-                            setFavoriteNotice(publicActionsDisabledReason);
-                          } else {
-                            void downloadPublicAsset(
-                              slug,
-                              asset,
-                              format,
-                              assetAccessToken,
-                              workspaceScope,
-                            );
-                          }
-                          setTileMenuOpenId(null);
-                        }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (publicActionsDisabledReason) {
+                              setFavoriteNotice(publicActionsDisabledReason);
+                            } else {
+                              void downloadPublicAsset(
+                                slug,
+                                asset,
+                                format,
+                                assetAccessToken,
+                                workspaceScope,
+                              );
+                            }
+                            setTileMenuOpenId(null);
+                          }}
                           className="flex w-full items-center gap-3 px-4 py-3 text-sm text-text-primary transition-colors hover:bg-surface-container-low"
                         >
                           <Download className="h-4 w-4" />
@@ -1767,15 +1853,11 @@ export function PublicGalleryGrid({
                 }
               />
               {watermarkOverlay && (
-                <WatermarkOverlay
-                  text={watermarkOverlay.text}
-                  opacity={watermarkOverlay.opacity}
-                  position={watermarkOverlay.position}
-                  placement={watermarkOverlay.placement}
-                  scale={watermarkOverlay.scale}
-                  mode={watermarkOverlay.mode}
-                  logoUrl={watermarkOverlay.logoUrl}
-                />
+                <>
+                  {watermarkOverlay.layers.map((layer) => (
+                    <WatermarkOverlay key={layer.kind} {...layer} />
+                  ))}
+                </>
               )}
             </div>
             {/* Studio-opt-in filename caption. Renders only when the

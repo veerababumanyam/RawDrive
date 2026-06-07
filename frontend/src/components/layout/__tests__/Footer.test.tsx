@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { renderToStaticMarkup } from "react-dom/server";
 import { Footer } from "@/components/layout/Footer";
 
 describe("Footer", () => {
@@ -14,9 +15,11 @@ describe("Footer", () => {
     const { container } = render(<Footer />);
 
     expect(screen.getByAltText("RawDrive Logo")).toBeInTheDocument();
-    expect(screen.getByText("info@rawdrive.in")).toBeInTheDocument();
-    expect(screen.getByText("support@rawdrive.in")).toBeInTheDocument();
-    expect(screen.getByText("contactus@rawdrive.in")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Email Product information"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Email Support")).toBeInTheDocument();
+    expect(screen.getByLabelText("Email General contact")).toBeInTheDocument();
     // Each phone number is its own formatted tel: link — no "contact:" prefix,
     // no two-numbers-but-one-href bug (public-pages review 2026-06-04, P0 #1).
     const firstPhone = screen.getByText("+91 92811 2993");
@@ -34,12 +37,25 @@ describe("Footer", () => {
     expect(container.innerHTML).not.toMatch(/text-\[#[0-9a-fA-F]{3,8}\]/);
   });
 
+  it("does not expose literal RawDrive emails in server-rendered footer HTML", () => {
+    const html = renderToStaticMarkup(<Footer />);
+
+    expect(html).toContain("info [at] rawdrive.in");
+    expect(html).toContain("support [at] rawdrive.in");
+    expect(html).toContain("contactus [at] rawdrive.in");
+    expect(html).not.toMatch(/[A-Za-z0-9._%+-]+@rawdrive\.in/);
+    expect(html).not.toMatch(/mailto:[^"]*rawdrive/i);
+  });
+
   it("uses footer component tokens instead of tall one-off utility layout", () => {
     const source = readFileSync(
       resolve(process.cwd(), "src/components/layout/Footer.tsx"),
       "utf8",
     );
-    const css = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
+    const css = readFileSync(
+      resolve(process.cwd(), "src/app/globals.css"),
+      "utf8",
+    );
     const tokens = JSON.parse(
       readFileSync(resolve(process.cwd(), "../design-tokens.json"), "utf8"),
     );

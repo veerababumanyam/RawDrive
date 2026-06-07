@@ -8,6 +8,11 @@ import {
   Phone,
   type LucideIcon,
 } from "lucide-react";
+import { SafeEmailLink } from "@/components/marketing/SafeEmailLink";
+import {
+  RAWDRIVE_CONTACT_EMAILS,
+  type RawDriveContactEmail,
+} from "@/lib/contact-email";
 import { createPageMetadata } from "@/lib/seo";
 
 export const metadata: Metadata = createPageMetadata("contact");
@@ -20,6 +25,7 @@ type ContactCard = {
   // as its own tel: link, so the displayed numbers and the dialled numbers can
   // never diverge.
   copy?: string;
+  email?: RawDriveContactEmail;
   href?: string;
   phones?: { display: string; href: string }[];
 };
@@ -28,20 +34,17 @@ const contactCards: ContactCard[] = [
   {
     icon: Mail,
     title: "Sales & Partnerships",
-    copy: "info@rawdrive.in",
-    href: "mailto:info@rawdrive.in",
+    email: RAWDRIVE_CONTACT_EMAILS.info,
   },
   {
     icon: MessageSquareText,
     title: "Product Support",
-    copy: "support@rawdrive.in",
-    href: "mailto:support@rawdrive.in",
+    email: RAWDRIVE_CONTACT_EMAILS.support,
   },
   {
     icon: Mail,
     title: "General Contact",
-    copy: "contactus@rawdrive.in",
-    href: "mailto:contactus@rawdrive.in",
+    email: RAWDRIVE_CONTACT_EMAILS.contactus,
   },
   {
     icon: Phone,
@@ -112,6 +115,27 @@ export default function ContactPage() {
                 );
               }
 
+              if (card.email) {
+                return (
+                  <SafeEmailLink
+                    key={card.title}
+                    localPart={card.email.localPart}
+                    domain={card.email.domain}
+                    className="surface-panel p-5 transition-colors hover:bg-surface-container-high"
+                    ariaLabel={`Email RawDrive ${card.title}`}
+                  >
+                    {(display) => (
+                      <>
+                        {head}
+                        <p className="mt-2 text-sm leading-7 text-text-secondary">
+                          {display}
+                        </p>
+                      </>
+                    )}
+                  </SafeEmailLink>
+                );
+              }
+
               return (
                 <Link
                   key={card.title}
@@ -152,12 +176,14 @@ export default function ContactPage() {
               team faster.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
-              <Link
-                href="mailto:contactus@rawdrive.in"
+              <SafeEmailLink
+                localPart={RAWDRIVE_CONTACT_EMAILS.contactus.localPart}
+                domain={RAWDRIVE_CONTACT_EMAILS.contactus.domain}
                 className="btn-primary px-6 py-3 text-sm font-semibold"
+                ariaLabel="Email the RawDrive team"
               >
                 Email the team
-              </Link>
+              </SafeEmailLink>
               <Link
                 href="/pricing"
                 className="btn-tertiary border border-border px-6 py-3 text-sm font-semibold"

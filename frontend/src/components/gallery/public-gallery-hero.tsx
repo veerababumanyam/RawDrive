@@ -354,6 +354,16 @@ function templateSlotFocalPoint(
   return cover?.slotFocalPoints?.[slotIndex] || { x: 50, y: 50 };
 }
 
+function templateSlotZoom(
+  cover: PublicCoverConfig | undefined,
+  slotIndex: number,
+): number {
+  if (slotIndex === 0) {
+    return cover?.zoom || 1;
+  }
+  return cover?.slotZooms?.[slotIndex] || 1;
+}
+
 const DEFAULT_COVER_TITLE_POSITION = { x: 50, y: 70 };
 const DEFAULT_COVER_SUBTITLE_POSITION = { x: 50, y: 82 };
 
@@ -390,6 +400,7 @@ function PublicCoverTemplateMedia({
           asset={assets[slotIndex]}
           fallbackUrl={slotIndex === 0 ? coverUrl : ""}
           focalPoint={templateSlotFocalPoint(cover, slotIndex)}
+          zoom={templateSlotZoom(cover, slotIndex)}
           title={title}
           slotIndex={slotIndex}
           viewerToken={viewerToken}
@@ -410,6 +421,7 @@ function PublicCoverTemplateSlot({
   asset,
   fallbackUrl,
   focalPoint,
+  zoom,
   title,
   slotIndex,
   viewerToken,
@@ -418,6 +430,7 @@ function PublicCoverTemplateSlot({
   asset: PublicAsset | null | undefined;
   fallbackUrl: string;
   focalPoint: { x: number; y: number };
+  zoom: number;
   title: string;
   slotIndex: number;
   viewerToken: string | null;
@@ -446,6 +459,8 @@ function PublicCoverTemplateSlot({
           className="cover-template-slot__image"
           style={{
             objectPosition: `${focalPoint.x}% ${focalPoint.y}%`,
+            transform: `scale(${zoom})`,
+            transformOrigin: `${focalPoint.x}% ${focalPoint.y}%`,
           }}
           loading={slotIndex === 0 ? "eager" : "lazy"}
         />
@@ -896,19 +911,19 @@ export function PublicGalleryHero({
       // place the container becomes the correct height for the chosen
       // style (16/9, 21/9, 4/3, etc.), so cover cropping shrinks to
       // near zero on standard viewports.
-      // Bracketing:
-      //   - minHeight: 60vh keeps the hero usable on tall narrow
-      //     viewports (mobile portrait) where the aspect-ratio derived
-      //     height would be too short.
-      //   - maxHeight: 85vh stops a 4:3 / 1:1 cover style from pushing
-      //     the View Gallery CTA below the fold on shorter desktop
-      //     viewports (1440×900 etc.).
+      // Saved Cover & Design output must remain WYSIWYG with the editor.
+      // The data attribute below disables the legacy viewport min/max height
+      // clamps in CSS so wide live-view screens do not squeeze the frame into
+      // a panoramic crop and zoom the template slots.
       <section
         className="cover-hero-frame relative flex w-full overflow-hidden"
         style={{
           aspectRatio: renderedAspectRatio,
+          minHeight: 0,
+          maxHeight: "none",
         }}
         data-cover-style={designStyle.id}
+        data-cover-experience="design"
       >
         {fontsHref && <link rel="stylesheet" href={fontsHref} />}
         {showVideo && coverUrl ? (

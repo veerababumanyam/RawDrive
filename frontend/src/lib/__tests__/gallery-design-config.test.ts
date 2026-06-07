@@ -27,6 +27,8 @@ describe("readPublicDesignConfig", () => {
           mediaMode: "photo-grid",
           focalPoint: { x: 25, y: 75 },
           mobileFocalPoint: { x: 40, y: 35 },
+          zoom: 1.35,
+          mobileZoom: 1.15,
           slotFocalPoints: [
             { x: 50, y: 50 },
             { x: 62, y: 31 },
@@ -35,6 +37,8 @@ describe("readPublicDesignConfig", () => {
             { x: 50, y: 50 },
             { x: 44, y: 48 },
           ],
+          slotZooms: [1, 1.4],
+          mobileSlotZooms: [1, 1.25],
           mobileAspectRatio: "4/5",
           title: "Anaya & Vihaan",
           subtitle: "Goa, Feb 2026",
@@ -103,6 +107,8 @@ describe("readPublicDesignConfig", () => {
     ]);
     expect(config!.cover?.focalPoint).toEqual({ x: 25, y: 75 });
     expect(config!.cover?.mobileFocalPoint).toEqual({ x: 40, y: 35 });
+    expect(config!.cover?.zoom).toBe(1.35);
+    expect(config!.cover?.mobileZoom).toBe(1.15);
     expect(config!.cover?.slotFocalPoints).toEqual([
       { x: 50, y: 50 },
       { x: 62, y: 31 },
@@ -111,6 +117,8 @@ describe("readPublicDesignConfig", () => {
       { x: 50, y: 50 },
       { x: 44, y: 48 },
     ]);
+    expect(config!.cover?.slotZooms).toEqual([1, 1.4]);
+    expect(config!.cover?.mobileSlotZooms).toEqual([1, 1.25]);
     expect(config!.cover?.mobileAspectRatio).toBe("4/5");
     expect(config!.cover?.scrimStyle).toBe("warm-vignette");
     expect(config!.cover?.textBackdrop).toBe("glass");
@@ -210,6 +218,8 @@ describe("readPublicDesignConfig", () => {
           styleId: "classic-full",
           focalPoint: { x: 20, y: 30 },
           mobileFocalPoint: { x: 40, y: 50 },
+          zoom: 1.2,
+          mobileZoom: 1.1,
           titlePosition: { x: 50, y: 70 },
           mobileTitlePosition: { x: 48, y: 58 },
           aspectRatio: "16/9",
@@ -220,6 +230,8 @@ describe("readPublicDesignConfig", () => {
               styleId: "modern-grid",
               title: "Desktop title",
               focalPoint: { x: 12, y: 34 },
+              zoom: 1.5,
+              slotZooms: [1, 1.35],
               aspectRatio: "21/9",
               typography: { titleSize: 62 },
             },
@@ -227,6 +239,7 @@ describe("readPublicDesignConfig", () => {
               assetId: "phone-cover",
               title: "Phone title",
               titlePosition: { x: 44, y: 52 },
+              zoom: 1.25,
               typography: { titleSize: 38 },
             },
           },
@@ -246,6 +259,8 @@ describe("readPublicDesignConfig", () => {
       styleId: "modern-grid",
       title: "Desktop title",
       focalPoint: { x: 12, y: 34 },
+      zoom: 1.5,
+      slotZooms: [1, 1.35],
       aspectRatio: "21/9",
     });
     expect(desktop.typography.titleSize).toBe(62);
@@ -254,6 +269,8 @@ describe("readPublicDesignConfig", () => {
       styleId: "modern-grid",
       title: "Phone title",
       focalPoint: { x: 40, y: 50 },
+      zoom: 1.25,
+      slotZooms: [1, 1.35],
       titlePosition: { x: 44, y: 52 },
       aspectRatio: "4/5",
     });

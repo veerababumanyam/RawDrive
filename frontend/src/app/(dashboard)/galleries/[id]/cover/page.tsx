@@ -9,7 +9,7 @@
  * at `/g/{slug}` reads — so changes flow straight through to clients.
  *
  * What this page does:
- *   1. Pick the cover asset and pan it (focal point) on a live preview.
+ *   1. Pick the cover asset, pan it, and zoom it on a live preview.
  *   2. Author title + subtitle text and drag them anywhere on the cover.
  *   3. Choose typography pairing and tune title/subtitle sizes.
  *   4. Choose grid layout, column count, gap, and per-photo info.
@@ -32,6 +32,7 @@
  *     cover.textColor           — overlay text color (hex)
  *     cover.textShadow          — toggle a readability shadow
  *     cover.aspectRatio         — overrides the styleId's aspectRatio
+ *     cover.zoom/slotZooms      — per-photo-slot crop zoom
  *   When unset, the public viewer falls back to the legacy bottom-anchored
  *   layout the design studio used.
  */
@@ -105,6 +106,16 @@ type GridLayout = "masonry" | "grid" | "justified" | "carousel";
 type TextAlign = "left" | "center" | "right";
 type TabId = "cover" | "text" | "media" | "scenes" | "brand" | "grid";
 type PreviewDevice = CoverDevice;
+
+const EDITOR_TABS: Array<{ id: TabId; label: string; mobileLabel: string }> = [
+  { id: "cover", label: "Cover", mobileLabel: "Cover" },
+  { id: "text", label: "Text", mobileLabel: "Text" },
+  { id: "media", label: "Media", mobileLabel: "Media" },
+  { id: "brand", label: "Brand", mobileLabel: "Brand" },
+  { id: "grid", label: "Grid", mobileLabel: "Grid" },
+  { id: "scenes", label: "Scenes", mobileLabel: "Scenes" },
+];
+
 type CoverPresetId =
   | "classic-wedding"
   | "editorial-split"
@@ -167,8 +178,12 @@ interface DesignConfig {
     mediaMode: CoverMediaMode;
     focalPoint: FocalPoint;
     mobileFocalPoint: FocalPoint;
+    zoom: number;
+    mobileZoom: number;
     slotFocalPoints: FocalPoint[];
     mobileSlotFocalPoints: FocalPoint[];
+    slotZooms: number[];
+    mobileSlotZooms: number[];
     mobileAspectRatio: string;
     title: string;
     subtitle: string;
@@ -238,6 +253,8 @@ const MOBILE_SUBTITLE_SIZE_MIN = 10;
 const MOBILE_SUBTITLE_SIZE_MAX = 32;
 const LOGO_SIZE_MIN = 28;
 const LOGO_SIZE_MAX = 96;
+const COVER_SLOT_ZOOM_MIN = 1;
+const COVER_SLOT_ZOOM_MAX = 3;
 
 // Editor-offered grid layouts. The schema's `layout` field still
 // accepts masonry/carousel (the public viewer can render them) — they
@@ -750,6 +767,38 @@ const COVER_PRESETS: Array<{
   },
 ];
 
+type CoverDesignOption = {
+  id: string;
+  name: string;
+  mood: string;
+  template: CoverTemplate;
+  presetId?: CoverPresetId;
+};
+
+const COVER_PRESET_STYLE_IDS = new Set(
+  COVER_PRESETS.map((preset) => preset.patch.cover.styleId).filter(
+    (styleId): styleId is string => Boolean(styleId),
+  ),
+);
+
+const COVER_DESIGNS: CoverDesignOption[] = [
+  ...COVER_PRESETS.map((preset) => ({
+    id: preset.id,
+    name: preset.name,
+    mood: preset.mood,
+    template: getCoverTemplate(preset.patch.cover.styleId),
+    presetId: preset.id,
+  })),
+  ...COVER_TEMPLATES.filter(
+    (template) => !COVER_PRESET_STYLE_IDS.has(template.id),
+  ).map((template) => ({
+    id: `template-${template.id}`,
+    name: template.name,
+    mood: template.mood,
+    template,
+  })),
+];
+
 const MEDIA_MODES: Array<{
   id: CoverMediaMode;
   label: string;
@@ -887,8 +936,12 @@ const DEFAULT_CONFIG: DesignConfig = {
     mediaMode: "single-photo",
     focalPoint: { x: 50, y: 50 },
     mobileFocalPoint: { x: 50, y: 50 },
+    zoom: 1,
+    mobileZoom: 1,
     slotFocalPoints: [],
     mobileSlotFocalPoints: [],
+    slotZooms: [],
+    mobileSlotZooms: [],
     mobileAspectRatio: "4/5",
     title: "",
     subtitle: "",
@@ -962,6 +1015,37 @@ function readSavedFocalPoints(value: unknown): FocalPoint[] {
   });
 }
 
+function clampCoverZoom(value: unknown, fallback = COVER_SLOT_ZOOM_MIN) {
+  const zoom = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(zoom)) return fallback;
+  return (
+    Math.round(clamp(zoom, COVER_SLOT_ZOOM_MIN, COVER_SLOT_ZOOM_MAX) * 100) /
+    100
+  );
+}
+
+function readSavedSlotZooms(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry) => clampCoverZoom(entry));
+}
+
+function normalizeSavedCoverProfile(
+  profile: CoverDeviceProfile,
+): CoverDeviceProfile {
+  const normalized: CoverDeviceProfile = { ...profile };
+  if (profile.zoom === undefined) {
+    delete normalized.zoom;
+  } else {
+    normalized.zoom = clampCoverZoom(profile.zoom);
+  }
+  if (Array.isArray(profile.slotZooms)) {
+    normalized.slotZooms = readSavedSlotZooms(profile.slotZooms);
+  } else {
+    delete normalized.slotZooms;
+  }
+  return normalized;
+}
+
 function normalizeTextPosition(value: unknown, fallback: TextPos): TextPos {
   if (!value || typeof value !== "object") return fallback;
   const point = value as Partial<TextPos>;
@@ -1028,7 +1112,9 @@ function profileFromConfig(
     layoutPreset: config.cover.layoutPreset,
     mediaMode: config.cover.mediaMode,
     focalPoint: config.cover.focalPoint,
+    zoom: config.cover.zoom,
     slotFocalPoints: config.cover.slotFocalPoints,
+    slotZooms: config.cover.slotZooms,
     aspectRatio: config.cover.aspectRatio,
     title: config.cover.title,
     subtitle: config.cover.subtitle,
@@ -1066,10 +1152,15 @@ function profileFromConfig(
   const phoneBase: CoverDeviceProfile = {
     ...resolvedDesktop,
     focalPoint: config.cover.mobileFocalPoint,
+    zoom: config.cover.mobileZoom,
     slotFocalPoints:
       config.cover.mobileSlotFocalPoints.length > 0
         ? config.cover.mobileSlotFocalPoints
         : resolvedDesktop.slotFocalPoints,
+    slotZooms:
+      config.cover.mobileSlotZooms.length > 0
+        ? config.cover.mobileSlotZooms
+        : resolvedDesktop.slotZooms,
     aspectRatio: config.cover.mobileAspectRatio,
     titlePosition: config.cover.mobileTitlePosition,
     subtitlePosition: config.cover.mobileSubtitlePosition,
@@ -1112,8 +1203,10 @@ function setProfileForDevice(
       cover: {
         ...config.cover,
         mobileFocalPoint: profile.focalPoint || config.cover.mobileFocalPoint,
+        mobileZoom: clampCoverZoom(profile.zoom, config.cover.mobileZoom),
         mobileSlotFocalPoints:
           profile.slotFocalPoints || config.cover.mobileSlotFocalPoints,
+        mobileSlotZooms: profile.slotZooms || config.cover.mobileSlotZooms,
         mobileAspectRatio:
           profile.aspectRatio || config.cover.mobileAspectRatio,
         mobileTitlePosition:
@@ -1145,7 +1238,9 @@ function setProfileForDevice(
       mediaMode:
         (profile.mediaMode as CoverMediaMode) || config.cover.mediaMode,
       focalPoint: profile.focalPoint || config.cover.focalPoint,
+      zoom: clampCoverZoom(profile.zoom, config.cover.zoom),
       slotFocalPoints: profile.slotFocalPoints || config.cover.slotFocalPoints,
+      slotZooms: profile.slotZooms || config.cover.slotZooms,
       aspectRatio: profile.aspectRatio || config.cover.aspectRatio,
       title: profile.title ?? config.cover.title,
       subtitle: profile.subtitle ?? config.cover.subtitle,
@@ -1357,6 +1452,19 @@ function coverSlotFocalPoint(
   return points[slotIndex] || { x: 50, y: 50 };
 }
 
+function coverSlotZoom(
+  config: DesignConfig,
+  slotIndex: number,
+  previewDevice: PreviewDevice,
+): number {
+  const profile = profileFromConfig(config, previewDevice);
+  if (slotIndex === 0) {
+    return clampCoverZoom(profile.zoom);
+  }
+  const zooms = profile.slotZooms || [];
+  return clampCoverZoom(zooms[slotIndex]);
+}
+
 function setCoverSlotAsset(
   config: DesignConfig,
   slotIndex: number,
@@ -1392,6 +1500,27 @@ function setCoverSlotFocalPoint(
   points[slotIndex] = nextPoint;
   return updateProfileForDevice(config, previewDevice, {
     slotFocalPoints: points,
+  });
+}
+
+function setCoverSlotZoom(
+  config: DesignConfig,
+  slotIndex: number,
+  previewDevice: PreviewDevice,
+  zoom: number,
+): DesignConfig {
+  const nextZoom = clampCoverZoom(zoom);
+  if (slotIndex === 0) {
+    return updateProfileForDevice(config, previewDevice, {
+      zoom: nextZoom,
+    });
+  }
+  const profile = profileFromConfig(config, previewDevice);
+  const zooms = [...(profile.slotZooms || [])];
+  while (zooms.length <= slotIndex) zooms.push(COVER_SLOT_ZOOM_MIN);
+  zooms[slotIndex] = nextZoom;
+  return updateProfileForDevice(config, previewDevice, {
+    slotZooms: zooms,
   });
 }
 
@@ -1567,6 +1696,12 @@ function configFromGallery(gallery: Gallery): DesignConfig {
   merged.cover.mobileSlotFocalPoints = readSavedFocalPoints(
     merged.cover.mobileSlotFocalPoints,
   );
+  merged.cover.zoom = clampCoverZoom(merged.cover.zoom);
+  merged.cover.mobileZoom = clampCoverZoom(merged.cover.mobileZoom);
+  merged.cover.slotZooms = readSavedSlotZooms(merged.cover.slotZooms);
+  merged.cover.mobileSlotZooms = readSavedSlotZooms(
+    merged.cover.mobileSlotZooms,
+  );
   if (!merged.cover.assetId && merged.cover.assetSlots[0]) {
     merged.cover.assetId = merged.cover.assetSlots[0];
   }
@@ -1640,11 +1775,15 @@ function configFromGallery(gallery: Gallery): DesignConfig {
     merged = setProfileForDevice(
       merged,
       "desktop",
-      savedDeviceProfiles.desktop,
+      normalizeSavedCoverProfile(savedDeviceProfiles.desktop),
     );
   }
   if (savedDeviceProfiles?.phone) {
-    merged = setProfileForDevice(merged, "phone", savedDeviceProfiles.phone);
+    merged = setProfileForDevice(
+      merged,
+      "phone",
+      normalizeSavedCoverProfile(savedDeviceProfiles.phone),
+    );
   }
   merged.branding.logoSize = clamp(
     Math.round(
@@ -1712,6 +1851,18 @@ function applyCoverPreset(
   );
 }
 
+function applyCoverDesign(
+  config: DesignConfig,
+  design: CoverDesignOption,
+  assets: Asset[] = [],
+  previewDevice: PreviewDevice = "desktop",
+): DesignConfig {
+  if (design.presetId) {
+    return applyCoverPreset(config, design.presetId, assets, previewDevice);
+  }
+  return applyCoverTemplate(config, design.template, assets, previewDevice);
+}
+
 function applyCoverTreatment(
   config: DesignConfig,
   treatment: (typeof COVER_TREATMENTS)[number],
@@ -1768,9 +1919,12 @@ function prepareDesignConfigForSave(config: DesignConfig): DesignConfig {
       mediaMode:
         (desktop.mediaMode as CoverMediaMode) || config.cover.mediaMode,
       focalPoint: (desktop.focalPoint as FocalPoint) || config.cover.focalPoint,
+      zoom: clampCoverZoom(desktop.zoom, config.cover.zoom),
       slotFocalPoints:
         (desktop.slotFocalPoints as FocalPoint[]) ||
         config.cover.slotFocalPoints,
+      slotZooms:
+        (desktop.slotZooms as number[] | undefined) || config.cover.slotZooms,
       aspectRatio: desktop.aspectRatio || config.cover.aspectRatio,
       title: desktop.title ?? config.cover.title,
       subtitle: desktop.subtitle ?? config.cover.subtitle,
@@ -1790,9 +1944,13 @@ function prepareDesignConfigForSave(config: DesignConfig): DesignConfig {
         (desktop.textBackdrop as TextBackdrop) || config.cover.textBackdrop,
       mobileFocalPoint:
         (phone.focalPoint as FocalPoint) || config.cover.mobileFocalPoint,
+      mobileZoom: clampCoverZoom(phone.zoom, config.cover.mobileZoom),
       mobileSlotFocalPoints:
         (phone.slotFocalPoints as FocalPoint[]) ||
         config.cover.mobileSlotFocalPoints,
+      mobileSlotZooms:
+        (phone.slotZooms as number[] | undefined) ||
+        config.cover.mobileSlotZooms,
       mobileAspectRatio: phone.aspectRatio || config.cover.mobileAspectRatio,
       mobileTitlePosition:
         (phone.titlePosition as TextPos) || config.cover.mobileTitlePosition,
@@ -2387,12 +2545,11 @@ export default function CoverDesignPage() {
               onChange={(e) => setTab(e.target.value as TabId)}
               className="input-base cover-header-select"
             >
-              <option value="cover">Cover</option>
-              <option value="text">Text</option>
-              <option value="media">Media</option>
-              <option value="scenes">Scenes</option>
-              <option value="brand">Brand</option>
-              <option value="grid">Grid</option>
+              {EDITOR_TABS.map((editorTab) => (
+                <option key={editorTab.id} value={editorTab.id}>
+                  {editorTab.label}
+                </option>
+              ))}
             </select>
             <GlassButton
               type="button"
@@ -2487,10 +2644,10 @@ export default function CoverDesignPage() {
           subject and gets the entire content rectangle. mx-auto + max-w
           keeps the cover from stretching absurdly wide on 4K monitors
           where a 16:9 frame would become a runway. */}
-      <div className="flex w-full flex-col gap-5 sm:gap-7 lg:gap-8">
+      <div className="cover-editor-layout flex w-full flex-col gap-5 sm:gap-7 lg:gap-8">
         {/* ───────── LIVE PREVIEW ───────── */}
-        <section>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <section className="cover-preview-section">
+          <div className="cover-preview-toolbar mb-3 flex flex-wrap items-center justify-between gap-3">
             <div
               className="glass-segmented cover-device-toggle"
               role="group"
@@ -2535,7 +2692,7 @@ export default function CoverDesignPage() {
             onPointerMove={onStagePointerMove}
             onPointerUp={onStagePointerUp}
             onPointerCancel={onStagePointerUp}
-            className={`cover-editor-stage relative w-full select-none overflow-hidden ${
+            className={`cover-editor-stage cover-editor-stage--${previewDevice} relative w-full select-none overflow-hidden ${
               hasCoverPreview
                 ? dragKind
                   ? "cursor-grabbing"
@@ -2548,13 +2705,9 @@ export default function CoverDesignPage() {
                 (previewDevice === "phone"
                   ? config.cover.mobileAspectRatio
                   : config.cover.aspectRatio),
-              maxHeight:
-                previewDevice === "phone"
-                  ? "min(78vh, 760px)"
-                  : "min(78vh, 820px)",
               touchAction: "none",
             }}
-            aria-label="Cover preview — drag photo to pan, drag title/subtitle to position"
+            aria-label="Cover preview — drag photo to pan, use photo zoom to resize, drag title/subtitle to position"
           >
             <CoverTemplateStage
               template={activeTemplate}
@@ -2716,8 +2869,8 @@ export default function CoverDesignPage() {
                 {tab === "text"
                   ? "Drag title / subtitle to position"
                   : activeTemplate.slotCount > 1
-                    ? `Drag photo ${activeCoverSlotIndex + 1} to pan`
-                    : "Drag photo to pan"}
+                    ? `Drag photo ${activeCoverSlotIndex + 1} to pan; use zoom below`
+                    : "Drag photo to pan; use zoom below"}
               </div>
             )}
 
@@ -2767,12 +2920,31 @@ export default function CoverDesignPage() {
           </div>
         </section>
 
+        <div
+          className="cover-mobile-task-tabs"
+          role="group"
+          aria-label="Mobile cover editor sections"
+        >
+          {EDITOR_TABS.map((editorTab) => (
+            <button
+              key={editorTab.id}
+              type="button"
+              className="cover-mobile-task-tab"
+              data-state={tab === editorTab.id ? "active" : "idle"}
+              aria-pressed={tab === editorTab.id}
+              onClick={() => setTab(editorTab.id)}
+            >
+              {editorTab.mobileLabel}
+            </button>
+          ))}
+        </div>
+
         {/* ───────── EDITOR PANEL ───────── */}
         <section>
           {/* Section picker moved into the page header as a dropdown
               next to Preview/Save. The panel body renders the active
               section's controls without a tab bar above it. */}
-          <Card variant="panel" padding="md">
+          <Card variant="panel" padding="md" className="cover-editor-panel">
             {tab === "cover" && (
               <PanelCover
                 assets={assets}
@@ -3098,6 +3270,7 @@ function CoverTemplateStage({
           asset={coverAssetForSlot(config, assets, slotIndex, previewDevice)}
           token={token}
           focalPoint={coverSlotFocalPoint(config, slotIndex, previewDevice)}
+          zoom={coverSlotZoom(config, slotIndex, previewDevice)}
           slotIndex={slotIndex}
           active={slotIndex === activeSlot}
           onSelect={() => onSelectSlot(slotIndex)}
@@ -3117,6 +3290,7 @@ function CoverTemplateStageSlot({
   asset,
   token,
   focalPoint,
+  zoom,
   slotIndex,
   active,
   onSelect,
@@ -3124,6 +3298,7 @@ function CoverTemplateStageSlot({
   asset: Asset | null;
   token: string | null;
   focalPoint: FocalPoint;
+  zoom: number;
   slotIndex: number;
   active: boolean;
   onSelect: () => void;
@@ -3160,6 +3335,8 @@ function CoverTemplateStageSlot({
           className="cover-template-slot__image"
           style={{
             objectPosition: `${focalPoint.x}% ${focalPoint.y}%`,
+            transform: `scale(${zoom})`,
+            transformOrigin: `${focalPoint.x}% ${focalPoint.y}%`,
           }}
           draggable={false}
         />
@@ -3211,6 +3388,13 @@ function PanelCover({
   );
   const activeLayoutPreset =
     activeCoverProfile.layoutPreset || config.cover.layoutPreset;
+  const activeNeutralDesign = COVER_DESIGNS.find(
+    (design) => !design.presetId && design.template.id === activeTemplate.id,
+  );
+  const activeCoverDesign =
+    activeNeutralDesign ||
+    COVER_DESIGNS.find((design) => design.presetId === activeLayoutPreset) ||
+    COVER_DESIGNS.find((design) => design.template.id === activeTemplate.id);
   const activeCoverSlotIndex = Math.min(
     activeCoverSlot,
     activeTemplate.slotCount - 1,
@@ -3236,6 +3420,7 @@ function PanelCover({
     activeCoverSlotIndex,
     previewDevice,
   );
+  const activeZoom = coverSlotZoom(config, activeCoverSlotIndex, previewDevice);
   const activeScrimStyle =
     (activeCoverProfile.scrimStyle as ScrimStyle) || config.cover.scrimStyle;
   const activeTextBackdrop =
@@ -3256,80 +3441,42 @@ function PanelCover({
 
   return (
     <div className="cover-panel-stack">
-      <section className="cover-section" aria-labelledby="cover-presets-title">
+      <section className="cover-section" aria-labelledby="cover-designs-title">
         <div className="cover-section-header">
           <div className="cover-section-heading">
-            <h3 id="cover-presets-title" className="cover-section-title">
-              Design presets
+            <h3 id="cover-designs-title" className="cover-section-title">
+              Cover designs
             </h3>
             <p className="cover-section-copy">
-              One-tap cover direction for wedding galleries.
+              Choose one cover direction with its layout, tone, and photo slots.
             </p>
           </div>
           <Badge variant="accent" className="uppercase">
-            {activeLayoutPreset.replace(/-/g, " ")}
+            {(activeCoverDesign?.name || activeTemplate.name).toUpperCase()}
           </Badge>
         </div>
         <div
-          className="cover-preset-grid"
+          className="cover-design-grid"
           role="group"
-          aria-label="Cover design presets"
+          aria-label="Cover designs"
         >
-          {COVER_PRESETS.map((preset) => {
-            const active = activeLayoutPreset === preset.id;
+          {COVER_DESIGNS.map((design) => {
+            const active = activeCoverDesign?.id === design.id;
             return (
               <SelectableTile
-                key={preset.id}
-                onClick={() =>
-                  setConfig((c) =>
-                    applyCoverPreset(c, preset.id, assets, previewDevice),
-                  )
-                }
-                selected={active}
-                title={preset.name}
-                description={preset.mood}
-              />
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="cover-section" aria-labelledby="cover-template-title">
-        <div className="cover-section-header">
-          <div className="cover-section-heading">
-            <h3 id="cover-template-title" className="cover-section-title">
-              Cover templates
-            </h3>
-            <p className="cover-section-copy">
-              Choose a single-photo, split, or multi-photo album cover.
-            </p>
-          </div>
-          <Badge variant="accent" className="uppercase">
-            {activeTemplate.name}
-          </Badge>
-        </div>
-        <div
-          className="cover-template-grid"
-          role="group"
-          aria-label="Cover templates"
-        >
-          {COVER_TEMPLATES.map((template) => {
-            const active = activeTemplate.id === template.id;
-            return (
-              <SelectableTile
-                key={template.id}
+                key={design.id}
                 onClick={() => {
                   setConfig((c) =>
-                    applyCoverTemplate(c, template, assets, previewDevice),
+                    applyCoverDesign(c, design, assets, previewDevice),
                   );
                   setActiveCoverSlot(0);
                 }}
                 selected={active}
-                className="cover-template-tile"
-                media={<CoverTemplateMiniPreview template={template} />}
-                title={template.name}
-                description={template.mood}
-                aria-label={`Use ${template.name} cover template`}
+                className="cover-design-tile"
+                media={<CoverTemplateMiniPreview template={design.template} />}
+                title={design.name}
+                description={design.mood}
+                aria-label={`Use ${design.name} design`}
               />
             );
           })}
@@ -3496,7 +3643,7 @@ function PanelCover({
               Template photo slots
             </h3>
             <p className="cover-section-copy">
-              Pick a slot, then choose a photo below or drag it in the preview.
+              Pick a slot, then choose, pan, and zoom its photo.
             </p>
           </div>
         </div>
@@ -3523,13 +3670,13 @@ function PanelCover({
         <div className="cover-slot-focal-grid">
           <div className="cover-field-stack">
             <div className="cover-field-row">
-              <label htmlFor="cover-slot-focal-x" className="form-label">
-                Horizontal focal
+              <label htmlFor="cover-slot-pan-x" className="form-label">
+                Move left/right
               </label>
               <span className="cover-range-value">{activeFocalPoint.x}%</span>
             </div>
             <input
-              id="cover-slot-focal-x"
+              id="cover-slot-pan-x"
               type="range"
               min={0}
               max={100}
@@ -3553,13 +3700,13 @@ function PanelCover({
           </div>
           <div className="cover-field-stack">
             <div className="cover-field-row">
-              <label htmlFor="cover-slot-focal-y" className="form-label">
-                Vertical focal
+              <label htmlFor="cover-slot-pan-y" className="form-label">
+                Move up/down
               </label>
               <span className="cover-range-value">{activeFocalPoint.y}%</span>
             </div>
             <input
-              id="cover-slot-focal-y"
+              id="cover-slot-pan-y"
               type="range"
               min={0}
               max={100}
@@ -3575,6 +3722,35 @@ function PanelCover({
                       ...activeFocalPoint,
                       y: Number(event.target.value),
                     },
+                  ),
+                )
+              }
+              className={COVER_RANGE_CLASS}
+            />
+          </div>
+          <div className="cover-field-stack">
+            <div className="cover-field-row">
+              <label htmlFor="cover-slot-zoom" className="form-label">
+                Photo zoom
+              </label>
+              <span className="cover-range-value">
+                {Math.round(activeZoom * 100)}%
+              </span>
+            </div>
+            <input
+              id="cover-slot-zoom"
+              type="range"
+              min={Math.round(COVER_SLOT_ZOOM_MIN * 100)}
+              max={Math.round(COVER_SLOT_ZOOM_MAX * 100)}
+              step={5}
+              value={Math.round(activeZoom * 100)}
+              onChange={(event) =>
+                setConfig((c) =>
+                  setCoverSlotZoom(
+                    c,
+                    activeCoverSlotIndex,
+                    previewDevice,
+                    Number(event.target.value) / 100,
                   ),
                 )
               }
@@ -3693,14 +3869,16 @@ function PanelCover({
             setConfig((c) =>
               updateProfileForDevice(c, previewDevice, {
                 focalPoint: { x: 50, y: 50 },
+                zoom: 1,
                 slotFocalPoints: [],
+                slotZooms: [],
               }),
             )
           }
           className="cover-panel-reset-button"
         >
-          Reset {previewDevice} focal points ({activeFocalPoint.x}%,{" "}
-          {activeFocalPoint.y}%)
+          Reset {previewDevice} crops ({activeFocalPoint.x}%,{" "}
+          {activeFocalPoint.y}%, {Math.round(activeZoom * 100)}%)
         </GlassButton>
       </div>
     </div>
