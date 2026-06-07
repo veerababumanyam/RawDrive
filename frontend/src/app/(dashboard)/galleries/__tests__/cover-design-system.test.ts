@@ -37,12 +37,22 @@ describe("gallery cover page design-system contracts", () => {
     expect(source).toContain('className="cover-design-tile"');
     expect(source).toContain('className="cover-slot-tabs"');
     expect(source).toContain('className="cover-section cover-photo-picker"');
+    expect(source).toContain(
+      'import { EmbeddedVideosPanel } from "@/components/gallery/embedded-videos-panel"',
+    );
+    expect(source).toContain(
+      'import { readEmbeddedVideos, type EmbeddedVideo } from "@/lib/embedded-videos"',
+    );
+    expect(source).toContain('label: "Videos"');
     expect(source).toContain('label: "Photos"');
     expect(source).toContain("data-cover-editor-tab");
     expect(source).not.toContain("cover-tab-select");
     expect(source).not.toContain("cover-header-select");
     expect(source).not.toContain("selectLabel");
     expect(source).toContain("PanelGalleryPhotos");
+    expect(source).toContain("EmbeddedVideosPanel");
+    expect(source).toContain("readEmbeddedVideos(gallery?.settings)");
+    expect(source).toContain('className="cover-videos-panel"');
     expect(source).toContain("PanelBrand");
     expect(source).toContain('className="cover-upload-stack"');
     expect(source).toContain('className="cover-info-panel"');
@@ -114,6 +124,8 @@ describe("gallery cover page design-system contracts", () => {
     expect(css).not.toContain(".cover-photo-rail");
     expect(css).toContain(".cover-preview-pane");
     expect(css).toContain(".cover-inspector-pane");
+    expect(css).toContain(".cover-videos-panel");
+    expect(css).toContain(".embedded-videos-grid");
     expect(css).toContain(".cover-photo-load-more");
   });
 

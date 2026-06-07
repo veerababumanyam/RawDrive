@@ -32,6 +32,7 @@ import {
   YouTubeMark,
 } from "@/components/icons";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { cn } from "@/lib/utils";
 
 declare global {
   interface Window {
@@ -45,8 +46,15 @@ declare global {
 
 const INSTAGRAM_EMBED_SCRIPT_ID = "rawdrive-instagram-embed-script";
 const INSTAGRAM_EMBED_SCRIPT_SRC = "https://www.instagram.com/embed.js";
-const INSTAGRAM_DISPLAY_MODES: InstagramEmbedDisplayMode[] = ["compact", "full"];
-const PROVIDER_HINTS: EmbeddedVideoProvider[] = ["youtube", "vimeo", "instagram"];
+const INSTAGRAM_DISPLAY_MODES: InstagramEmbedDisplayMode[] = [
+  "compact",
+  "full",
+];
+const PROVIDER_HINTS: EmbeddedVideoProvider[] = [
+  "youtube",
+  "vimeo",
+  "instagram",
+];
 
 let instagramScriptLoadPromise: Promise<void> | null = null;
 
@@ -124,6 +132,7 @@ function loadInstagramEmbedScript(): Promise<void> {
 interface EmbeddedVideosPanelProps {
   galleryId: string;
   initialVideos: EmbeddedVideo[];
+  className?: string;
   // When true, only the iframe grid renders — no add form, no delete
   // affordance. This is the public-viewer mode. Defaults to false
   // (full editor mode) for the dashboard usage.
@@ -138,6 +147,7 @@ interface EmbeddedVideosPanelProps {
 export function EmbeddedVideosPanel({
   galleryId,
   initialVideos,
+  className,
   readOnly = false,
   onChange,
 }: EmbeddedVideosPanelProps) {
@@ -222,7 +232,8 @@ export function EmbeddedVideosPanel({
       (v) =>
         v.provider === parsed.provider &&
         v.video_id === parsed.videoId &&
-        (parsed.provider !== "instagram" || v.instagram_kind === parsed.instagramKind),
+        (parsed.provider !== "instagram" ||
+          v.instagram_kind === parsed.instagramKind),
     );
     if (duplicate) {
       setError("That video is already in this gallery.");
@@ -272,7 +283,10 @@ export function EmbeddedVideosPanel({
 
   return (
     <section
-      className="surface-panel space-y-5 p-5"
+      className={cn(
+        "embedded-videos-panel surface-panel space-y-5 p-5",
+        className,
+      )}
       aria-label="Embedded videos"
     >
       <header className="flex items-end justify-between gap-4">
@@ -348,7 +362,9 @@ export function EmbeddedVideosPanel({
                     className="inline-flex items-center gap-1 rounded-full border border-border-default bg-surface-raised px-2 py-1 text-xs text-text-secondary"
                   >
                     {providerIcon(provider)}
-                    {provider === "instagram" ? "Instagram Reels" : providerLabel(provider)}
+                    {provider === "instagram"
+                      ? "Instagram Reels"
+                      : providerLabel(provider)}
                   </li>
                 ))}
               </ul>
@@ -405,7 +421,7 @@ export function EmbeddedVideosPanel({
           </p>
         )
       ) : (
-        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <ul className="embedded-videos-grid grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {videos.map((v, index) => (
             <li
               key={v.id}
@@ -441,7 +457,9 @@ export function EmbeddedVideosPanel({
                   />
                   <iframe
                     src={embedUrlFor(v)}
-                    title={v.title || `Embedded ${v.provider} video ${v.video_id}`}
+                    title={
+                      v.title || `Embedded ${v.provider} video ${v.video_id}`
+                    }
                     loading="lazy"
                     // YouTube/Vimeo require these specific allow tokens to
                     // play. Without `encrypted-media` Chromium throws on
@@ -481,7 +499,9 @@ export function EmbeddedVideosPanel({
                             type="button"
                             aria-pressed={active}
                             disabled={saving || active}
-                            onClick={() => void handleInstagramDisplayMode(v.id, mode)}
+                            onClick={() =>
+                              void handleInstagramDisplayMode(v.id, mode)
+                            }
                             className={`rounded-lg px-2 py-1 text-xs font-medium transition-colors ${
                               active
                                 ? "bg-accent-primary text-text-inverse"
@@ -496,7 +516,8 @@ export function EmbeddedVideosPanel({
                   )}
                   {v.provider === "instagram" && (
                     <p className="mt-1 text-xs text-text-tertiary">
-                      Private or restricted Instagram posts may only open on Instagram.
+                      Private or restricted Instagram posts may only open on
+                      Instagram.
                     </p>
                   )}
                   {/* Always-present click-through link. Cross-origin

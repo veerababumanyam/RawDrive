@@ -17,6 +17,7 @@ import type { Asset } from "@/lib/api/assets";
 import type { PublicAsset } from "@/lib/api/galleries";
 
 const mocks = vi.hoisted(() => ({
+  authFetch: vi.fn(async () => ({ ok: true }) as Response),
   updateGalleryDesign: vi.fn(async () => ({})),
   useUpload: vi.fn(),
   uploadAddFiles: vi.fn(),
@@ -55,6 +56,10 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: vi.fn(() => "token-1"),
+}));
+
+vi.mock("@/lib/api/authFetch", () => ({
+  authFetch: mocks.authFetch,
 }));
 
 vi.mock("@/lib/api/workspace-profile", () => ({
@@ -185,6 +190,7 @@ async function openGalleryPhotosPanel() {
 describe("CoverDesignPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.authFetch.mockResolvedValue({ ok: true } as Response);
     mocks.useUpload.mockReturnValue({
       items: [],
       addFiles: mocks.uploadAddFiles,
@@ -287,6 +293,9 @@ describe("CoverDesignPage", () => {
       within(mobileRail).getByRole("button", { name: "Brand" }),
     ).toBeInTheDocument();
     expect(
+      within(mobileRail).getByRole("button", { name: "Videos" }),
+    ).toBeInTheDocument();
+    expect(
       within(mobileRail).getByRole("button", { name: "Photos" }),
     ).toBeInTheDocument();
     expect(
@@ -295,22 +304,34 @@ describe("CoverDesignPage", () => {
 
     fireEvent.click(within(mobileRail).getByRole("button", { name: "Text" }));
 
-    expect(within(mobileRail).getByRole("button", { name: "Text" }))
-      .toHaveAttribute("aria-pressed", "true");
+    expect(
+      within(mobileRail).getByRole("button", { name: "Text" }),
+    ).toHaveAttribute("aria-pressed", "true");
     expect(
       await screen.findByPlaceholderText("Your gallery title"),
     ).toBeInTheDocument();
 
     fireEvent.click(within(mobileRail).getByRole("button", { name: "Grid" }));
 
-    expect(within(mobileRail).getByRole("button", { name: "Grid" }))
-      .toHaveAttribute("aria-pressed", "true");
+    expect(
+      within(mobileRail).getByRole("button", { name: "Grid" }),
+    ).toHaveAttribute("aria-pressed", "true");
     expect(await screen.findByText("Filename captions")).toBeInTheDocument();
+
+    fireEvent.click(within(mobileRail).getByRole("button", { name: "Videos" }));
+
+    expect(
+      within(mobileRail).getByRole("button", { name: "Videos" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      await screen.findByRole("heading", { name: "Videos & Reels" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(within(mobileRail).getByRole("button", { name: "Photos" }));
 
-    expect(within(mobileRail).getByRole("button", { name: "Photos" }))
-      .toHaveAttribute("aria-pressed", "true");
+    expect(
+      within(mobileRail).getByRole("button", { name: "Photos" }),
+    ).toHaveAttribute("aria-pressed", "true");
     expect(await screen.findByText("Choose from gallery")).toBeInTheDocument();
   });
 
@@ -328,6 +349,73 @@ describe("CoverDesignPage", () => {
     expect(
       screen.getByLabelText(/Cover preview/i).closest("section"),
     ).toHaveClass("cover-preview-pane");
+  });
+
+  it("mounts video and reel ordering inside the cover workbench", async () => {
+    vi.mocked(getGallery).mockResolvedValueOnce({
+      id: "gallery-1",
+      workspace_id: "workspace-1",
+      title: "Asha & Ravi",
+      slug: "asha-ravi",
+      description: "Wedding highlights",
+      cover_asset_id: "asset-cover",
+      gallery_type: "delivery",
+      is_published: true,
+      max_selections: 0,
+      status: "published",
+      created_at: "2026-04-01T00:00:00Z",
+      updated_at: "2026-04-01T00:00:00Z",
+      settings: {
+        embedded_videos: [
+          {
+            id: "yt-1",
+            provider: "youtube",
+            video_id: "dQw4w9WgXcQ",
+            title: "Highlights",
+            added_at: "2026-06-06T00:00:00.000Z",
+          },
+          {
+            id: "ig-1",
+            provider: "instagram",
+            video_id: "DLHx_WNoXoY",
+            instagram_kind: "reel",
+            instagram_display_mode: "compact",
+            title: "Ceremony reel",
+            added_at: "2026-06-06T00:00:00.000Z",
+          },
+        ],
+      },
+    });
+
+    await renderPage();
+    await openCoverEditorTab("Videos");
+
+    expect(
+      await screen.findByRole("heading", { name: "Videos & Reels" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Instagram Reels")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Preview as client" }),
+    ).toHaveAttribute("href", "/galleries/gallery-1/preview");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Move Highlights down" }),
+    );
+
+    await waitFor(() => {
+      expect(mocks.authFetch).toHaveBeenCalledWith(
+        "/api/v1/galleries/gallery-1/embedded-videos",
+        expect.objectContaining({ method: "PUT" }),
+      );
+    });
+
+    const requestBody = vi.mocked(mocks.authFetch).mock.calls.at(-1)?.[1]?.body;
+    expect(typeof requestBody).toBe("string");
+    const payload = JSON.parse(requestBody as string);
+    expect(payload.videos.map((video: { id: string }) => video.id)).toEqual([
+      "ig-1",
+      "yt-1",
+    ]);
   });
 
   it("preserves legacy branding without exposing brand editing controls", async () => {
@@ -826,8 +914,9 @@ describe("CoverDesignPage", () => {
       const tabs = screen.getByRole("group", {
         name: "Cover editor sections",
       });
-      expect(within(tabs).getByRole("button", { name: "Text" }))
-        .toHaveAttribute("aria-pressed", "true");
+      expect(
+        within(tabs).getByRole("button", { name: "Text" }),
+      ).toHaveAttribute("aria-pressed", "true");
     });
     expect(screen.getByPlaceholderText("Your gallery title")).toBeVisible();
 

@@ -13,12 +13,13 @@
  *   2. Author title + subtitle text and drag them anywhere on the cover.
  *   3. Choose typography pairing and tune title/subtitle sizes.
  *   4. Choose grid layout, column count, gap, and per-photo info.
- *   5. Choose theme variant + accent color and per-cover overrides
+ *   5. Manage embedded videos and reels without leaving the workbench.
+ *   6. Choose theme variant + accent color and per-cover overrides
  *      (text color, text shadow, aspect ratio).
  *
  * UX shape:
- *   - Mobile-first. Live preview at top, tab bar at bottom.
- *   - 4 sections: Cover / Text / Media / Grid.
+ *   - Desktop-first split editor. Live preview beside task tabs.
+ *   - Sections: Cover / Text / Media / Videos / Brand / Grid / Photos.
  *   - All interactions land on the same preview — no separate "preview"
  *     screen. Desktop/phone preview and undo/redo keep the editor fast
  *     without opening a second design studio surface.
@@ -70,6 +71,7 @@ import { getOrCreateSyncedGalleryMediaKey } from "@/lib/media-encryption/gallery
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { UploadDropzone, UploadProgress } from "@/components/upload";
 import { TermsAcceptanceModal } from "@/components/legal/terms-acceptance-modal";
+import { EmbeddedVideosPanel } from "@/components/gallery/embedded-videos-panel";
 import {
   COVER_TEMPLATES,
   coverTemplateSlotIndices,
@@ -98,6 +100,7 @@ import {
   type CoverFontOption,
 } from "@/lib/indian-cover-typography";
 import { components as designComponents } from "@/lib/tokens";
+import { readEmbeddedVideos, type EmbeddedVideo } from "@/lib/embedded-videos";
 import type {
   CoverDevice,
   CoverDeviceProfile,
@@ -109,7 +112,14 @@ import type {
 type ThemeVariant = "light" | "dark" | "auto";
 type GridLayout = "masonry" | "grid" | "justified" | "carousel";
 type TextAlign = "left" | "center" | "right";
-type TabId = "cover" | "text" | "media" | "brand" | "grid" | "photos";
+type TabId =
+  | "cover"
+  | "text"
+  | "media"
+  | "videos"
+  | "brand"
+  | "grid"
+  | "photos";
 type PreviewDevice = CoverDevice;
 
 const EDITOR_TABS: Array<{
@@ -120,6 +130,7 @@ const EDITOR_TABS: Array<{
   { id: "cover", label: "Cover", mobileLabel: "Cover" },
   { id: "text", label: "Text", mobileLabel: "Text" },
   { id: "media", label: "Media", mobileLabel: "Media" },
+  { id: "videos", label: "Videos", mobileLabel: "Videos" },
   { id: "brand", label: "Brand", mobileLabel: "Brand" },
   { id: "grid", label: "Grid", mobileLabel: "Grid" },
   { id: "photos", label: "Photos", mobileLabel: "Photos" },
@@ -3037,64 +3048,85 @@ export default function CoverDesignPage() {
           <section>
             {/* The panel body renders the active section selected from the
               dedicated task tabs above. */}
-            <Card variant="panel" padding="md" className="cover-editor-panel">
-              {tab === "cover" && (
-                <PanelCover
-                  assets={assets}
-                  config={config}
-                  setConfig={updateConfig}
-                  previewDevice={previewDevice}
-                  setActiveCoverSlot={setActiveCoverSlot}
-                />
-              )}
-              {tab === "photos" && (
-                <PanelGalleryPhotos
-                  assets={assets}
-                  token={token}
-                  config={config}
-                  setConfig={updateConfig}
-                  previewDevice={previewDevice}
-                  activeCoverSlot={activeCoverSlotIndex}
-                  setActiveCoverSlot={setActiveCoverSlot}
-                  onFilesAccepted={upload.addFiles}
-                  uploadItems={upload.items}
-                  uploadPaused={upload.isPaused}
-                  onCancelUpload={upload.cancel}
-                  onRetryUpload={upload.retry}
-                />
-              )}
-              {tab === "text" && (
-                <PanelText
-                  config={config}
-                  setConfig={updateConfig}
-                  albumTitle={gallery?.title || ""}
-                  albumSubtitle={gallery?.description || ""}
-                  previewDevice={previewDevice}
-                  activeText={activeText}
-                  setActiveText={setActiveText}
-                  setTab={setTab}
-                />
-              )}
-              {tab === "media" && (
-                <PanelMedia
-                  config={config}
-                  setConfig={updateConfig}
-                  assets={assets}
-                  previewDevice={previewDevice}
-                />
-              )}
-              {tab === "brand" && (
-                <PanelBrand config={config} setConfig={updateConfig} />
-              )}
-              {tab === "grid" && (
-                <PanelGrid
-                  config={config}
-                  setConfig={updateConfig}
-                  assets={assets}
-                  token={token}
-                />
-              )}
-            </Card>
+            {tab === "videos" ? (
+              <EmbeddedVideosPanel
+                galleryId={galleryId}
+                initialVideos={readEmbeddedVideos(gallery?.settings)}
+                className="cover-videos-panel"
+                onChange={(next: EmbeddedVideo[]) => {
+                  setGallery((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          settings: {
+                            ...(prev.settings ?? {}),
+                            embedded_videos: next,
+                          },
+                        }
+                      : prev,
+                  );
+                }}
+              />
+            ) : (
+              <Card variant="panel" padding="md" className="cover-editor-panel">
+                {tab === "cover" && (
+                  <PanelCover
+                    assets={assets}
+                    config={config}
+                    setConfig={updateConfig}
+                    previewDevice={previewDevice}
+                    setActiveCoverSlot={setActiveCoverSlot}
+                  />
+                )}
+                {tab === "photos" && (
+                  <PanelGalleryPhotos
+                    assets={assets}
+                    token={token}
+                    config={config}
+                    setConfig={updateConfig}
+                    previewDevice={previewDevice}
+                    activeCoverSlot={activeCoverSlotIndex}
+                    setActiveCoverSlot={setActiveCoverSlot}
+                    onFilesAccepted={upload.addFiles}
+                    uploadItems={upload.items}
+                    uploadPaused={upload.isPaused}
+                    onCancelUpload={upload.cancel}
+                    onRetryUpload={upload.retry}
+                  />
+                )}
+                {tab === "text" && (
+                  <PanelText
+                    config={config}
+                    setConfig={updateConfig}
+                    albumTitle={gallery?.title || ""}
+                    albumSubtitle={gallery?.description || ""}
+                    previewDevice={previewDevice}
+                    activeText={activeText}
+                    setActiveText={setActiveText}
+                    setTab={setTab}
+                  />
+                )}
+                {tab === "media" && (
+                  <PanelMedia
+                    config={config}
+                    setConfig={updateConfig}
+                    assets={assets}
+                    previewDevice={previewDevice}
+                  />
+                )}
+                {tab === "brand" && (
+                  <PanelBrand config={config} setConfig={updateConfig} />
+                )}
+                {tab === "grid" && (
+                  <PanelGrid
+                    config={config}
+                    setConfig={updateConfig}
+                    assets={assets}
+                    token={token}
+                  />
+                )}
+              </Card>
+            )}
           </section>
         </section>
       </ResizableWorkspaceSplit>
@@ -3688,7 +3720,6 @@ function PanelCover({
           </div>
         </div>
       </section>
-
     </div>
   );
 }
@@ -3792,8 +3823,8 @@ function PanelGalleryPhotos({
               Gallery photos
             </h3>
             <p className="cover-section-copy">
-              Pick the active template slot, choose its photo, then pan and
-              zoom it in the live preview.
+              Pick the active template slot, choose its photo, then pan and zoom
+              it in the live preview.
             </p>
           </div>
           <Badge variant="accent" className="uppercase">
@@ -5067,8 +5098,8 @@ function PanelBrand({
               Cover brand
             </h3>
             <p className="cover-section-copy">
-              Use business defaults, or override the logo mark and watermark
-              for this gallery cover only.
+              Use business defaults, or override the logo mark and watermark for
+              this gallery cover only.
             </p>
           </div>
           <Badge variant={config.legacyBranding ? "accent" : "neutral"}>
@@ -5144,9 +5175,7 @@ function PanelBrand({
               <label htmlFor="cover-logo-opacity" className="form-label">
                 Logo opacity
               </label>
-              <span className="cover-range-value">
-                {branding.logoOpacity}%
-              </span>
+              <span className="cover-range-value">{branding.logoOpacity}%</span>
             </div>
             <input
               id="cover-logo-opacity"
@@ -5164,7 +5193,10 @@ function PanelBrand({
         </div>
       </section>
 
-      <section className="cover-section" aria-labelledby="cover-watermark-title">
+      <section
+        className="cover-section"
+        aria-labelledby="cover-watermark-title"
+      >
         <div className="cover-section-header">
           <div className="cover-section-heading">
             <h3 id="cover-watermark-title" className="cover-section-title">
