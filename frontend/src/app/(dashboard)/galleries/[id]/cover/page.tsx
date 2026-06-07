@@ -2606,29 +2606,64 @@ export default function CoverDesignPage() {
       >
         {/* ───────── LIVE PREVIEW ───────── */}
         <section className="cover-preview-section cover-preview-pane">
-          <div className="cover-preview-toolbar mb-3 flex flex-wrap items-center justify-between gap-3">
-            <div
-              className="glass-segmented cover-device-toggle"
-              role="group"
-              aria-label="Preview device"
-            >
-              {(["desktop", "phone"] as PreviewDevice[]).map((device) => (
-                <button
-                  key={device}
-                  type="button"
-                  onClick={() => setPreviewDevice(device)}
-                  aria-pressed={previewDevice === device}
-                  aria-label={
-                    device === "desktop" ? "Desktop preview" : "Phone preview"
-                  }
-                  className="glass-segmented-option"
-                >
-                  {device === "desktop" ? "Desktop" : "Phone"}
-                </button>
-              ))}
+          <div className="cover-preview-toolbar">
+            <div className="cover-preview-primary-actions">
+              <div
+                className="glass-segmented cover-device-toggle"
+                role="group"
+                aria-label="Preview device"
+              >
+                {(["desktop", "phone"] as PreviewDevice[]).map((device) => (
+                  <button
+                    key={device}
+                    type="button"
+                    onClick={() => setPreviewDevice(device)}
+                    aria-pressed={previewDevice === device}
+                    aria-label={
+                      device === "desktop"
+                        ? "Desktop preview"
+                        : "Phone preview"
+                    }
+                    className="glass-segmented-option"
+                  >
+                    {device === "desktop" ? "Desktop" : "Phone"}
+                  </button>
+                ))}
+              </div>
+              <GlassButton
+                type="button"
+                onClick={handleSave}
+                disabled={saving || !config.cover.assetId}
+                aria-label={
+                  saving
+                    ? "Saving cover and design"
+                    : justSaved
+                      ? "Cover and design saved"
+                      : isDirty
+                        ? "Save cover and design (unsaved changes)"
+                        : "Save cover and design"
+                }
+                variant={justSaved ? "success" : "primary"}
+                icon={
+                  saving ? (
+                    <Loader2
+                      className="cover-save-button__spinner"
+                      aria-hidden
+                    />
+                  ) : justSaved ? (
+                    <Check aria-hidden />
+                  ) : undefined
+                }
+                className="cover-save-button"
+              >
+                {saving ? "Saving..." : justSaved ? "Saved" : "Save"}
+                {isDirty && !saving && !justSaved && (
+                  <span className="cover-save-button__dirty" aria-hidden />
+                )}
+              </GlassButton>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-xs text-on-surface-variant">
+            <div className="cover-preview-secondary-actions">
+              <p className="sr-only" aria-live="polite">
                 {previewDevice === "phone"
                   ? "Phone profile is active for cover edits."
                   : "Desktop profile is active for cover edits."}
@@ -2637,11 +2672,12 @@ export default function CoverDesignPage() {
                 type="button"
                 variant="surface"
                 size="sm"
+                aria-label="Copy desktop cover settings to phone"
                 onClick={() =>
                   updateConfig((current) => copyDesktopToPhoneProfile(current))
                 }
               >
-                Copy desktop to phone
+                Copy to phone
               </GlassButton>
             </div>
           </div>
@@ -3010,36 +3046,6 @@ export default function CoverDesignPage() {
             )}
           </section>
 
-          <div className="cover-save-dock" aria-live="polite">
-            <GlassButton
-              type="button"
-              onClick={handleSave}
-              disabled={saving || !config.cover.assetId}
-              aria-label={
-                saving
-                  ? "Saving cover and design"
-                  : justSaved
-                    ? "Cover and design saved"
-                    : isDirty
-                      ? "Save cover and design (unsaved changes)"
-                      : "Save cover and design"
-              }
-              variant={justSaved ? "success" : "primary"}
-              icon={
-                saving ? (
-                  <Loader2 className="cover-save-button__spinner" aria-hidden />
-                ) : justSaved ? (
-                  <Check aria-hidden />
-                ) : undefined
-              }
-              className="cover-save-button"
-            >
-              {saving ? "Saving..." : justSaved ? "Saved" : "Save"}
-              {isDirty && !saving && !justSaved && (
-                <span className="cover-save-button__dirty" aria-hidden />
-              )}
-            </GlassButton>
-          </div>
         </section>
       </ResizableWorkspaceSplit>
       <TermsAcceptanceModal

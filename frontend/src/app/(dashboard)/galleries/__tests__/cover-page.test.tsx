@@ -340,10 +340,17 @@ describe("CoverDesignPage", () => {
 
     expect(document.querySelector(".cover-workbench")).toBeInTheDocument();
     expect(document.querySelector(".cover-photo-rail")).not.toBeInTheDocument();
-    expect(document.querySelector(".cover-save-dock")).toBeInTheDocument();
+    expect(document.querySelector(".cover-save-dock")).not.toBeInTheDocument();
+    const saveButton = screen.getByRole("button", {
+      name: /save cover and design/i,
+    });
+    expect(saveButton).toBeInTheDocument();
+    expect(saveButton.closest(".cover-preview-toolbar")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /save cover and design/i }),
-    ).toBeInTheDocument();
+      screen.getByRole("button", {
+        name: "Copy desktop cover settings to phone",
+      }),
+    ).toHaveClass("glass-button");
     expect(
       screen.queryByRole("button", { name: /^undo/i }),
     ).not.toBeInTheDocument();

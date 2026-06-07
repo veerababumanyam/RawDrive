@@ -59,7 +59,12 @@ describe("gallery cover page design-system contracts", () => {
     expect(source).toContain("EmbeddedVideosPanel");
     expect(source).toContain("readEmbeddedVideos(gallery?.settings)");
     expect(source).toContain('className="cover-videos-panel"');
-    expect(source).toContain('className="cover-save-dock"');
+    expect(source).toContain('className="cover-preview-primary-actions"');
+    expect(source).toContain('className="cover-preview-secondary-actions"');
+    expect(source).toContain(
+      'aria-label="Copy desktop cover settings to phone"',
+    );
+    expect(source).not.toContain('className="cover-save-dock"');
     expect(source).toContain("PanelBrand");
     expect(source).toContain('className="cover-upload-stack"');
     expect(source).toContain('className="cover-info-panel"');
@@ -121,7 +126,9 @@ describe("gallery cover page design-system contracts", () => {
     expect(source).toContain("cover-preview-pane");
     expect(source).toContain("cover-inspector-pane");
     expect(source).toContain("cover-inspector-tabs");
-    expect(source).toContain("cover-save-dock");
+    expect(source).toContain("cover-preview-toolbar");
+    expect(source).toContain("cover-preview-primary-actions");
+    expect(source).not.toContain("cover-save-dock");
     expect(source).toContain("COVER_PHOTO_PAGE_SIZE");
     expect(source).toContain("pagedCoverAssets.map");
     expect(source).not.toContain("assets.map((a, index)");
@@ -132,7 +139,10 @@ describe("gallery cover page design-system contracts", () => {
     expect(css).not.toContain(".cover-photo-rail");
     expect(css).toContain(".cover-preview-pane");
     expect(css).toContain(".cover-inspector-pane");
-    expect(css).toContain(".cover-save-dock");
+    expect(css).toContain("--cover-workbench-height");
+    expect(css).toContain(".cover-preview-primary-actions");
+    expect(css).toContain(".cover-preview-secondary-actions");
+    expect(css).not.toContain(".cover-save-dock");
     expect(css).toContain(".cover-videos-panel");
     expect(css).toContain(".embedded-videos-grid");
     expect(css).toContain("grid-template-columns: repeat(7, minmax(0, 1fr))");
