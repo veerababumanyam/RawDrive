@@ -236,13 +236,23 @@ export function subscribeMediaKeyStoreChanges(
         : undefined;
     callback(detail ?? { reason: "storage" });
   };
-  const storageListener = () => callback({ reason: "storage" });
+  const storageListener = (event: StorageEvent) => {
+    if (!mediaKeyStorageEventApplies(event)) return;
+    callback({ reason: "storage" });
+  };
   window.addEventListener(MEDIA_KEY_STORE_CHANGE_EVENT, listener);
   window.addEventListener("storage", storageListener);
   return () => {
     window.removeEventListener(MEDIA_KEY_STORE_CHANGE_EVENT, listener);
     window.removeEventListener("storage", storageListener);
   };
+}
+
+function mediaKeyStorageEventApplies(event: StorageEvent): boolean {
+  if (event.key === null) return true;
+  return (
+    event.key.startsWith(KEY_PREFIX) || event.key.startsWith(ACTIVE_KEY_PREFIX)
+  );
 }
 
 async function getExportedKeysForKeyId(keyId: string): Promise<string[]> {

@@ -492,6 +492,79 @@ describe("useDecryptedAssetUrl", () => {
     );
   });
 
+  it("keeps visible encrypted media stable when unrelated storage events fire", async () => {
+    const galleryId = "public-storage-noise-test";
+    const key = await generateRawMediaKey();
+    const exported = await exportRawMediaKey(key);
+    const keyId = await versionedGalleryKeyId(galleryId, exported);
+    await importGalleryMediaKeyFromInput({
+      galleryId,
+      input: exported,
+      expectedKeyIds: [keyId],
+    });
+
+    const encrypted = await encryptBlob(
+      new Blob(["webp-bytes"], { type: "image/webp" }),
+      {
+        key,
+        keyId,
+        objectType: "thumb_md_webp",
+        contentType: "image/webp",
+      },
+    );
+    const ciphertextBytes = await encrypted.ciphertext.arrayBuffer();
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(
+          new Response(ciphertextBytes.slice(0), { status: 200 }),
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <Probe
+        asset={{
+          id: "asset-1",
+          filename: "photo.webp",
+          is_encrypted: true,
+          thumbnail_urls: {
+            thumb_md_webp: "gallery/asset-1/thumb_md.webp.enc",
+          },
+          media_encryption: {
+            scheme: "rawdrive-e2ee-v1",
+            variants: {
+              thumb_md_webp: encrypted.manifest as MediaEncryptionManifest,
+            },
+          },
+        }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("src")).toHaveTextContent(
+        "blob:decrypted-webp",
+      );
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: "rawdrive-favorites-wedding-gallery",
+          newValue: "asset-1",
+        }),
+      );
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+
+    expect(screen.getByTestId("src")).toHaveTextContent(
+      "blob:decrypted-webp",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+  });
+
   it("retries locked encrypted media after a gallery key is imported without remounting", async () => {
     const galleryId = "hook-retry-import-test";
     const key = await generateRawMediaKey();

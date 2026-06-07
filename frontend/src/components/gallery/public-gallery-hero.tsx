@@ -337,6 +337,40 @@ function useIsMobileViewport() {
   return mobile;
 }
 
+function useViewportHeight() {
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const update = () => {
+      const height = window.visualViewport?.height || window.innerHeight;
+      setViewportHeight(Number.isFinite(height) && height > 0 ? height : null);
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("resize", update);
+    };
+  }, []);
+
+  return viewportHeight;
+}
+
+function coverAspectRatioNumber(aspectRatio: string | undefined): number | null {
+  const match = aspectRatio?.match(
+    /^\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*$/,
+  );
+  if (!match) return null;
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || height <= 0) {
+    return null;
+  }
+  return width / height;
+}
+
 function placementClass(
   placement:
     | NonNullable<PublicDesignConfig["branding"]>["logoPlacement"]
@@ -719,6 +753,7 @@ export function PublicGalleryHero({
   viewerToken = null,
 }: PublicGalleryHeroProps) {
   const mobileViewport = useIsMobileViewport();
+  const viewportHeight = useViewportHeight();
   // Whether to surface the public slideshow at all: it only needs a slug and
   // at least one photo. The retired page-level launcher always showed Play for
   // photo galleries; music only controlled whether audio was wired in.
@@ -888,6 +923,16 @@ export function PublicGalleryHero({
     // crop a 21/9 panoramic style to 4/3 without picking a new style.
     const renderedAspectRatio =
       activeCover.aspectRatio || designStyle.aspectRatio;
+    const coverAspectRatio = coverAspectRatioNumber(renderedAspectRatio);
+    const designFrameStyle: CSSProperties = {
+      aspectRatio: renderedAspectRatio,
+      minHeight: 0,
+      maxHeight: "none",
+      maxWidth:
+        viewportHeight && coverAspectRatio
+          ? `${Math.round(viewportHeight * coverAspectRatio)}px`
+          : undefined,
+    };
     const hasAnyTextPosition = Boolean(
       activeCover.titlePosition || activeCover.subtitlePosition,
     );
@@ -1041,11 +1086,7 @@ export function PublicGalleryHero({
       // a panoramic crop and zoom the template slots.
       <section
         className="cover-hero-frame relative flex w-full overflow-hidden"
-        style={{
-          aspectRatio: renderedAspectRatio,
-          minHeight: 0,
-          maxHeight: "none",
-        }}
+        style={designFrameStyle}
         data-cover-style={designStyle.id}
         data-cover-experience="design"
       >

@@ -12,6 +12,7 @@ import {
   MEDIA_KEY_IMPORT_WRONG_GALLERY_MESSAGE,
   MEDIA_KEY_UNAVAILABLE_MESSAGE,
   parseGalleryMediaKeyInput,
+  subscribeMediaKeyStoreChanges,
   versionedGalleryKeyId,
 } from "../media-key-store";
 
@@ -150,6 +151,41 @@ describe("media key store", () => {
     expect(parseGalleryMediaKeyInput("rd_key=query-key")).toBe("query-key");
     expect(parseGalleryMediaKeyInput("raw-key")).toBe("raw-key");
     expect(parseGalleryMediaKeyInput("   ")).toBeNull();
+  });
+
+  it("ignores browser storage events for non-media-key localStorage entries", () => {
+    const changeEvents: unknown[] = [];
+    const unsubscribe = subscribeMediaKeyStoreChanges((detail) => {
+      changeEvents.push(detail);
+    });
+
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: "rawdrive-favorites-wedding-gallery",
+        newValue: "asset-1",
+      }),
+    );
+
+    expect(changeEvents).toEqual([]);
+
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: `${KEY_PREFIX}gallery:gallery-test`,
+        newValue: "exported-key",
+      }),
+    );
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: `${ACTIVE_PREFIX}gallery:gallery-test`,
+        newValue: "gallery:gallery-test:0123456789abcdef",
+      }),
+    );
+
+    expect(changeEvents).toEqual([
+      { reason: "storage" },
+      { reason: "storage" },
+    ]);
+    unsubscribe();
   });
 
   it("imports a pasted gallery key, persists it, and emits a key-store change event", async () => {

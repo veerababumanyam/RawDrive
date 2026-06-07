@@ -2781,6 +2781,7 @@ body[data-chrome="marketing"] {
 .cover-hero-frame[data-cover-experience="design"] {
   min-height: 0;
   max-height: none;
+  margin-inline: auto;
 }
 
 .cover-preview-safe-zone {

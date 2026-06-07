@@ -123,6 +123,52 @@ describe("PublicGalleryHero", () => {
     );
   });
 
+  it("contains wide saved-design covers inside the viewport without height-clamping the frame", async () => {
+    const innerHeightDescriptor = Object.getOwnPropertyDescriptor(
+      window,
+      "innerHeight",
+    );
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 900,
+    });
+
+    try {
+      const { container } = render(
+        <PublicGalleryHero
+          gallery={gallery}
+          assets={[coverAsset, secondaryAsset]}
+          branding={branding}
+          design={{
+            cover: {
+              assetId: "asset-cover",
+              assetSlots: ["asset-cover", "asset-2"],
+              styleId: "classic-split",
+              aspectRatio: "16/9",
+              title: "Asha & Ravi",
+              titlePosition: { x: 51, y: 86 },
+            },
+          }}
+        />,
+      );
+
+      const heroFrame = container.querySelector(
+        ".cover-hero-frame",
+      ) as HTMLElement;
+
+      await waitFor(() => expect(heroFrame.style.maxWidth).toBe("1600px"));
+      expect(heroFrame).toHaveStyle({
+        aspectRatio: "16/9",
+        minHeight: "0",
+        maxHeight: "none",
+      });
+    } finally {
+      if (innerHeightDescriptor) {
+        Object.defineProperty(window, "innerHeight", innerHeightDescriptor);
+      }
+    }
+  });
+
   it("renders studio identity and cover photo on the public gallery hero", () => {
     render(
       <PublicGalleryHero
