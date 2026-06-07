@@ -140,6 +140,7 @@ type AdminUserService struct {
 	jwtSecret    []byte
 	inviteSender AdminInviteSender
 	frontendURL  string
+	planCatalog  *PlanCatalogService
 	// F-020: optional impersonation deps. tokenSigner mints RS256 platform
 	// access tokens that the real validator accepts; wsLookup resolves the
 	// target user's primary workspace / state / role context so the minted
@@ -174,6 +175,11 @@ func (s *AdminUserService) SetImpersonationTokenSigner(signer auth.JWTService, w
 func (s *AdminUserService) SetAdminInviteSender(sender AdminInviteSender, frontendURL string) {
 	s.inviteSender = sender
 	s.frontendURL = frontendURL
+}
+
+func (s *AdminUserService) WithPlanCatalog(catalog *PlanCatalogService) *AdminUserService {
+	s.planCatalog = catalog
+	return s
 }
 
 func (s *AdminUserService) ListUsers(ctx context.Context, filter repository.AdminUserFilter) (*repository.PaginatedResult[repository.AdminUserRow], error) {
@@ -492,6 +498,11 @@ func (s *AdminUserService) ChangeTier(ctx context.Context, id uuid.UUID, newTier
 		return ErrInvalidPlanTier
 	}
 	quotaBytes := PlanDefaultQuotaBytes(newTier)
+	if s.planCatalog != nil {
+		if resolvedQuota, err := s.planCatalog.QuotaBytes(ctx, newTier); err == nil {
+			quotaBytes = resolvedQuota
+		}
+	}
 	if err := s.userRepo.UpdateTier(ctx, id, newTier, quotaBytes, actorID); err != nil {
 		return fmt.Errorf("updating tier: %w", err)
 	}

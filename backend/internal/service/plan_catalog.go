@@ -196,7 +196,15 @@ func IsPaidPlanTier(tier string) bool {
 
 func IsSelfServePaidPlanTier(tier string) bool {
 	p, ok := planByTier(tier)
-	return ok && p.Paid && p.Active && p.SelfServe
+	return ok && p.Paid && p.Active && p.SelfServe && p.Tier != "pay_per_event"
+}
+
+func (s *PlanCatalogService) IsSelfServeSignupPlan(ctx context.Context, tier string) (bool, error) {
+	p, ok, err := s.Get(ctx, tier)
+	if err != nil {
+		return false, err
+	}
+	return ok && p.Active && p.SelfServe && p.Tier != "pay_per_event", nil
 }
 
 var ErrPlanNotFound = errors.New("plan not found")

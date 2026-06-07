@@ -78,7 +78,7 @@ func RegisterAdminRoutes(r chi.Router, deps AdminDeps) {
 		r.Put("/plans/{tier}", plans.Update)
 		if deps.PricingCatalogSvc != nil {
 			pricingCatalog := NewPricingCatalogHandler(deps.PricingCatalogSvc)
-			r.Get("/pricing-catalog", pricingCatalog.PublicCatalog)
+			r.Get("/pricing-catalog", pricingCatalog.AdminCatalog)
 		}
 		pricingChanges := NewAdminPricingChangeRequestsHandler(deps.PricingChangeRequestSvc)
 		r.Get("/pricing-change-requests", pricingChanges.List)

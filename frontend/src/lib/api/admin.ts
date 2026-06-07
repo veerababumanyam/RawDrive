@@ -751,8 +751,32 @@ export interface AdminPlan {
   trial_days: number;
 }
 
+export interface AdminBillingProduct {
+  code: string;
+  product_type: string;
+  version_id: string;
+  version: number;
+  name: string;
+  description: string;
+  currency: string;
+  price_paise: number;
+  billing_interval: string;
+  metadata?: Record<string, unknown>;
+  rank: number;
+  active: boolean;
+  effective_from: string;
+}
+
 export interface ListAdminPlansResponse {
   plans: AdminPlan[];
+}
+
+export interface AdminPricingCatalogResponse {
+  generated_at?: string;
+  plans?: AdminPlan[];
+  event_packs?: AdminBillingProduct[];
+  gallery_extensions?: AdminBillingProduct[];
+  storage_boosters?: AdminBillingProduct[];
 }
 
 export async function listAdminPlans(token: string): Promise<AdminPlan[]> {
@@ -764,6 +788,31 @@ export async function listAdminPlans(token: string): Promise<AdminPlan[]> {
   }
   const body = (await res.json()) as ListAdminPlansResponse;
   return Array.isArray(body.plans) ? body.plans : [];
+}
+
+export async function getAdminPricingCatalog(
+  token: string,
+): Promise<Required<Omit<AdminPricingCatalogResponse, "generated_at">> & {
+  generated_at?: string;
+}> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/pricing-catalog`, {
+    headers: headers(token),
+  });
+  if (!res.ok) {
+    throw new Error(`Load admin pricing catalog failed: ${res.status}`);
+  }
+  const body = (await res.json()) as AdminPricingCatalogResponse;
+  return {
+    generated_at: body.generated_at,
+    plans: Array.isArray(body.plans) ? body.plans : [],
+    event_packs: Array.isArray(body.event_packs) ? body.event_packs : [],
+    gallery_extensions: Array.isArray(body.gallery_extensions)
+      ? body.gallery_extensions
+      : [],
+    storage_boosters: Array.isArray(body.storage_boosters)
+      ? body.storage_boosters
+      : [],
+  };
 }
 
 export type UpdateAdminPlanInput = Omit<AdminPlan, "tier">;

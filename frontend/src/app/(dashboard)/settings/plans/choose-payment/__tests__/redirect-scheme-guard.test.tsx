@@ -12,15 +12,72 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 // redirect branch directly.
 
 const pushMock = vi.fn();
+const navigationState = vi.hoisted(() => ({
+  search: "tier=creator&interval=monthly",
+}));
+const mockPlanCatalog = vi.hoisted(() => ({
+  current: {
+    plans: [
+      {
+        id: "creator",
+        tier: "creator",
+        name: "Creator",
+        description: "Side photographers.",
+        currency: "INR",
+        monthlyPricePaise: 49900,
+        annualPricePaise: 499000,
+        monthlyPrice: 499,
+        annualPrice: 4990,
+        quotaBytes: 100 * 2 ** 30,
+        storage: "100GB",
+        galleries: 10,
+        clients: -1,
+        features: ["100GB storage"],
+        popular: false,
+        rank: 2,
+        paid: true,
+        active: true,
+        selfServe: true,
+        trialDays: 0,
+      },
+    ],
+    eventPacks: [
+      {
+        code: "event_upload_standard",
+        product_type: "event_upload",
+        version_id: "product-version-1",
+        version: 1,
+        name: "Event upload",
+        description: "One-off event upload cycle.",
+        currency: "INR",
+        price_paise: 19900,
+        billing_interval: "one_time",
+        metadata: { active_days: 30 },
+        rank: 10,
+        active: true,
+        effective_from: new Date("2026-06-07T00:00:00Z").toISOString(),
+      },
+    ],
+    galleryExtensions: [],
+    storageBoosters: [],
+  },
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock, back: vi.fn() }),
-  // tier=creator is a valid paid self-serve plan in pricingPlans.
-  useSearchParams: () => new URLSearchParams("tier=creator&interval=monthly"),
+  useSearchParams: () => new URLSearchParams(navigationState.search),
 }));
 
 vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: () => "test-token",
+}));
+
+vi.mock("@/hooks/use-plan-catalog", () => ({
+  usePlanCatalog: () => ({
+    ...mockPlanCatalog.current,
+    loading: false,
+    error: null,
+  }),
 }));
 
 import ChoosePaymentPage from "../page";
@@ -72,6 +129,7 @@ function stubUpgradeFetch(redirectUrl: string, phonePeConfigured = true) {
 let assignSpy: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
+  navigationState.search = "tier=creator&interval=monthly";
   assignSpy = vi.fn();
   // jsdom's window.location is not configurable to reassign wholesale across
   // versions; replacing just .assign is the portable approach.
@@ -166,5 +224,85 @@ describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
     expect(
       screen.getByRole("button", { name: /phonepe not configured/i }),
     ).toBeDisabled();
+  });
+
+  it("posts product_code, provider, target type, and target id for gallery product orders", async () => {
+    navigationState.search =
+      "product_code=event_upload_standard&target_type=gallery&target_id=gallery-1";
+    const razorpayOpen = vi.fn();
+    Object.defineProperty(window, "Razorpay", {
+      configurable: true,
+      writable: true,
+      value: vi.fn(function Razorpay() {
+        return { open: razorpayOpen };
+      }),
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : (input as Request).url;
+      if (url.includes("/workspace/subscription/payment-providers")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            default_provider: "razorpay",
+            providers: [
+              { id: "razorpay", configured: true },
+              { id: "phonepe", configured: true },
+            ],
+          }),
+        } as unknown as Response;
+      }
+      if (url.includes("/workspace/billing/orders")) {
+        return {
+          ok: true,
+          status: 201,
+          json: async () => ({
+            provider: "razorpay",
+            billing_order_id: "bo-1",
+            amount_paise: 19900,
+            currency: "INR",
+            order_type: "event_upload",
+            product_code: "event_upload_standard",
+            target_type: "gallery",
+            target_id: "gallery-1",
+            razorpay_order_id: "rzp-1",
+            razorpay_key_id: "rzp-key",
+          }),
+        } as unknown as Response;
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+      } as unknown as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ChoosePaymentPage />);
+
+    const payButton = await screen.findByRole("button", {
+      name: /pay .* with razorpay/i,
+    });
+    fireEvent.click(payButton);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/workspace/billing/orders"),
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            product_code: "event_upload_standard",
+            provider: "razorpay",
+            target_type: "gallery",
+            target_id: "gallery-1",
+          }),
+        }),
+      );
+    });
   });
 });

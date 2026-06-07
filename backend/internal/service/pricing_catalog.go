@@ -73,6 +73,39 @@ func (s *PricingCatalogService) PublicCatalog(ctx context.Context) (PricingCatal
 	return catalog, nil
 }
 
+func (s *PricingCatalogService) AdminCatalog(ctx context.Context) (PricingCatalog, error) {
+	if s == nil || s.db == nil {
+		return PricingCatalog{}, errors.New("pricing catalog database not configured")
+	}
+	plans, err := NewPlanCatalogService(s.db).List(ctx, true)
+	if err != nil {
+		return PricingCatalog{}, err
+	}
+	products, err := s.currentManageableProducts(ctx)
+	if err != nil {
+		return PricingCatalog{}, err
+	}
+	return buildPricingCatalog(plans, products), nil
+}
+
+func buildPricingCatalog(plans []PlanCatalogEntry, products []BillingProductCatalog) PricingCatalog {
+	catalog := PricingCatalog{
+		GeneratedAt: time.Now().UTC(),
+		Plans:       plans,
+	}
+	for _, product := range products {
+		switch product.ProductType {
+		case "event_upload":
+			catalog.EventPacks = append(catalog.EventPacks, product)
+		case "gallery_extension":
+			catalog.GalleryExtensions = append(catalog.GalleryExtensions, product)
+		case "storage_booster":
+			catalog.StorageBoosters = append(catalog.StorageBoosters, product)
+		}
+	}
+	return catalog
+}
+
 func (s *PricingCatalogService) currentApprovedPlans(ctx context.Context) ([]PlanCatalogEntry, error) {
 	rows, err := s.db.Query(ctx, `
 		WITH ranked AS (
@@ -146,6 +179,50 @@ func (s *PricingCatalogService) currentApprovedProducts(ctx context.Context) ([]
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("pricing catalog: load product versions: %w", err)
+	}
+	defer rows.Close()
+	var products []BillingProductCatalog
+	for rows.Next() {
+		product, err := scanBillingProductCatalog(rows)
+		if err != nil {
+			return nil, err
+		}
+		products = append(products, product)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return products, nil
+}
+
+func (s *PricingCatalogService) currentManageableProducts(ctx context.Context) ([]BillingProductCatalog, error) {
+	rows, err := s.db.Query(ctx, `
+		WITH ranked AS (
+			SELECT bp.code, bp.product_type,
+			       bpv.id, bpv.version, bpv.name, bpv.description,
+			       bpv.currency, bpv.price_paise, bpv.billing_interval,
+			       bpv.metadata, bpv.rank, (bp.active AND bpv.active) AS active,
+			       bpv.effective_from,
+			       ROW_NUMBER() OVER (
+			           PARTITION BY bpv.product_code
+			           ORDER BY bpv.effective_from DESC, bpv.version DESC
+			       ) AS rn
+			  FROM billing_products bp
+			  JOIN billing_product_versions bpv ON bpv.product_code = bp.code
+			 WHERE bp.archived_at IS NULL
+			   AND bpv.status IN ('approved', 'published')
+			   AND bpv.archived_at IS NULL
+			   AND bpv.effective_from <= NOW()
+			   AND (bpv.effective_to IS NULL OR bpv.effective_to > NOW())
+		)
+		SELECT code, product_type, id, version, name, description, currency,
+		       price_paise, billing_interval, metadata, rank, active, effective_from
+		  FROM ranked
+		 WHERE rn = 1
+		 ORDER BY rank ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("pricing catalog: load manageable product versions: %w", err)
 	}
 	defer rows.Close()
 	var products []BillingProductCatalog

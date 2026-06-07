@@ -273,14 +273,18 @@ func isStrictUpgrade(fromTier, toTier string) bool {
 }
 
 func (h *SubscriptionUpgradeHandler) validUpgradeTier(ctx context.Context, tier string) (bool, error) {
-	if h.planCatalog == nil {
-		return validUpgradeTier(tier), nil
+	normalizedTier := service.NormalizePlanTierSlug(tier)
+	if normalizedTier == "pay_per_event" {
+		return false, nil
 	}
-	plan, ok, err := h.planCatalog.Get(ctx, strings.TrimSpace(tier))
+	if h.planCatalog == nil {
+		return validUpgradeTier(normalizedTier), nil
+	}
+	plan, ok, err := h.planCatalog.Get(ctx, normalizedTier)
 	if err != nil {
 		return false, err
 	}
-	return ok && plan.Paid && plan.Active && plan.SelfServe, nil
+	return ok && plan.Paid && plan.Active && plan.SelfServe && plan.Tier != "pay_per_event", nil
 }
 
 func (h *SubscriptionUpgradeHandler) planPricePaise(ctx context.Context, tier, billingInterval string) (int64, bool, error) {

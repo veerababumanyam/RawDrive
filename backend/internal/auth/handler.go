@@ -67,6 +67,19 @@ func normalizePlan(p string) (plan string, ok bool) {
 	return "free", true
 }
 
+func (h *Handler) normalizePlan(ctx context.Context, p string) (plan string, ok bool) {
+	p = strings.ToLower(strings.TrimSpace(p))
+	if h != nil && h.plans != nil && p != "" {
+		allowed, err := h.plans.IsSelfServeSignupPlan(ctx, p)
+		if err != nil {
+			log.Printf("auth.Register: plan catalog lookup failed for %q: %v", p, err)
+		} else if allowed {
+			return p, true
+		}
+	}
+	return normalizePlan(p)
+}
+
 // isPaidPlanIntent reports whether a CANONICAL plan id signals paid intent. This
 // is INTENT ONLY — it decides routing (free-signup vs paid_pending), never the
 // granted tier. A paid tier is conferred solely by a provider-verified payment
@@ -180,6 +193,10 @@ type PlanTierLookup interface {
 	GetWorkspacePlanTier(ctx context.Context, workspaceID string) (tier string, startedAt, expiresAt *time.Time, err error)
 }
 
+type SelfServePlanCatalog interface {
+	IsSelfServeSignupPlan(ctx context.Context, tier string) (bool, error)
+}
+
 // TermsManager records Terms-of-Service / copyright acceptance and reports a
 // user's terms status. Declared here (not imported from the service package)
 // because the service package imports auth — importing it back would create a
@@ -207,6 +224,7 @@ type Handler struct {
 	users      UserService
 	workspaces WorkspaceLookup
 	planTier   PlanTierLookup
+	plans      SelfServePlanCatalog
 	// phoneReuse gates the paid_pending routing path (phone-reuse epic). When
 	// nil, the feature is off: duplicates are rejected, never routed to paid.
 	phoneReuse PhoneReuseEnforcement
@@ -249,6 +267,11 @@ func (h *Handler) WithPhoneReuseEnforcement(f PhoneReuseEnforcement) *Handler {
 // WithPlanTierLookup attaches a plan/subscription resolver used by Me().
 func (h *Handler) WithPlanTierLookup(ptl PlanTierLookup) *Handler {
 	h.planTier = ptl
+	return h
+}
+
+func (h *Handler) WithSelfServePlanCatalog(catalog SelfServePlanCatalog) *Handler {
+	h.plans = catalog
 	return h
 }
 
@@ -466,7 +489,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 	// Validate / canonicalize the self-serve plan intent. Unknown values fall
 	// back to "free" so a stray query-param typo never blocks signup.
-	canonicalPlan, _ := normalizePlan(req.Plan)
+	canonicalPlan, _ := h.normalizePlan(r.Context(), req.Plan)
 
 	// Check if user already exists
 	_, exists, err := h.users.FindByEmail(r.Context(), req.Email)

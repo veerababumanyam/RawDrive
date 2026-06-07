@@ -23,18 +23,8 @@ const REGISTER_RATE_LIMIT_ERROR =
 const GOOGLE_SIGNUP_UNAVAILABLE =
   "Google sign-up is temporarily unavailable. Use email signup for now.";
 
-// Self-serve plan IDs the user can pick at signup. Must match the backend
-// whitelist in backend/internal/auth/handler.go (selfServePlans).
-const selfServePlanIds = [
-  "free",
-  "creator",
-  "pro_photographer",
-  "studio",
-] as const;
-type SelfServePlanId = (typeof selfServePlanIds)[number];
-
-function isSelfServePlan(value: string): value is SelfServePlanId {
-  return (selfServePlanIds as readonly string[]).includes(value);
+function isSignupEligiblePlanId(value: string): boolean {
+  return value.trim().length > 0 && value !== "pay_per_event";
 }
 
 async function parseRegisterResponse(
@@ -63,7 +53,7 @@ async function readRegisterError(response: Response): Promise<string> {
 // Hand-picked marketing copy for the featured card. We could derive this
 // from plan.features, but the full feature lists are long and read poorly
 // in a narrow form column — 3 short, benefit-led lines work better here.
-const planHighlights: Record<SelfServePlanId, readonly string[]> = {
+const planHighlights: Record<string, readonly string[]> = {
   free: [
     "5GB storage, 1 event",
     "Limited AI face search",
@@ -87,7 +77,7 @@ const planHighlights: Record<SelfServePlanId, readonly string[]> = {
 };
 
 // One-line sub-headers shown under the plan name inside the featured card.
-const planTagline: Record<SelfServePlanId, string> = {
+const planTagline: Record<string, string> = {
   free: "Free forever for beginners",
   creator: "Side & weekend photographers getting started",
   pro_photographer: "The main money plan for working pros",
@@ -99,19 +89,12 @@ export function RegisterForm() {
   const searchParams = useSearchParams();
   const planParam = searchParams?.get("plan")?.toLowerCase() ?? "";
 
-  const initialPlan: SelfServePlanId = useMemo(() => {
-    return isSelfServePlan(planParam) ? planParam : "free";
+  const initialPlan = useMemo(() => {
+    return isSignupEligiblePlanId(planParam) ? planParam : "free";
   }, [planParam]);
 
-  const [plan, setPlan] = useState<SelfServePlanId>(initialPlan);
-  // Keep local plan state in sync if the user navigates from /pricing?plan=X to
-  // /register?plan=Y without a full reload (Next.js soft nav). Adjusting state
-  // during render (React's "store info from previous render" pattern) instead of
-  // in an effect: it re-syncs the moment the URL-derived plan changes, while a
-  // user clicking the segmented control within the same URL still wins because
-  // initialPlan is unchanged on those renders.
-  const [planParamSnapshot, setPlanParamSnapshot] =
-    useState<SelfServePlanId>(initialPlan);
+  const [plan, setPlan] = useState(initialPlan);
+  const [planParamSnapshot, setPlanParamSnapshot] = useState(initialPlan);
   if (planParamSnapshot !== initialPlan) {
     setPlanParamSnapshot(initialPlan);
     setPlan(initialPlan);
@@ -138,17 +121,28 @@ export function RegisterForm() {
     ? "register-google-webview-recovery"
     : undefined;
 
-  const googleStartUrl = useMemo(
-    () => getGoogleOAuthStartUrl(API_BASE, { intent: "signup", plan }),
-    [plan],
-  );
-
   const selectablePlans = useMemo(
     () =>
       plans.filter(
-        (p) => isSelfServePlan(p.id) && p.active && p.selfServe,
+        (p) => p.id !== "pay_per_event" && p.active && p.selfServe,
       ),
     [plans],
+  );
+  const selectablePlanIds = useMemo(
+    () => new Set(selectablePlans.map((p) => p.id)),
+    [selectablePlans],
+  );
+  const selectedPlan = selectablePlanIds.has(plan)
+    ? plan
+    : (selectablePlans[0]?.id ?? "free");
+
+  const googleStartUrl = useMemo(
+    () =>
+      getGoogleOAuthStartUrl(API_BASE, {
+        intent: "signup",
+        plan: selectedPlan,
+      }),
+    [selectedPlan],
   );
 
   async function handleRegister(event?: FormEvent<HTMLFormElement>) {
@@ -177,7 +171,7 @@ export function RegisterForm() {
           password,
           full_name: fullName.trim(),
           phone: phone.trim(),
-          plan,
+          plan: selectedPlan,
           // One-time Terms-of-Service / copyright acceptance. The checkbox
           // already gates this submit; sending it lets the backend record the
           // acceptance (timestamp, version, IP, UA) as IT Act §10A / DPDP
@@ -208,7 +202,7 @@ export function RegisterForm() {
 
       const payload = await parseRegisterResponse(response);
       const acceptedPlan: string =
-        typeof payload.plan === "string" ? payload.plan : plan;
+        typeof payload.plan === "string" ? payload.plan : selectedPlan;
       router.push(
         `/activate?email=${encodeURIComponent(email.trim())}` +
           `&plan=${encodeURIComponent(acceptedPlan)}`,
@@ -235,7 +229,7 @@ export function RegisterForm() {
     }
     setGoogleLoading(true);
     try {
-      window.sessionStorage.setItem("rawdrive_pending_plan", plan);
+      window.sessionStorage.setItem("rawdrive_pending_plan", selectedPlan);
     } catch {
       // SessionStorage can fail in private mode — ignore, intent is non-critical.
     }
@@ -286,14 +280,14 @@ export function RegisterForm() {
           className="relative flex rounded-2xl border border-border bg-surface-container-low p-1 shadow-inner"
         >
           {selectablePlans.map((p) => {
-            const selected = plan === p.id;
+            const selected = selectedPlan === p.id;
             return (
               <button
                 key={p.id}
                 type="button"
                 role="radio"
                 aria-checked={selected}
-                onClick={() => setPlan(p.id as SelfServePlanId)}
+                onClick={() => setPlan(p.id)}
                 className={`relative z-10 flex-1 rounded-xl px-2 py-2 text-xs font-semibold uppercase transition-all duration-200 ${
                   selected
                     ? "bg-surface-elevated text-text-primary shadow-sm ring-1 ring-accent/30"
@@ -308,15 +302,17 @@ export function RegisterForm() {
 
         {/* Featured detail card — dynamic, shows the currently selected plan */}
         {(() => {
-          const currentPlan = selectablePlans.find((p) => p.id === plan);
+          const currentPlan = selectablePlans.find((p) => p.id === selectedPlan);
           if (!currentPlan) return null;
           const isFree = currentPlan.monthlyPrice === 0;
           const highlights =
             currentPlan.features.length > 0
               ? currentPlan.features.slice(0, 3)
-              : planHighlights[plan];
+              : (planHighlights[selectedPlan] ?? []);
           const tagline =
-            currentPlan.description.trim() || planTagline[plan];
+            currentPlan.description.trim() ||
+            planTagline[selectedPlan] ||
+            currentPlan.name;
           return (
             <div className="relative overflow-hidden rounded-2xl border border-accent/25 bg-gradient-to-br from-accent-subtle/80 via-surface-elevated to-surface-container-low p-5 shadow-glass">
               {/* ambient glow */}

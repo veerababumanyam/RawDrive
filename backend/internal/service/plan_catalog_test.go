@@ -46,3 +46,12 @@ func TestPlanCatalogEntryJSONUsesSnakeCaseKeys(t *testing.T) {
 	}`, string(body))
 	require.NotContains(t, string(body), "MonthlyPricePaise")
 }
+
+func TestIsSelfServePaidPlanTierExcludesPayPerEvent(t *testing.T) {
+	require.True(t, IsSelfServePaidPlanTier("creator"))
+	require.True(t, IsSelfServePaidPlanTier("pro_photographer"))
+	require.True(t, IsSelfServePaidPlanTier("studio"))
+	require.False(t, IsSelfServePaidPlanTier("free"))
+	require.False(t, IsSelfServePaidPlanTier("pay_per_event"))
+	require.False(t, IsSelfServePaidPlanTier("elite_studio"))
+}

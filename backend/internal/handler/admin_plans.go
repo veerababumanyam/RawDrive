@@ -2,13 +2,11 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/service"
@@ -91,36 +89,9 @@ func (h *AdminPlansHandler) Update(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusForbidden, map[string]string{"error": "super_admin required"})
 		return
 	}
-	if h.catalog == nil {
-		respondJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "plan catalog unavailable"})
-		return
-	}
-	tier := strings.TrimSpace(chi.URLParam(r, "tier"))
-	var req updateAdminPlanRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
-		return
-	}
-	input, err := req.toServiceUpdate()
-	if err != nil {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
-	}
-	plan, err := h.catalog.Update(r.Context(), tier, input)
-	if errors.Is(err, service.ErrPlanNotFound) {
-		respondJSON(w, http.StatusNotFound, map[string]string{"error": "plan not found"})
-		return
-	}
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-		respondJSON(w, http.StatusConflict, map[string]string{"error": "plan rank already in use"})
-		return
-	}
-	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "update plan failed"})
-		return
-	}
-	respondJSON(w, http.StatusOK, map[string]adminPlan{"plan": projectAdminPlan(plan)})
+	respondJSON(w, http.StatusConflict, map[string]string{
+		"error": "plan changes must be submitted through pricing change requests",
+	})
 }
 
 func (h *AdminPlansHandler) list(r *http.Request, includeInactive bool) ([]service.PlanCatalogEntry, error) {
@@ -246,6 +217,19 @@ func (h *PricingCatalogHandler) PublicCatalog(w http.ResponseWriter, r *http.Req
 		return
 	}
 	catalog, err := h.catalog.PublicCatalog(r.Context())
+	if err != nil {
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "list pricing catalog failed"})
+		return
+	}
+	respondJSON(w, http.StatusOK, catalog)
+}
+
+func (h *PricingCatalogHandler) AdminCatalog(w http.ResponseWriter, r *http.Request) {
+	if h.catalog == nil {
+		respondJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "pricing catalog unavailable"})
+		return
+	}
+	catalog, err := h.catalog.AdminCatalog(r.Context())
 	if err != nil {
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "list pricing catalog failed"})
 		return

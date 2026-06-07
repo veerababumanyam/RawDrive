@@ -6,41 +6,6 @@ import { Check, ChevronDown, Tag } from "lucide-react";
 import { usePlanCatalog } from "@/hooks/use-plan-catalog";
 import type { PlanCatalogPlan, PricingCatalogProduct } from "@/lib/plans";
 
-const faqItems = [
-  {
-    q: "Is Starter a trial?",
-    a: "No. Starter is free forever with 5GB storage, 1 event, limited AI face search, watermarked galleries, and no photo selling.",
-  },
-  {
-    q: "How does Pay Per Event work?",
-    a: "Pay Per Event gives occasional photographers a one-off upload cycle: Rs. 199 events include 30 active days, Rs. 499 wedding uploads include 60 active days, and both become view-only after the active phase.",
-  },
-  {
-    q: "Can I switch plans later?",
-    a: "Yes. You can move from Starter or Pay Per Event to a monthly plan when your event volume grows.",
-  },
-  {
-    q: "What payment methods do you accept?",
-    a: "We accept UPI, credit/debit cards, net banking, and wallets through the configured payment provider. Elite Studio can be handled through sales-assisted billing.",
-  },
-  {
-    q: "Is GST included in the pricing?",
-    a: "Prices are shown in INR and are exclusive of GST. The checkout shows the final payable amount before confirmation.",
-  },
-  {
-    q: "What is the wedding bundle?",
-    a: "The wedding upload is Rs. 499 for multi-day events and larger galleries, with a 60-day active phase before the gallery becomes view-only.",
-  },
-  {
-    q: "Can I extend a Pay Per Event gallery?",
-    a: "Yes. After expiry you can extend 30 days for Rs. 49, extend 90 days for Rs. 99, or download plus archive forever for Rs. 199.",
-  },
-  {
-    q: "Is my data stored in India?",
-    a: "Yes, all data is stored in Indian data centers (Mumbai region) and is DPDPA compliant.",
-  },
-];
-
 function formatPrice(price: number): string {
   if (price === -1) return "Custom";
   if (price === 0) return "Rs. 0";
@@ -92,11 +57,26 @@ function featuredPlanLabel(plan: PlanCatalogPlan): string {
   return "";
 }
 
+function productByCode(
+  products: PricingCatalogProduct[],
+  code: string,
+): PricingCatalogProduct | undefined {
+  return products.find((product) => product.code === code);
+}
+
+function productByMetadataNumber(
+  products: PricingCatalogProduct[],
+  key: string,
+  value: number,
+): PricingCatalogProduct | undefined {
+  return products.find((product) => productNumber(product, key, -1) === value);
+}
+
 export function PricingContent() {
   const [isAnnual, setIsAnnual] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [coupon, setCoupon] = useState("");
-  const { plans, eventPacks } = usePlanCatalog();
+  const { plans, eventPacks, galleryExtensions } = usePlanCatalog();
   const activePlans = plans
     .filter((plan) => plan.active)
     .sort((a, b) => a.rank - b.rank);
@@ -166,6 +146,73 @@ export function PricingContent() {
           };
         })
       : fallbackEventOptions;
+  const standardEvent = productByCode(eventPacks, "event_upload_standard");
+  const weddingEvent = productByCode(eventPacks, "event_upload_wedding");
+  const extension30 =
+    productByMetadataNumber(galleryExtensions, "extension_days", 30) ??
+    productByCode(galleryExtensions, "gallery_extend_30");
+  const extension90 =
+    productByMetadataNumber(galleryExtensions, "extension_days", 90) ??
+    productByCode(galleryExtensions, "gallery_extend_90");
+  const archiveForever = productByCode(
+    galleryExtensions,
+    "gallery_archive_forever",
+  );
+  const standardPrice = standardEvent
+    ? formatProductPrice(standardEvent)
+    : "Rs. 199";
+  const weddingPrice = weddingEvent
+    ? formatProductPrice(weddingEvent)
+    : "Rs. 499";
+  const standardActiveDays = standardEvent
+    ? productNumber(standardEvent, "active_days", 30)
+    : 30;
+  const weddingActiveDays = weddingEvent
+    ? productNumber(weddingEvent, "active_days", 60)
+    : 60;
+  const extension30Price = extension30
+    ? formatProductPrice(extension30)
+    : "Rs. 49";
+  const extension90Price = extension90
+    ? formatProductPrice(extension90)
+    : "Rs. 99";
+  const archiveForeverPrice = archiveForever
+    ? formatProductPrice(archiveForever)
+    : "Rs. 199";
+  const faqItems = [
+    {
+      q: "Is Starter a trial?",
+      a: "No. Starter is free forever with 5GB storage, 1 event, limited AI face search, watermarked galleries, and no photo selling.",
+    },
+    {
+      q: "How does Pay Per Event work?",
+      a: `Pay Per Event gives occasional photographers a one-off upload cycle: ${standardPrice} events include ${standardActiveDays} active days, ${weddingPrice} wedding uploads include ${weddingActiveDays} active days, and both become view-only after the active phase.`,
+    },
+    {
+      q: "Can I switch plans later?",
+      a: "Yes. You can move from Starter or Pay Per Event to a monthly plan when your event volume grows.",
+    },
+    {
+      q: "What payment methods do you accept?",
+      a: "We accept UPI, credit/debit cards, net banking, and wallets through the configured payment provider. Elite Studio can be handled through sales-assisted billing.",
+    },
+    {
+      q: "Is GST included in the pricing?",
+      a: "Prices are shown in INR and are exclusive of GST. The checkout shows the final payable amount before confirmation.",
+    },
+    {
+      q: "What is the wedding bundle?",
+      a: `The wedding upload is ${weddingPrice} for multi-day events and larger galleries, with a ${weddingActiveDays}-day active phase before the gallery becomes view-only.`,
+    },
+    {
+      q: "Can I extend a Pay Per Event gallery?",
+      a: `Yes. After expiry you can extend 30 days for ${extension30Price}, extend 90 days for ${extension90Price}, or download plus archive forever for ${archiveForeverPrice}.`,
+    },
+    {
+      q: "Is my data stored in India?",
+      a: "Yes, all data is stored in Indian data centers (Mumbai region) and is DPDPA compliant.",
+    },
+  ];
 
   return (
     <div className="bg-surface text-text-primary">

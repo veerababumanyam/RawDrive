@@ -785,8 +785,9 @@ func (n *logSecurityNotifier) SendPasswordResetOTP(_ context.Context, email, cod
 // It resolves 2-letter state codes (e.g. "TS") to integer state IDs from the DB,
 // updates the user's state_id, and creates the workspace + membership.
 type onboardingWorkspaceCreator struct {
-	wsSvc workspace.Service
-	pool  *pgxpool.Pool
+	wsSvc       workspace.Service
+	pool        *pgxpool.Pool
+	planCatalog *service.PlanCatalogService
 }
 
 func (o *onboardingWorkspaceCreator) CreateWorkspace(ctx context.Context, userID, stateCode, businessName, planTier string) (string, error) {
@@ -824,6 +825,13 @@ func (o *onboardingWorkspaceCreator) CreateWorkspace(ctx context.Context, userID
 	// propagates up to onboarding.SetProfile, which then does NOT advance
 	// the step — the user can retry.
 	quotaBytes := service.PlanDefaultQuotaBytes(planTier)
+	if o.planCatalog != nil {
+		if resolvedQuota, qErr := o.planCatalog.QuotaBytes(ctx, planTier); qErr != nil {
+			log.Printf("WARNING: could not resolve plan quota for %q from catalog: %v", planTier, qErr)
+		} else {
+			quotaBytes = resolvedQuota
+		}
+	}
 	ws, err := o.wsSvc.CreateWithBootstrap(ctx, workspace.CreateWorkspaceInput{
 		Name:         businessName,
 		StateID:      stateIDStr,
@@ -1549,6 +1557,7 @@ func main() {
 	authHandler := auth.NewHandler(otpSvc, jwtSvc, oauthSvc, userAuthAdapter).
 		WithWorkspaceLookup(wsLookup).
 		WithPlanTierLookup(wsLookup).
+		WithSelfServePlanCatalog(planCatalogSvc).
 		WithTerms(termsSvc).
 		// Phone-reuse epic: gates the paid_pending routing for signups on an
 		// already-used phone. Settings row featureflag/phone_reuse.enforcement
@@ -1693,7 +1702,7 @@ func main() {
 	onbRepo := onboarding.NewPgRepo(dbPool)
 	onbSvc := onboarding.NewService(
 		onbRepo,
-		&onboardingWorkspaceCreator{wsSvc: wsSvc, pool: dbPool},
+		&onboardingWorkspaceCreator{wsSvc: wsSvc, pool: dbPool, planCatalog: planCatalogSvc},
 		eventPublisher,
 		onboarding.WithUserUpdater(&onboardingUserUpdater{userSvc: userSvc}),
 		// 2026-05-19 admin-granted plan comp (migration 113) — the
@@ -2835,7 +2844,7 @@ func main() {
 		// rows in audit_logs after a PUT /upload-policy request.
 		workspacePolicySvc.WithAuditLog(auditLogSvc)
 
-		adminUserSvc := service.NewAdminUserService(adminUserRepo, auditLogSvc, jwtSecret)
+		adminUserSvc := service.NewAdminUserService(adminUserRepo, auditLogSvc, jwtSecret).WithPlanCatalog(planCatalogSvc)
 		adminRevenueSvc := service.NewAdminRevenueService(adminRevenueRepo).WithPDFService(pdfSvc)
 		if notificationEmailSender != nil {
 			adminRevenueSvc.WithReportEmailSender(notificationEmailSender)

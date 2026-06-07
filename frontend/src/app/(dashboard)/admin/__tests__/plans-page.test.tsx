@@ -8,7 +8,7 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/api/admin", () => ({
   createPricingChangeRequest: vi.fn(),
-  listAdminPlans: vi.fn(),
+  getAdminPricingCatalog: vi.fn(),
   listPricingChangeRequests: vi.fn(),
   submitPricingChangeRequest: vi.fn(),
   approvePricingChangeRequest: vi.fn(),
@@ -18,14 +18,15 @@ vi.mock("@/lib/api/admin", () => ({
 
 import {
   createPricingChangeRequest,
-  listAdminPlans,
+  getAdminPricingCatalog,
   listPricingChangeRequests,
   submitPricingChangeRequest,
+  type AdminBillingProduct,
   type AdminPlan,
 } from "@/lib/api/admin";
 import AdminPlansPage from "../plans/page";
 
-const mockListAdminPlans = vi.mocked(listAdminPlans);
+const mockGetAdminPricingCatalog = vi.mocked(getAdminPricingCatalog);
 const mockListPricingChangeRequests = vi.mocked(listPricingChangeRequests);
 const mockCreatePricingChangeRequest = vi.mocked(createPricingChangeRequest);
 const mockSubmitPricingChangeRequest = vi.mocked(submitPricingChangeRequest);
@@ -34,14 +35,14 @@ function planFixture(overrides: Partial<AdminPlan>): AdminPlan {
   return {
     tier: "creator",
     name: "Creator",
-    description: "Side & weekend photographers getting started.",
+    description: "Side photographers moving into paid client delivery.",
     currency: "INR",
     monthly_price_paise: 49900,
     annual_price_paise: 499000,
     quota_bytes: 100 * 2 ** 30,
     gallery_limit: 10,
     client_limit: -1,
-    features: ["100 GB storage", "10 events / month"],
+    features: ["100GB Storage", "10 Events / Month"],
     popular: false,
     rank: 2,
     paid: true,
@@ -52,16 +53,42 @@ function planFixture(overrides: Partial<AdminPlan>): AdminPlan {
   };
 }
 
+function productFixture(
+  overrides: Partial<AdminBillingProduct>,
+): AdminBillingProduct {
+  return {
+    code: "event_upload_standard",
+    product_type: "event_upload",
+    version_id: "version-1",
+    version: 1,
+    name: "Event upload",
+    description: "One-off event upload cycle for occasional shoots.",
+    currency: "INR",
+    price_paise: 19900,
+    billing_interval: "one_time",
+    metadata: {
+      active_days: 30,
+      upload_window_days: 30,
+      retention_days: 90,
+      upload_credits: 500,
+    },
+    rank: 10,
+    active: true,
+    effective_from: new Date("2026-06-07T00:00:00Z").toISOString(),
+    ...overrides,
+  };
+}
+
 const starterPlan = planFixture({
   tier: "free",
   name: "Starter",
-  description: "Hook beginners.",
+  description: "Free starter gallery.",
   monthly_price_paise: 0,
   annual_price_paise: 0,
   quota_bytes: 5 * 2 ** 30,
   gallery_limit: 1,
   client_limit: 0,
-  features: ["5 GB storage"],
+  features: ["5GB storage"],
   paid: false,
   rank: 0,
 });
@@ -81,43 +108,96 @@ const creatorPlan = planFixture({});
 const proPlan = planFixture({
   tier: "pro_photographer",
   name: "Pro Photographer",
-  description: "The main money plan for working pros.",
   monthly_price_paise: 99900,
   annual_price_paise: 999000,
   quota_bytes: 300 * 2 ** 30,
   gallery_limit: -1,
-  features: ["300 GB storage", "Unlimited events"],
+  features: ["300GB Storage", "Unlimited Events"],
   popular: true,
   rank: 3,
 });
 const studioPlan = planFixture({
   tier: "studio",
   name: "Studio",
-  description: "Studios with a team and a brand to protect.",
   monthly_price_paise: 199900,
   annual_price_paise: 1999000,
   quota_bytes: 1024 * 2 ** 30,
   gallery_limit: -1,
-  features: ["1 TB storage", "Unlimited everything"],
   popular: true,
   rank: 4,
 });
 const elitePlan = planFixture({
   tier: "elite_studio",
   name: "Elite Studio",
-  description: "High-end & multi-branch studios.",
   monthly_price_paise: 399900,
   annual_price_paise: 3999000,
   quota_bytes: 3 * 1024 * 2 ** 30,
   gallery_limit: -1,
-  features: ["3 TB+ storage", "Multi-branch studio support"],
   self_serve: false,
   rank: 5,
 });
 
+const eventUploadProduct = productFixture({});
+const weddingUploadProduct = productFixture({
+  code: "event_upload_wedding",
+  name: "Wedding upload",
+  description: "Longer upload cycle for weddings.",
+  price_paise: 49900,
+  metadata: {
+    active_days: 60,
+    upload_window_days: 60,
+    retention_days: 90,
+    upload_credits: 2000,
+  },
+  rank: 20,
+});
+const extensionProduct = productFixture({
+  code: "gallery_extend_30",
+  product_type: "gallery_extension",
+  name: "Extend +30 days",
+  description: "Keep a gallery active for another 30 days.",
+  price_paise: 4900,
+  metadata: { extension_days: 30 },
+  rank: 30,
+});
+const archiveProduct = productFixture({
+  code: "gallery_archive_forever",
+  product_type: "gallery_extension",
+  name: "Download + archive forever",
+  description: "Export the gallery package and keep it archived.",
+  price_paise: 19900,
+  metadata: { archive_forever: true },
+  rank: 50,
+});
+const storageProduct = productFixture({
+  code: "storage_boost_50",
+  product_type: "storage_booster",
+  name: "Boost 50",
+  description: "Add 50GB recurring storage.",
+  price_paise: 30000,
+  billing_interval: "monthly",
+  metadata: { quota_bytes: 50 * 2 ** 30 },
+  rank: 60,
+});
+
+const catalogFixture = {
+  generated_at: new Date("2026-06-07T00:00:00Z").toISOString(),
+  plans: [
+    starterPlan,
+    payPerEventPlan,
+    creatorPlan,
+    proPlan,
+    studioPlan,
+    elitePlan,
+  ],
+  event_packs: [eventUploadProduct, weddingUploadProduct],
+  gallery_extensions: [extensionProduct, archiveProduct],
+  storage_boosters: [storageProduct],
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
-  mockListAdminPlans.mockResolvedValue([creatorPlan]);
+  mockGetAdminPricingCatalog.mockResolvedValue(catalogFixture);
   mockListPricingChangeRequests.mockResolvedValue([]);
   mockCreatePricingChangeRequest.mockResolvedValue({
     id: "change-1",
@@ -148,24 +228,47 @@ beforeEach(() => {
 });
 
 describe("AdminPlansPage", () => {
-  it("loads tier plans and submits edits for approval", async () => {
+  it("loads plans and billing products from the admin catalog", async () => {
     render(<AdminPlansPage />);
 
     expect(
-      await screen.findByRole("heading", { name: "Paid Tier Plans" }),
+      await screen.findByRole("heading", { name: "Pricing Catalog" }),
     ).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Starter")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Pay Per Event")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Creator")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Pro Photographer")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Studio")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Elite Studio")).toBeInTheDocument();
+    expect(screen.getAllByDisplayValue("Event upload").length).toBeGreaterThan(
+      0,
+    );
+    expect(screen.getByDisplayValue("Wedding upload")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Extend +30 days")).toBeInTheDocument();
+    expect(
+      screen.getByDisplayValue("Download + archive forever"),
+    ).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Boost 50")).toBeInTheDocument();
+    expect(screen.getByText("active plans")).toBeInTheDocument();
+    expect(screen.getByText("active products")).toBeInTheDocument();
+  });
+
+  it("submits plan edits for approval", async () => {
+    render(<AdminPlansPage />);
+
     expect(await screen.findByDisplayValue("Creator")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByDisplayValue("499"), {
+    fireEvent.change(screen.getAllByDisplayValue("499")[0], {
       target: { value: "149" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Submit change" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Submit plan change" })[2]);
 
     await waitFor(() => {
       expect(mockCreatePricingChangeRequest).toHaveBeenCalledWith(
         "test-token",
         expect.objectContaining({
           request_type: "plan_update",
+          target_type: "subscription_plan",
           target_key: "creator",
           after_state: expect.objectContaining({
             monthly_price_paise: 14900,
@@ -179,31 +282,49 @@ describe("AdminPlansPage", () => {
       "change-1",
     );
     expect(
-      await screen.findByText("Creator pricing change submitted for approval."),
+      await screen.findByText("Creator catalog change submitted for approval."),
     ).toBeInTheDocument();
   });
 
-  it("shows only editable paid subscription tiers", async () => {
-    mockListAdminPlans.mockResolvedValueOnce([
-      starterPlan,
-      payPerEventPlan,
-      creatorPlan,
-      proPlan,
-      studioPlan,
-      elitePlan,
-    ]);
-
+  it("submits billing product edits with structured metadata", async () => {
     render(<AdminPlansPage />);
 
-    expect(await screen.findByDisplayValue("Creator")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Pro Photographer")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Studio")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Elite Studio")).toBeInTheDocument();
-    expect(screen.queryByDisplayValue("Starter")).not.toBeInTheDocument();
-    expect(screen.queryByDisplayValue("Pay Per Event")).not.toBeInTheDocument();
-    expect(screen.getByText("MOST POPULAR")).toBeInTheDocument();
-    expect(screen.getByText("BEST VALUE")).toBeInTheDocument();
-    expect(screen.getByText("4")).toBeInTheDocument();
-    expect(screen.getByText("active paid plans")).toBeInTheDocument();
+    const eventUploadFields = await screen.findAllByDisplayValue("Event upload");
+    const eventUploadNameInput =
+      eventUploadFields.find(
+        (field) => field.tagName.toLowerCase() === "input",
+      ) ?? eventUploadFields[0];
+
+    fireEvent.change(eventUploadNameInput, {
+      target: { value: "Event Upload Plus" },
+    });
+    fireEvent.change(screen.getAllByDisplayValue("30")[0], {
+      target: { value: "45" },
+    });
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Submit product change" })[0],
+    );
+
+    await waitFor(() => {
+      expect(mockCreatePricingChangeRequest).toHaveBeenCalledWith(
+        "test-token",
+        expect.objectContaining({
+          request_type: "product_update",
+          target_type: "billing_product",
+          target_key: "event_upload_standard",
+          after_state: expect.objectContaining({
+            code: "event_upload_standard",
+            product_type: "event_upload",
+            name: "Event Upload Plus",
+            metadata: expect.objectContaining({
+              active_days: 45,
+              upload_window_days: 30,
+              retention_days: 90,
+              upload_credits: 500,
+            }),
+          }),
+        }),
+      );
+    });
   });
 });

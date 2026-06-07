@@ -250,6 +250,19 @@ func (s *PricingChangeRequestService) PreviewCatalog(ctx context.Context, id uui
 			catalog.Plans = append(catalog.Plans, plan)
 		}
 	}
+	if req.TargetType == "billing_product" && (req.RequestType == "product_update" || req.RequestType == "product_create") {
+		product, err := billingProductFromMap(req.AfterState)
+		if err != nil {
+			return PricingCatalog{}, err
+		}
+		product.VersionID = "preview"
+		product.Version = 0
+		product.EffectiveFrom = time.Now().UTC()
+		replaceProductInCatalog(&catalog, product)
+	}
+	if req.TargetType == "billing_product" && req.RequestType == "product_archive" {
+		removeProductFromCatalog(&catalog, strings.TrimSpace(req.TargetKey))
+	}
 	return catalog, nil
 }
 
@@ -345,6 +358,8 @@ func (s *PricingChangeRequestService) applyPublishedChange(ctx context.Context, 
 	switch req.TargetType {
 	case "subscription_plan":
 		return publishSubscriptionPlanChange(ctx, q, req)
+	case "billing_product":
+		return publishBillingProductChange(ctx, q, req)
 	default:
 		return nil
 	}
@@ -353,6 +368,9 @@ func (s *PricingChangeRequestService) applyPublishedChange(ctx context.Context, 
 func publishSubscriptionPlanChange(ctx context.Context, q subscriptionCatalogBackfillDB, req PricingChangeRequest) error {
 	plan, err := planCatalogEntryFromMap(req.AfterState)
 	if err != nil {
+		return err
+	}
+	if err := validateGovernedPlan(plan); err != nil {
 		return err
 	}
 	if req.RequestType == "plan_archive" {
@@ -418,6 +436,101 @@ func publishSubscriptionPlanChange(ctx context.Context, q subscriptionCatalogBac
 	return err
 }
 
+func publishBillingProductChange(ctx context.Context, q subscriptionCatalogBackfillDB, req PricingChangeRequest) error {
+	if req.RequestType == "product_archive" {
+		code := strings.TrimSpace(req.TargetKey)
+		if code == "" {
+			return errors.New("product code required")
+		}
+		if _, err := q.Exec(ctx, `
+			UPDATE billing_products
+			   SET active = FALSE, archived_at = NOW(), updated_at = NOW()
+			 WHERE code = $1
+		`, code); err != nil {
+			return err
+		}
+		var archivedVersion int
+		err := q.QueryRow(ctx, `
+			WITH current_version AS (
+				SELECT name, description, currency, price_paise, billing_interval,
+				       metadata, rank
+				  FROM billing_product_versions
+				 WHERE product_code = $1
+				   AND status IN ('approved', 'published')
+				   AND archived_at IS NULL
+				 ORDER BY effective_from DESC, version DESC
+				 LIMIT 1
+			), next_version AS (
+				SELECT COALESCE(MAX(version), 0) + 1 AS version
+				  FROM billing_product_versions
+				 WHERE product_code = $1
+			)
+			INSERT INTO billing_product_versions (
+				product_code, version, status, name, description, currency,
+				price_paise, billing_interval, metadata, active, rank,
+				effective_from, approved_at, archived_at
+			)
+			SELECT $1, next_version.version, 'approved', current_version.name,
+			       current_version.description, current_version.currency,
+			       current_version.price_paise, current_version.billing_interval,
+			       current_version.metadata, FALSE, current_version.rank,
+			       COALESCE($2::timestamptz, NOW()), NOW(), NOW()
+			  FROM current_version, next_version
+			RETURNING version
+		`, code, req.EffectiveFrom).Scan(&archivedVersion)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return errors.New("product version not found")
+		}
+		return err
+	}
+
+	product, err := billingProductFromMap(req.AfterState)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(req.TargetKey) != "" && req.RequestType != "product_create" && product.Code != strings.TrimSpace(req.TargetKey) {
+		return errors.New("product code cannot be changed")
+	}
+	metadataJSON, err := marshalJSONMap(product.Metadata)
+	if err != nil {
+		return err
+	}
+	_, err = q.Exec(ctx, `
+		INSERT INTO billing_products (
+			code, product_type, name, description, active, rank, archived_at
+		) VALUES ($1, $2, $3, $4, $5, $6, NULL)
+		ON CONFLICT (code) DO UPDATE
+		   SET product_type = billing_products.product_type,
+		       name = EXCLUDED.name,
+		       description = EXCLUDED.description,
+		       active = EXCLUDED.active,
+		       rank = EXCLUDED.rank,
+		       archived_at = CASE WHEN EXCLUDED.active THEN NULL ELSE billing_products.archived_at END,
+		       updated_at = NOW()
+	`, product.Code, product.ProductType, product.Name, product.Description, product.Active, product.Rank)
+	if err != nil {
+		return err
+	}
+	_, err = q.Exec(ctx, `
+		WITH next_version AS (
+			SELECT COALESCE(MAX(version), 0) + 1 AS version
+			  FROM billing_product_versions
+			 WHERE product_code = $1
+		)
+		INSERT INTO billing_product_versions (
+			product_code, version, status, name, description, currency,
+			price_paise, billing_interval, metadata, active, rank,
+			effective_from, approved_at
+		)
+		SELECT $1, next_version.version, 'approved', $2, $3, $4,
+		       $5, $6, $7::jsonb, $8, $9, COALESCE($10::timestamptz, NOW()), NOW()
+		  FROM next_version
+	`, product.Code, product.Name, product.Description, product.Currency,
+		product.PricePaise, product.BillingInterval, metadataJSON, product.Active,
+		product.Rank, req.EffectiveFrom)
+	return err
+}
+
 func enqueuePricingChangeNotices(ctx context.Context, q subscriptionCatalogBackfillDB, req PricingChangeRequest) error {
 	if req.TargetType != "subscription_plan" || strings.TrimSpace(req.TargetKey) == "" {
 		return nil
@@ -462,6 +575,20 @@ func enqueuePricingChangeNotices(ctx context.Context, q subscriptionCatalogBackf
 		req.ID, req.TargetKey, batchID,
 	)
 	return err
+}
+
+func validateGovernedPlan(plan PlanCatalogEntry) error {
+	switch plan.Tier {
+	case "free":
+		if plan.Paid || plan.MonthlyPricePaise != 0 || plan.AnnualPricePaise != 0 {
+			return errors.New("starter/free plan cannot be made paid")
+		}
+	case "pay_per_event":
+		if plan.SelfServe {
+			return errors.New("pay per event cannot be a subscription signup or upgrade target")
+		}
+	}
+	return nil
 }
 
 func planCatalogEntryFromMap(values map[string]any) (PlanCatalogEntry, error) {
@@ -518,6 +645,125 @@ func planCatalogEntryFromMap(values map[string]any) (PlanCatalogEntry, error) {
 		TrialDays:         raw.TrialDays,
 		Rank:              raw.Rank,
 	}, nil
+}
+
+func billingProductFromMap(values map[string]any) (BillingProductCatalog, error) {
+	body, err := json.Marshal(values)
+	if err != nil {
+		return BillingProductCatalog{}, err
+	}
+	var raw struct {
+		Code            string         `json:"code"`
+		ProductType     string         `json:"product_type"`
+		Name            string         `json:"name"`
+		Description     string         `json:"description"`
+		Currency        string         `json:"currency"`
+		PricePaise      int64          `json:"price_paise"`
+		BillingInterval string         `json:"billing_interval"`
+		Metadata        map[string]any `json:"metadata"`
+		Rank            int            `json:"rank"`
+		Active          *bool          `json:"active"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return BillingProductCatalog{}, err
+	}
+	raw.Code = strings.TrimSpace(raw.Code)
+	raw.ProductType = strings.TrimSpace(raw.ProductType)
+	if raw.Code == "" || raw.ProductType == "" || strings.TrimSpace(raw.Name) == "" {
+		return BillingProductCatalog{}, errors.New("product code, type, and name required")
+	}
+	if !validBillingProductType(raw.ProductType) {
+		return BillingProductCatalog{}, errors.New("invalid product type")
+	}
+	if raw.PricePaise < 0 {
+		return BillingProductCatalog{}, errors.New("price_paise must be non-negative")
+	}
+	if raw.Rank < 0 {
+		return BillingProductCatalog{}, errors.New("rank must be non-negative")
+	}
+	if raw.Currency == "" {
+		raw.Currency = "INR"
+	}
+	if raw.BillingInterval == "" {
+		raw.BillingInterval = "one_time"
+	}
+	if !validBillingInterval(raw.BillingInterval) {
+		return BillingProductCatalog{}, errors.New("invalid billing interval")
+	}
+	active := true
+	if raw.Active != nil {
+		active = *raw.Active
+	}
+	if raw.Metadata == nil {
+		raw.Metadata = map[string]any{}
+	}
+	return BillingProductCatalog{
+		Code:            raw.Code,
+		ProductType:     raw.ProductType,
+		Name:            strings.TrimSpace(raw.Name),
+		Description:     strings.TrimSpace(raw.Description),
+		Currency:        strings.ToUpper(strings.TrimSpace(raw.Currency)),
+		PricePaise:      raw.PricePaise,
+		BillingInterval: raw.BillingInterval,
+		Metadata:        raw.Metadata,
+		Rank:            raw.Rank,
+		Active:          active,
+	}, nil
+}
+
+func validBillingProductType(productType string) bool {
+	switch productType {
+	case "event_upload", "gallery_extension", "storage_booster", "upload_credit_pack", "streaming_pack":
+		return true
+	default:
+		return false
+	}
+}
+
+func validBillingInterval(interval string) bool {
+	switch interval {
+	case "one_time", "monthly", "annual":
+		return true
+	default:
+		return false
+	}
+}
+
+func replaceProductInCatalog(catalog *PricingCatalog, product BillingProductCatalog) {
+	switch product.ProductType {
+	case "event_upload":
+		catalog.EventPacks = replaceProduct(catalog.EventPacks, product)
+	case "gallery_extension":
+		catalog.GalleryExtensions = replaceProduct(catalog.GalleryExtensions, product)
+	case "storage_booster":
+		catalog.StorageBoosters = replaceProduct(catalog.StorageBoosters, product)
+	}
+}
+
+func replaceProduct(products []BillingProductCatalog, product BillingProductCatalog) []BillingProductCatalog {
+	for i := range products {
+		if products[i].Code == product.Code {
+			products[i] = product
+			return products
+		}
+	}
+	return append(products, product)
+}
+
+func removeProductFromCatalog(catalog *PricingCatalog, code string) {
+	catalog.EventPacks = removeProduct(catalog.EventPacks, code)
+	catalog.GalleryExtensions = removeProduct(catalog.GalleryExtensions, code)
+	catalog.StorageBoosters = removeProduct(catalog.StorageBoosters, code)
+}
+
+func removeProduct(products []BillingProductCatalog, code string) []BillingProductCatalog {
+	out := products[:0]
+	for _, product := range products {
+		if product.Code != code {
+			out = append(out, product)
+		}
+	}
+	return out
 }
 
 func scanPricingChangeRequest(row pgx.Row) (PricingChangeRequest, error) {
