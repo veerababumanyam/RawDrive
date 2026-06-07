@@ -3,19 +3,39 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/rawdrive/backend/internal/face"
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/storage"
 )
 
+// faceDetector is the per-asset detection seam the worker depends on. The
+// concrete *FaceService satisfies it; a fake satisfies it in unit tests so the
+// whole-batch-outage decision logic is testable without a DB or live sidecar.
+type faceDetector interface {
+	DetectAndStore(ctx context.Context, assetID, workspaceID uuid.UUID, galleryID *uuid.UUID) (int, error)
+}
+
+// faceJobSink is the job-disposition seam the worker depends on for a single
+// job's lifecycle writes. The concrete *JobRepo satisfies it; a fake records the
+// terminal done/failed disposition in unit tests.
+type faceJobSink interface {
+	UpdateProgress(ctx context.Context, id uuid.UUID, status string, processed int) error
+	MarkDone(ctx context.Context, id uuid.UUID, result map[string]any) error
+	MarkFailed(ctx context.Context, id uuid.UUID, errMsg string) error
+}
+
 // FaceWorker polls for pending face detection jobs and processes them.
 type FaceWorker struct {
 	jobRepo      *JobRepo
-	faceSvc      *FaceService
+	jobSink      faceJobSink // per-job lifecycle writes (defaults to jobRepo)
+	faceSvc      faceDetector
 	assetRepo    *repository.AssetRepo
 	galleryRepo  *repository.GalleryRepo // optional — when nil, privacy opt-out is skipped
 	store        storage.Provider
@@ -27,6 +47,7 @@ type FaceWorker struct {
 func NewFaceWorker(jobRepo *JobRepo, faceSvc *FaceService, assetRepo *repository.AssetRepo, store storage.Provider) *FaceWorker {
 	return &FaceWorker{
 		jobRepo:      jobRepo,
+		jobSink:      jobRepo,
 		faceSvc:      faceSvc,
 		assetRepo:    assetRepo,
 		store:        store,
@@ -83,10 +104,14 @@ func (w *FaceWorker) processNextBatch(ctx context.Context) {
 		return
 	}
 
+	sink := w.jobSink
+	if sink == nil {
+		sink = w.jobRepo
+	}
 	for _, job := range jobs {
 		if err := w.processJob(ctx, job); err != nil {
 			log.Printf("face worker: job %s failed: %v", job.ID, err)
-			_ = w.jobRepo.MarkFailed(ctx, job.ID, err.Error())
+			_ = sink.MarkFailed(ctx, job.ID, err.Error())
 			continue
 		}
 	}
@@ -109,7 +134,11 @@ func shouldReportFaceProgress(index, total int) bool {
 }
 
 func (w *FaceWorker) processJob(ctx context.Context, job *AIJob) error {
-	_ = w.jobRepo.UpdateProgress(ctx, job.ID, "running", 0)
+	sink := w.jobSink
+	if sink == nil {
+		sink = w.jobRepo
+	}
+	_ = sink.UpdateProgress(ctx, job.ID, "running", 0)
 
 	// Extract asset IDs from job result
 	var assetIDs []uuid.UUID
@@ -119,7 +148,7 @@ func (w *FaceWorker) processJob(ctx context.Context, job *AIJob) error {
 	}
 
 	if len(assetIDs) == 0 {
-		return w.jobRepo.MarkDone(ctx, job.ID, map[string]any{"processed": 0, "faces_found": 0})
+		return sink.MarkDone(ctx, job.ID, map[string]any{"processed": 0, "faces_found": 0})
 	}
 
 	var galleryID *uuid.UUID
@@ -139,12 +168,12 @@ func (w *FaceWorker) processJob(ctx context.Context, job *AIJob) error {
 		if err != nil {
 			log.Printf("face worker: gallery %s opt-out check failed: %v", *galleryID, err)
 			// Fail closed: mark the job failed so an operator can investigate.
-			return w.jobRepo.MarkFailed(ctx, job.ID, "gallery opt-out check failed: "+err.Error())
+			return sink.MarkFailed(ctx, job.ID, "gallery opt-out check failed: "+err.Error())
 		}
 		if !enabled {
 			log.Printf("face worker: gallery %s opted out of face detection; skipping %d asset(s)",
 				*galleryID, len(assetIDs))
-			return w.jobRepo.MarkDone(ctx, job.ID, map[string]any{
+			return sink.MarkDone(ctx, job.ID, map[string]any{
 				"processed":   0,
 				"faces_found": 0,
 				"skipped":     len(assetIDs),
@@ -154,13 +183,24 @@ func (w *FaceWorker) processJob(ctx context.Context, job *AIJob) error {
 	}
 
 	totalFaces := 0
+	unavailableCount := 0
 	for i, assetID := range assetIDs {
 		// DetectAndStore now returns the per-asset face count, so we no longer
 		// issue a separate GetFacesByAsset query per asset (was an N+1).
 		count, err := w.faceSvc.DetectAndStore(ctx, assetID, job.WorkspaceID, galleryID)
 		if err != nil {
 			log.Printf("face worker: asset %s: %v", assetID, err)
-			// Continue processing remaining assets.
+			// A sidecar-unavailable error (face-svc 503 / unreachable) is a
+			// transient infra outage, not a per-asset defect like a corrupt
+			// image. Tally these separately so we can distinguish a WHOLE-BATCH
+			// outage (mark failed/retryable) from one bad asset (continue).
+			if errors.Is(err, face.ErrServiceUnavailable) {
+				unavailableCount++
+			}
+			// Continue processing remaining assets either way: a single decode
+			// error must not abort the batch, and counting outages requires
+			// probing the rest so a brief blip doesn't fail an otherwise-healthy
+			// run.
 		} else {
 			totalFaces += count
 		}
@@ -168,12 +208,44 @@ func (w *FaceWorker) processJob(ctx context.Context, job *AIJob) error {
 		// writes. Report every faceProgressBatchSize assets and always on the
 		// last one, so progress writes scale sub-linearly with asset count.
 		if shouldReportFaceProgress(i, len(assetIDs)) {
-			_ = w.jobRepo.UpdateProgress(ctx, job.ID, "running", i+1)
+			_ = sink.UpdateProgress(ctx, job.ID, "running", i+1)
 		}
 	}
 
-	return w.jobRepo.MarkDone(ctx, job.ID, map[string]any{
+	// Whole-batch sidecar outage: when the sidecar was unavailable for (nearly)
+	// every asset, this scan is not a real "0 faces found" result — it is a
+	// transient face-svc outage. Returning an error makes processNextBatch mark
+	// the job FAILED (not done), so the empty scan isn't permanently committed.
+	// processNextBatch does NOT re-enqueue failed jobs (ClaimPending only claims
+	// 'pending' or lease-expired 'running' rows), so this is a single bounded
+	// attempt — a persistently-down sidecar fails the job once and stops rather
+	// than reclaiming forever. An operator (or a re-enqueue) retries deliberately.
+	if isWholeBatchOutage(unavailableCount, len(assetIDs)) {
+		return fmt.Errorf("face worker: whole-batch sidecar outage: %d/%d asset(s) returned %w; marking job failed/retryable",
+			unavailableCount, len(assetIDs), face.ErrServiceUnavailable)
+	}
+
+	return sink.MarkDone(ctx, job.ID, map[string]any{
 		"processed":   len(assetIDs),
 		"faces_found": totalFaces,
 	})
+}
+
+// faceBatchOutageThreshold is the fraction of a batch's asset calls that must
+// return ErrServiceUnavailable for the batch to count as a whole-sidecar outage.
+// At 1.0 we require EVERY call to be unavailable, which most conservatively
+// avoids failing a job for a transient blip on a minority of assets while still
+// catching a real total outage. (A genuinely empty-but-healthy batch reports 0
+// unavailable calls and so never trips this.)
+const faceBatchOutageThreshold = 1.0
+
+// isWholeBatchOutage reports whether a batch should be treated as a sidecar
+// outage (→ job failed/retryable) rather than a completed scan. Pure +
+// deterministic so the policy is unit-testable. A batch with zero assets or zero
+// unavailable calls is never an outage.
+func isWholeBatchOutage(unavailable, total int) bool {
+	if total <= 0 || unavailable <= 0 {
+		return false
+	}
+	return float64(unavailable) >= faceBatchOutageThreshold*float64(total)
 }
