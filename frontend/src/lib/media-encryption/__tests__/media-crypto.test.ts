@@ -68,5 +68,6 @@ describe("media E2EE crypto", () => {
     );
     expect(new URL(shared).search).toBe("?album=a1");
     expect(readGalleryKeyFromHash(new URL(shared).hash)).toBe(exported);
+    expect(readGalleryKeyFromHash("#rq_key=legacy-key")).toBe("legacy-key");
   });
 });

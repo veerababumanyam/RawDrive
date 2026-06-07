@@ -23,10 +23,52 @@ describe("media encryption share URLs", () => {
 
     expect(
       appendStoredGalleryKeyFragment(
-        "https://app.rawdrive.test/g/wedding?album=family",
-        "gallery-share-test",
-      ),
+      "https://app.rawdrive.test/g/wedding?album=family",
+      "gallery-share-test",
+    ),
     ).toBe("https://app.rawdrive.test/g/wedding?album=family#rd_key=storedExportedKey");
+  });
+
+  it("prefers the stored key matching the gallery's current encrypted media", () => {
+    window.localStorage.setItem(
+      "rawdrive:media-key-active:gallery:gallery-share-test",
+      "gallery:gallery-share-test:stale",
+    );
+    window.localStorage.setItem(
+      "rawdrive:media-key:gallery:gallery-share-test:stale",
+      "staleExportedKey",
+    );
+    window.localStorage.setItem(
+      "rawdrive:media-key:gallery:gallery-share-test:current",
+      "currentExportedKey",
+    );
+
+    expect(
+      appendStoredGalleryKeyFragment(
+        "https://app.rawdrive.test/g/wedding",
+        "gallery-share-test",
+        ["gallery:gallery-share-test:current"],
+      ),
+    ).toBe("https://app.rawdrive.test/g/wedding#rd_key=currentExportedKey");
+  });
+
+  it("does not append a stale active key when expected media keys are missing", () => {
+    window.localStorage.setItem(
+      "rawdrive:media-key-active:gallery:gallery-share-missing-test",
+      "gallery:gallery-share-missing-test:stale",
+    );
+    window.localStorage.setItem(
+      "rawdrive:media-key:gallery:gallery-share-missing-test:stale",
+      "staleExportedKey",
+    );
+
+    expect(
+      appendStoredGalleryKeyFragment(
+        "https://app.rawdrive.test/g/wedding",
+        "gallery-share-missing-test",
+        ["gallery:gallery-share-missing-test:current"],
+      ),
+    ).toBe("https://app.rawdrive.test/g/wedding");
   });
 
   it("keeps share tokens in the search params before the encrypted media key fragment", () => {

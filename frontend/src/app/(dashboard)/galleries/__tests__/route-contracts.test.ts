@@ -107,9 +107,12 @@ describe("gallery route contracts", () => {
     expect(source).toContain(
       "Publish this gallery before sharing client links.",
     );
-    expect(source).toContain(
-      "appendStoredGalleryKeyFragment(base, gallery.id)",
+    expect(source).toContain("mediaKeyIdsForAsset");
+    expect(source).toMatch(
+      /appendStoredGalleryKeyFragment\(\s*base,\s*gallery\.id,\s*mediaKeyIdsForAsset\(coverAsset \?\? gallery\.cover_asset\),\s*\)/,
     );
+    expect(source).toContain("gallery.cover_asset ??");
+    expect(source).toContain("coverAssets[coverAssetId]");
   });
 
   it("creates durable share links before copying gallery-detail public URLs", () => {

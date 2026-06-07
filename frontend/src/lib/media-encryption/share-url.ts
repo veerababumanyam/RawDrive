@@ -6,9 +6,14 @@ const ABSOLUTE_URL_RE = /^[a-z][a-z\d+\-.]*:/i;
 export function appendStoredGalleryKeyFragment(
   url: string,
   galleryId: string | null | undefined,
+  expectedKeyIds: readonly string[] = [],
 ): string {
   if (!url || !galleryId) return url;
-  const key = getStoredExportedMediaKey(galleryKeyId(galleryId));
+  const key =
+    expectedKeyIds.map(getStoredExportedMediaKey).find(Boolean) ??
+    (expectedKeyIds.length === 0
+      ? getStoredExportedMediaKey(galleryKeyId(galleryId))
+      : null);
   return key ? appendGalleryKeyFragment(url, key) : url;
 }
 

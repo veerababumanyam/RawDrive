@@ -4,6 +4,7 @@ const KEY_LENGTH_BITS = 256;
 const GCM_IV_BYTES = 12;
 const ENCRYPTED_MEDIA_CONTENT_TYPE = "application/vnd.rawdrive.encrypted";
 const SHARE_KEY_PARAM = "rd_key";
+const LEGACY_SHARE_KEY_PARAMS = ["rq_key"] as const;
 
 export type MediaEncryptionManifest = {
   scheme: typeof SCHEME;
@@ -132,7 +133,11 @@ export function readGalleryKeyFromHash(hash: string | undefined | null): string 
   if (!hash) return null;
   const rawHash = hash.startsWith("#") ? hash.slice(1) : hash;
   const params = new URLSearchParams(rawHash);
-  return params.get(SHARE_KEY_PARAM);
+  return (
+    params.get(SHARE_KEY_PARAM) ??
+    LEGACY_SHARE_KEY_PARAMS.map((name) => params.get(name)).find(Boolean) ??
+    null
+  );
 }
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {

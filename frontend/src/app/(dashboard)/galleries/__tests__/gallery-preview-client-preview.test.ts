@@ -43,7 +43,11 @@ describe("Preview as client shared public render contract", () => {
   it("uses the server canonical URL instead of rebuilding from dashboard origin", () => {
     const source = read(previewPagePath);
     expect(source).toContain("publicUrl: result.public_url || \"\"");
-    expect(source).toContain("appendStoredGalleryKeyFragment(payload.publicUrl, id)");
+    expect(source).toContain("mediaKeyIdsForAsset");
+    expect(source).toContain("const expectedKeyIds = Array.from(");
+    expect(source).toMatch(
+      /appendStoredGalleryKeyFragment\(\s*payload\.publicUrl,\s*id,\s*expectedKeyIds,\s*\)/,
+    );
     expect(source).toContain("createGalleryShareLink");
     expect(source).toContain("setUrlSearchParamBeforeFragment(");
     expect(source).toContain("created.token");

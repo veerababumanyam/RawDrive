@@ -14,6 +14,7 @@ import {
   appendStoredGalleryKeyFragment,
   setUrlSearchParamBeforeFragment,
 } from "@/lib/media-encryption/share-url";
+import { mediaKeyIdsForAsset } from "@/lib/media-encryption/asset-media";
 
 interface GalleryShareCenterProps {
   gallery: Gallery;
@@ -59,8 +60,9 @@ export function GalleryShareCenter({
     return appendStoredGalleryKeyFragment(
       galleryPublicUrl({ slug: gallerySlug }),
       galleryId,
+      mediaKeyIdsForAsset(gallery.cover_asset),
     );
-  }, [galleryId, gallerySlug]);
+  }, [gallery.cover_asset, galleryId, gallerySlug]);
   const legacyUrl = ""; // unused in the orphan state — keep variable for JSX below
 
   useEffect(() => {

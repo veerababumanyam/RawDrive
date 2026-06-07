@@ -24,6 +24,7 @@ import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import {
   GRID_VARIANTS,
+  mediaKeyIdsForAsset,
   type EncryptedAssetLike,
 } from "@/lib/media-encryption/asset-media";
 import {
@@ -189,10 +190,15 @@ function GalleryPublishSwitch({
 function buildGalleryCardShareUrl(
   gallery: Gallery,
   workspaceProfile: WorkspaceProfile | null,
+  coverAsset?: EncryptedAssetLike | null,
 ): string {
   if (!gallery.slug) return "";
   const base = galleryPublicUrl(gallery, workspaceProfile);
-  return appendStoredGalleryKeyFragment(base, gallery.id);
+  return appendStoredGalleryKeyFragment(
+    base,
+    gallery.id,
+    mediaKeyIdsForAsset(coverAsset ?? gallery.cover_asset),
+  );
 }
 
 function buildGalleryShareText(gallery: Gallery, url: string): string {
@@ -663,7 +669,18 @@ export default function GalleriesPage() {
       throw new Error("Publish this gallery before sharing client links.");
     }
 
-    const baseUrl = buildGalleryCardShareUrl(gallery, workspaceProfile);
+    const coverAssetId = readGalleryCoverAssetId(
+      gallery.settings,
+      gallery.cover_asset_id,
+    );
+    const coverAsset =
+      gallery.cover_asset ??
+      (coverAssetId ? coverAssets[coverAssetId] : undefined);
+    const baseUrl = buildGalleryCardShareUrl(
+      gallery,
+      workspaceProfile,
+      coverAsset,
+    );
     if (!baseUrl) {
       throw new Error("Share link unavailable: gallery URL is missing.");
     }
@@ -1276,7 +1293,11 @@ export default function GalleriesPage() {
             const coverAsset =
               g.cover_asset ??
               (coverAssetId ? coverAssets[coverAssetId] : undefined);
-            const shareUrl = buildGalleryCardShareUrl(g, workspaceProfile);
+            const shareUrl = buildGalleryCardShareUrl(
+              g,
+              workspaceProfile,
+              coverAsset,
+            );
 
             const galleryHref = `/galleries/${g.id}`;
 

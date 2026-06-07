@@ -30,6 +30,7 @@ import {
   appendStoredGalleryKeyFragment,
   setUrlSearchParamBeforeFragment,
 } from "@/lib/media-encryption/share-url";
+import { mediaKeyIdsForAsset } from "@/lib/media-encryption/asset-media";
 
 interface PreviewPayload {
   gallery: Gallery;
@@ -149,8 +150,15 @@ export default function GalleryPreviewPage({
   );
   const publicUrl = useMemo(() => {
     if (!payload?.publicUrl) return "";
-    return appendStoredGalleryKeyFragment(payload.publicUrl, id);
-  }, [id, payload]);
+    const expectedKeyIds = Array.from(
+      new Set(assets.flatMap((asset) => mediaKeyIdsForAsset(asset))),
+    );
+    return appendStoredGalleryKeyFragment(
+      payload.publicUrl,
+      id,
+      expectedKeyIds,
+    );
+  }, [assets, id, payload]);
   const getPreviewShareUrl = useCallback(async () => {
     if (previewShareUrlRef.current) return previewShareUrlRef.current;
     if (!gallery || !payload?.isPublished) {

@@ -43,7 +43,10 @@ import {
   appendStoredGalleryKeyFragment,
   setUrlSearchParamBeforeFragment,
 } from "@/lib/media-encryption/share-url";
-import { GRID_VARIANTS } from "@/lib/media-encryption/asset-media";
+import {
+  GRID_VARIANTS,
+  mediaKeyIdsForAsset,
+} from "@/lib/media-encryption/asset-media";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { indexAssetFacesFromBrowser } from "@/lib/media-encryption/face-index-browser";
 import { isFaceIndexUnavailableError } from "@/lib/api/ai";
@@ -494,6 +497,15 @@ export default function GalleryDetailPage({
     () => assets.map((entry) => entry.asset),
     [assets],
   );
+  const shareMediaKeyIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          galleryMediaAssets.flatMap((asset) => mediaKeyIdsForAsset(asset)),
+        ),
+      ),
+    [galleryMediaAssets],
+  );
   const lockedMediaRecoverySummary = useLockedMediaRecoverySummary(
     galleryMediaAssets,
     id,
@@ -872,9 +884,9 @@ export default function GalleryDetailPage({
         const sep = base.includes("?") ? "&" : "?";
         return `${base}${sep}album=${encodeURIComponent(albumId)}`;
       })();
-      return appendStoredGalleryKeyFragment(withAlbum, id);
+      return appendStoredGalleryKeyFragment(withAlbum, id, shareMediaKeyIds);
     },
-    [gallery, id, workspaceProfile],
+    [gallery, id, shareMediaKeyIds, workspaceProfile],
   );
 
   const createWorkingShareUrl = useCallback(
@@ -1018,7 +1030,12 @@ export default function GalleryDetailPage({
       e.stopPropagation();
       if (!gallery?.slug) return;
       const baseUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/g/${gallery.slug}/photo/${assetId}`;
-      const url = appendStoredGalleryKeyFragment(baseUrl, id);
+      const asset = assets.find((entry) => entry.asset_id === assetId)?.asset;
+      const url = appendStoredGalleryKeyFragment(
+        baseUrl,
+        id,
+        mediaKeyIdsForAsset(asset),
+      );
       try {
         if (typeof navigator !== "undefined" && "share" in navigator) {
           await (
@@ -1044,7 +1061,7 @@ export default function GalleryDetailPage({
       setCopiedAssetId(assetId);
       setTimeout(() => setCopiedAssetId(null), 2000);
     },
-    [gallery, id],
+    [assets, gallery, id],
   );
 
   const handleStopFaceIndexRun = useCallback(() => {
