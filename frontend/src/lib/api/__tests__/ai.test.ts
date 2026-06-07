@@ -676,9 +676,11 @@ describe("uploadAssetFaceIndexImage (server-assisted encrypted face index)", () 
       caught = err;
     }
     expect(isFaceIndexUnavailableError(caught)).toBe(true);
+    // 503 = sidecar down: the "try again when healthy" wording is accurate.
+    expect((caught as Error).message).toMatch(/healthy/i);
   });
 
-  it("maps a gated-off 404 'feature not available' to the typed unavailable error", async () => {
+  it("maps a gated-off 404 'feature not available' to a typed-but-honest 'turned off' error", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 404,
@@ -695,6 +697,9 @@ describe("uploadAssetFaceIndexImage (server-assisted encrypted face index)", () 
       caught = err;
     }
     expect(isFaceIndexUnavailableError(caught)).toBe(true);
+    // 404 = deliberately gated off: the message must say so, NOT imply an outage.
+    expect((caught as Error).message).toMatch(/turned off/i);
+    expect((caught as Error).message).not.toMatch(/healthy/i);
   });
 
   it("keeps a genuine asset-not-found 404 a hard error (not unavailable)", async () => {

@@ -650,20 +650,25 @@ export async function uploadAssetFaceIndexImage(
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    // The plaintext face-index path is gated by the server_face_index_plaintext
-    // kill switch (off by default) and by the workspace face-recognition opt-in.
-    // When gated off the backend returns 404 {"error":"feature not available"};
-    // when the face-svc sidecar is down it returns 503 {"error":"face_index_unavailable"}.
-    // Both mean "indexing did not happen, and retrying now will not help" — surface
-    // them as the same honest FaceIndexUnavailableError so the upload row flags
-    // faceIndexUnavailable (re-sync later) instead of completing as if indexed, and
-    // the Sync-Now path stops churning. The body-text guard keeps a genuine
-    // asset-not-found 404 (different body) a hard error.
-    if (
-      (res.status === 503 && text.includes("face_index_unavailable")) ||
-      (res.status === 404 && text.includes("feature not available"))
-    ) {
+    // Both 503 and the gated-off 404 mean "indexing did not happen, and retrying
+    // now will not help" — surface them as the typed FaceIndexUnavailableError so
+    // the upload row flags faceIndexUnavailable (re-sync later) instead of
+    // completing as if indexed, and the Sync-Now path stops churning. But they
+    // are NOT the same condition, so they carry different messages:
+    //   503 {"error":"face_index_unavailable"} — the face-svc sidecar is DOWN.
+    //     Transient: "try again after the service is healthy" is accurate.
+    //   404 {"error":"feature not available"}  — the plaintext path is GATED OFF
+    //     (server_face_index_plaintext kill switch / workspace face-recognition
+    //     opt-in is disabled). The service is healthy; the feature is deliberately
+    //     turned off, so "try again when healthy" would mislead — say so honestly.
+    // The body-text guard keeps a genuine asset-not-found 404 a hard error.
+    if (res.status === 503 && text.includes("face_index_unavailable")) {
       throw new FaceIndexUnavailableError();
+    }
+    if (res.status === 404 && text.includes("feature not available")) {
+      throw new FaceIndexUnavailableError(
+        "Face recognition is turned off for this workspace.",
+      );
     }
     throw new Error(text || `Face index image upload failed: ${res.status}`);
   }
