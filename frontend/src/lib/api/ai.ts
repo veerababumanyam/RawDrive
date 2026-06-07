@@ -498,6 +498,12 @@ export interface PublicFaceSearchResponse {
 export interface PublicGalleryScope {
   shareToken?: string | null;
   ws?: string | null;
+  // Affirmative biometric consent (GAL-FR-107). When the guest has accepted the
+  // consent affordance, the standalone Find-Me page passes `consentGiven: true`
+  // so the photo-search POST carries `consent_given=true` in its multipart body.
+  // The 3b backend returns 403 `biometric_consent_required` without it, so this
+  // flag is REQUIRED for the search to proceed — never default it to true.
+  consentGiven?: boolean;
 }
 
 // Append the public access scope (share token + workspace subdomain) to a
@@ -526,6 +532,13 @@ export async function searchPublicFaceInGallery(
   // Field name must match the backend handler — see
   // public_gallery_handler.PhotoSearch.
   form.append("image", imageBlob, "search.jpg");
+  // Affirmative biometric consent (GAL-FR-107). The 3b backend reads this as a
+  // multipart form value (parseConsentGiven) and returns 403
+  // `biometric_consent_required` unless it is an affirmative encoding. Only sent
+  // when the caller passed `consentGiven: true` — never fabricated here.
+  if (scope?.consentGiven) {
+    form.append("consent_given", "true");
+  }
   // Same-origin relative path + credentials so the host-only gallery_session
   // cookie reaches gateGalleryAccess on gated galleries — see listPublicPeople
   // above (issue #135). The selfie itself is not gallery-encrypted; only the

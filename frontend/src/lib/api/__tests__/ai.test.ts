@@ -468,6 +468,55 @@ describe("Public face/people API client (gallery-session credential)", () => {
     expect(q.get("ws")).toBe("legacy-scope-9e8a5927");
     expect(init.credentials).toBe("include");
   });
+
+  // GAL-FR-107 (slice 3c): the 3b backend now returns 403
+  // `biometric_consent_required` unless the photo-search POST carries an
+  // affirmative `consent_given`. When the guest accepted the consent affordance,
+  // the page passes `consentGiven: true` and the multipart body MUST include
+  // `consent_given=true` (parseConsentGiven accepts that encoding).
+  it("searchPublicFaceInGallery sends consent_given=true when consent is accepted", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          found: false,
+          faces_detected: 0,
+          asset_ids: [],
+          count: 0,
+        }),
+    });
+
+    const blob = new Blob([new Uint8Array([1, 2, 3])], { type: "image/jpeg" });
+    await searchPublicFaceInGallery("wedding-abcd1234", blob, {
+      consentGiven: true,
+    });
+
+    const init = mockFetch.mock.calls[0][1];
+    expect(init.body).toBeInstanceOf(FormData);
+    expect((init.body as FormData).get("consent_given")).toBe("true");
+  });
+
+  // Without affirmative consent the flag must NOT be fabricated — the request
+  // omits `consent_given`, so the backend's fail-closed 403 holds.
+  it("searchPublicFaceInGallery omits consent_given without acceptance", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          found: false,
+          faces_detected: 0,
+          asset_ids: [],
+          count: 0,
+        }),
+    });
+
+    const blob = new Blob([new Uint8Array([1, 2, 3])], { type: "image/jpeg" });
+    await searchPublicFaceInGallery("wedding-abcd1234", blob);
+
+    const init = mockFetch.mock.calls[0][1];
+    expect(init.body).toBeInstanceOf(FormData);
+    expect((init.body as FormData).get("consent_given")).toBeNull();
+  });
 });
 
 // Upload-side client for the slice-1 ingest endpoint. Authenticated owner call

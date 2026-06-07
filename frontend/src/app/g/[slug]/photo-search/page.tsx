@@ -123,6 +123,11 @@ export default function PublicPhotoSearchPage({
   const streamRef = useRef<MediaStream | null>(null);
 
   const [stage, setStage] = useState<Stage>("idle");
+  // Affirmative biometric consent (GAL-FR-107). The guest MUST tick the consent
+  // affordance before the camera/selfie capture step can proceed — this mirrors
+  // the FaceIDGate modal's consent contract and is REQUIRED by the 3b backend,
+  // which returns 403 `biometric_consent_required` on photo-search without it.
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const [errorDetail, setErrorDetail] = useState<string>("");
   const [cameraError, setCameraError] = useState<CameraError | null>(null);
   const [videoReady, setVideoReady] = useState(false);
@@ -147,6 +152,11 @@ export default function PublicPhotoSearchPage({
   }, []);
 
   const startCamera = useCallback(async () => {
+    // Fail-closed consent guard (GAL-FR-107): the camera never opens until the
+    // guest has affirmatively accepted biometric face matching. The UI already
+    // disables the trigger until consent is ticked; this guard makes the
+    // invariant hold even if a future caller reaches startCamera another way.
+    if (!consentAccepted) return;
     setErrorDetail("");
     setCameraError(null);
     setFeatureDisabled(null);
@@ -191,7 +201,7 @@ export default function PublicPhotoSearchPage({
       setCameraError(classifyCameraError(err));
       setStage("camera-error");
     }
-  }, []);
+  }, [consentAccepted]);
 
   // Attach the stream AFTER the <video> element mounts. Same race
   // condition we hit on the dashboard page — startCamera fires while
@@ -290,6 +300,11 @@ export default function PublicPhotoSearchPage({
       const result = await searchPublicFaceInGallery(slug, blob, {
         shareToken,
         ws,
+        // The guest reached capture only after accepting the consent affordance
+        // (startCamera is fail-closed on consentAccepted), so signal affirmative
+        // biometric consent to the 3b backend (GAL-FR-107). Without it the
+        // backend returns 403 `biometric_consent_required`.
+        consentGiven: consentAccepted,
       });
       setSearchResult(result);
       if (!result.found) {
@@ -332,7 +347,7 @@ export default function PublicPhotoSearchPage({
       setErrorDetail(msg);
       setStage("preview");
     }
-  }, [slug, shareToken, ws, stopCamera]);
+  }, [slug, shareToken, ws, stopCamera, consentAccepted]);
 
   const handleRetry = useCallback(() => {
     setSearchResult(null);
@@ -367,21 +382,54 @@ export default function PublicPhotoSearchPage({
 
       <section className="surface-panel p-4">
         {stage === "idle" && (
-          <div className="text-center space-y-4 py-8">
+          <div className="mx-auto max-w-xl space-y-4 py-8">
             <Camera
               className="mx-auto h-12 w-12 text-text-tertiary"
               aria-hidden
             />
-            <p className="text-sm text-text-secondary">
+            {/*
+              Affirmative biometric consent (GAL-FR-107). The guest must tick the
+              checkbox before the camera/selfie capture step can proceed —
+              mirroring the FaceIDGate modal's consent contract. The Start camera
+              trigger stays disabled until consent is accepted, and startCamera
+              is additionally fail-closed on the same flag.
+            */}
+            <ul className="space-y-2 text-sm text-text-secondary">
+              <li>
+                • Your selfie is used only to find your photos in this gallery.
+              </li>
+              <li>• We don&apos;t store your selfie after matching.</li>
+              <li>• You can skip this and browse all photos instead.</li>
+            </ul>
+            <label className="flex cursor-pointer items-start gap-3 text-left">
+              <input
+                type="checkbox"
+                checked={consentAccepted}
+                onChange={(event) =>
+                  setConsentAccepted(event.target.checked)
+                }
+                className="mt-1 h-4 w-4 rounded border-border text-accent focus:ring-accent focus:ring-offset-2"
+                aria-describedby="findme-consent-text"
+              />
+              <span
+                id="findme-consent-text"
+                className="text-sm text-text-secondary"
+              >
+                I agree to use my camera to take a selfie and have my face
+                matched against the people in this gallery to find my photos.
+              </span>
+            </label>
+            <p className="text-xs text-text-tertiary">
               We&apos;ll ask for camera permission once.
             </p>
             <button
               type="button"
               onClick={() => void startCamera()}
-              className="inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-text-inverse hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
+              disabled={!consentAccepted}
+              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-text-inverse hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Camera className="h-4 w-4" aria-hidden />
-              Start camera
+              I agree — start camera
             </button>
           </div>
         )}
