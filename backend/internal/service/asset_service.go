@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -100,13 +101,10 @@ func (s *AssetService) GetStorageReader(ctx context.Context, key string) (io.Rea
 }
 
 // SoftDelete permanently deletes an asset. The name is retained for call-site
-// stability, but the behaviour is now a hard delete: every storage object
-// (original + WebP derivatives + thumbnails) is removed from object storage
-// synchronously, then the asset row and its dependents are hard-deleted. There
-// is no soft-delete/retention window — galleries are E2EE, so a deleted photo's
-// ciphertext is unrecoverable and retaining it only wastes B2 storage. If a
-// storage object cannot be deleted the row is left intact and the error is
-// returned, so the caller can retry rather than leaking an orphan.
+// stability, but the behaviour is now a hard delete: the asset row, dependents,
+// storage deletion jobs, and workspace quota decrement are committed in one DB
+// transaction. B2 object deletes are attempted immediately after commit and
+// retried by the storage deletion worker if a provider call fails.
 func (s *AssetService) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	asset, err := s.assetRepo.GetByID(ctx, id)
 	if err != nil {
@@ -157,50 +155,50 @@ func (s *AssetService) SoftDeleteManyForWorkspace(ctx context.Context, ids []uui
 	return affected, nil
 }
 
-// purge permanently removes an asset: it deletes every storage object
-// synchronously, then hard-deletes the row (FK cascade cleans dependents), then
-// records the reclaimed bytes against the workspace quota. Storage objects are
-// deleted BEFORE the rows so the derivative keys are still resolvable; if any
-// object delete fails the row is left intact and the error returned so the caller
-// can retry — nothing is orphaned in object storage.
+// purge permanently removes an asset and immediately returns its bytes to the
+// workspace quota pool. Object keys are captured before the row disappears, then
+// B2 cleanup is attempted best-effort after the DB commit and retried by a worker
+// from storage_deletion_jobs.
 func (s *AssetService) purge(ctx context.Context, asset *repository.Asset) error {
 	if asset == nil {
 		return ErrAssetNotFound
 	}
 
-	// Capture the derivative byte total before the rows are deleted (accounting).
+	// Capture derivative bytes and object keys before rows are deleted.
 	derivativeBytes := int64(0)
-	if s.storageSvc != nil && s.derivativeRepo != nil {
+	if s.derivativeRepo != nil {
 		total, err := s.derivativeRepo.TotalSizeByAsset(ctx, asset.ID)
 		if err != nil {
 			return fmt.Errorf("asset delete: derivative size lookup: %w", err)
 		}
 		derivativeBytes = total
 	}
-
-	// Delete every storage object (original + derivatives + thumbnails). Keys are
-	// resolved while the derivative rows still exist.
-	if err := s.deleteStorageObjects(ctx, s.assetStorageKeys(ctx, asset)); err != nil {
+	storageKeys, err := s.assetStorageKeys(ctx, asset)
+	if err != nil {
 		return err
 	}
 
-	// Hard-delete the asset row and its dependents.
-	if err := s.assetRepo.HardDelete(ctx, asset.ID); err != nil {
-		return fmt.Errorf("asset delete: hard delete: %w", err)
+	jobs, err := s.assetRepo.HardDeleteWithStorageAccounting(
+		ctx,
+		asset.ID,
+		asset.WorkspaceID,
+		asset.SizeBytes,
+		derivativeBytes,
+		storageKeys,
+	)
+	if err != nil {
+		return fmt.Errorf("asset delete: hard delete/accounting: %w", err)
 	}
-
-	// Record the reclaimed storage against the workspace quota.
 	if s.storageSvc != nil {
-		if err := s.storageSvc.RecordDelete(ctx, asset.WorkspaceID, asset.SizeBytes, derivativeBytes); err != nil {
-			return fmt.Errorf("asset delete: storage accounting: %w", err)
-		}
+		s.storageSvc.InvalidateAnalytics(asset.WorkspaceID)
 	}
+	s.processStorageDeletionJobs(ctx, jobs)
 	return nil
 }
 
-func (s *AssetService) assetStorageKeys(ctx context.Context, asset *repository.Asset) []string {
+func (s *AssetService) assetStorageKeys(ctx context.Context, asset *repository.Asset) ([]string, error) {
 	if asset == nil {
-		return nil
+		return nil, nil
 	}
 	keys := make([]string, 0, 1+len(asset.ThumbnailURLs))
 	if asset.StorageKey != "" {
@@ -209,7 +207,7 @@ func (s *AssetService) assetStorageKeys(ctx context.Context, asset *repository.A
 	if s.derivativeRepo != nil {
 		derivatives, err := s.derivativeRepo.ListByAsset(ctx, asset.ID)
 		if err != nil {
-			log.Printf("asset delete: derivative key lookup failed for %s: %v", asset.ID, err)
+			return nil, fmt.Errorf("asset delete: derivative key lookup: %w", err)
 		}
 		for _, derivative := range derivatives {
 			keys = append(keys, derivative.StorageKey)
@@ -218,7 +216,7 @@ func (s *AssetService) assetStorageKeys(ctx context.Context, asset *repository.A
 	for _, key := range asset.ThumbnailURLs {
 		keys = append(keys, key)
 	}
-	return normalizeStorageKeys(keys)
+	return normalizeStorageKeys(keys), nil
 }
 
 func normalizeStorageKeys(values []string) []string {
@@ -256,17 +254,20 @@ func normalizeStorageKey(value string) string {
 	return key
 }
 
-// deleteStorageObjects removes every key from object storage synchronously,
-// returning the first failure so the caller can abort the delete (leaving the row
-// intact for a retry) instead of leaking orphaned objects in B2.
-func (s *AssetService) deleteStorageObjects(ctx context.Context, keys []string) error {
-	if s.storage == nil || len(keys) == 0 {
-		return nil
+func (s *AssetService) processStorageDeletionJobs(ctx context.Context, jobs []repository.StorageDeletionJob) {
+	if s.storage == nil || len(jobs) == 0 {
+		return
 	}
-	for _, key := range keys {
-		if err := s.storage.Delete(ctx, key); err != nil {
-			return fmt.Errorf("asset delete: storage delete failed for %q: %w", key, err)
+	for _, job := range jobs {
+		if err := s.storage.Delete(ctx, job.StorageKey); err != nil {
+			log.Printf("asset delete: storage delete failed for %q: %v", job.StorageKey, err)
+			if markErr := s.assetRepo.MarkStorageDeletionJobFailed(ctx, job.ID, err.Error(), time.Now().Add(time.Minute)); markErr != nil {
+				log.Printf("asset delete: mark storage delete job failed %s: %v", job.ID, markErr)
+			}
+			continue
+		}
+		if err := s.assetRepo.MarkStorageDeletionJobDeleted(ctx, job.ID); err != nil {
+			log.Printf("asset delete: mark storage delete job deleted %s: %v", job.ID, err)
 		}
 	}
-	return nil
 }

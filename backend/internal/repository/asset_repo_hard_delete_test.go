@@ -108,3 +108,65 @@ func TestHardDelete_MissingAssetReturnsError(t *testing.T) {
 	repo := NewAssetRepo(pool)
 	require.Error(t, repo.HardDelete(context.Background(), uuid.New()))
 }
+
+// TestHardDeleteWithStorageAccounting_DecrementsAndQueuesStorageJobs pins the
+// #236 fix: the asset row removal, workspace_storage decrement, and durable B2
+// deletion jobs must commit together. RecordDelete must not be a separate
+// post-hard-delete step that can fail after the row is gone.
+func TestHardDeleteWithStorageAccounting_DecrementsAndQueuesStorageJobs(t *testing.T) {
+	pool := getRetryTestPool(t)
+	repo := NewAssetRepo(pool)
+	ctx := context.Background()
+
+	workspaceID := newRetryWorkspace(t, ctx, repo, "HardDeleteAccounting")
+	assetID := seedRetryAsset(t, ctx, repo, workspaceID, "ready", 0, nil)
+	_, err := pool.Exec(ctx,
+		`INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes)
+		 VALUES ($1, 4096, 768, 999999)
+		 ON CONFLICT (workspace_id) DO UPDATE
+		    SET used_bytes = 4096,
+		        derivative_bytes = 768,
+		        quota_bytes = 999999`,
+		workspaceID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx,
+		`INSERT INTO asset_derivatives (asset_id, variant, storage_key, size_bytes, format)
+		 VALUES ($1, 'display_webp', $2, 256, 'webp')`,
+		assetID, "derivatives/"+assetID.String()+"/display_webp.webp")
+	require.NoError(t, err)
+
+	jobs, err := repo.HardDeleteWithStorageAccounting(
+		ctx,
+		assetID,
+		workspaceID,
+		1024,
+		256,
+		[]string{
+			"originals/" + assetID.String() + ".jpg",
+			"derivatives/" + assetID.String() + "/display_webp.webp",
+		},
+	)
+	require.NoError(t, err)
+	require.Len(t, jobs, 2)
+
+	var assetCount int
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT count(*) FROM assets WHERE id = $1`, assetID).Scan(&assetCount))
+	assert.Equal(t, 0, assetCount, "asset row must be hard-deleted")
+
+	var usedBytes, derivativeBytes, quotaBytes int64
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT used_bytes, derivative_bytes, quota_bytes
+		   FROM workspace_storage
+		  WHERE workspace_id = $1`, workspaceID).Scan(&usedBytes, &derivativeBytes, &quotaBytes))
+	assert.Equal(t, int64(3072), usedBytes)
+	assert.Equal(t, int64(512), derivativeBytes)
+	assert.Equal(t, int64(999999), quotaBytes, "quota must be preserved")
+
+	var jobCount int
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT count(*) FROM storage_deletion_jobs
+		  WHERE workspace_id = $1 AND asset_id = $2 AND status = 'pending'`,
+		workspaceID, assetID).Scan(&jobCount))
+	assert.Equal(t, 2, jobCount, "B2 cleanup keys must be captured before the asset row disappears")
+}

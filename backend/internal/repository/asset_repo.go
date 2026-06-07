@@ -65,6 +65,14 @@ type Asset struct {
 	DecodeFormat *string    `json:"decode_format,omitempty"`
 }
 
+// StorageDeletionJob is an object-storage key captured before an asset row is
+// hard-deleted. The request path attempts these immediately; the background
+// storage deletion worker retries any job that remains pending/failed.
+type StorageDeletionJob struct {
+	ID         uuid.UUID `json:"id"`
+	StorageKey string    `json:"storage_key"`
+}
+
 // MaxDecodeRetries is the hard cap on transient-failure retries for a single
 // asset before the worker dead-letters it as terminal. ~5 attempts with
 // exponential backoff spans roughly a minute of transient-fault tolerance,
@@ -587,6 +595,172 @@ func (r *AssetRepo) HardDelete(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("asset not found")
 	}
 	return tx.Commit(ctx)
+}
+
+// HardDeleteWithStorageAccounting captures object-delete jobs, hard-deletes the
+// asset row, and decrements workspace_storage in one transaction. This keeps the
+// user-visible quota meter tied to the same commit that removes the photo from
+// the account: a DB failure rolls all of it back, so workspace_storage cannot
+// stay inflated after the asset row is gone.
+func (r *AssetRepo) HardDeleteWithStorageAccounting(
+	ctx context.Context,
+	assetID uuid.UUID,
+	workspaceID uuid.UUID,
+	originalBytes int64,
+	derivativeBytes int64,
+	storageKeys []string,
+) ([]StorageDeletionJob, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("asset repo hard delete/accounting: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck — Commit() shadows; Rollback on error is best-effort
+
+	jobs, err := insertStorageDeletionJobs(ctx, tx, workspaceID, assetID, storageKeys)
+	if err != nil {
+		return nil, err
+	}
+	if err := hardDeleteAssetInTx(ctx, tx, assetID, workspaceID); err != nil {
+		return nil, err
+	}
+	if err := decrementWorkspaceStorageInTx(ctx, tx, workspaceID, originalBytes, derivativeBytes); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("asset repo hard delete/accounting: commit tx: %w", err)
+	}
+	return jobs, nil
+}
+
+func insertStorageDeletionJobs(
+	ctx context.Context,
+	tx pgx.Tx,
+	workspaceID uuid.UUID,
+	assetID uuid.UUID,
+	storageKeys []string,
+) ([]StorageDeletionJob, error) {
+	if len(storageKeys) == 0 {
+		return nil, nil
+	}
+	rows, err := tx.Query(ctx,
+		`INSERT INTO storage_deletion_jobs (workspace_id, asset_id, storage_key)
+		 SELECT $1, $2, unnest($3::text[])
+		 RETURNING id, storage_key`,
+		workspaceID, assetID, storageKeys,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("asset repo hard delete/accounting: enqueue storage deletes: %w", err)
+	}
+	defer rows.Close()
+
+	var jobs []StorageDeletionJob
+	for rows.Next() {
+		var job StorageDeletionJob
+		if err := rows.Scan(&job.ID, &job.StorageKey); err != nil {
+			return nil, fmt.Errorf("asset repo hard delete/accounting: scan storage delete job: %w", err)
+		}
+		jobs = append(jobs, job)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("asset repo hard delete/accounting: storage delete jobs rows: %w", err)
+	}
+	return jobs, nil
+}
+
+func hardDeleteAssetInTx(ctx context.Context, tx pgx.Tx, assetID, workspaceID uuid.UUID) error {
+	if _, err := tx.Exec(ctx,
+		`UPDATE gallery_products SET asset_id = NULL WHERE asset_id = $1`, assetID); err != nil {
+		return fmt.Errorf("asset repo hard delete/accounting: clear gallery_product refs: %w", err)
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE burst_groups SET best_pick_id = NULL WHERE best_pick_id = $1`, assetID); err != nil {
+		return fmt.Errorf("asset repo hard delete/accounting: clear burst best-pick refs: %w", err)
+	}
+
+	tag, err := tx.Exec(ctx,
+		`DELETE FROM assets WHERE id = $1 AND workspace_id = $2`,
+		assetID, workspaceID,
+	)
+	if err != nil {
+		return fmt.Errorf("asset repo hard delete/accounting: delete asset: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("asset not found")
+	}
+	return nil
+}
+
+func decrementWorkspaceStorageInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	workspaceID uuid.UUID,
+	originalBytes int64,
+	derivativeBytes int64,
+) error {
+	if originalBytes < 0 || derivativeBytes < 0 {
+		return fmt.Errorf("asset repo hard delete/accounting: negative byte delta")
+	}
+	_, err := tx.Exec(ctx,
+		`INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes)
+		 VALUES ($1, 0, 0, 0)
+		 ON CONFLICT (workspace_id) DO NOTHING`,
+		workspaceID,
+	)
+	if err != nil {
+		return fmt.Errorf("asset repo hard delete/accounting: seed workspace storage: %w", err)
+	}
+	_, err = tx.Exec(ctx,
+		`UPDATE workspace_storage
+		    SET used_bytes = GREATEST(0, used_bytes - $2),
+		        derivative_bytes = GREATEST(0, derivative_bytes - $3),
+		        updated_at = now()
+		  WHERE workspace_id = $1`,
+		workspaceID, originalBytes, derivativeBytes,
+	)
+	if err != nil {
+		return fmt.Errorf("asset repo hard delete/accounting: decrement storage: %w", err)
+	}
+	return nil
+}
+
+// MarkStorageDeletionJobDeleted records that the corresponding object key was
+// deleted from B2/S3. It is idempotent: retrying a completed job leaves it
+// completed.
+func (r *AssetRepo) MarkStorageDeletionJobDeleted(ctx context.Context, id uuid.UUID) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE storage_deletion_jobs
+		    SET status = 'deleted',
+		        deleted_at = COALESCE(deleted_at, now()),
+		        claimed_at = NULL,
+		        last_error = NULL,
+		        updated_at = now()
+		  WHERE id = $1`,
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("asset repo storage delete job deleted: %w", err)
+	}
+	return nil
+}
+
+// MarkStorageDeletionJobFailed records a failed object delete attempt and
+// schedules the next retry.
+func (r *AssetRepo) MarkStorageDeletionJobFailed(ctx context.Context, id uuid.UUID, cause string, nextAttemptAt time.Time) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE storage_deletion_jobs
+		    SET status = 'failed',
+		        attempts = attempts + 1,
+		        claimed_at = NULL,
+		        next_attempt_at = $2,
+		        last_error = $3,
+		        updated_at = now()
+		  WHERE id = $1`,
+		id, nextAttemptAt, cause,
+	)
+	if err != nil {
+		return fmt.Errorf("asset repo storage delete job failed: %w", err)
+	}
+	return nil
 }
 
 // UpdateStatus changes the asset's status.

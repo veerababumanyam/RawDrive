@@ -3388,9 +3388,14 @@ func main() {
 	}
 	workerRegistry.Register("thumbnail", thumbWorker)
 	// Asset deletion is synchronous and hard (see AssetService.SoftDelete →
-	// HardDelete): storage objects + rows are removed at delete time, so there is
-	// no deferred AssetPurgeWorker. Galleries are E2EE, so retaining a deleted
-	// photo's ciphertext serves no recovery purpose and only wastes B2 storage.
+	// HardDeleteWithStorageAccounting): rows + quota are removed at delete time,
+	// and storage objects are captured into a durable retry queue before the row
+	// disappears. Galleries are E2EE, so retaining a deleted photo's ciphertext
+	// serves no recovery purpose and only wastes B2 storage.
+	storageDeletionWorker := worker.NewStorageDeletionWorker(dbPool, storageProvider)
+	workerRegistry.Register("storage-deletion", storageDeletionWorker)
+	storageReconciliationWorker := worker.NewStorageReconciliationWorker(storageAccountingSvc)
+	workerRegistry.Register("storage-reconciliation", storageReconciliationWorker)
 	expiryWorker := worker.NewGalleryExpiryWorker(dbPool)
 	workerRegistry.Register("gallery-expiry", expiryWorker)
 	billingLifecycleWorker := worker.NewBillingLifecycleWorker(dbPool, notificationEmailSender, publicBaseURL).
@@ -3435,7 +3440,7 @@ func main() {
 	workerCtx, workerCancel := context.WithCancel(context.Background())
 	defer workerCancel()
 	workerRegistry.StartAll(workerCtx)
-	log.Println("Workers: all started (thumbnail, gallery-expiry, face-detection, ai-tagging, duplicate-scan, message-cleanup, moderation)")
+	log.Println("Workers: all started")
 
 	// Scheduler: start after workers so jobs run under the same cancellable context.
 	if m6Scheduler != nil {

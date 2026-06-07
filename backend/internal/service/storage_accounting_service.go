@@ -369,6 +369,105 @@ func (s *StorageAccounting) RecordDelete(ctx context.Context, workspaceID uuid.U
 	return nil
 }
 
+// ReconcileWorkspace recomputes used_bytes and derivative_bytes from live asset
+// rows. It preserves quota_bytes, grace_bytes, and reserved_bytes because those
+// are entitlement/session state, not derived asset footprint.
+func (s *StorageAccounting) ReconcileWorkspace(ctx context.Context, workspaceID uuid.UUID) (*WorkspaceStorage, error) {
+	_, err := s.pool.Exec(ctx,
+		`WITH originals AS (
+		     SELECT workspace_id, COALESCE(SUM(size_bytes), 0)::bigint AS used_bytes
+		       FROM assets
+		      WHERE workspace_id = $1 AND deleted_at IS NULL
+		      GROUP BY workspace_id
+		   ),
+		   derivatives AS (
+		     SELECT a.workspace_id, COALESCE(SUM(ad.size_bytes), 0)::bigint AS derivative_bytes
+		       FROM assets a
+		       JOIN asset_derivatives ad ON ad.asset_id = a.id
+		      WHERE a.workspace_id = $1 AND a.deleted_at IS NULL
+		      GROUP BY a.workspace_id
+		   )
+		   INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes)
+		   SELECT w.id,
+		          COALESCE(o.used_bytes, 0),
+		          COALESCE(d.derivative_bytes, 0),
+		          0
+		     FROM workspaces w
+		     LEFT JOIN originals o ON o.workspace_id = w.id
+		     LEFT JOIN derivatives d ON d.workspace_id = w.id
+		    WHERE w.id = $1
+		   ON CONFLICT (workspace_id) DO UPDATE
+		      SET used_bytes = EXCLUDED.used_bytes,
+		          derivative_bytes = EXCLUDED.derivative_bytes,
+		          updated_at = now()`,
+		workspaceID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("storage accounting: reconcile workspace: %w", err)
+	}
+	s.cache.invalidate(workspaceID)
+	return s.GetUsage(ctx, workspaceID)
+}
+
+// ReconcileAll recomputes storage counters for every workspace and returns the
+// number of rows whose counters changed. It is safe to run periodically.
+func (s *StorageAccounting) ReconcileAll(ctx context.Context) (int64, error) {
+	rows, err := s.pool.Query(ctx,
+		`WITH originals AS (
+		     SELECT workspace_id, COALESCE(SUM(size_bytes), 0)::bigint AS used_bytes
+		       FROM assets
+		      WHERE deleted_at IS NULL
+		      GROUP BY workspace_id
+		   ),
+		   derivatives AS (
+		     SELECT a.workspace_id, COALESCE(SUM(ad.size_bytes), 0)::bigint AS derivative_bytes
+		       FROM assets a
+		       JOIN asset_derivatives ad ON ad.asset_id = a.id
+		      WHERE a.deleted_at IS NULL
+		      GROUP BY a.workspace_id
+		   ),
+		   totals AS (
+		     SELECT w.id AS workspace_id,
+		            COALESCE(o.used_bytes, 0)::bigint AS used_bytes,
+		            COALESCE(d.derivative_bytes, 0)::bigint AS derivative_bytes
+		       FROM workspaces w
+		       LEFT JOIN originals o ON o.workspace_id = w.id
+		       LEFT JOIN derivatives d ON d.workspace_id = w.id
+		   ),
+		   upserted AS (
+		     INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes)
+		     SELECT workspace_id, used_bytes, derivative_bytes, 0
+		       FROM totals
+		     ON CONFLICT (workspace_id) DO UPDATE
+		        SET used_bytes = EXCLUDED.used_bytes,
+		            derivative_bytes = EXCLUDED.derivative_bytes,
+		            updated_at = now()
+		      WHERE workspace_storage.used_bytes IS DISTINCT FROM EXCLUDED.used_bytes
+		         OR workspace_storage.derivative_bytes IS DISTINCT FROM EXCLUDED.derivative_bytes
+		     RETURNING workspace_id
+		   )
+		   SELECT workspace_id FROM upserted`,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("storage accounting: reconcile all: %w", err)
+	}
+	defer rows.Close()
+
+	var changed int64
+	for rows.Next() {
+		var workspaceID uuid.UUID
+		if err := rows.Scan(&workspaceID); err != nil {
+			return changed, fmt.Errorf("storage accounting: reconcile all scan: %w", err)
+		}
+		changed++
+		s.cache.invalidate(workspaceID)
+	}
+	if err := rows.Err(); err != nil {
+		return changed, fmt.Errorf("storage accounting: reconcile all rows: %w", err)
+	}
+	return changed, nil
+}
+
 // GalleryStorageBreakdown shows storage used per gallery.
 type GalleryStorageBreakdown struct {
 	GalleryID   uuid.UUID `json:"gallery_id"`
