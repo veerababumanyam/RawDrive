@@ -677,4 +677,43 @@ describe("uploadAssetFaceIndexImage (server-assisted encrypted face index)", () 
     }
     expect(isFaceIndexUnavailableError(caught)).toBe(true);
   });
+
+  it("maps a gated-off 404 'feature not available' to the typed unavailable error", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      text: () => Promise.resolve('{"error":"feature not available"}'),
+    });
+
+    let caught: unknown;
+    try {
+      await uploadAssetFaceIndexImage(
+        "asset-1",
+        new Blob(["webp"], { type: "image/webp" }),
+      );
+    } catch (err) {
+      caught = err;
+    }
+    expect(isFaceIndexUnavailableError(caught)).toBe(true);
+  });
+
+  it("keeps a genuine asset-not-found 404 a hard error (not unavailable)", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      text: () => Promise.resolve('{"error":"asset not found"}'),
+    });
+
+    let caught: unknown;
+    try {
+      await uploadAssetFaceIndexImage(
+        "asset-1",
+        new Blob(["webp"], { type: "image/webp" }),
+      );
+    } catch (err) {
+      caught = err;
+    }
+    expect(isFaceIndexUnavailableError(caught)).toBe(false);
+    expect((caught as Error).message).toMatch(/asset not found|404/);
+  });
 });
