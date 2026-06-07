@@ -3,6 +3,14 @@
 **Status:** epic in progress. Slice 0 (this PR) shipped first.
 **Origin:** rawdrive-fix RCA of *"Face ID not working"* — `{"error":"gallery access requires a valid share link or invite"}` (HTTP 403). Issue #135.
 
+> **Licensing + E2EE-posture decision:** the `buffalo_l` weights are licensed
+> non-commercial-research-only (and the live `face-svc` sidecar already ships them in prod),
+> and the E2EE recognition posture (server-side plaintext match vs client-side encrypted-
+> embedding match) is now an explicit, owner-ratifiable decision. See
+> [`docs/decisions/faceid-licensing-and-e2ee-posture.md`](../../decisions/faceid-licensing-and-e2ee-posture.md)
+> (slice 3j, issue #289). Slice 2b below stays owner-blocked on resolving that licensing plus
+> hosting the ~190 MB models.
+
 ## Problem
 
 "Find Me" (public `/g/{slug}/photo-search`) and the People tab are broken on shared galleries.

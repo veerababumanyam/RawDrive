@@ -105,6 +105,13 @@ These are load-bearing — breaking them causes real bugs and has burned us befo
   for BYOS overrides.
 - **Derivatives:** All uploads must produce **WebP** derivatives. Storage auth is
   required; download offers format choice.
+- **FaceID / Find-Me (biometric):** Before touching face recognition, embeddings, or
+  the `face-svc` sidecar, read
+  [`docs/decisions/faceid-licensing-and-e2ee-posture.md`](docs/decisions/faceid-licensing-and-e2ee-posture.md).
+  It records the `buffalo_l` non-commercial-licensing exposure (live in prod), the
+  target/interim E2EE recognition posture, and the `/face-index-image` vs
+  `/face-embeddings` ingest reconciliation. Companion spec:
+  `docs/features/e2ee-face-search/README.md`.
 - **JWT claims:** Handlers must call `middleware.JWTClaimsFromContext(ctx)`. Never
   define a local context-key type — it silently fails to match the middleware's key.
 - **Platform roles (M7.5):** Two-tier model. Use `RequirePlatformRole` middleware;
