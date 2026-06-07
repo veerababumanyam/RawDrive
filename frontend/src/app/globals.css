@@ -3086,6 +3086,10 @@ body[data-chrome="marketing"] {
     gap: var(--space-2);
   }
 
+  .gallery-settings-workbench {
+    align-items: start;
+  }
+
   .cover-workbench {
     height: max(
       calc(var(--touch-target-min) * 9),
@@ -3271,8 +3275,9 @@ body[data-chrome="marketing"] {
   }
 
   .gallery-settings-rail {
+    align-self: start;
     display: flex;
-    max-height: calc(100vh - var(--navbar-height) - var(--space-8));
+    max-height: calc(100dvh - var(--navbar-height) - var(--space-8));
     flex-direction: column;
     gap: var(--space-1);
     overflow-y: auto;

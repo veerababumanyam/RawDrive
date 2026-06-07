@@ -494,7 +494,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   // During onboarding, render a minimal layout without sidebar/header
   if (isOnboarding) {
     return (
-      <div className="min-h-[100dvh] overflow-x-hidden bg-surface text-text-primary">
+      <div className="min-h-[100dvh] overflow-x-clip bg-surface text-text-primary">
         <main className="min-h-screen px-4 pb-12 pt-8">{children}</main>
       </div>
     );
@@ -504,7 +504,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const homeHref = getHomeHref(role);
 
   return (
-    <div className="min-h-[100dvh] overflow-x-hidden bg-surface text-text-primary">
+    <div className="min-h-[100dvh] overflow-x-clip bg-surface text-text-primary">
       {/* S5-G1: persistent read-only banner for admin impersonation sessions.
           Self-hides for normal sessions; when active it sets
           data-impersonation on <html> so mutating controls dim + disable. */}

@@ -78,6 +78,7 @@ export function GalleryShareQrCard({
   const displayUrl = url
     ? url.replace(/^https?:\/\//, "").split(/[?#]/)[0]
     : "";
+  const securedShareUrl = /[?&]share=/.test(url);
   const preparingUrl = isClient && !url && !actionError && !urlResolved;
 
   useEffect(() => {
@@ -223,6 +224,11 @@ export function GalleryShareQrCard({
             >
               {displayUrl}
             </span>
+            {securedShareUrl && (
+              <span className="status-badge status-badge--success hidden shrink-0 sm:inline-flex">
+                Secured link
+              </span>
+            )}
             <GlassIconButton
               type="button"
               size="md"

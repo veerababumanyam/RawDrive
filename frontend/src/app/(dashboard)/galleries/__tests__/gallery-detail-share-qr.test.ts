@@ -46,6 +46,9 @@ describe("gallery detail page — share QR regression (#123)", () => {
     expect(source).toContain("getCachedWorkingShareUrl");
     expect(source).toContain("getGalleryShareQrUrl");
     expect(source).toContain("getAlbumShareQrUrl");
+    expect(source).toContain("listGalleryShareLinks");
+    expect(source).toContain("resolveStablePublicGalleryShareLink");
+    expect(source).toContain("shareUrlInFlightRef");
     expect(source).toContain("getShareUrl={getGalleryShareQrUrl}");
     expect(source).not.toContain("url={gallery.is_published ? buildShareUrl()");
     expect(source).not.toContain("getShareUrl={buildShareUrl}");
@@ -59,6 +62,7 @@ describe("gallery detail page — share QR regression (#123)", () => {
     const source = readDetailPage();
     expect(source).toContain("const openWhatsAppShare = useCallback");
     expect(source).toContain('createWorkingShareUrl(albumId, "whatsapp")');
+    expect(source).toContain('channel === "copy"');
     expect(source).toContain("https://wa.me/?text=");
     expect(source).toContain("WhatsApp gallery share link");
     // Lightweight wa.me share — deliberately NOT the removed share-contacts

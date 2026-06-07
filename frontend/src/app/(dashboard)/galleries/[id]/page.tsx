@@ -19,6 +19,7 @@ import {
   getGallery,
   listGalleryAlbums,
   listGalleryAssets,
+  listGalleryShareLinks,
   updateGallery,
   type Gallery,
   type GalleryAlbum,
@@ -98,6 +99,7 @@ import { GalleryPageShell } from "@/components/gallery/gallery-page-shell";
 import { ResizableWorkspaceSplit } from "@/components/gallery/resizable-workspace-split";
 import { ShareQrPopover } from "@/components/gallery/share-qr-popover";
 import { galleryShareExpiryDays } from "@/lib/gallery-share-expiry";
+import { resolveStablePublicGalleryShareLink } from "@/lib/gallery-share-link-resolver";
 import {
   LockedMediaFallback,
   MediaKeyRecoveryBanner,
@@ -578,6 +580,8 @@ export default function GalleryDetailPage({
   const [savingAlbumId, setSavingAlbumId] = useState<string | null>(null);
   const [shareMessage, setShareMessage] = useState("");
   const shareUrlCacheRef = useRef<Map<string, string>>(new Map());
+  const shareUrlInFlightRef = useRef<Map<string, Promise<string>>>(new Map());
+  const shareUrlCacheGenerationRef = useRef(0);
   const [copiedAssetId, setCopiedAssetId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{
     assetId: string;
@@ -904,19 +908,32 @@ export default function GalleryDetailPage({
       }
 
       const expiryDays = galleryShareExpiryDays(gallery);
-      const created = await createGalleryShareLink(token, gallery.id, {
-        access_mode: "public",
-        download_allowed: gallery.download_enabled !== false,
-        channel,
-        ...(expiryDays !== undefined ? { expiry_days: expiryDays } : {}),
-      });
+      const downloadAllowed = gallery.download_enabled !== false;
+      const created =
+        channel === "copy"
+          ? await resolveStablePublicGalleryShareLink({
+              token,
+              galleryId: gallery.id,
+              downloadAllowed,
+              expiryDays,
+              listLinks: listGalleryShareLinks,
+              createLink: createGalleryShareLink,
+            })
+          : await createGalleryShareLink(token, gallery.id, {
+              access_mode: "public",
+              download_allowed: downloadAllowed,
+              channel,
+              ...(expiryDays !== undefined ? { expiry_days: expiryDays } : {}),
+            });
       return setUrlSearchParamBeforeFragment(baseUrl, "share", created.token);
     },
     [buildShareUrl, gallery],
   );
 
   useEffect(() => {
+    shareUrlCacheGenerationRef.current += 1;
     shareUrlCacheRef.current.clear();
+    shareUrlInFlightRef.current.clear();
   }, [createWorkingShareUrl]);
 
   const getCachedWorkingShareUrl = useCallback(
@@ -924,9 +941,23 @@ export default function GalleryDetailPage({
       const cacheKey = `${channel}:${albumId ?? "all"}`;
       const cached = shareUrlCacheRef.current.get(cacheKey);
       if (cached) return cached;
-      const url = await createWorkingShareUrl(albumId, channel);
-      shareUrlCacheRef.current.set(cacheKey, url);
-      return url;
+      const inFlight = shareUrlInFlightRef.current.get(cacheKey);
+      if (inFlight) return inFlight;
+      const generation = shareUrlCacheGenerationRef.current;
+      const promise = createWorkingShareUrl(albumId, channel)
+        .then((url) => {
+          if (generation === shareUrlCacheGenerationRef.current) {
+            shareUrlCacheRef.current.set(cacheKey, url);
+          }
+          return url;
+        })
+        .finally(() => {
+          if (generation === shareUrlCacheGenerationRef.current) {
+            shareUrlInFlightRef.current.delete(cacheKey);
+          }
+        });
+      shareUrlInFlightRef.current.set(cacheKey, promise);
+      return promise;
     },
     [createWorkingShareUrl],
   );

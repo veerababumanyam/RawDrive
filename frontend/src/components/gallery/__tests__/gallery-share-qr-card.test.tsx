@@ -52,6 +52,7 @@ describe("GalleryShareQrCard", () => {
     expect(
       screen.getByText("rawdrive.in/g/sharma-wedding"),
     ).toBeInTheDocument();
+    expect(screen.getByText("Secured link")).toBeInTheDocument();
 
     await waitFor(() => expect(toCanvas).toHaveBeenCalled());
 
@@ -183,6 +184,43 @@ describe("GalleryShareQrCard", () => {
     await waitFor(() => expect(getShareUrl).toHaveBeenCalledTimes(1));
   });
 
+  it("keeps the encoded QR URL stable across callback identity changes", async () => {
+    const firstGetter = vi.fn().mockResolvedValue(SHARE_URL);
+    const secondGetter = vi.fn().mockResolvedValue(SHARE_URL);
+    const { rerender } = render(
+      <GalleryShareQrCard
+        getShareUrl={firstGetter}
+        title="Sharma Wedding"
+        slug="sharma-wedding"
+      />,
+    );
+
+    await screen.findByTestId("share-qr-card-canvas");
+    await waitFor(() =>
+      expect(toCanvas).toHaveBeenCalledWith(
+        expect.any(HTMLCanvasElement),
+        SHARE_URL,
+        expect.any(Object),
+      ),
+    );
+
+    rerender(
+      <GalleryShareQrCard
+        getShareUrl={secondGetter}
+        title="Sharma Wedding"
+        slug="sharma-wedding"
+      />,
+    );
+
+    await waitFor(() => expect(secondGetter).toHaveBeenCalledTimes(1));
+    expect(toCanvas.mock.calls.map((call) => call[1])).toEqual(
+      expect.arrayContaining([SHARE_URL]),
+    );
+    expect(new Set(toCanvas.mock.calls.map((call) => call[1]))).toEqual(
+      new Set([SHARE_URL]),
+    );
+  });
+
   it("shows an unavailable state (no QR) when no URL is available", async () => {
     render(
       <GalleryShareQrCard
@@ -194,7 +232,9 @@ describe("GalleryShareQrCard", () => {
     expect(
       screen.queryByTestId("share-qr-card-canvas"),
     ).not.toBeInTheDocument();
-    expect(await screen.findByTestId("share-qr-card-unavailable")).toBeVisible();
+    expect(
+      await screen.findByTestId("share-qr-card-unavailable"),
+    ).toBeVisible();
     await waitFor(() =>
       expect(
         screen.getByText(

@@ -194,6 +194,17 @@ describe("DashboardLayout header", () => {
     expect(main?.className).not.toContain("pt-24");
   });
 
+  it("does not create a dashboard scroll container that blocks sticky children", async () => {
+    renderDashboardLayout();
+
+    const content = await screen.findByText("Dashboard content");
+    const main = content.closest("main");
+    const shell = main?.parentElement;
+
+    expect(shell?.className).toContain("overflow-x-clip");
+    expect(shell?.className).not.toContain("overflow-x-hidden");
+  });
+
   it("notification bell has aria-label for screen readers", async () => {
     renderDashboardLayout();
     const bell = await screen.findByRole("link", { name: "Notifications" });
