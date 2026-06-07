@@ -299,8 +299,8 @@ describe("CoverDesignPage", () => {
       within(mobileRail).getByRole("button", { name: "Photos" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /brand defaults/i }),
-    ).toHaveAttribute("href", "/settings/business");
+      screen.queryByRole("link", { name: /brand defaults/i }),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(within(mobileRail).getByRole("button", { name: "Text" }));
 
@@ -340,6 +340,22 @@ describe("CoverDesignPage", () => {
 
     expect(document.querySelector(".cover-workbench")).toBeInTheDocument();
     expect(document.querySelector(".cover-photo-rail")).not.toBeInTheDocument();
+    expect(document.querySelector(".cover-save-dock")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /save cover and design/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^undo/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^redo/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /^preview$/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /brand defaults/i }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("group", { name: "Cover editor sections" }),
     ).toHaveClass("cover-inspector-tabs");
@@ -830,7 +846,7 @@ describe("CoverDesignPage", () => {
     });
   }, 15_000);
 
-  it("shows layer controls, undo, and expanded Indian presets", async () => {
+  it("shows layer controls, expanded Indian presets, and save-only commands", async () => {
     await renderPage();
 
     expect(
@@ -853,13 +869,15 @@ describe("CoverDesignPage", () => {
       screen.getByRole("switch", { name: /show subtitle layer/i }),
     );
     expect(
-      screen.getByRole("button", { name: /undo cover design change/i }),
-    ).toBeEnabled();
-    fireEvent.click(
-      screen.getByRole("button", { name: /undo cover design change/i }),
-    );
+      screen.queryByRole("button", { name: /undo cover design change/i }),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /redo cover design change/i }),
+      screen.queryByRole("button", { name: /redo cover design change/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: /save cover and design \(unsaved changes\)/i,
+      }),
     ).toBeEnabled();
   });
 

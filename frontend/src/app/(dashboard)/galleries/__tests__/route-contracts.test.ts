@@ -127,7 +127,7 @@ describe("gallery route contracts", () => {
     expect(source).toContain("Sign in again to create a share link.");
   });
 
-  it("keeps owner preview actions inside the dashboard preview route", () => {
+  it("keeps owner preview actions out of the cover workbench header", () => {
     const coverSource = fs.readFileSync(
       path.join(dashboardRoot, "galleries/[id]/cover/page.tsx"),
       "utf8",
@@ -142,7 +142,11 @@ describe("gallery route contracts", () => {
       "utf8",
     );
 
-    expect(coverSource).toContain("href={`/galleries/${galleryId}/preview`}");
+    // Cover & Design is already a live preview workbench; the owner-preview
+    // action belongs in the gallery detail/share surfaces, not the cover header.
+    expect(coverSource).not.toContain(
+      "href={`/galleries/${galleryId}/preview`}",
+    );
     expect(shareSource).toContain("href={`/galleries/${gallery.id}/preview`}");
     expect(coverSource).not.toContain("href={`/g/${gallery.slug}`}");
     expect(shareSource).not.toContain(

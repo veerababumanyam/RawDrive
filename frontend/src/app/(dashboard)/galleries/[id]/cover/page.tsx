@@ -21,8 +21,8 @@
  *   - Desktop-first split editor. Live preview beside task tabs.
  *   - Sections: Cover / Text / Media / Videos / Brand / Grid / Photos.
  *   - All interactions land on the same preview — no separate "preview"
- *     screen. Desktop/phone preview and undo/redo keep the editor fast
- *     without opening a second design studio surface.
+ *     screen. Desktop/phone preview and a sticky save dock keep the editor
+ *     fast without opening a second design studio surface.
  *
  * Schema compatibility:
  *   The persisted shape matches `frontend/src/lib/gallery-design-config.ts`
@@ -46,7 +46,6 @@ import {
   useMemo,
   useDeferredValue,
 } from "react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { getStoredAccessToken } from "@/lib/auth";
 import { getApiBaseUrl } from "@/lib/api/base-url";
@@ -2177,8 +2176,6 @@ export default function CoverDesignPage() {
   // immediately on successful save). 2026-05-18: replaces silent
   // "Saving…" text-only feedback that users were missing entirely.
   const [savedSnapshot, setSavedSnapshot] = useState<string>("");
-  const [undoStack, setUndoStack] = useState<DesignConfig[]>([]);
-  const [redoStack, setRedoStack] = useState<DesignConfig[]>([]);
   // `justSaved` runs a brief green check-icon state on the button right
   // after a successful save. Auto-clears after 1800ms so the button
   // returns to its idle look but the user has had a clear "yes that
@@ -2204,42 +2201,12 @@ export default function CoverDesignPage() {
 
   const updateConfig: React.Dispatch<React.SetStateAction<DesignConfig>> =
     useCallback((action) => {
-      setConfig((current) => {
-        const next =
-          typeof action === "function"
-            ? (action as (value: DesignConfig) => DesignConfig)(current)
-            : action;
-        if (JSON.stringify(current) !== JSON.stringify(next)) {
-          setUndoStack((past) => [...past.slice(-19), current]);
-          setRedoStack([]);
-        }
-        return next;
-      });
+      setConfig((current) =>
+        typeof action === "function"
+          ? (action as (value: DesignConfig) => DesignConfig)(current)
+          : action,
+      );
     }, []);
-
-  const handleUndo = useCallback(() => {
-    setUndoStack((past) => {
-      if (past.length === 0) return past;
-      const previous = past[past.length - 1];
-      setConfig((current) => {
-        setRedoStack((future) => [current, ...future].slice(0, 20));
-        return previous;
-      });
-      return past.slice(0, -1);
-    });
-  }, []);
-
-  const handleRedo = useCallback(() => {
-    setRedoStack((future) => {
-      if (future.length === 0) return future;
-      const next = future[0];
-      setConfig((current) => {
-        setUndoStack((past) => [...past.slice(-19), current]);
-        return next;
-      });
-      return future.slice(1);
-    });
-  }, []);
 
   // Mount: fetch gallery + assets, hydrate config from gallery.settings.
   useEffect(() => {
@@ -2280,8 +2247,6 @@ export default function CoverDesignPage() {
         // as the working default while the saved snapshot stays at the persisted
         // state. Saving then makes that default durable through Design Studio.
         setSavedSnapshot((prev) => (prev ? prev : persistedSnapshot));
-        setUndoStack([]);
-        setRedoStack([]);
         setLoaded(true);
       } catch (err) {
         console.error("Failed to load Cover & Design data:", err);
@@ -2612,93 +2577,9 @@ export default function CoverDesignPage() {
       mode="workbench"
       className="text-on-surface"
     >
-      <GalleryPageHeader
-        backHref={`/galleries/${galleryId}`}
-        eyebrow="Cover & Design"
-        title="Cover & Design"
-        subtitle={gallery?.title || "Loading…"}
-        actions={
-          <>
-            <GlassButton
-              type="button"
-              variant="surface"
-              onClick={handleUndo}
-              disabled={undoStack.length === 0}
-              className="cover-header-action"
-              aria-label="Undo cover design change"
-            >
-              Undo
-            </GlassButton>
-            <GlassButton
-              type="button"
-              variant="surface"
-              onClick={handleRedo}
-              disabled={redoStack.length === 0}
-              className="cover-header-action"
-              aria-label="Redo cover design change"
-            >
-              Redo
-            </GlassButton>
-            {gallery?.slug && (
-              <Link
-                href={`/galleries/${galleryId}/preview`}
-                className="glass-button glass-button--surface glass-button--md cover-header-action"
-              >
-                Preview
-              </Link>
-            )}
-            <Link
-              href="/settings/business"
-              className="glass-button glass-button--surface glass-button--md cover-header-action"
-            >
-              Brand defaults
-            </Link>
-            {/* Save button — three visual states that give the user
-              concrete feedback at every step of the save cycle:
-                1. Idle (clean)   — neutral primary gradient, "Save"
-                2. Idle (dirty)   — same gradient + a small amber dot in
-                                    the upper-right corner of the button
-                                    marking "unsaved changes"
-                3. Saving         — spinner + "Saving…" + disabled
-                4. Just saved     — green tint + check icon + "Saved" for
-                                    1800ms before falling back to idle
-              The previous version only swapped text from "Save" → "Saving…"
-              for one render tick — users genuinely couldn't tell whether
-              the click registered. */}
-            <GlassButton
-              type="button"
-              onClick={handleSave}
-              disabled={saving || !config.cover.assetId}
-              aria-live="polite"
-              aria-label={
-                saving
-                  ? "Saving cover and design"
-                  : justSaved
-                    ? "Cover and design saved"
-                    : isDirty
-                      ? "Save cover and design (unsaved changes)"
-                      : "Save cover and design"
-              }
-              variant={justSaved ? "success" : "primary"}
-              icon={
-                saving ? (
-                  <Loader2 className="cover-save-button__spinner" aria-hidden />
-                ) : justSaved ? (
-                  <Check aria-hidden />
-                ) : undefined
-              }
-              className="cover-save-button"
-            >
-              {saving ? "Saving..." : justSaved ? "Saved" : "Save"}
-              {/* Unsaved-changes dot in the button corner. Only visible in
-                the idle-dirty state — not during save or right after. */}
-              {isDirty && !saving && !justSaved && (
-                <span className="cover-save-button__dirty" aria-hidden />
-              )}
-            </GlassButton>
-          </>
-        }
-      />
+      <div className="sr-only">
+        <GalleryPageHeader title="Cover & Design" />
+      </div>
 
       {(saveMessage || saveError) && (
         <div role="status" aria-live="polite">
@@ -3128,6 +3009,37 @@ export default function CoverDesignPage() {
               </Card>
             )}
           </section>
+
+          <div className="cover-save-dock" aria-live="polite">
+            <GlassButton
+              type="button"
+              onClick={handleSave}
+              disabled={saving || !config.cover.assetId}
+              aria-label={
+                saving
+                  ? "Saving cover and design"
+                  : justSaved
+                    ? "Cover and design saved"
+                    : isDirty
+                      ? "Save cover and design (unsaved changes)"
+                      : "Save cover and design"
+              }
+              variant={justSaved ? "success" : "primary"}
+              icon={
+                saving ? (
+                  <Loader2 className="cover-save-button__spinner" aria-hidden />
+                ) : justSaved ? (
+                  <Check aria-hidden />
+                ) : undefined
+              }
+              className="cover-save-button"
+            >
+              {saving ? "Saving..." : justSaved ? "Saved" : "Save"}
+              {isDirty && !saving && !justSaved && (
+                <span className="cover-save-button__dirty" aria-hidden />
+              )}
+            </GlassButton>
+          </div>
         </section>
       </ResizableWorkspaceSplit>
       <TermsAcceptanceModal

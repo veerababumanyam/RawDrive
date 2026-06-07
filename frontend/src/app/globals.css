@@ -2895,13 +2895,14 @@ body[data-chrome="marketing"] {
   transform: scale(1.08);
 }
 
-.cover-header-action {
-  color: var(--text-accent);
-  text-decoration: none;
-}
-
 .cover-save-button {
   position: relative;
+}
+
+.cover-save-dock {
+  display: flex;
+  justify-content: flex-end;
+  padding-block-start: var(--space-2);
 }
 
 .cover-save-button__spinner {
@@ -3152,21 +3153,32 @@ body[data-chrome="marketing"] {
     position: sticky;
     top: 0;
     z-index: 2;
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     min-width: 0;
     margin-block-end: var(--space-1);
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .cover-inspector-tabs::-webkit-scrollbar {
-    display: none;
+    overflow: visible;
   }
 
   .cover-inspector-tabs .glass-segmented-option {
-    min-width: max-content;
-    flex: 1 0 auto;
-    padding-inline: var(--space-2);
+    min-width: 0;
+    flex: initial;
+    font-size: var(--type-2xs);
+    padding-inline: var(--space-1);
+    white-space: nowrap;
+  }
+
+  .cover-save-dock {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    padding-block: var(--space-2);
+    background: linear-gradient(
+      180deg,
+      transparent,
+      color-mix(in srgb, var(--surface-base) 92%, transparent) 44%,
+      var(--surface-base)
+    );
   }
 
   .cover-inspector-pane .cover-design-grid,
@@ -4172,11 +4184,6 @@ body[data-chrome="marketing"] {
 }
 
 @media (max-width: 767px) {
-  .cover-header-action {
-    min-height: var(--touch-target-min);
-    padding-inline: var(--space-3);
-  }
-
   .cover-editor-layout {
     gap: var(--space-3);
   }
