@@ -11,6 +11,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/rawdrive/backend/internal/repository"
+	"github.com/rawdrive/backend/internal/storage"
 )
 
 // WorkspaceProfileHandler reads and writes the non-sensitive "business
@@ -25,6 +28,12 @@ import (
 // row to read/write.
 type WorkspaceProfileHandler struct {
 	DB *pgxpool.Pool
+	// Store + Assets are required only by the server-side logo upload/crop
+	// endpoints (UploadLogo / CropLogo). They are nil for the read/write
+	// profile endpoints, which depend on DB alone, so existing wiring that
+	// constructs the handler with just DB keeps working.
+	Store  storage.Provider
+	Assets *repository.AssetRepo
 }
 
 // WorkspaceProfile mirrors the columns added in migration 068 plus the
@@ -74,7 +83,19 @@ func (h *WorkspaceProfileHandler) GetProfile(w http.ResponseWriter, r *http.Requ
 		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
 		return
 	}
-	row := h.DB.QueryRow(r.Context(), `
+	profile, err := h.loadWorkspaceProfile(r.Context(), wsID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"failed to load profile: %s"}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+	respondJSON(w, http.StatusOK, profile)
+}
+
+// loadWorkspaceProfile reads the full business profile map for a workspace.
+// Shared by GetProfile and the logo upload/crop endpoints so they all return
+// the identical shape.
+func (h *WorkspaceProfileHandler) loadWorkspaceProfile(ctx context.Context, wsID uuid.UUID) (map[string]any, error) {
+	row := h.DB.QueryRow(ctx, `
 		SELECT
 			COALESCE(name, ''),
 			COALESCE(gstin, ''),
@@ -120,10 +141,9 @@ func (h *WorkspaceProfileHandler) GetProfile(w http.ResponseWriter, r *http.Requ
 		&bankName, &bankHolder, &bankAcc, &ifsc, &branch, &sig, &terms, &footer,
 		&upiID, &panNumber, &instaHandle, &stateCode,
 		&businessSlug, &businessCode); err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":"failed to load profile: %s"}`, err.Error()), http.StatusInternalServerError)
-		return
+		return nil, err
 	}
-	respondJSON(w, http.StatusOK, map[string]any{
+	return map[string]any{
 		"name":                    name,
 		"gstin":                   gstin,
 		"address_line1":           addr1,
@@ -153,7 +173,7 @@ func (h *WorkspaceProfileHandler) GetProfile(w http.ResponseWriter, r *http.Requ
 		"state_code":              stateCode,
 		"business_profile_slug":   businessSlug,
 		"business_unique_code":    businessCode,
-	})
+	}, nil
 }
 
 // UpdateProfile PUTs a partial WorkspaceProfile — any omitted field is

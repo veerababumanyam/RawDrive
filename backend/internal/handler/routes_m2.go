@@ -290,9 +290,19 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 	// branding to lay out. Uses "current" literal + JWT workspace id
 	// (same pattern as /plan above).
 	if deps.Pool != nil {
-		profileHandler := &WorkspaceProfileHandler{DB: deps.Pool}
+		profileHandler := &WorkspaceProfileHandler{DB: deps.Pool, Store: deps.StorageProvider, Assets: deps.AssetRepo}
 		r.Get("/api/v1/workspaces/current/profile", profileHandler.GetProfile)
 		r.Put("/api/v1/workspaces/current/profile", profileHandler.UpdateProfile)
+
+		// Server-side business-logo upload + crop. Renders a free-aspect WebP
+		// brand mark from the chosen crop, stores it as an asset, and points
+		// the workspace's logo_asset_id at it. Requires object storage + the
+		// asset repo; the raw-asset-link path (PUT profile) remains the
+		// fallback when either is absent.
+		if deps.StorageProvider != nil && deps.AssetRepo != nil {
+			r.Post("/api/v1/workspaces/current/logo/upload", profileHandler.UploadLogo)
+			r.Post("/api/v1/workspaces/current/logo/crop", profileHandler.CropLogo)
+		}
 
 		// PR-3c: workspace-level face-recognition opt-in. Backs the
 		// Settings → Face Recognition toggle. Same "current" literal +
