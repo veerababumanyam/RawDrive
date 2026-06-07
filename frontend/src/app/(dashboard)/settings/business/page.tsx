@@ -25,6 +25,9 @@ import {
   SettingsPanel,
 } from "../_components/settings-page-shell";
 import { WorkspaceLogoCrop } from "./_components/workspace-logo-crop";
+import { WorkspaceBrandIdentityHeader } from "./_components/workspace-brand-identity-header";
+
+const LOGO_CONTROL_ID = "studio-logo-control";
 
 const inputClass = "input-base settings-input";
 
@@ -111,6 +114,12 @@ export default function BusinessProfilePage() {
             {saving ? "Saving" : "Save"}
           </GlassButton>
         }
+      />
+
+      <WorkspaceBrandIdentityHeader
+        profile={profile}
+        brandName={studioBrandName}
+        logoControlId={LOGO_CONTROL_ID}
       />
 
       {error && <SettingsAlert tone="error">{error}</SettingsAlert>}
@@ -252,13 +261,15 @@ export default function BusinessProfilePage() {
               }
             />
           </div>
-          <WorkspaceLogoCrop
-            profile={profile}
-            brandName={studioBrandName}
-            onProfileChange={setProfile}
-            onError={(message) => setError(message || null)}
-            onNotice={(message) => setSavedNotice(message || null)}
-          />
+          <div id={LOGO_CONTROL_ID}>
+            <WorkspaceLogoCrop
+              profile={profile}
+              brandName={studioBrandName}
+              onProfileChange={setProfile}
+              onError={(message) => setError(message || null)}
+              onNotice={(message) => setSavedNotice(message || null)}
+            />
+          </div>
         </div>
       </SettingsPanel>
 

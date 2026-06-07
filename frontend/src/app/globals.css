@@ -6094,6 +6094,67 @@ body[data-chrome="marketing"] {
   line-height: var(--leading-2xl);
 }
 
+/* Brand-identity hero — the prominent studio logo + name shown at the TOP of
+   the Business Profile page. Inherits the glass panel aesthetic; all values
+   resolve to semantic tokens so it renders across all three themes. */
+.settings-brand-hero {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.settings-brand-hero__logo {
+  display: flex;
+  width: var(--space-24);
+  height: var(--space-24);
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-2xl);
+  background: var(--surface-elevated);
+}
+
+.settings-brand-hero__image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: var(--space-3);
+}
+
+.settings-brand-hero__placeholder {
+  color: var(--text-tertiary);
+  font-size: var(--type-4xl);
+  font-weight: 700;
+  line-height: var(--leading-4xl);
+}
+
+.settings-brand-hero__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.settings-brand-hero__name {
+  color: var(--text-primary);
+  font-size: var(--type-3xl);
+  font-weight: 700;
+  line-height: var(--leading-3xl);
+}
+
+.settings-brand-hero__subtitle {
+  color: var(--text-secondary);
+  font-size: var(--type-sm);
+  line-height: var(--leading-sm);
+}
+
+.settings-brand-hero__cta {
+  margin-top: var(--space-2);
+}
+
 .settings-file-input {
   display: none;
 }
