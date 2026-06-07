@@ -360,6 +360,46 @@ export default function PublicPhotoSearchPage({
     void startCamera();
   }, [startCamera]);
 
+  // WCAG 4.1.3 (Status Messages, AA): the capture stage swaps visual panels
+  // (preview → searching → match/no-match/error) without moving focus, so a
+  // screen-reader user gets no feedback unless the new state is announced via a
+  // polite live region. This derives a concise, stage-keyed message that the
+  // sr-only region below voices on every transition. Camera/feature errors are
+  // assertive (role="alert") because they interrupt the flow; everything else
+  // is polite.
+  const liveMessage = (() => {
+    switch (stage) {
+      case "preview":
+        return videoReady
+          ? "Camera ready. Tap Capture and search when you are framed."
+          : "Camera is warming up.";
+      case "searching":
+        return "Searching this gallery for your photos.";
+      case "result-found":
+        return `Match found. ${searchResult?.count ?? 0} ${
+          (searchResult?.count ?? 0) === 1 ? "photo" : "photos"
+        } in this gallery.`;
+      case "result-no-face":
+        return "No face detected in your capture. Try again.";
+      case "result-index-empty":
+        return "This gallery has no indexed people yet. Try again later.";
+      case "result-no-match":
+        return "No matching photos found in this gallery.";
+      case "camera-error":
+        if (featureDisabled) {
+          return featureDisabled.reason === "disabled"
+            ? "Photo search is not enabled for this gallery."
+            : "Photo search is not available right now.";
+        }
+        return "Camera unavailable.";
+      default:
+        return "";
+    }
+  })();
+  // Camera/feature failures interrupt the task and warrant assertive delivery;
+  // progress and results are non-interrupting (polite).
+  const liveAssertive = stage === "camera-error";
+
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
       <Link
@@ -386,6 +426,23 @@ export default function PublicPhotoSearchPage({
       </header>
 
       <section className="surface-panel p-4">
+        {/*
+          WCAG 4.1.3 status region. Always mounted (a live region must exist
+          before its text changes to be reliably announced) and visually hidden;
+          it voices the current capture stage to assistive technology as the
+          panels swap. role switches to "alert" for camera/feature failures and
+          "status" otherwise; aria-live mirrors that politeness.
+        */}
+        <div
+          role={liveAssertive ? "alert" : "status"}
+          aria-live={liveAssertive ? "assertive" : "polite"}
+          aria-atomic="true"
+          className="sr-only"
+          data-testid="photo-search-live-region"
+        >
+          {liveMessage}
+        </div>
+
         {stage === "idle" && (
           <div className="mx-auto max-w-xl space-y-4 py-8">
             <Camera
