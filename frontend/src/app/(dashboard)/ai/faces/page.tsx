@@ -5,7 +5,10 @@ import { FaceClusterDetail } from "@/components/ai/FaceClusterDetail";
 import { getStoredAccessToken } from "@/lib/auth";
 export default function AIFacesPage() {
   const token = getStoredAccessToken();
-  const [selectedCluster, setSelectedCluster] = useState<string | null>(null);
+  const [selectedCluster, setSelectedCluster] = useState<{
+    label: string;
+    name: string;
+  } | null>(null);
   return (
     <div>
       {" "}
@@ -29,14 +32,16 @@ export default function AIFacesPage() {
           </button>{" "}
           <FaceClusterDetail
             token={token}
-            clusterLabel={selectedCluster}
-            clusterName=""
+            clusterLabel={selectedCluster.label}
+            clusterName={selectedCluster.name}
           />{" "}
         </div>
       ) : (
         <FaceClusterBrowser
           token={token}
-          onSelectCluster={setSelectedCluster}
+          onSelectCluster={(label, name) =>
+            setSelectedCluster({ label, name })
+          }
         />
       )}{" "}
     </div>

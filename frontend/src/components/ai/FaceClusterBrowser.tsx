@@ -10,7 +10,7 @@ import {
 interface FaceClusterBrowserProps {
   token: string;
   galleryId?: string;
-  onSelectCluster?: (clusterLabel: string) => void;
+  onSelectCluster?: (clusterLabel: string, clusterName: string) => void;
 }
 
 export function FaceClusterBrowser({
@@ -97,7 +97,9 @@ export function FaceClusterBrowser({
       {clusters.map((cluster) => (
         <button
           key={cluster.cluster_label}
-          onClick={() => onSelectCluster?.(cluster.cluster_label)}
+          onClick={() =>
+            onSelectCluster?.(cluster.cluster_label, cluster.cluster_name)
+          }
           className="group flex flex-col items-center gap-2 rounded-xl border border-border-default bg-surface-raised p-4 transition-colors hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-accent min-h-[44px]"
         >
           <div className="h-16 w-16 rounded-full bg-surface-sunken flex items-center justify-center text-text-tertiary text-xl font-semibold">

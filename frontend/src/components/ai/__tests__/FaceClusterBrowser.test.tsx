@@ -93,7 +93,7 @@ describe("FaceClusterBrowser", () => {
     });
 
     fireEvent.click(screen.getByText("Bride"));
-    expect(onSelect).toHaveBeenCalledWith("c1");
+    expect(onSelect).toHaveBeenCalledWith("c1", "Bride");
   });
 
   it("passes galleryId to API call", async () => {
