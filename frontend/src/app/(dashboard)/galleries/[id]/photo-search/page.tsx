@@ -34,6 +34,7 @@ import { use } from "react";
 import { Camera, RefreshCw, Search } from "lucide-react";
 import { GalleryPageShell } from "@/components/gallery/gallery-page-shell";
 import { GalleryPageHeader } from "@/components/gallery/gallery-page-header";
+import { ResizableWorkspaceSplit } from "@/components/gallery/resizable-workspace-split";
 import { searchFaceInGallery, type FaceSearchResponse } from "@/lib/api/ai";
 import type { Asset } from "@/lib/api/assets";
 import { listGalleryAssets } from "@/lib/api/galleries";
@@ -469,7 +470,17 @@ export default function PhotoSearchPage({
         subtitle="Point your camera at someone's face and tap Capture. We'll match it against the people already detected in this gallery and show every photo they appear in."
       />
 
-      <div className="gallery-photo-search-workbench">
+      <ResizableWorkspaceSplit
+        className="gallery-photo-search-workbench"
+        storageKey="rawdrive:gallery-workspace:photo-search:split:v1"
+        label="Resize People Review and photo-search results"
+        secondarySide="start"
+        defaultSecondaryPercent={31}
+        minSecondaryPercent={24}
+        maxSecondaryPercent={42}
+        minSecondaryPx={320}
+        maxSecondaryPx={460}
+      >
         <aside
           className="gallery-photo-search-review"
           aria-label="People review and FaceID sync"
@@ -732,7 +743,7 @@ export default function PhotoSearchPage({
             </section>
           )}
         </div>
-      </div>
+      </ResizableWorkspaceSplit>
     </GalleryPageShell>
   );
 }

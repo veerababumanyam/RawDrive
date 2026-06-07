@@ -78,6 +78,7 @@ import {
 } from "@/components/gallery/cover-templates";
 import { GalleryPageShell } from "@/components/gallery/gallery-page-shell";
 import { GalleryPageHeader } from "@/components/gallery/gallery-page-header";
+import { ResizableWorkspaceSplit } from "@/components/gallery/resizable-workspace-split";
 import { LockedMediaFallback } from "@/components/gallery/media-key-recovery";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -2700,7 +2701,17 @@ export default function CoverDesignPage() {
         </div>
       )}
 
-      <div className="cover-editor-layout cover-workbench">
+      <ResizableWorkspaceSplit
+        className="cover-editor-layout cover-workbench"
+        storageKey="rawdrive:gallery-workspace:cover:split:v1"
+        label="Resize live preview and settings"
+        secondarySide="end"
+        defaultSecondaryPercent={34}
+        minSecondaryPercent={26}
+        maxSecondaryPercent={46}
+        minSecondaryPx={340}
+        maxSecondaryPx={520}
+      >
         {/* ───────── LIVE PREVIEW ───────── */}
         <section className="cover-preview-section cover-preview-pane">
           <div className="cover-preview-toolbar mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -3024,9 +3035,8 @@ export default function CoverDesignPage() {
 
           {/* ───────── EDITOR PANEL ───────── */}
           <section>
-            {/* Section picker moved into the page header as a dropdown
-              next to Preview/Save. The panel body renders the active
-              section's controls without a tab bar above it. */}
+            {/* The panel body renders the active section selected from the
+              dedicated task tabs above. */}
             <Card variant="panel" padding="md" className="cover-editor-panel">
               {tab === "cover" && (
                 <PanelCover
@@ -3087,7 +3097,7 @@ export default function CoverDesignPage() {
             </Card>
           </section>
         </section>
-      </div>
+      </ResizableWorkspaceSplit>
       <TermsAcceptanceModal
         open={termsModalOpen}
         token={token}

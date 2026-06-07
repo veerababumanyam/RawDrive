@@ -91,6 +91,7 @@ import {
 // FaceID gate (GAL-FR-107/108). If the dashboard ever needs the chip
 // strip back, re-add the import + the JSX render block.
 import { GalleryPageShell } from "@/components/gallery/gallery-page-shell";
+import { ResizableWorkspaceSplit } from "@/components/gallery/resizable-workspace-split";
 import { ShareQrPopover } from "@/components/gallery/share-qr-popover";
 import { galleryShareExpiryDays } from "@/lib/gallery-share-expiry";
 import {
@@ -2759,7 +2760,17 @@ export default function GalleryDetailPage({
         />
       )}
 
-      <div className="gallery-overview-workbench">
+      <ResizableWorkspaceSplit
+        className="gallery-overview-workbench"
+        storageKey="rawdrive:gallery-workspace:overview:split:v1"
+        label="Resize gallery photos and workflow panel"
+        secondarySide="end"
+        defaultSecondaryPercent={28}
+        minSecondaryPercent={22}
+        maxSecondaryPercent={42}
+        minSecondaryPx={280}
+        maxSecondaryPx={420}
+      >
         <section className="gallery-overview-main space-y-4">
           <div id="photos" className="surface-panel space-y-4 p-5">
             <div className="flex items-center justify-between">
@@ -3721,7 +3732,7 @@ export default function GalleryDetailPage({
             </Link>
           </div>
         </aside>
-      </div>
+      </ResizableWorkspaceSplit>
 
       {uploadDialogOpen && (
         <div

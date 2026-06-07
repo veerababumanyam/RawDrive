@@ -24,6 +24,8 @@ const SHELL_IMPORT =
   /import\s*{[^}]*\bGalleryPageShell\b[^}]*}\s*from\s*"@\/components\/gallery\/gallery-page-shell"/;
 const HEADER_IMPORT =
   /import\s*{[^}]*\bGalleryPageHeader\b[^}]*}\s*from\s*"@\/components\/gallery\/gallery-page-header"/;
+const RESIZABLE_SPLIT_IMPORT =
+  /import\s*{[^}]*\bResizableWorkspaceSplit\b[^}]*}\s*from\s*"@\/components\/gallery\/resizable-workspace-split"/;
 
 // Pages that MUST share the canonical workspace shell. Preview is deliberately
 // excluded because it renders the exact client gallery with owner chrome.
@@ -48,6 +50,13 @@ const CANONICAL_HEADER_PAGES = [
   "src/app/(dashboard)/galleries/[id]/ai/page.tsx",
 ] as const;
 
+const RESIZABLE_WORKBENCH_PAGES = [
+  "src/app/(dashboard)/galleries/[id]/page.tsx",
+  "src/app/(dashboard)/galleries/[id]/cover/page.tsx",
+  "src/app/(dashboard)/galleries/[id]/settings/page.tsx",
+  "src/app/(dashboard)/galleries/[id]/photo-search/page.tsx",
+] as const;
+
 function readPage(relPath: string): string {
   return fs.readFileSync(path.join(frontendRoot, relPath), "utf8");
 }
@@ -60,6 +69,19 @@ describe("gallery sub-page shell consistency", () => {
 
       expect(source).toMatch(SHELL_IMPORT);
       expect(source).toContain("<GalleryPageShell");
+    },
+  );
+
+  it.each(RESIZABLE_WORKBENCH_PAGES)(
+    "%s uses the shared persisted resizable split for desktop rails",
+    (relPath) => {
+      const source = readPage(relPath);
+
+      expect(source).toMatch(RESIZABLE_SPLIT_IMPORT);
+      expect(source).toContain("<ResizableWorkspaceSplit");
+      expect(source).toContain("rawdrive:gallery-workspace:");
+      expect(source).toContain("split:v1");
+      expect(source).toContain("secondarySide=");
     },
   );
 

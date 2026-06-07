@@ -32,6 +32,7 @@ import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset
 import { TermsAcceptanceModal } from "@/components/legal/terms-acceptance-modal";
 import { GalleryPageShell } from "@/components/gallery/gallery-page-shell";
 import { GalleryPageHeader } from "@/components/gallery/gallery-page-header";
+import { ResizableWorkspaceSplit } from "@/components/gallery/resizable-workspace-split";
 import { InlineAlert } from "@/components/ui/inline-alert";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { Dialog } from "@/components/ui/dialog";
@@ -970,7 +971,17 @@ export default function GallerySettingsPage({
         subtitle={gallery.title}
       />
 
-      <div className="gallery-settings-workbench">
+      <ResizableWorkspaceSplit
+        className="gallery-settings-workbench"
+        storageKey="rawdrive:gallery-workspace:settings:split:v1"
+        label="Resize settings categories and panels"
+        secondarySide="start"
+        defaultSecondaryPercent={23}
+        minSecondaryPercent={16}
+        maxSecondaryPercent={32}
+        minSecondaryPx={200}
+        maxSecondaryPx={320}
+      >
         <aside
           className="gallery-settings-rail"
           aria-label="Settings categories"
@@ -1689,7 +1700,7 @@ export default function GallerySettingsPage({
             )}
           </section>
         </div>
-      </div>
+      </ResizableWorkspaceSplit>
       <WatermarkPreviewModal
         open={watermarkPreviewOpen}
         onClose={() => setWatermarkPreviewOpen(false)}

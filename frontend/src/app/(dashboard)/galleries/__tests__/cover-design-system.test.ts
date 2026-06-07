@@ -95,6 +95,11 @@ describe("gallery cover page design-system contracts", () => {
     expect(source).toContain('width="full"');
     expect(source).toContain('mode="workbench"');
     expect(source).toContain("cover-workbench");
+    expect(source).toContain("ResizableWorkspaceSplit");
+    expect(source).toContain(
+      'storageKey="rawdrive:gallery-workspace:cover:split:v1"',
+    );
+    expect(source).toContain('label="Resize live preview and settings"');
     expect(source).not.toContain("cover-photo-rail");
     expect(source).toContain("cover-preview-pane");
     expect(source).toContain("cover-inspector-pane");
@@ -103,6 +108,8 @@ describe("gallery cover page design-system contracts", () => {
     expect(source).toContain("pagedCoverAssets.map");
     expect(source).not.toContain("assets.map((a, index)");
     expect(css).toContain(".gallery-workspace-shell");
+    expect(css).toContain(".gallery-resizable-split");
+    expect(css).toContain(".gallery-resizable-split__handle");
     expect(css).toContain(".cover-workbench");
     expect(css).not.toContain(".cover-photo-rail");
     expect(css).toContain(".cover-preview-pane");
