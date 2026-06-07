@@ -2,6 +2,8 @@ package handler
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -77,6 +79,24 @@ type PublicGalleryHandler struct {
 	// gallery-session/PIN access gate — never on the unauthenticated shell
 	// (cover thumbnails are deliberately left unsigned).
 	cdn *storage.CDNSigner
+
+	// biometricAudit is the append-only audit ledger for the two public
+	// biometric matching endpoints (PhotoSearch / FaceMatch). Every accepted
+	// request writes exactly one row recording WHO searched (gated session
+	// subject), in WHICH gallery, WHEN, with consent, and the match-count
+	// outcome (DPDP/GDPR Art 9). Required for both endpoints to run: a nil
+	// recorder fails the biometric request closed (no silent unaudited match)
+	// rather than serving matches with no audit trail. Production wires the
+	// pool-backed repository.BiometricConsentRepo via WithBiometricConsentRepo.
+	biometricAudit biometricSearchAuditor
+}
+
+// biometricSearchAuditor is the narrow seam the public handler uses to append a
+// biometric-search audit row. Defined locally so handler tests can substitute a
+// fake (capturing the recorded rows / forcing a write failure) without a DB,
+// while production wires the pool-backed repository.BiometricConsentRepo.
+type biometricSearchAuditor interface {
+	RecordSearch(ctx context.Context, a *repository.BiometricSearchAudit) error
 }
 
 // WithCDNSigner wires the signed-CDN derivative delivery seam (CDN_SIGNED_URLS).
@@ -85,6 +105,82 @@ type PublicGalleryHandler struct {
 func (h *PublicGalleryHandler) WithCDNSigner(c *storage.CDNSigner) *PublicGalleryHandler {
 	h.cdn = c
 	return h
+}
+
+// WithBiometricConsentRepo wires the append-only biometric-search audit ledger
+// (3b / DPDP·GDPR Art 9). Production passes the pool-backed
+// repository.BiometricConsentRepo; tests can pass a fake. When wired, both
+// PhotoSearch and FaceMatch write exactly one audit row per accepted request
+// and FAIL CLOSED if that write fails. Returns the receiver so callers can chain.
+func (h *PublicGalleryHandler) WithBiometricConsentRepo(a biometricSearchAuditor) *PublicGalleryHandler {
+	h.biometricAudit = a
+	return h
+}
+
+// parseConsentGiven interprets the multipart `consent_given` form value as an
+// affirmative biometric consent. PhotoSearch is multipart (the JSON-bodied
+// FaceMatch uses a typed bool), so consent arrives as a string. We accept the
+// common affirmative encodings a browser FormData / fetch client emits — "true"
+// and "1" — and treat everything else (including empty/absent) as no consent.
+func parseConsentGiven(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "true", "1", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+// gallerySessionSubject derives the durable, non-reversible subject identifier
+// for a biometric-search audit row from the request's gated gallery session.
+//
+// It is a SHA-256 hex digest of the gallery-session token the guest already
+// presented to unlock the gallery — so the audit ledger can correlate every
+// search a single gated session performed WITHOUT storing the raw token (which
+// would be a replayable live credential) and WITHOUT inventing any new PII.
+// Returns nil when the request carries no session token (a fully-public
+// gallery), which the audit row records as a NULL subject.
+func gallerySessionSubject(r *http.Request) *string {
+	tok := gallerySessionToken(r)
+	if tok == "" {
+		return nil
+	}
+	sum := sha256.Sum256([]byte(tok))
+	hexsum := hex.EncodeToString(sum[:])
+	return &hexsum
+}
+
+// recordBiometricSearchAudit appends exactly one audit row for an accepted
+// biometric face-search and reports whether the write succeeded. A failed write
+// is FAIL-CLOSED: the caller MUST NOT return matches when this returns false —
+// an unaudited special-category match would breach the DPDP/GDPR Art 9 posture.
+// On failure it writes a 500 with a clear, retryable error so a legitimately-
+// consented request is not silently dropped on a transient infra blip.
+func (h *PublicGalleryHandler) recordBiometricSearchAudit(
+	w http.ResponseWriter, r *http.Request,
+	gallery *repository.Gallery, endpoint string, consentGiven bool, matchCount int,
+) bool {
+	if h.biometricAudit == nil {
+		// The audit ledger is a hard precondition for biometric matching — a
+		// handler wired without it must not serve unaudited matches.
+		http.Error(w, `{"error":"biometric_audit_unavailable"}`, http.StatusServiceUnavailable)
+		return false
+	}
+	err := h.biometricAudit.RecordSearch(r.Context(), &repository.BiometricSearchAudit{
+		WorkspaceID:    gallery.WorkspaceID,
+		GalleryID:      gallery.ID,
+		SessionSubject: gallerySessionSubject(r),
+		Endpoint:       endpoint,
+		ConsentGiven:   consentGiven,
+		MatchCount:     matchCount,
+	})
+	if err != nil {
+		// Fail closed: no audit row → no match returned. 500 (retryable) rather
+		// than dropping the consented request silently.
+		http.Error(w, `{"error":"biometric_audit_write_failed"}`, http.StatusInternalServerError)
+		return false
+	}
+	return true
 }
 
 // deliverThumbnailURLs maps a stored thumbnail_urls map (variant→storage-key)
@@ -1643,6 +1739,14 @@ func (h *PublicGalleryHandler) FaceMatch(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+	// DPDP/GDPR Art 9: append exactly one audit row for this consented biometric
+	// match BEFORE returning any photo identities. Fail-closed — a failed audit
+	// write must not surface matches (recordBiometricSearchAudit has already
+	// written the error response).
+	if !h.recordBiometricSearchAudit(w, r, gallery, repository.BiometricEndpointFaceMatch, req.ConsentGiven, len(ids)) {
+		return
+	}
+
 	respondJSON(w, http.StatusOK, faceMatchResponse{
 		GalleryID:         gallery.ID.String(),
 		AssetIDs:          ids,
@@ -1890,6 +1994,25 @@ func (h *PublicGalleryHandler) PhotoSearch(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	const maxUpload = 10 << 20
+	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
+	if err := r.ParseMultipartForm(maxUpload); err != nil {
+		http.Error(w, `{"error":"could not parse upload"}`, http.StatusBadRequest)
+		return
+	}
+
+	// DPDP/GDPR Art 9 (3b): biometric matching is a hard, explicit-consent
+	// precondition — the SAME 403 biometric_consent_required contract FaceMatch
+	// already enforces. The guest's consent arrives as the `consent_given`
+	// multipart form field; anything other than an affirmative value is rejected
+	// BEFORE any selfie bytes are read, face-svc is called, or any biometric
+	// processing happens.
+	consentGiven := parseConsentGiven(r.FormValue("consent_given"))
+	if !consentGiven {
+		http.Error(w, `{"error":"biometric_consent_required"}`, http.StatusForbidden)
+		return
+	}
+
 	if h.faceRepo == nil || h.faceClient == nil {
 		http.Error(w, `{"error":"photo search not available"}`, http.StatusServiceUnavailable)
 		return
@@ -1905,12 +2028,6 @@ func (h *PublicGalleryHandler) PhotoSearch(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	const maxUpload = 10 << 20
-	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
-	if err := r.ParseMultipartForm(maxUpload); err != nil {
-		http.Error(w, `{"error":"could not parse upload"}`, http.StatusBadRequest)
-		return
-	}
 	file, _, err := r.FormFile("image")
 	if err != nil {
 		http.Error(w, `{"error":"image file required (form field 'image')"}`, http.StatusBadRequest)
@@ -1930,6 +2047,9 @@ func (h *PublicGalleryHandler) PhotoSearch(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if len(resp.Faces) == 0 {
+		if !h.recordBiometricSearchAudit(w, r, gallery, repository.BiometricEndpointPhotoSearch, consentGiven, 0) {
+			return
+		}
 		respondJSON(w, http.StatusOK, map[string]any{
 			"found":          false,
 			"faces_detected": 0,
@@ -1977,6 +2097,9 @@ func (h *PublicGalleryHandler) PhotoSearch(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if len(matches) == 0 {
+		if !h.recordBiometricSearchAudit(w, r, gallery, repository.BiometricEndpointPhotoSearch, consentGiven, 0) {
+			return
+		}
 		respondJSON(w, http.StatusOK, map[string]any{
 			"found":          false,
 			"faces_detected": len(resp.Faces),
@@ -2029,6 +2152,9 @@ func (h *PublicGalleryHandler) PhotoSearch(w http.ResponseWriter, r *http.Reques
 	}
 
 	if winner == nil || (winner.bestSim < minBestSimilarity && winner.aggregate < minAggregateScore) {
+		if !h.recordBiometricSearchAudit(w, r, gallery, repository.BiometricEndpointPhotoSearch, consentGiven, 0) {
+			return
+		}
 		respondJSON(w, http.StatusOK, map[string]any{
 			"found":          false,
 			"faces_detected": len(resp.Faces),
@@ -2052,6 +2178,12 @@ func (h *PublicGalleryHandler) PhotoSearch(w http.ResponseWriter, r *http.Reques
 	stringIDs := make([]string, 0, len(assetIDs))
 	for _, id := range assetIDs {
 		stringIDs = append(stringIDs, id.String())
+	}
+
+	// DPDP/GDPR Art 9: one audit row for this consented match, recording the
+	// match-count outcome, BEFORE returning any photo identities. Fail-closed.
+	if !h.recordBiometricSearchAudit(w, r, gallery, repository.BiometricEndpointPhotoSearch, consentGiven, len(stringIDs)) {
+		return
 	}
 
 	respondJSON(w, http.StatusOK, map[string]any{

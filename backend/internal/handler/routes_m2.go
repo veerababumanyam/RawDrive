@@ -462,6 +462,16 @@ func RegisterPublicGalleryRoutes(r chi.Router, deps M2Dependencies) {
 	if deps.CDNSigner != nil {
 		publicHandler = publicHandler.WithCDNSigner(deps.CDNSigner)
 	}
+	// 3b: append-only biometric consent/search audit ledger (DPDP/GDPR Art 9).
+	// Required for the public PhotoSearch / FaceMatch endpoints to serve matches
+	// — when wired, both record exactly one audit row per request and fail
+	// closed on a write error. Prefer the explicitly-provided repo; otherwise
+	// construct one from the pool so production always has the gate.
+	if deps.BiometricConsentRepo != nil {
+		publicHandler = publicHandler.WithBiometricConsentRepo(deps.BiometricConsentRepo)
+	} else if deps.Pool != nil {
+		publicHandler = publicHandler.WithBiometricConsentRepo(repository.NewBiometricConsentRepo(deps.Pool))
+	}
 	proofingHandler := NewProofingHandler(deps.ProofingService).
 		WithGalleryService(deps.GalleryService).
 		WithGalleryAccessService(deps.GalleryAccessSvc).
@@ -717,4 +727,10 @@ type M2Dependencies struct {
 	// serializers emit bare /storage keys exactly as before. Resolved from
 	// platform_settings(cdn.*) → env in main.go.
 	CDNSigner *storage.CDNSigner
+
+	// BiometricConsentRepo: append-only audit ledger for the public biometric
+	// matching endpoints (PhotoSearch / FaceMatch), DPDP/GDPR Art 9. Wired from
+	// deps.Pool in main.go. When non-nil the public handler requires + records
+	// consent on both endpoints and fails the request closed on a write error.
+	BiometricConsentRepo *repository.BiometricConsentRepo
 }
