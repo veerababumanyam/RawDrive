@@ -1,0 +1,115 @@
+{
+  "schema": "plan-tracker/v1",
+  "feature": {
+    "title": "Free subscription public gallery branding, gallery cap, and strict admin-defined storage quota",
+    "slug": "free-public-gallery-entitlements",
+    "umbrella": 2
+  },
+  "subFeatures": [
+    {
+      "ref": "2a",
+      "slug": "free-plan-catalog-defaults",
+      "title": "Set free-plan catalog defaults to three galleries",
+      "priority": null,
+      "size": null,
+      "deps": [],
+      "paths": [],
+      "doc": "orchestra/orchestra-plan-feature/roadmap/2a-free-plan-catalog-defaults.md",
+      "sourceRowDoc": null,
+      "status": "pending",
+      "issue": 273,
+      "branch": null,
+      "pr": null,
+      "mergedSha": null,
+      "note": null,
+      "startedAt": null,
+      "updatedAt": "2026-06-07T13:09:04.675Z"
+    },
+    {
+      "ref": "2b",
+      "slug": "free-gallery-limit-enforcement",
+      "title": "Enforce the free gallery limit at gallery authority points",
+      "priority": null,
+      "size": null,
+      "deps": [
+        "2a"
+      ],
+      "paths": [],
+      "doc": "orchestra/orchestra-plan-feature/roadmap/2b-free-gallery-limit-enforcement.md",
+      "sourceRowDoc": null,
+      "status": "pending",
+      "issue": 274,
+      "branch": null,
+      "pr": null,
+      "mergedSha": null,
+      "note": null,
+      "startedAt": null,
+      "updatedAt": "2026-06-07T13:09:04.948Z"
+    },
+    {
+      "ref": "2c",
+      "slug": "strict-admin-storage-quota",
+      "title": "Use admin-defined storage quota in strict upload accounting",
+      "priority": null,
+      "size": null,
+      "deps": [
+        "2a"
+      ],
+      "paths": [],
+      "doc": "orchestra/orchestra-plan-feature/roadmap/2c-strict-admin-storage-quota.md",
+      "sourceRowDoc": null,
+      "status": "pending",
+      "issue": 275,
+      "branch": null,
+      "pr": null,
+      "mergedSha": null,
+      "note": null,
+      "startedAt": null,
+      "updatedAt": "2026-06-07T13:09:05.346Z"
+    },
+    {
+      "ref": "2d",
+      "slug": "free-public-gallery-rawdrive-logo",
+      "title": "Render RawDrive logo badge only on free public galleries",
+      "priority": null,
+      "size": null,
+      "deps": [
+        "2a"
+      ],
+      "paths": [],
+      "doc": "orchestra/orchestra-plan-feature/roadmap/2d-free-public-gallery-rawdrive-logo.md",
+      "sourceRowDoc": null,
+      "status": "pending",
+      "issue": 276,
+      "branch": null,
+      "pr": null,
+      "mergedSha": null,
+      "note": null,
+      "startedAt": null,
+      "updatedAt": "2026-06-07T13:09:05.597Z"
+    }
+  ],
+  "metadata": {
+    "created": "2026-06-07T13:07:49.485Z",
+    "lastUpdated": "2026-06-07T13:09:05.598Z",
+    "version": "1",
+    "total": 4,
+    "summary": {
+      "byStatus": {
+        "pending": 4,
+        "in_progress": 0,
+        "merged": 0,
+        "released": 0,
+        "blocked": 0,
+        "superseded": 0
+      },
+      "byPriority": {},
+      "shipped": 0,
+      "total": 4,
+      "percentComplete": 0,
+      "ready": [
+        "2a"
+      ]
+    }
+  }
+}
