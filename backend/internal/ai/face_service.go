@@ -74,9 +74,17 @@ func (s *FaceService) EnqueueDetection(ctx context.Context, workspaceID uuid.UUI
 // DetectAndStore performs face detection on a single asset.
 //
 // Workspace gate: face recognition processes biometric data, gated on the
-// workspace's face_recognition_enabled flag (migration 110, DEFAULT FALSE).
-// A disabled workspace returns nil — the worker treats this as a clean skip
-// so jobs don't pile up in the failed state.
+// workspace's face_recognition_enabled flag. As shipped this flag is
+// DEFAULT-ON: migration 112 flipped the workspace default FALSE → TRUE and
+// backfilled every existing workspace, and the opt-in Settings UI was
+// removed, so in practice the gate always observes TRUE (the column is kept
+// only as an audit/disable surface). The per-gallery faceid_enabled toggle
+// (migration 111) is likewise DEFAULT-ON. The gate is retained so a workspace
+// CAN still be disabled, in which case this returns nil and the worker treats
+// it as a clean skip so jobs don't pile up in the failed state. Real consent
+// capture (not a default-off gate) is delivered by slices 3b/3c, and the
+// licensing + E2EE-posture decision for this default-on biometric processing
+// is recorded by slice 3j.
 //
 // Detection runs on the required face-svc sidecar (insightface, 512-d). The
 // legacy Gemini fallback was removed — it emitted 128-d vectors that are
@@ -243,14 +251,20 @@ func (s *FaceService) isGalleryFaceDetectionEnabled(ctx context.Context, gallery
 }
 
 // IsGalleryFaceDetectionEnabled is the exported view of the per-gallery
-// biometric opt-out gate. Client ingest handlers use it to skip and clear
-// gallery-scoped client faces when Find Me is disabled for that gallery.
+// biometric gate (faceid_enabled, DEFAULT-ON per migration 111). Client
+// ingest handlers use it to skip and clear gallery-scoped client faces when
+// Find Me has been explicitly disabled for that gallery.
 func (s *FaceService) IsGalleryFaceDetectionEnabled(ctx context.Context, galleryID uuid.UUID) (bool, error) {
 	return s.isGalleryFaceDetectionEnabled(ctx, galleryID)
 }
 
-// isFaceRecognitionEnabled reads workspaces.face_recognition_enabled (migration
-// 110). DEFAULT FALSE — biometric data processing is opt-in under DPDP/GDPR.
+// isFaceRecognitionEnabled reads workspaces.face_recognition_enabled. As
+// shipped this is DEFAULT-ON (migration 112 set the default TRUE and
+// backfilled every workspace; the opt-in UI was removed), so this normally
+// returns true — the column is retained as an audit/disable surface, not an
+// opt-in gate. Consent capture is delivered by slices 3b/3c and the
+// licensing + E2EE-posture decision for default-on biometric processing is
+// recorded by slice 3j.
 func (s *FaceService) isFaceRecognitionEnabled(ctx context.Context, workspaceID uuid.UUID) (bool, error) {
 	var enabled bool
 	err := s.faceRepo.pool.QueryRow(ctx,
@@ -264,9 +278,11 @@ func (s *FaceService) isFaceRecognitionEnabled(ctx context.Context, workspaceID 
 }
 
 // IsFaceRecognitionEnabled is the exported view of the workspace biometric
-// opt-in gate (workspaces.face_recognition_enabled, migration 110). The
-// client-face-index ingest handler (epic slice 1) uses it to refuse storing
-// biometric embeddings for a workspace that hasn't opted in (DPDP/GDPR).
+// gate (workspaces.face_recognition_enabled, DEFAULT-ON per migration 112).
+// The client-face-index ingest handler (epic slice 1) uses it to refuse
+// storing biometric embeddings for a workspace that has explicitly disabled
+// face recognition. This is NOT an opt-in/consent gate — the shipped default
+// is on and consent capture is delivered separately by slices 3b/3c.
 func (s *FaceService) IsFaceRecognitionEnabled(ctx context.Context, workspaceID uuid.UUID) (bool, error) {
 	return s.isFaceRecognitionEnabled(ctx, workspaceID)
 }

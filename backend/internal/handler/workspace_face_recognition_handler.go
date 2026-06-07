@@ -1,11 +1,19 @@
 package handler
 
-// PR-3c: workspace-level face-recognition opt-in toggle.
+// PR-3c: workspace-level face-recognition toggle.
 //
-// Backs the Settings → Face Recognition page. The flag stored at
-// workspaces.face_recognition_enabled (migration 110) gates the entire
-// detection pipeline — when false, FaceService.DetectAndStore returns
-// nil silently, and the public People endpoints (PR-3b) return empty.
+// Backs the legacy Settings → Face Recognition page. NOTE on shipped
+// posture: face recognition is DEFAULT-ON — migration 112 flipped
+// workspaces.face_recognition_enabled FALSE → TRUE and backfilled every
+// workspace, and the Settings → Face Recognition tile/page were removed. This
+// is therefore NOT an opt-in toggle as shipped; the flag is retained as an
+// audit/disable surface. The real consent capture (not a default-off gate) is
+// delivered by slices 3b/3c, and the licensing + E2EE-posture decision for the
+// default-on biometric processing is recorded by slice 3j.
+//
+// The flag stored at workspaces.face_recognition_enabled still gates the
+// detection pipeline — when false, FaceService.DetectAndStore returns nil
+// silently, and the public People endpoints (PR-3b) return empty.
 //
 // Endpoints:
 //   GET   /api/v1/workspaces/current/face-recognition → {enabled: bool}
