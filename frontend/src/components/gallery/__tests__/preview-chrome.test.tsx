@@ -114,6 +114,39 @@ describe("PreviewChrome", () => {
     );
   });
 
+  it("copies the resolved share URL when private galleries need a token", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const getShareUrl = vi
+      .fn()
+      .mockResolvedValue(
+        "https://app.rawdrive.test/g/wedding-2026?share=share-token",
+      );
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+
+    render(
+      <PreviewChrome
+        gallery={buildGallery({ access_mode: "private" })}
+        publicUrl="https://app.rawdrive.test/g/wedding-2026"
+        getShareUrl={getShareUrl}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("preview-share-button"));
+
+    await waitFor(() => {
+      expect(getShareUrl).toHaveBeenCalledTimes(1);
+      expect(writeText).toHaveBeenCalledWith(
+        "https://app.rawdrive.test/g/wedding-2026?share=share-token",
+      );
+    });
+    expect(
+      screen.getByText("app.rawdrive.test/g/wedding-2026"),
+    ).toBeInTheDocument();
+  });
+
   it("surfaces an unpublished warning and disables sharing when slug missing", () => {
     render(
       <PreviewChrome
@@ -165,6 +198,37 @@ describe("PreviewChrome", () => {
     ).toBeInTheDocument();
   });
 
+  it("encodes the resolved share URL in the QR popover", async () => {
+    const getShareUrl = vi
+      .fn()
+      .mockResolvedValue(
+        "https://app.rawdrive.test/g/wedding-2026?share=share-token",
+      );
+
+    render(
+      <PreviewChrome
+        gallery={buildGallery({ access_mode: "private" })}
+        publicUrl="https://app.rawdrive.test/g/wedding-2026"
+        getShareUrl={getShareUrl}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("share-qr-toggle"));
+
+    await waitFor(() => expect(getShareUrl).toHaveBeenCalledTimes(1));
+    const popover = await screen.findByTestId("share-qr-popover");
+    const canvas = within(popover).getByTestId("share-qr-canvas");
+    expect(canvas).toHaveAttribute(
+      "aria-label",
+      "QR code for https://app.rawdrive.test/g/wedding-2026?share=share-token",
+    );
+    expect(
+      within(popover).getByText(
+        "https://app.rawdrive.test/g/wedding-2026?share=share-token",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("disables the QR toggle when no public URL is available", () => {
     render(
       <PreviewChrome
@@ -195,6 +259,10 @@ describe("PreviewChrome", () => {
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },
       configurable: true,
+    });
+    Object.defineProperty(document, "execCommand", {
+      configurable: true,
+      value: vi.fn().mockReturnValue(false),
     });
 
     render(

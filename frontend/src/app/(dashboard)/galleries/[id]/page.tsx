@@ -38,7 +38,7 @@ import {
 } from "@/lib/api/favorites";
 import { readEmbeddedVideos, type EmbeddedVideo } from "@/lib/embedded-videos";
 import { assetIsProcessing } from "@/lib/dashboard-ui";
-import { getOrCreateGalleryMediaKey } from "@/lib/media-encryption/media-key-store";
+import { getOrCreateSyncedGalleryMediaKey } from "@/lib/media-encryption/gallery-media-key-sync";
 import {
   appendStoredGalleryKeyFragment,
   setUrlSearchParamBeforeFragment,
@@ -57,6 +57,7 @@ import {
   type WorkspaceProfile,
 } from "@/lib/api/workspace-profile";
 import { cn } from "@/lib/utils";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { GalleryShareQrCard } from "@/components/gallery/gallery-share-qr-card";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
@@ -930,7 +931,7 @@ export default function GalleryDetailPage({
     async (albumId?: string) => {
       try {
         const url = await getCachedWorkingShareUrl(albumId, "copy");
-        await navigator.clipboard.writeText(url);
+        await copyTextToClipboard(url);
         setShareMessage(
           albumId ? "Sub-gallery link copied." : "Gallery link copied.",
         );
@@ -1033,7 +1034,7 @@ export default function GalleryDetailPage({
         /* fall through to clipboard */
       }
       try {
-        await navigator.clipboard.writeText(url);
+        await copyTextToClipboard(url);
         setShareMessage("Photo link copied.");
       } catch {
         setShareMessage(url);
@@ -1442,7 +1443,7 @@ export default function GalleryDetailPage({
   // browser before it leaves the device.
   const uploadEncryption = useMemo(
     () => ({
-      getKey: () => getOrCreateGalleryMediaKey(id),
+      getKey: () => getOrCreateSyncedGalleryMediaKey(id),
     }),
     [id],
   );

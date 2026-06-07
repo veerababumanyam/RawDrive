@@ -1,9 +1,10 @@
 import { authFetch } from "@/lib/api/authFetch";
-import { getApiBaseUrl } from "@/lib/api/base-url";
+import { getApiBaseUrl, getBrowserApiBaseUrl } from "@/lib/api/base-url";
 import type { Asset } from "@/lib/api/assets";
 import type { GalleryBanner, GalleryProduct } from "@/lib/api/commerce";
 
 const apiUrl = (path: string) => `${getApiBaseUrl()}${path}`;
+const browserApiUrl = (path: string) => `${getBrowserApiBaseUrl()}${path}`;
 
 export interface Gallery {
   id: string;
@@ -219,7 +220,12 @@ export interface GalleryBranding {
   hide_footer: boolean;
   public_branding_enabled?: boolean;
   gallery_branding_defaults?: {
-    logo_placement?: "hidden" | "top-left" | "top-right" | "bottom-left" | "bottom-right";
+    logo_placement?:
+      | "hidden"
+      | "top-left"
+      | "top-right"
+      | "bottom-left"
+      | "bottom-right";
     monogram?: string;
     watermark_style?: "none" | "subtle-corner" | "center-mark" | "tiled";
     logo_size?: number;
@@ -473,7 +479,7 @@ export function publicGalleryMusicUrl(
     const sep = path.includes("?") ? "&" : "?";
     path = `${path}${sep}at=${encodeURIComponent(assetAccessToken)}`;
   }
-  return apiUrl(path);
+  return browserApiUrl(path);
 }
 
 // GAL-FR-107/108: FaceID gallery entry
@@ -602,6 +608,36 @@ export async function revokeGalleryShareLink(
   );
   if (!res.ok)
     throw new Error(`Failed to revoke gallery share link: ${res.status}`);
+}
+
+export interface GalleryMediaKeyRecord {
+  key_id: string;
+  exported_key: string;
+}
+
+export async function listGalleryMediaKeys(
+  galleryId: string,
+): Promise<GalleryMediaKeyRecord[]> {
+  const res = await authFetch(`/api/v1/galleries/${galleryId}/media-keys`);
+  if (!res.ok)
+    throw new Error(`Failed to list gallery media keys: ${res.status}`);
+  const body = await res.json();
+  return Array.isArray(body?.keys) ? body.keys : [];
+}
+
+export async function upsertGalleryMediaKey(
+  galleryId: string,
+  key: GalleryMediaKeyRecord,
+): Promise<GalleryMediaKeyRecord> {
+  const res = await authFetch(`/api/v1/galleries/${galleryId}/media-keys`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(key),
+  });
+  if (!res.ok)
+    throw new Error(`Failed to save gallery media key: ${res.status}`);
+  const body = await res.json();
+  return body?.key ?? key;
 }
 
 export interface GalleryAsset {

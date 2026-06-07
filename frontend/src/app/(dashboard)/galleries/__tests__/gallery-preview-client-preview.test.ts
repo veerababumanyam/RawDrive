@@ -44,6 +44,10 @@ describe("Preview as client shared public render contract", () => {
     const source = read(previewPagePath);
     expect(source).toContain("publicUrl: result.public_url || \"\"");
     expect(source).toContain("appendStoredGalleryKeyFragment(payload.publicUrl, id)");
+    expect(source).toContain("createGalleryShareLink");
+    expect(source).toContain("setUrlSearchParamBeforeFragment(");
+    expect(source).toContain("created.token");
+    expect(source).toContain("getShareUrl={getPreviewShareUrl}");
     expect(source).not.toContain("window.location.origin");
   });
 

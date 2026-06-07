@@ -16,6 +16,7 @@ import (
 	"github.com/rawdrive/backend/internal/handler"
 	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
+	"github.com/rawdrive/backend/internal/service"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -68,6 +69,51 @@ type fakeAlbumResolver struct {
 
 func (f *fakeAlbumResolver) GetByID(_ context.Context, _ uuid.UUID) (*repository.Album, error) {
 	return f.album, f.err
+}
+
+type fakeGalleryUploadGate struct {
+	err error
+}
+
+func (f fakeGalleryUploadGate) CheckGalleryUpload(context.Context, uuid.UUID, uuid.UUID, int64) error {
+	return f.err
+}
+
+func TestCreateSession_ExpiredEventGalleryRejectedBeforeStorage(t *testing.T) {
+	workspaceID := uuid.New()
+	userID := uuid.New()
+	galleryID := uuid.New()
+	h := handler.NewChunkedUploadHandler(nil, nil, nil, nil).
+		WithGalleryLinkage(
+			&fakeGalleryResolver{gallery: &repository.Gallery{ID: galleryID, WorkspaceID: workspaceID}},
+			&fakeAlbumResolver{},
+			&fakeGalleryLinker{},
+		).
+		WithGalleryUploadGate(fakeGalleryUploadGate{err: service.ErrGalleryUploadWindowClosed})
+
+	body, err := json.Marshal(map[string]any{
+		"filename":     "closed-gallery.jpg",
+		"content_type": "image/jpeg",
+		"total_size":   2048,
+		"gallery_id":   galleryID.String(),
+	})
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/uploads", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	claims := map[string]interface{}{
+		"sub":          userID.String(),
+		"workspace_id": workspaceID.String(),
+	}
+	ctx := middleware.WithJWTClaims(req.Context(), claims)
+	ctx = middleware.WithWorkspaceID(ctx, workspaceID.String())
+
+	rr := httptest.NewRecorder()
+	h.CreateSession(rr, req.WithContext(ctx))
+
+	require.Equal(t, http.StatusForbidden, rr.Code)
+	assert.Contains(t, rr.Body.String(), "gallery_upload_window_closed")
+	assert.Contains(t, rr.Body.String(), "view-only")
 }
 
 // TestFinalize_WithSessionGalleryID_LinksServerSide is the core P0 guard: when

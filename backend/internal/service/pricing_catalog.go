@@ -187,6 +187,9 @@ func (s *PricingCatalogService) currentApprovedProducts(ctx context.Context) ([]
 		if err != nil {
 			return nil, err
 		}
+		if product.ProductType == "event_upload" && validateBillingProductCatalog(product) != nil {
+			continue
+		}
 		products = append(products, product)
 	}
 	if err := rows.Err(); err != nil {

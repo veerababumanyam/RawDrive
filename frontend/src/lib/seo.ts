@@ -4,7 +4,8 @@ export const SITE_NAME = "RawDrive";
 export const SITE_URL = "https://rawdrive.in";
 export const SITE_LOCALE = "en_IN";
 export const SITE_LANGUAGE = "en-IN";
-export const SITE_TAGLINE = "The Operating System for Professional Photography in India";
+export const SITE_TAGLINE =
+  "The Operating System for Professional Photography in India";
 export const DEFAULT_DESCRIPTION =
   "Run galleries, proofing, AI culling, CRM, scheduling, invoices, live streaming, and marketplace workflows from one platform built for Indian photography studios.";
 export const DEFAULT_OG_IMAGE = {
@@ -79,7 +80,7 @@ export const PUBLIC_PAGES = [
     description:
       "Compare RawDrive plans for photographers in India: Starter, Pay Per Event, Creator, Pro Photographer, Studio, and Elite Studio.",
     summary:
-      "RawDrive pricing includes a free Starter plan, one-off Pay Per Event delivery, and paid studio plans for storage, AI face search, branding, client delivery, and selling.",
+      "RawDrive pricing includes a free Starter plan, governed Pay Per Event delivery with storage quota and 30-day cleanup, and paid studio plans for storage, AI face search, branding, client delivery, and selling.",
     image: {
       url: "/marketing/rawdrive-home-product-os.webp",
       width: 1600,
@@ -441,7 +442,9 @@ export function createPageMetadata(key: PublicPageKey): Metadata {
   const page = getPublicPage(key);
   const image = page.image ?? DEFAULT_OG_IMAGE;
   const canonical = absoluteUrl(page.path);
-  const socialTitle = page.absoluteTitle ? page.title : `${page.title} | ${SITE_NAME}`;
+  const socialTitle = page.absoluteTitle
+    ? page.title
+    : `${page.title} | ${SITE_NAME}`;
 
   return {
     title: page.absoluteTitle ? { absolute: page.title } : page.title,
@@ -496,13 +499,15 @@ export function createNoIndexMetadata(
 }
 
 export function buildMarketingSitemap(): MetadataRoute.Sitemap {
-  return PUBLIC_PAGES_FOR_METADATA.filter((page) => page.sitemap !== false).map((page) => ({
-    url: absoluteUrl(page.path),
-    lastModified: SEO_LAST_MODIFIED,
-    changeFrequency: page.changeFrequency,
-    priority: page.priority,
-    images: page.image ? [absoluteUrl(page.image.url)] : undefined,
-  }));
+  return PUBLIC_PAGES_FOR_METADATA.filter((page) => page.sitemap !== false).map(
+    (page) => ({
+      url: absoluteUrl(page.path),
+      lastModified: SEO_LAST_MODIFIED,
+      changeFrequency: page.changeFrequency,
+      priority: page.priority,
+      images: page.image ? [absoluteUrl(page.image.url)] : undefined,
+    }),
+  );
 }
 
 export function serializeJsonLd(data: unknown): string {
@@ -578,7 +583,9 @@ export function buildFaqJsonLd(
 }
 
 export function buildSiteJsonLd() {
-  const publicWebPages = PUBLIC_PAGES_FOR_METADATA.filter((page) => page.sitemap !== false).map((page) => ({
+  const publicWebPages = PUBLIC_PAGES_FOR_METADATA.filter(
+    (page) => page.sitemap !== false,
+  ).map((page) => ({
     "@type": "WebPage",
     "@id": `${absoluteUrl(page.path)}#webpage`,
     url: absoluteUrl(page.path),
@@ -661,12 +668,48 @@ export function buildSiteJsonLd() {
           name: "RawDrive subscription plans",
           url: absoluteUrl("/pricing"),
           itemListElement: [
-            { "@type": "Offer", name: "Starter", price: "0", priceCurrency: "INR", url: absoluteUrl("/pricing") },
-            { "@type": "Offer", name: "Pay Per Event", price: "199", priceCurrency: "INR", url: absoluteUrl("/pricing") },
-            { "@type": "Offer", name: "Creator", price: "499", priceCurrency: "INR", url: absoluteUrl("/pricing") },
-            { "@type": "Offer", name: "Pro Photographer", price: "999", priceCurrency: "INR", url: absoluteUrl("/pricing") },
-            { "@type": "Offer", name: "Studio", price: "1999", priceCurrency: "INR", url: absoluteUrl("/pricing") },
-            { "@type": "Offer", name: "Elite Studio", price: "3999", priceCurrency: "INR", url: absoluteUrl("/pricing") },
+            {
+              "@type": "Offer",
+              name: "Starter",
+              price: "0",
+              priceCurrency: "INR",
+              url: absoluteUrl("/pricing"),
+            },
+            {
+              "@type": "Offer",
+              name: "Pay Per Event",
+              price: "199",
+              priceCurrency: "INR",
+              url: absoluteUrl("/pricing"),
+            },
+            {
+              "@type": "Offer",
+              name: "Creator",
+              price: "499",
+              priceCurrency: "INR",
+              url: absoluteUrl("/pricing"),
+            },
+            {
+              "@type": "Offer",
+              name: "Pro Photographer",
+              price: "999",
+              priceCurrency: "INR",
+              url: absoluteUrl("/pricing"),
+            },
+            {
+              "@type": "Offer",
+              name: "Studio",
+              price: "1999",
+              priceCurrency: "INR",
+              url: absoluteUrl("/pricing"),
+            },
+            {
+              "@type": "Offer",
+              name: "Elite Studio",
+              price: "3999",
+              priceCurrency: "INR",
+              url: absoluteUrl("/pricing"),
+            },
           ],
         },
       },
@@ -692,7 +735,9 @@ export function buildLlmsTxt(): string {
     "",
     "## Public pages",
     "",
-    ...PUBLIC_PAGES_FOR_METADATA.filter((page) => page.sitemap !== false).flatMap((page) => [
+    ...PUBLIC_PAGES_FOR_METADATA.filter(
+      (page) => page.sitemap !== false,
+    ).flatMap((page) => [
       `- [${page.absoluteTitle ? SITE_NAME : page.title}](${absoluteUrl(page.path)}): ${page.summary}`,
     ]),
     "",

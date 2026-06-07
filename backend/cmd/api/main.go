@@ -1364,6 +1364,7 @@ func main() {
 	// Construct this before email so SMTP follows the documented
 	// platform_settings -> environment -> fail lookup order.
 	platformSettingsRepo := repository.NewPlatformSettingsRepo(dbPool)
+	var platformEnvelope *backendcrypto.Envelope
 	planCatalogSvc := service.NewPlanCatalogService(dbPool)
 	pricingCatalogSvc := service.NewPricingCatalogService(dbPool)
 	pricingChangeRequestSvc := service.NewPricingChangeRequestService(dbPool)
@@ -1375,6 +1376,7 @@ func main() {
 			if err != nil {
 				log.Fatalf("FATAL: PLATFORM_SETTINGS_KEK is invalid: %v", err)
 			}
+			platformEnvelope = envelope
 			platformSettingsRepo = platformSettingsRepo.WithEnvelope(envelope)
 			log.Println("F-005: platform_settings at-rest encryption ENABLED (envelope wired)")
 		} else {
@@ -1399,6 +1401,7 @@ func main() {
 			log.Println("WARNING: PLATFORM_SETTINGS_KEK not set - platform settings secrets will be stored in PLAINTEXT. This is only acceptable in local development/test environments.")
 		}
 	}
+	galleryMediaKeyRepo := repository.NewGalleryMediaKeyRepo(dbPool).WithEnvelope(platformEnvelope)
 
 	// ──────────────────────── M1: Auth, Users, Workspaces, Teams ──────────────────
 
@@ -2256,11 +2259,12 @@ func main() {
 			AssetDerivativeRepo:  assetDerivativeRepo,
 			StorageProvider:      storageProvider,
 			// M12
-			GalleryDesignSvc:  service.NewGalleryDesignService(galleryRepo).WithGalleryAssetRepo(galleryAssetRepo),
-			GalleryRepo:       galleryRepo,
-			DesignTemplateSvc: service.NewDesignTemplateService(repository.NewDesignTemplateRepo(dbPool), galleryRepo),
-			DesignCollabSvc:   service.NewDesignCollabService(nil), // nil NATS — uses in-memory presence
-			DesignAISvc:       nil,                                 // set after AI init below
+			GalleryDesignSvc:    service.NewGalleryDesignService(galleryRepo).WithGalleryAssetRepo(galleryAssetRepo),
+			GalleryRepo:         galleryRepo,
+			GalleryMediaKeyRepo: galleryMediaKeyRepo,
+			DesignTemplateSvc:   service.NewDesignTemplateService(repository.NewDesignTemplateRepo(dbPool), galleryRepo),
+			DesignCollabSvc:     service.NewDesignCollabService(nil), // nil NATS — uses in-memory presence
+			DesignAISvc:         nil,                                 // set after AI init below
 			// M13
 			GalleryAccessSvc:   galleryAccessSvc,
 			ProofingSessionSvc: proofingSessionSvc,
@@ -2365,7 +2369,8 @@ func main() {
 			// validates an optional gallery_id (+ album_id) against the caller's
 			// workspace and persists it; finalize links the asset itself so the
 			// association never depends on a post-finalize client call.
-			WithGalleryLinkage(galleryRepo, albumRepo, galleryAssetRepo)
+			WithGalleryLinkage(galleryRepo, albumRepo, galleryAssetRepo).
+			WithGalleryUploadGate(service.NewEventGalleryUploadGate(dbPool))
 		chunkedHandler.RegisterRoutes(api)
 
 		// Terms-of-Service / copyright acceptance endpoints (GET current, GET
@@ -3388,7 +3393,8 @@ func main() {
 	// photo's ciphertext serves no recovery purpose and only wastes B2 storage.
 	expiryWorker := worker.NewGalleryExpiryWorker(dbPool)
 	workerRegistry.Register("gallery-expiry", expiryWorker)
-	billingLifecycleWorker := worker.NewBillingLifecycleWorker(dbPool, notificationEmailSender, publicBaseURL)
+	billingLifecycleWorker := worker.NewBillingLifecycleWorker(dbPool, notificationEmailSender, publicBaseURL).
+		WithStorageProvider(storageProvider)
 	workerRegistry.Register("billing-lifecycle", billingLifecycleWorker)
 	// Gallery Enhancements June 2026: branded client email automation. Self-
 	// seeding drip (ready / reminder / last-chance). Only wired when SMTP is

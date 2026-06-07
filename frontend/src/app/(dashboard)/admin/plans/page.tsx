@@ -211,16 +211,43 @@ function productQuotaSummary(product: EditableProduct): string {
   return formatQuotaBytes(bytes >= TB ? Math.round(bytes) : bytes);
 }
 
+function eventProductValidationError(product: EditableProduct): string {
+  if (product.product_type !== "event_upload" || !product.active) return "";
+  const quotaGB = Number(product.quota_gb);
+  if (!Number.isFinite(quotaGB) || quotaGB <= 0) {
+    return "Active event products require a storage quota.";
+  }
+  const activeDays = Number(product.active_days);
+  if (!Number.isFinite(activeDays) || activeDays <= 0 || activeDays > 30) {
+    return "Active event products require active days between 1 and 30.";
+  }
+  const uploadWindowDays = Number(product.upload_window_days);
+  if (
+    !Number.isFinite(uploadWindowDays) ||
+    uploadWindowDays <= 0 ||
+    uploadWindowDays > activeDays
+  ) {
+    return "Upload window must be between 1 and active days.";
+  }
+  const retentionDays = Number(product.retention_days);
+  if (retentionDays !== 30) {
+    return "Pay Per Event retention must be exactly 30 days.";
+  }
+  return "";
+}
+
 function NumberField({
   label,
   value,
   min = "0",
+  required,
   disabled,
   onChange,
 }: {
   label: string;
   value: string | number;
   min?: string;
+  required?: boolean;
   disabled?: boolean;
   onChange: (value: string) => void;
 }) {
@@ -231,6 +258,7 @@ function NumberField({
         type="number"
         min={min}
         value={value}
+        required={required}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         className="touch-min w-full rounded-xl border border-border-subtle bg-surface px-3 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
@@ -254,9 +282,7 @@ export default function AdminPlansPage() {
   );
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [canManage] = useState(
-    () => getStoredPlatformRole() === "super_admin",
-  );
+  const [canManage] = useState(() => getStoredPlatformRole() === "super_admin");
 
   useEffect(() => {
     let active = true;
@@ -322,10 +348,11 @@ export default function AdminPlansPage() {
     try {
       const token = getStoredAccessToken() || "";
       const afterState = { tier: plan.tier, ...toPlanUpdateInput(plan) };
-      const beforeState =
-        original.plans.find((item) => item.tier === plan.tier) ?? {
-          tier: plan.tier,
-        };
+      const beforeState = original.plans.find(
+        (item) => item.tier === plan.tier,
+      ) ?? {
+        tier: plan.tier,
+      };
       const created = await createPricingChangeRequest(token, {
         request_type: "plan_update",
         target_type: "subscription_plan",
@@ -366,21 +393,24 @@ export default function AdminPlansPage() {
     }
   }
 
-  async function handleSaveProduct(
-    event: FormEvent,
-    product: EditableProduct,
-  ) {
+  async function handleSaveProduct(event: FormEvent, product: EditableProduct) {
     event.preventDefault();
     setMessage(null);
     setError(null);
+    const validationError = eventProductValidationError(product);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
     setSavingKey(`product:${product.code}`);
     try {
       const token = getStoredAccessToken() || "";
       const afterState = toProductUpdateInput(product);
-      const beforeState =
-        original.products.find((item) => item.code === product.code) ?? {
-          code: product.code,
-        };
+      const beforeState = original.products.find(
+        (item) => item.code === product.code,
+      ) ?? {
+        code: product.code,
+      };
       const created = await createPricingChangeRequest(token, {
         request_type: "product_update",
         target_type: "billing_product",
@@ -403,7 +433,9 @@ export default function AdminPlansPage() {
       });
       const submitted = await submitPricingChangeRequest(token, created.id);
       setChanges((current) => [submitted, ...current]);
-      setMessage(`${product.name || product.code} change submitted for approval.`);
+      setMessage(
+        `${product.name || product.code} change submitted for approval.`,
+      );
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to submit product change",
@@ -594,9 +626,9 @@ export default function AdminPlansPage() {
                         </div>
                         <p className="mt-2 text-sm text-text-secondary">
                           Rs.{" "}
-                          {Number(plan.monthly_price_rupees || 0).toLocaleString(
-                            "en-IN",
-                          )}
+                          {Number(
+                            plan.monthly_price_rupees || 0,
+                          ).toLocaleString("en-IN")}
                           /mo · Rs.{" "}
                           {Number(plan.annual_price_rupees || 0).toLocaleString(
                             "en-IN",
@@ -800,6 +832,7 @@ export default function AdminPlansPage() {
               {products.map((product) => {
                 const saving = savingKey === `product:${product.code}`;
                 const quota = productQuotaSummary(product);
+                const validationError = eventProductValidationError(product);
                 return (
                   <form
                     key={product.code}
@@ -832,6 +865,12 @@ export default function AdminPlansPage() {
                           {billingIntervalLabel(product)}
                           {quota ? ` · ${quota}` : ""}
                         </p>
+                        {product.product_type === "event_upload" && (
+                          <p className="mt-2 text-xs font-semibold text-feedback-warning">
+                            Storage quota is required for active public Pay Per
+                            Event products.
+                          </p>
+                        )}
                       </div>
                       <button
                         type="submit"
@@ -887,6 +926,7 @@ export default function AdminPlansPage() {
                       <NumberField
                         label="Active days"
                         value={product.active_days}
+                        required={product.product_type === "event_upload"}
                         onChange={(value) =>
                           patchProduct(product.code, { active_days: value })
                         }
@@ -894,6 +934,7 @@ export default function AdminPlansPage() {
                       <NumberField
                         label="Upload window days"
                         value={product.upload_window_days}
+                        required={product.product_type === "event_upload"}
                         onChange={(value) =>
                           patchProduct(product.code, {
                             upload_window_days: value,
@@ -901,8 +942,13 @@ export default function AdminPlansPage() {
                         }
                       />
                       <NumberField
-                        label="Retention days"
+                        label={
+                          product.product_type === "event_upload"
+                            ? "Retention days (30 required)"
+                            : "Retention days"
+                        }
                         value={product.retention_days}
+                        required={product.product_type === "event_upload"}
                         onChange={(value) =>
                           patchProduct(product.code, { retention_days: value })
                         }
@@ -925,8 +971,13 @@ export default function AdminPlansPage() {
                         }
                       />
                       <NumberField
-                        label="Quota GB"
+                        label={
+                          product.product_type === "event_upload"
+                            ? "Event storage quota GB"
+                            : "Quota GB"
+                        }
                         value={product.quota_gb}
+                        required={product.product_type === "event_upload"}
                         onChange={(value) =>
                           patchProduct(product.code, { quota_gb: value })
                         }
@@ -992,6 +1043,11 @@ export default function AdminPlansPage() {
                         Archive forever
                       </label>
                     </div>
+                    {validationError && (
+                      <p className="mt-3 text-sm font-semibold text-feedback-warning">
+                        {validationError}
+                      </p>
+                    )}
                   </form>
                 );
               })}

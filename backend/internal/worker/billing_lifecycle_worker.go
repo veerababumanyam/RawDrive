@@ -11,10 +11,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/rawdrive/backend/internal/publicurl"
+	"github.com/rawdrive/backend/internal/storage"
 )
 
 type billingNotificationSender interface {
@@ -27,9 +29,15 @@ type billingNotificationSender interface {
 type BillingLifecycleWorker struct {
 	pool          *pgxpool.Pool
 	sender        billingNotificationSender
+	store         storage.Provider
 	publicBaseURL string
 	pollInterval  time.Duration
 	stopCh        chan struct{}
+}
+
+func (w *BillingLifecycleWorker) WithStorageProvider(store storage.Provider) *BillingLifecycleWorker {
+	w.store = store
+	return w
 }
 
 func NewBillingLifecycleWorker(pool *pgxpool.Pool, sender billingNotificationSender, publicBaseURL string) *BillingLifecycleWorker {
@@ -384,6 +392,23 @@ func (w *BillingLifecycleWorker) deleteGalleryTarget(ctx context.Context, job bi
 		w.markFailed(ctx, job.id, err)
 		return err
 	}
+	if skipped, err := w.skipConvertedPayPerEventCleanup(ctx, job); err != nil {
+		w.markFailed(ctx, job.id, err)
+		return err
+	} else if skipped {
+		return w.markCompleted(ctx, job.id, map[string]any{
+			"skipped": "converted_to_paid_subscription",
+		})
+	}
+	keys, err := w.storageKeysForLifecycleTarget(ctx, job)
+	if err != nil {
+		w.markFailed(ctx, job.id, err)
+		return err
+	}
+	if err := w.deleteStorageKeys(ctx, keys); err != nil {
+		w.markFailed(ctx, job.id, err)
+		return err
+	}
 
 	var galleryCount, assetCount int64
 	tx, err := w.pool.Begin(ctx)
@@ -395,6 +420,36 @@ func (w *BillingLifecycleWorker) deleteGalleryTarget(ctx context.Context, job bi
 
 	switch job.targetType {
 	case "gallery":
+		if err := clearGalleryAssetRestrictRefs(ctx, tx, job.targetID); err != nil {
+			w.markFailed(ctx, job.id, err)
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			WITH target_gallery AS (
+			    SELECT id, workspace_id
+			    FROM galleries
+			    WHERE id = $1 AND deleted_at IS NULL
+			),
+			deletable_assets AS (
+			    SELECT DISTINCT ga.asset_id
+			    FROM gallery_assets ga
+			    JOIN target_gallery tg ON tg.id = ga.gallery_id
+			    WHERE NOT EXISTS (
+			        SELECT 1
+			        FROM gallery_assets other_ga
+			        JOIN galleries other_g ON other_g.id = other_ga.gallery_id
+			        WHERE other_ga.asset_id = ga.asset_id
+			          AND other_ga.gallery_id <> ga.gallery_id
+			          AND other_g.deleted_at IS NULL
+			    )
+			)
+			DELETE FROM asset_derivatives
+			WHERE asset_id IN (SELECT asset_id FROM deletable_assets)`,
+			job.targetID,
+		); err != nil {
+			w.markFailed(ctx, job.id, err)
+			return err
+		}
 		assetTag, err := tx.Exec(ctx, `
 			WITH target_gallery AS (
 			    SELECT id, workspace_id
@@ -414,10 +469,8 @@ func (w *BillingLifecycleWorker) deleteGalleryTarget(ctx context.Context, job bi
 			          AND other_g.deleted_at IS NULL
 			    )
 			)
-			UPDATE assets
-			SET deleted_at = now(), status = 'deleted', updated_at = now()
-			WHERE id IN (SELECT asset_id FROM deletable_assets)
-			  AND deleted_at IS NULL`,
+			DELETE FROM assets
+			WHERE id IN (SELECT asset_id FROM deletable_assets)`,
 			job.targetID,
 		)
 		if err != nil {
@@ -437,9 +490,45 @@ func (w *BillingLifecycleWorker) deleteGalleryTarget(ctx context.Context, job bi
 			return err
 		}
 		galleryCount = tag.RowsAffected()
+		if job.workspaceID != nil {
+			if err := refreshWorkspaceStorageUsage(ctx, tx, *job.workspaceID); err != nil {
+				w.markFailed(ctx, job.id, err)
+				return err
+			}
+		}
 	case "workspace":
 		if job.workspaceID == nil {
 			err := fmt.Errorf("workspace id is required for workspace gallery deletion")
+			w.markFailed(ctx, job.id, err)
+			return err
+		}
+		if err := clearWorkspaceAssetRestrictRefs(ctx, tx, *job.workspaceID); err != nil {
+			w.markFailed(ctx, job.id, err)
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			WITH target_galleries AS (
+			    SELECT id
+			    FROM galleries
+			    WHERE workspace_id = $1 AND deleted_at IS NULL
+			),
+			deletable_assets AS (
+			    SELECT DISTINCT ga.asset_id
+			    FROM gallery_assets ga
+			    JOIN target_galleries tg ON tg.id = ga.gallery_id
+			    WHERE NOT EXISTS (
+			        SELECT 1
+			        FROM gallery_assets other_ga
+			        JOIN galleries other_g ON other_g.id = other_ga.gallery_id
+			        WHERE other_ga.asset_id = ga.asset_id
+			          AND other_g.id NOT IN (SELECT id FROM target_galleries)
+			          AND other_g.deleted_at IS NULL
+			    )
+			)
+			DELETE FROM asset_derivatives
+			WHERE asset_id IN (SELECT asset_id FROM deletable_assets)`,
+			*job.workspaceID,
+		); err != nil {
 			w.markFailed(ctx, job.id, err)
 			return err
 		}
@@ -462,10 +551,8 @@ func (w *BillingLifecycleWorker) deleteGalleryTarget(ctx context.Context, job bi
 			          AND other_g.deleted_at IS NULL
 			    )
 			)
-			UPDATE assets
-			SET deleted_at = now(), status = 'deleted', updated_at = now()
-			WHERE id IN (SELECT asset_id FROM deletable_assets)
-			  AND deleted_at IS NULL`,
+			DELETE FROM assets
+			WHERE id IN (SELECT asset_id FROM deletable_assets)`,
 			*job.workspaceID,
 		)
 		if err != nil {
@@ -485,10 +572,28 @@ func (w *BillingLifecycleWorker) deleteGalleryTarget(ctx context.Context, job bi
 			return err
 		}
 		galleryCount = tag.RowsAffected()
+		if err := refreshWorkspaceStorageUsage(ctx, tx, *job.workspaceID); err != nil {
+			w.markFailed(ctx, job.id, err)
+			return err
+		}
 	default:
 		err := fmt.Errorf("gallery_delete cannot target %s", job.targetType)
 		w.markFailed(ctx, job.id, err)
 		return err
+	}
+	if job.policyCode == "pay_per_event_default" {
+		if _, err := tx.Exec(ctx, `
+			UPDATE gallery_event_entitlements
+			   SET status = 'cleaned',
+			       cleanup_completed_at = COALESCE(cleanup_completed_at, now()),
+			       updated_at = now()
+			 WHERE gallery_id = $1
+			   AND cleanup_completed_at IS NULL`,
+			job.targetID,
+		); err != nil {
+			w.markFailed(ctx, job.id, err)
+			return err
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -512,6 +617,23 @@ func (w *BillingLifecycleWorker) deleteAccountTarget(ctx context.Context, job bi
 		w.markFailed(ctx, job.id, err)
 		return err
 	}
+	if skipped, err := w.skipConvertedPayPerEventCleanup(ctx, job); err != nil {
+		w.markFailed(ctx, job.id, err)
+		return err
+	} else if skipped {
+		return w.markCompleted(ctx, job.id, map[string]any{
+			"skipped": "converted_to_paid_subscription",
+		})
+	}
+	keys, err := w.storageKeysForLifecycleTarget(ctx, job)
+	if err != nil {
+		w.markFailed(ctx, job.id, err)
+		return err
+	}
+	if err := w.deleteStorageKeys(ctx, keys); err != nil {
+		w.markFailed(ctx, job.id, err)
+		return err
+	}
 
 	tx, err := w.pool.Begin(ctx)
 	if err != nil {
@@ -522,6 +644,31 @@ func (w *BillingLifecycleWorker) deleteAccountTarget(ctx context.Context, job bi
 
 	var ownerID uuid.UUID
 	if err := tx.QueryRow(ctx, `SELECT owner_id FROM workspaces WHERE id = $1`, *job.workspaceID).Scan(&ownerID); err != nil {
+		w.markFailed(ctx, job.id, err)
+		return err
+	}
+
+	if err := clearWorkspaceAssetRestrictRefs(ctx, tx, *job.workspaceID); err != nil {
+		w.markFailed(ctx, job.id, err)
+		return err
+	}
+
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM asset_derivatives
+		WHERE asset_id IN (
+			SELECT id FROM assets WHERE workspace_id = $1
+		)`,
+		*job.workspaceID,
+	); err != nil {
+		w.markFailed(ctx, job.id, err)
+		return err
+	}
+	assetTag, err := tx.Exec(ctx, `
+		DELETE FROM assets
+		WHERE workspace_id = $1`,
+		*job.workspaceID,
+	)
+	if err != nil {
 		w.markFailed(ctx, job.id, err)
 		return err
 	}
@@ -565,6 +712,32 @@ func (w *BillingLifecycleWorker) deleteAccountTarget(ctx context.Context, job bi
 		w.markFailed(ctx, job.id, err)
 		return err
 	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE workspace_storage
+		   SET used_bytes = 0,
+		       derivative_bytes = 0,
+		       reserved_bytes = 0,
+		       updated_at = now()
+		 WHERE workspace_id = $1`,
+		*job.workspaceID,
+	); err != nil {
+		w.markFailed(ctx, job.id, err)
+		return err
+	}
+	if job.policyCode == "pay_per_event_default" {
+		if _, err := tx.Exec(ctx, `
+			UPDATE gallery_event_entitlements
+			   SET status = 'cleaned',
+			       cleanup_completed_at = COALESCE(cleanup_completed_at, now()),
+			       updated_at = now()
+			 WHERE workspace_id = $1
+			   AND cleanup_completed_at IS NULL`,
+			*job.workspaceID,
+		); err != nil {
+			w.markFailed(ctx, job.id, err)
+			return err
+		}
+	}
 
 	if err := tx.Commit(ctx); err != nil {
 		w.markFailed(ctx, job.id, err)
@@ -572,6 +745,7 @@ func (w *BillingLifecycleWorker) deleteAccountTarget(ctx context.Context, job bi
 	}
 	return w.markCompleted(ctx, job.id, map[string]any{
 		"galleries_deleted":  galleryTag.RowsAffected(),
+		"assets_deleted":     assetTag.RowsAffected(),
 		"workspaces_deleted": workspaceTag.RowsAffected(),
 		"users_deleted":      userTag.RowsAffected(),
 	})
@@ -619,6 +793,279 @@ func (w *BillingLifecycleWorker) expireStorageBooster(ctx context.Context, job b
 		"quota_bytes_removed": quotaBytes,
 		"safe_reduction":      true,
 	})
+}
+
+func (w *BillingLifecycleWorker) skipConvertedPayPerEventCleanup(ctx context.Context, job billingLifecycleJob) (bool, error) {
+	if job.policyCode != "pay_per_event_default" || job.workspaceID == nil {
+		return false, nil
+	}
+	var converted bool
+	if err := w.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			  FROM workspaces w
+			 WHERE w.id = $1
+			   AND COALESCE(w.status, 'active') = 'active'
+			   AND COALESCE(w.plan_tier, 'free') NOT IN ('free', 'pay_per_event')
+		) OR EXISTS (
+			SELECT 1
+			  FROM subscriptions s
+			 WHERE s.workspace_id = $1
+			   AND s.status = 'active'
+			   AND COALESCE(s.tier_slug, '') NOT IN ('free', 'pay_per_event')
+			   AND (s.expires_at IS NULL OR s.expires_at > now())
+		)`,
+		*job.workspaceID,
+	).Scan(&converted); err != nil {
+		return false, err
+	}
+	if !converted {
+		return false, nil
+	}
+	if _, err := w.pool.Exec(ctx, `
+		UPDATE gallery_event_entitlements
+		   SET status = 'converted',
+		       converted_at = COALESCE(converted_at, now()),
+		       updated_at = now()
+		 WHERE workspace_id = $1
+		   AND converted_at IS NULL
+		   AND cancelled_at IS NULL
+		   AND cleanup_completed_at IS NULL`,
+		*job.workspaceID,
+	); err != nil {
+		return false, err
+	}
+	_, err := w.pool.Exec(ctx, `
+		UPDATE billing_lifecycle_jobs
+		   SET status = 'cancelled', updated_at = now()
+		 WHERE workspace_id = $1
+		   AND id <> $2
+		   AND status IN ('pending', 'failed')
+		   AND job_type IN ('expiry_warning', 'deletion_warning', 'gallery_delete', 'account_delete', 'conversion_prompt')`,
+		*job.workspaceID, job.id,
+	)
+	return true, err
+}
+
+func (w *BillingLifecycleWorker) storageKeysForLifecycleTarget(ctx context.Context, job billingLifecycleJob) ([]string, error) {
+	switch job.targetType {
+	case "gallery":
+		rows, err := w.pool.Query(ctx, `
+			WITH target_gallery AS (
+			    SELECT id
+			      FROM galleries
+			     WHERE id = $1 AND deleted_at IS NULL
+			),
+			target_assets AS (
+			    SELECT DISTINCT ga.asset_id
+			      FROM gallery_assets ga
+			      JOIN target_gallery tg ON tg.id = ga.gallery_id
+			     WHERE NOT EXISTS (
+			        SELECT 1
+			          FROM gallery_assets other_ga
+			          JOIN galleries other_g ON other_g.id = other_ga.gallery_id
+			         WHERE other_ga.asset_id = ga.asset_id
+			           AND other_ga.gallery_id <> ga.gallery_id
+			           AND other_g.deleted_at IS NULL
+			     )
+			),
+			keys AS (
+			    SELECT NULLIF(a.storage_key, '') AS storage_key
+			      FROM assets a
+			     WHERE a.id IN (SELECT asset_id FROM target_assets)
+			    UNION
+			    SELECT NULLIF(ad.storage_key, '') AS storage_key
+			      FROM asset_derivatives ad
+			     WHERE ad.asset_id IN (SELECT asset_id FROM target_assets)
+			)
+			SELECT storage_key FROM keys WHERE storage_key IS NOT NULL`,
+			job.targetID,
+		)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		return scanStorageKeys(rows)
+	case "workspace":
+		if job.workspaceID == nil {
+			return nil, fmt.Errorf("workspace id is required for storage cleanup")
+		}
+		rows, err := w.pool.Query(ctx, `
+			WITH target_assets AS (
+			    SELECT id
+			      FROM assets
+			     WHERE workspace_id = $1
+			),
+			keys AS (
+			    SELECT NULLIF(a.storage_key, '') AS storage_key
+			      FROM assets a
+			     WHERE a.id IN (SELECT id FROM target_assets)
+			    UNION
+			    SELECT NULLIF(ad.storage_key, '') AS storage_key
+			      FROM asset_derivatives ad
+			     WHERE ad.asset_id IN (SELECT id FROM target_assets)
+			)
+			SELECT storage_key FROM keys WHERE storage_key IS NOT NULL`,
+			*job.workspaceID,
+		)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		return scanStorageKeys(rows)
+	default:
+		return nil, nil
+	}
+}
+
+type storageKeyRows interface {
+	Next() bool
+	Scan(dest ...any) error
+	Err() error
+}
+
+func scanStorageKeys(rows storageKeyRows) ([]string, error) {
+	var keys []string
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		keys = append(keys, key)
+	}
+	return keys, rows.Err()
+}
+
+func (w *BillingLifecycleWorker) deleteStorageKeys(ctx context.Context, keys []string) error {
+	seen := make(map[string]struct{}, len(keys))
+	var unique []string
+	for _, key := range keys {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		unique = append(unique, key)
+	}
+	if len(unique) == 0 {
+		return nil
+	}
+	if w.store == nil {
+		return fmt.Errorf("storage provider is required for lifecycle cleanup")
+	}
+	for _, key := range unique {
+		if err := w.store.Delete(ctx, key); err != nil {
+			return fmt.Errorf("delete storage key %s: %w", key, err)
+		}
+	}
+	return nil
+}
+
+func clearGalleryAssetRestrictRefs(ctx context.Context, tx pgx.Tx, galleryID uuid.UUID) error {
+	if _, err := tx.Exec(ctx, `
+		WITH target_gallery AS (
+		    SELECT id
+		      FROM galleries
+		     WHERE id = $1 AND deleted_at IS NULL
+		),
+		deletable_assets AS (
+		    SELECT DISTINCT ga.asset_id
+		      FROM gallery_assets ga
+		      JOIN target_gallery tg ON tg.id = ga.gallery_id
+		     WHERE NOT EXISTS (
+		        SELECT 1
+		          FROM gallery_assets other_ga
+		          JOIN galleries other_g ON other_g.id = other_ga.gallery_id
+		         WHERE other_ga.asset_id = ga.asset_id
+		           AND other_ga.gallery_id <> ga.gallery_id
+		           AND other_g.deleted_at IS NULL
+		    )
+		)
+		UPDATE gallery_products
+		   SET asset_id = NULL, updated_at = now()
+		 WHERE asset_id IN (SELECT asset_id FROM deletable_assets)`,
+		galleryID,
+	); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `
+		WITH target_gallery AS (
+		    SELECT id
+		      FROM galleries
+		     WHERE id = $1 AND deleted_at IS NULL
+		),
+		deletable_assets AS (
+		    SELECT DISTINCT ga.asset_id
+		      FROM gallery_assets ga
+		      JOIN target_gallery tg ON tg.id = ga.gallery_id
+		     WHERE NOT EXISTS (
+		        SELECT 1
+		          FROM gallery_assets other_ga
+		          JOIN galleries other_g ON other_g.id = other_ga.gallery_id
+		         WHERE other_ga.asset_id = ga.asset_id
+		           AND other_ga.gallery_id <> ga.gallery_id
+		           AND other_g.deleted_at IS NULL
+		    )
+		)
+		UPDATE burst_groups
+		   SET best_pick_id = NULL
+		 WHERE best_pick_id IN (SELECT asset_id FROM deletable_assets)`,
+		galleryID,
+	)
+	return err
+}
+
+func clearWorkspaceAssetRestrictRefs(ctx context.Context, tx pgx.Tx, workspaceID uuid.UUID) error {
+	if _, err := tx.Exec(ctx, `
+		UPDATE gallery_products
+		   SET asset_id = NULL, updated_at = now()
+		 WHERE workspace_id = $1
+		   AND asset_id IN (
+		       SELECT id FROM assets WHERE workspace_id = $1
+		   )`,
+		workspaceID,
+	); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `
+		UPDATE burst_groups
+		   SET best_pick_id = NULL
+		 WHERE gallery_id IN (
+		       SELECT id FROM galleries WHERE workspace_id = $1
+		   )
+		   AND best_pick_id IN (
+		       SELECT id FROM assets WHERE workspace_id = $1
+		   )`,
+		workspaceID,
+	)
+	return err
+}
+
+func refreshWorkspaceStorageUsage(ctx context.Context, tx pgx.Tx, workspaceID uuid.UUID) error {
+	_, err := tx.Exec(ctx, `
+		UPDATE workspace_storage ws
+		   SET used_bytes = COALESCE((
+		           SELECT SUM(a.size_bytes)
+		             FROM assets a
+		            WHERE a.workspace_id = $1
+		              AND a.deleted_at IS NULL
+		       ), 0),
+		       derivative_bytes = COALESCE((
+		           SELECT SUM(ad.size_bytes)
+		             FROM asset_derivatives ad
+		             JOIN assets a ON a.id = ad.asset_id
+		            WHERE a.workspace_id = $1
+		              AND a.deleted_at IS NULL
+		       ), 0),
+		       reserved_bytes = 0,
+		       updated_at = now()
+		 WHERE ws.workspace_id = $1`,
+		workspaceID,
+	)
+	return err
 }
 
 func (w *BillingLifecycleWorker) hasDeletionNoticeProof(ctx context.Context, job billingLifecycleJob) bool {

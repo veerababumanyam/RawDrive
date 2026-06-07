@@ -232,10 +232,11 @@ describe("Pricing Page", () => {
 
     expect(screen.getByText("Event upload")).toBeInTheDocument();
     expect(screen.getByText("Wedding upload")).toBeInTheDocument();
-    expect(screen.getByText("30-day active phase")).toBeInTheDocument();
-    expect(screen.getByText("60-day active phase")).toBeInTheDocument();
+    expect(screen.getAllByText("30-day active phase").length).toBeGreaterThan(
+      1,
+    );
     expect(
-      screen.getAllByText("Auto-archive at day 90 unless extended").length,
+      screen.getAllByText("Clean sweep after 30 days unless upgraded").length,
     ).toBeGreaterThan(0);
     expect(
       screen.queryByText("Add-ons and extension packs"),
@@ -292,9 +293,10 @@ describe("Pricing Page", () => {
         price_paise: 29900,
         billing_interval: "one_time",
         metadata: {
-          active_days: 45,
-          upload_window_days: 45,
-          retention_days: 120,
+          active_days: 30,
+          upload_window_days: 30,
+          retention_days: 30,
+          quota_bytes: 12 * 2 ** 30,
         },
         rank: 10,
         active: true,
@@ -311,9 +313,10 @@ describe("Pricing Page", () => {
         price_paise: 69900,
         billing_interval: "one_time",
         metadata: {
-          active_days: 75,
-          upload_window_days: 75,
-          retention_days: 120,
+          active_days: 30,
+          upload_window_days: 30,
+          retention_days: 30,
+          quota_bytes: 64 * 2 ** 30,
         },
         rank: 20,
         active: true,
@@ -372,8 +375,14 @@ describe("Pricing Page", () => {
 
     expect(
       screen.getByText(
-        /Rs\. 299 events include 45 active days, Rs\. 699 wedding uploads include 75 active days/i,
+        /Rs\. 299 events include 30 active days, Rs\. 699 wedding uploads include 30 active days, each product carries its own approved storage quota/i,
       ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("12GB managed storage included"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("64GB managed storage included"),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -381,7 +390,6 @@ describe("Pricing Page", () => {
       ),
     ).toBeInTheDocument();
   });
-
 
   it("reveals FAQ answers without a fixed-height clip", () => {
     // Regression guard for the max-h-40 cap that clipped longer answers. The

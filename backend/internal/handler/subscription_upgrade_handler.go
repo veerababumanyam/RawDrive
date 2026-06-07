@@ -941,6 +941,9 @@ func (h *SubscriptionUpgradeHandler) settlePaidSubscriptionOrder(ctx context.Con
 	); err != nil {
 		return time.Time{}, fmt.Errorf("update plan_tier: %w", err)
 	}
+	if err := markPayPerEventEntitlementsConverted(ctx, tx, wsID); err != nil {
+		return time.Time{}, fmt.Errorf("mark pay-per-event entitlements converted: %w", err)
+	}
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes)
 		 VALUES ($1, 0, 0, $2)

@@ -114,6 +114,10 @@ type GalleryLinker interface {
 	LinkFinalizedAsset(ctx context.Context, galleryID, assetID, workspaceID uuid.UUID) error
 }
 
+type GalleryUploadGate interface {
+	CheckGalleryUpload(ctx context.Context, workspaceID, galleryID uuid.UUID, additionalBytes int64) error
+}
+
 // TermsGate reports whether a user has accepted the active Terms of Service.
 // Satisfied by *service.TermsService. CreateSession consults it (when wired) so
 // no upload — image or slideshow audio — proceeds until the photographer has
@@ -192,9 +196,10 @@ type ChunkedUploadHandler struct {
 	// so association never depends on a post-finalize client call. All nil =
 	// feature off: CreateSession ignores any gallery_id in the request and
 	// finalize performs no link (legacy client-link flow unchanged).
-	galleries     galleryResolver
-	albums        albumResolver
-	galleryLinker GalleryLinker
+	galleries         galleryResolver
+	albums            albumResolver
+	galleryLinker     GalleryLinker
+	galleryUploadGate GalleryUploadGate
 
 	// termsGate, when wired via WithTermsGate, blocks CreateSession until the
 	// uploading user has accepted the active Terms of Service. Nil = feature
@@ -353,6 +358,11 @@ func (h *ChunkedUploadHandler) WithGalleryLinkage(
 	h.galleries = galleries
 	h.albums = albums
 	h.galleryLinker = linker
+	return h
+}
+
+func (h *ChunkedUploadHandler) WithGalleryUploadGate(g GalleryUploadGate) *ChunkedUploadHandler {
+	h.galleryUploadGate = g
 	return h
 }
 
@@ -554,6 +564,28 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 	}
 	if input.ChunkSize <= 0 {
 		input.ChunkSize = 5 * 1024 * 1024 // default 5MB
+	}
+	if h.galleryUploadGate != nil && sessionGalleryID != nil {
+		if err := h.galleryUploadGate.CheckGalleryUpload(r.Context(), workspaceID, *sessionGalleryID, input.TotalSize); err != nil {
+			switch {
+			case errors.Is(err, service.ErrGalleryUploadWindowClosed):
+				respondJSON(w, http.StatusForbidden, map[string]interface{}{
+					"error":   "gallery_upload_window_closed",
+					"message": "This Pay Per Event gallery is view-only. Extend or upgrade to continue uploading.",
+				})
+			case errors.Is(err, service.ErrGalleryEventQuotaExceeded):
+				respondJSON(w, http.StatusForbidden, map[string]interface{}{
+					"error":   "gallery_event_storage_quota_exceeded",
+					"message": "This Pay Per Event gallery has reached its configured storage quota. Extend or upgrade to continue uploading.",
+				})
+			default:
+				respondJSON(w, http.StatusInternalServerError, map[string]interface{}{
+					"error":   "gallery_upload_gate_failed",
+					"message": "could not verify gallery upload access; please retry",
+				})
+			}
+			return
+		}
 	}
 
 	uploadUUID := uuid.New()

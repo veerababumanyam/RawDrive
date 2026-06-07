@@ -60,8 +60,9 @@ func TestBillingProductFromMapAcceptsStructuredProductMetadata(t *testing.T) {
 		"metadata": map[string]any{
 			"active_days":        float64(30),
 			"upload_window_days": float64(30),
-			"retention_days":     float64(90),
+			"retention_days":     float64(30),
 			"upload_credits":     float64(500),
+			"quota_bytes":        float64(10 * 1024 * 1024 * 1024),
 		},
 		"rank":   float64(10),
 		"active": true,
@@ -77,6 +78,7 @@ func TestBillingProductFromMapAcceptsStructuredProductMetadata(t *testing.T) {
 	require.True(t, product.Active)
 	require.Equal(t, float64(30), product.Metadata["active_days"])
 	require.Equal(t, float64(500), product.Metadata["upload_credits"])
+	require.Equal(t, float64(10*1024*1024*1024), product.Metadata["quota_bytes"])
 }
 
 func TestBillingProductFromMapRejectsInvalidPaymentCriticalFields(t *testing.T) {
@@ -106,4 +108,39 @@ func TestBillingProductFromMapRejectsInvalidPaymentCriticalFields(t *testing.T) 
 		"billing_interval": "one_time",
 	})
 	require.ErrorContains(t, err, "invalid product type")
+}
+
+func TestBillingProductFromMapRejectsActiveEventProductWithoutQuota(t *testing.T) {
+	_, err := billingProductFromMap(map[string]any{
+		"code":             "event_upload_standard",
+		"product_type":     "event_upload",
+		"name":             "Event upload",
+		"price_paise":      float64(19900),
+		"billing_interval": "one_time",
+		"metadata": map[string]any{
+			"active_days":        float64(30),
+			"upload_window_days": float64(30),
+			"retention_days":     float64(30),
+		},
+		"active": true,
+	})
+	require.ErrorContains(t, err, "quota_bytes")
+}
+
+func TestBillingProductFromMapRejectsEventRetentionAboveThirtyDays(t *testing.T) {
+	_, err := billingProductFromMap(map[string]any{
+		"code":             "event_upload_wedding",
+		"product_type":     "event_upload",
+		"name":             "Wedding upload",
+		"price_paise":      float64(49900),
+		"billing_interval": "one_time",
+		"metadata": map[string]any{
+			"active_days":        float64(60),
+			"upload_window_days": float64(60),
+			"retention_days":     float64(90),
+			"quota_bytes":        float64(50 * 1024 * 1024 * 1024),
+		},
+		"active": true,
+	})
+	require.ErrorContains(t, err, "active_days between 1 and 30")
 }

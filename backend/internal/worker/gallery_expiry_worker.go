@@ -67,4 +67,20 @@ func (w *GalleryExpiryWorker) expire(ctx context.Context) {
 	if tag.RowsAffected() > 0 {
 		log.Printf("gallery expiry worker: expired %d galleries", tag.RowsAffected())
 	}
+	entTag, err := w.pool.Exec(ctx,
+		`UPDATE gallery_event_entitlements
+		 SET status = 'view_only', updated_at = now()
+		 WHERE status = 'active'
+		   AND active_ends_at < now()
+		   AND converted_at IS NULL
+		   AND cancelled_at IS NULL
+		   AND cleanup_completed_at IS NULL`,
+	)
+	if err != nil {
+		log.Printf("gallery expiry worker: entitlement update error: %v", err)
+		return
+	}
+	if entTag.RowsAffected() > 0 {
+		log.Printf("gallery expiry worker: marked %d event entitlements view-only", entTag.RowsAffected())
+	}
 }

@@ -5,9 +5,14 @@ import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import {
   decryptBlobWithAvailableMediaKeys,
   galleryIdFromMediaKeyId,
+  MEDIA_KEY_UNAVAILABLE_MESSAGE,
   subscribeMediaKeyStoreChanges,
   type MediaKeyStoreChangeDetail,
 } from "./media-key-store";
+import {
+  hydrateOwnerGalleryMediaKeyIds,
+  syncStoredGalleryMediaKeyForKeyId,
+} from "./gallery-media-key-sync";
 import {
   assetUsesClientMediaEncryption,
   mediaKeyIdsForAsset,
@@ -279,6 +284,7 @@ export function useDecryptedAssetUrl(
               objectUrl = URL.createObjectURL(plaintext);
               setState({ src: objectUrl, loading: false, error: null });
             }
+            void syncStoredGalleryMediaKeyForKeyId(picked.manifest.key_id);
             return;
           } catch (err) {
             lastError =
@@ -286,6 +292,15 @@ export function useDecryptedAssetUrl(
                 ? err.message
                 : "Encrypted media decrypt failed";
           }
+        }
+        if (
+          lastError === MEDIA_KEY_UNAVAILABLE_MESSAGE &&
+          (await hydrateOwnerGalleryMediaKeyIds(assetKeyIds))
+        ) {
+          if (!cancelled) {
+            setKeyStoreVersion((version) => version + 1);
+          }
+          return;
         }
         if (!cancelled) {
           setState({ src: "", loading: false, error: lastError });
@@ -309,7 +324,14 @@ export function useDecryptedAssetUrl(
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [asset, candidates, token, assetAccessToken, keyStoreVersion]);
+  }, [
+    asset,
+    candidates,
+    assetKeyIds,
+    token,
+    assetAccessToken,
+    keyStoreVersion,
+  ]);
 
   return state;
 }

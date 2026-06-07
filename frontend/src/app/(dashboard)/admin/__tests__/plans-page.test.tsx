@@ -69,8 +69,9 @@ function productFixture(
     metadata: {
       active_days: 30,
       upload_window_days: 30,
-      retention_days: 90,
+      retention_days: 30,
       upload_credits: 500,
+      quota_bytes: 10 * 2 ** 30,
     },
     rank: 10,
     active: true,
@@ -144,10 +145,11 @@ const weddingUploadProduct = productFixture({
   description: "Longer upload cycle for weddings.",
   price_paise: 49900,
   metadata: {
-    active_days: 60,
-    upload_window_days: 60,
-    retention_days: 90,
+    active_days: 30,
+    upload_window_days: 30,
+    retention_days: 30,
     upload_credits: 2000,
+    quota_bytes: 50 * 2 ** 30,
   },
   rank: 20,
 });
@@ -261,7 +263,9 @@ describe("AdminPlansPage", () => {
     fireEvent.change(screen.getAllByDisplayValue("499")[0], {
       target: { value: "149" },
     });
-    fireEvent.click(screen.getAllByRole("button", { name: "Submit plan change" })[2]);
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Submit plan change" })[2],
+    );
 
     await waitFor(() => {
       expect(mockCreatePricingChangeRequest).toHaveBeenCalledWith(
@@ -289,7 +293,8 @@ describe("AdminPlansPage", () => {
   it("submits billing product edits with structured metadata", async () => {
     render(<AdminPlansPage />);
 
-    const eventUploadFields = await screen.findAllByDisplayValue("Event upload");
+    const eventUploadFields =
+      await screen.findAllByDisplayValue("Event upload");
     const eventUploadNameInput =
       eventUploadFields.find(
         (field) => field.tagName.toLowerCase() === "input",
@@ -297,9 +302,6 @@ describe("AdminPlansPage", () => {
 
     fireEvent.change(eventUploadNameInput, {
       target: { value: "Event Upload Plus" },
-    });
-    fireEvent.change(screen.getAllByDisplayValue("30")[0], {
-      target: { value: "45" },
     });
     fireEvent.click(
       screen.getAllByRole("button", { name: "Submit product change" })[0],
@@ -317,14 +319,45 @@ describe("AdminPlansPage", () => {
             product_type: "event_upload",
             name: "Event Upload Plus",
             metadata: expect.objectContaining({
-              active_days: 45,
+              active_days: 30,
               upload_window_days: 30,
-              retention_days: 90,
+              retention_days: 30,
               upload_credits: 500,
+              quota_bytes: 10 * 2 ** 30,
             }),
           }),
         }),
       );
     });
+  });
+
+  it("requires quota metadata before submitting an active event product", async () => {
+    mockGetAdminPricingCatalog.mockResolvedValueOnce({
+      ...catalogFixture,
+      event_packs: [
+        {
+          ...eventUploadProduct,
+          metadata: {
+            active_days: 30,
+            upload_window_days: 30,
+            retention_days: 30,
+            upload_credits: 500,
+          },
+        },
+      ],
+    });
+    render(<AdminPlansPage />);
+
+    expect(
+      (await screen.findAllByDisplayValue("Event upload")).length,
+    ).toBeGreaterThan(0);
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Submit product change" })[0],
+    );
+
+    expect(
+      await screen.findByText("Active event products require a storage quota."),
+    ).toBeInTheDocument();
+    expect(mockCreatePricingChangeRequest).not.toHaveBeenCalled();
   });
 });

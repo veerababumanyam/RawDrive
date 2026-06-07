@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createGalleryShareLink,
+  listGalleryMediaKeys,
   listGalleryShareLinks,
   revokeGalleryShareLink,
+  upsertGalleryMediaKey,
 } from "../galleries";
 import { persistAuthTokens, clearAuthTokens } from "@/lib/auth";
 
@@ -40,7 +42,11 @@ describe("gallery share API", () => {
   it("creates share links with access mode, recipients, expiry, and share copy", async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ id: "share-1", token: "token-1", permissions: { access_mode: "pin" } }),
+      json: async () => ({
+        id: "share-1",
+        token: "token-1",
+        permissions: { access_mode: "pin" },
+      }),
     });
 
     await createGalleryShareLink("token", "gallery-1", {
@@ -59,7 +65,9 @@ describe("gallery share API", () => {
         body: expect.stringContaining('"access_mode":"pin"'),
       }),
     );
-    expect(fetchMock.mock.calls[0][1].body).toContain('"recipient_emails":["client@example.com"]');
+    expect(fetchMock.mock.calls[0][1].body).toContain(
+      '"recipient_emails":["client@example.com"]',
+    );
   });
 
   it("revokes share links under the same gallery workspace", async () => {
@@ -70,6 +78,63 @@ describe("gallery share API", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/api/v1/galleries/gallery-1/share/share-1"),
       expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("lists and saves gallery media keys through the protected gallery workspace route", async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          keys: [
+            {
+              key_id: "gallery:gallery-1:abcdef1234567890",
+              exported_key: "raw-key",
+            },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          key: {
+            key_id: "gallery:gallery-1:abcdef1234567890",
+            exported_key: "raw-key",
+          },
+        }),
+      });
+
+    const keys = await listGalleryMediaKeys("gallery-1");
+    const saved = await upsertGalleryMediaKey("gallery-1", {
+      key_id: "gallery:gallery-1:abcdef1234567890",
+      exported_key: "raw-key",
+    });
+
+    expect(keys).toEqual([
+      { key_id: "gallery:gallery-1:abcdef1234567890", exported_key: "raw-key" },
+    ]);
+    expect(saved.exported_key).toBe("raw-key");
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("/api/v1/galleries/gallery-1/media-keys"),
+      expect.objectContaining({
+        credentials: "include",
+        headers: expect.any(Headers),
+      }),
+    );
+    expect(
+      new Headers(fetchMock.mock.calls[0][1].headers).get("Authorization"),
+    ).toBe("Bearer token");
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("/api/v1/galleries/gallery-1/media-keys"),
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({
+          key_id: "gallery:gallery-1:abcdef1234567890",
+          exported_key: "raw-key",
+        }),
+      }),
     );
   });
 });

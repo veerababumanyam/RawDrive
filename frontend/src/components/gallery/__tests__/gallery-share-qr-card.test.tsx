@@ -24,6 +24,14 @@ describe("GalleryShareQrCard", () => {
     toCanvas.mockClear();
     toDataURL.mockClear();
     toString.mockClear();
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(document, "execCommand", {
+      configurable: true,
+      value: undefined,
+    });
   });
 
   it("renders the QR, a clean public address, and both download actions when a URL is available", async () => {
@@ -106,7 +114,10 @@ describe("GalleryShareQrCard", () => {
 
   it("copies the full (key-bearing) public URL to the clipboard", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, { clipboard: { writeText } });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
 
     render(
       <GalleryShareQrCard
@@ -118,6 +129,43 @@ describe("GalleryShareQrCard", () => {
 
     fireEvent.click(await screen.findByTestId("share-qr-card-copy"));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(SHARE_URL));
+  });
+
+  it("falls back to selection copy when async clipboard is blocked", async () => {
+    const writeText = vi
+      .fn()
+      .mockRejectedValue(new DOMException("blocked", "NotAllowedError"));
+    const execCommand = vi.fn().mockReturnValue(true);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    Object.defineProperty(document, "execCommand", {
+      configurable: true,
+      value: execCommand,
+    });
+
+    render(
+      <GalleryShareQrCard
+        getShareUrl={() => SHARE_URL}
+        title="Sharma Wedding"
+        slug="sharma-wedding"
+      />,
+    );
+
+    fireEvent.click(await screen.findByTestId("share-qr-card-copy"));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(SHARE_URL));
+    await waitFor(() => expect(execCommand).toHaveBeenCalledWith("copy"));
+    await waitFor(() =>
+      expect(screen.getByTestId("share-qr-card-copy")).toHaveAttribute(
+        "aria-label",
+        "Gallery address copied",
+      ),
+    );
+    expect(
+      screen.queryByText("Couldn't copy — long-press the address to copy it."),
+    ).not.toBeInTheDocument();
   });
 
   it("accepts async share URL preparation before rendering QR actions", async () => {
@@ -135,7 +183,7 @@ describe("GalleryShareQrCard", () => {
     await waitFor(() => expect(getShareUrl).toHaveBeenCalledTimes(1));
   });
 
-  it("shows an unavailable state (no QR) when no URL is available", () => {
+  it("shows an unavailable state (no QR) when no URL is available", async () => {
     render(
       <GalleryShareQrCard
         getShareUrl={() => ""}
@@ -146,6 +194,13 @@ describe("GalleryShareQrCard", () => {
     expect(
       screen.queryByTestId("share-qr-card-canvas"),
     ).not.toBeInTheDocument();
-    expect(screen.getByTestId("share-qr-card-unavailable")).toBeInTheDocument();
+    expect(await screen.findByTestId("share-qr-card-unavailable")).toBeVisible();
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          "Publish this gallery to generate its shareable QR code.",
+        ),
+      ).toBeInTheDocument(),
+    );
   });
 });

@@ -80,6 +80,11 @@ func (h *SubscriptionUpgradeHandler) CreateBillingOrder(w http.ResponseWriter, r
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "product catalog unavailable"})
 		return
 	}
+	if err := validateBillingProductForCheckout(product); err != nil {
+		log.Printf("billing order: product metadata invalid code=%s err=%v", product.productCode, err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "product catalog metadata incomplete"})
+		return
+	}
 	orderType, ok := billingOrderTypeForProduct(product.productType)
 	if !ok {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unsupported product type"})
@@ -512,6 +517,31 @@ func (h *SubscriptionUpgradeHandler) currentBillingProductVersion(ctx context.Co
 	return product, err
 }
 
+func validateBillingProductForCheckout(product billingProductVersion) error {
+	if product.productType != "event_upload" {
+		return nil
+	}
+	var metadata map[string]any
+	if err := json.Unmarshal(product.metadata, &metadata); err != nil {
+		return fmt.Errorf("invalid event product metadata: %w", err)
+	}
+	if int64FromMetadata(metadata, "quota_bytes", 0) <= 0 {
+		return fmt.Errorf("event product quota_bytes metadata required")
+	}
+	activeDays := int64FromMetadata(metadata, "active_days", 0)
+	if activeDays <= 0 || activeDays > 30 {
+		return fmt.Errorf("event product active_days must be between 1 and 30")
+	}
+	uploadWindowDays := int64FromMetadata(metadata, "upload_window_days", 0)
+	if uploadWindowDays <= 0 || uploadWindowDays > activeDays {
+		return fmt.Errorf("event product upload_window_days must be between 1 and active_days")
+	}
+	if retentionDays := int64FromMetadata(metadata, "retention_days", 0); retentionDays != 30 {
+		return fmt.Errorf("event product retention_days must be 30")
+	}
+	return nil
+}
+
 func billingOrderTypeForProduct(productType string) (string, bool) {
 	switch productType {
 	case "event_upload":
@@ -745,6 +775,19 @@ func (h *SubscriptionUpgradeHandler) settleGalleryExtension(ctx context.Context,
 		); err != nil {
 			return err
 		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE gallery_event_entitlements
+			   SET status = 'cancelled',
+			       cancelled_at = COALESCE(cancelled_at, now()),
+			       updated_at = now()
+			 WHERE workspace_id = $1
+			   AND gallery_id = $2
+			   AND converted_at IS NULL
+			   AND cleanup_completed_at IS NULL`,
+			order.workspaceID, *order.targetID,
+		); err != nil {
+			return err
+		}
 		return cancelPendingGalleryLifecycleJobs(ctx, tx, *order.targetID)
 	}
 	extensionDays := int64FromMetadata(snap.Product.Metadata, "extension_days", 0)
@@ -770,7 +813,22 @@ func (h *SubscriptionUpgradeHandler) settleGalleryExtension(ctx context.Context,
 	if err := cancelPendingGalleryLifecycleJobs(ctx, tx, *order.targetID); err != nil {
 		return err
 	}
-	return h.scheduleGalleryLifecycleJobs(ctx, tx, order, "pay_per_event_default", expiresAt, true)
+	if _, err := tx.Exec(ctx, `
+		UPDATE gallery_event_entitlements
+		   SET active_ends_at = $3,
+		       cleanup_due_at = $3,
+		       status = 'active',
+		       updated_at = now()
+		 WHERE workspace_id = $1
+		   AND gallery_id = $2
+		   AND converted_at IS NULL
+		   AND cancelled_at IS NULL
+		   AND cleanup_completed_at IS NULL`,
+		order.workspaceID, *order.targetID, expiresAt,
+	); err != nil {
+		return err
+	}
+	return h.scheduleGalleryLifecycleJobs(ctx, tx, order, "pay_per_event_default", expiresAt, &expiresAt, true)
 }
 
 func (h *SubscriptionUpgradeHandler) settleEventUpload(ctx context.Context, tx pgx.Tx, order settledBillingOrder) error {
@@ -782,8 +840,21 @@ func (h *SubscriptionUpgradeHandler) settleEventUpload(ctx context.Context, tx p
 		return err
 	}
 	activeDays := int64FromMetadata(snap.Product.Metadata, "active_days", 30)
+	uploadWindowDays := int64FromMetadata(snap.Product.Metadata, "upload_window_days", activeDays)
+	retentionDays := int64FromMetadata(snap.Product.Metadata, "retention_days", 30)
 	credits := int64FromMetadata(snap.Product.Metadata, "upload_credits", 500)
-	expiresAt := time.Now().UTC().AddDate(0, 0, int(activeDays))
+	quotaBytes := int64FromMetadata(snap.Product.Metadata, "quota_bytes", 0)
+	if activeDays <= 0 || activeDays > 30 || uploadWindowDays <= 0 || uploadWindowDays > activeDays || retentionDays != 30 || quotaBytes <= 0 {
+		return fmt.Errorf("invalid event product entitlement metadata")
+	}
+	versionID, err := uuid.Parse(snap.Product.VersionID)
+	if err != nil {
+		return fmt.Errorf("invalid product version id: %w", err)
+	}
+	now := time.Now().UTC()
+	uploadWindowEndsAt := now.AddDate(0, 0, int(uploadWindowDays))
+	activeEndsAt := now.AddDate(0, 0, int(activeDays))
+	cleanupDueAt := now.AddDate(0, 0, int(retentionDays))
 
 	if _, err := tx.Exec(ctx, `
 		UPDATE galleries
@@ -791,7 +862,38 @@ func (h *SubscriptionUpgradeHandler) settleEventUpload(ctx context.Context, tx p
 		    status = CASE WHEN status IN ('draft', 'expired') THEN 'shared' ELSE status END,
 		    updated_at = now()
 		WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
-		*order.targetID, order.workspaceID, expiresAt,
+		*order.targetID, order.workspaceID, activeEndsAt,
+	); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO gallery_event_entitlements (
+		    workspace_id, gallery_id, billing_order_id, billing_product_version_id,
+		    product_code, quota_bytes, upload_credits, upload_window_ends_at,
+		    active_ends_at, cleanup_due_at, status, metadata
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active',
+		        jsonb_build_object('source', 'billing_event_upload'))
+		ON CONFLICT (billing_order_id) DO UPDATE
+		   SET quota_bytes = EXCLUDED.quota_bytes,
+		       upload_credits = EXCLUDED.upload_credits,
+		       upload_window_ends_at = EXCLUDED.upload_window_ends_at,
+		       active_ends_at = EXCLUDED.active_ends_at,
+		       cleanup_due_at = EXCLUDED.cleanup_due_at,
+		       status = 'active',
+		       updated_at = now()`,
+		order.workspaceID, *order.targetID, order.id, versionID, snap.Product.Code,
+		quotaBytes, credits, uploadWindowEndsAt, activeEndsAt, cleanupDueAt,
+	); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes)
+		VALUES ($1, 0, 0, $2)
+		ON CONFLICT (workspace_id) DO UPDATE
+		SET quota_bytes = GREATEST(workspace_storage.quota_bytes, $2),
+		    updated_at = now()`,
+		order.workspaceID, quotaBytes,
 	); err != nil {
 		return err
 	}
@@ -832,7 +934,7 @@ func (h *SubscriptionUpgradeHandler) settleEventUpload(ctx context.Context, tx p
 	if err := cancelPendingGalleryLifecycleJobs(ctx, tx, *order.targetID); err != nil {
 		return err
 	}
-	return h.scheduleGalleryLifecycleJobs(ctx, tx, order, "pay_per_event_default", expiresAt, true)
+	return h.scheduleGalleryLifecycleJobs(ctx, tx, order, "pay_per_event_default", activeEndsAt, &cleanupDueAt, true)
 }
 
 func (h *SubscriptionUpgradeHandler) scheduleBillingPaymentSuccess(ctx context.Context, tx pgx.Tx, order settledBillingOrder) error {
@@ -851,9 +953,13 @@ func (h *SubscriptionUpgradeHandler) scheduleBillingPaymentSuccess(ctx context.C
 	return err
 }
 
-func (h *SubscriptionUpgradeHandler) scheduleGalleryLifecycleJobs(ctx context.Context, tx pgx.Tx, order settledBillingOrder, policyCode string, expiresAt time.Time, conversionPrompt bool) error {
+func (h *SubscriptionUpgradeHandler) scheduleGalleryLifecycleJobs(ctx context.Context, tx pgx.Tx, order settledBillingOrder, policyCode string, activeEndsAt time.Time, cleanupDueAt *time.Time, conversionPrompt bool) error {
 	if order.targetID == nil {
 		return fmt.Errorf("gallery target missing")
+	}
+	cleanupAt := activeEndsAt
+	if cleanupDueAt != nil {
+		cleanupAt = *cleanupDueAt
 	}
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO billing_lifecycle_jobs (
@@ -868,7 +974,7 @@ func (h *SubscriptionUpgradeHandler) scheduleGalleryLifecycleJobs(ctx context.Co
 		CROSS JOIN LATERAL unnest(p.expiry_warning_days) AS days
 		WHERE p.code = $1
 		  AND $5 - (days * INTERVAL '1 day') > now()`,
-		policyCode, *order.targetID, order.workspaceID, order.userID, expiresAt, order.orderType,
+		policyCode, *order.targetID, order.workspaceID, order.userID, activeEndsAt, order.orderType,
 	); err != nil {
 		return err
 	}
@@ -885,7 +991,7 @@ func (h *SubscriptionUpgradeHandler) scheduleGalleryLifecycleJobs(ctx context.Co
 			FROM billing_lifecycle_policies p
 			WHERE p.code = $1
 			  AND p.conversion_prompt_enabled = TRUE`,
-			policyCode, *order.targetID, order.workspaceID, order.userID, expiresAt, order.orderType,
+			policyCode, *order.targetID, order.workspaceID, order.userID, activeEndsAt, order.orderType,
 		); err != nil {
 			return err
 		}
@@ -896,14 +1002,14 @@ func (h *SubscriptionUpgradeHandler) scheduleGalleryLifecycleJobs(ctx context.Co
 		    due_at, proof_snapshot, metadata
 		)
 		SELECT p.code, 'deletion_warning', 'gallery', $2, $3, $4,
-		       ($5 + (p.gallery_delete_grace_days * INTERVAL '1 day')) - (days * INTERVAL '1 day'),
-		       jsonb_build_object('gallery_id', $2::text, 'expires_at', $5::text, 'days_before_delete', days),
-		       jsonb_build_object('source', $6)
+		       $5 - (days * INTERVAL '1 day'),
+		       jsonb_build_object('gallery_id', $2::text, 'expires_at', $6::text, 'cleanup_due_at', $5::text, 'days_before_delete', days),
+		       jsonb_build_object('source', $7)
 		FROM billing_lifecycle_policies p
 		CROSS JOIN LATERAL unnest(p.deletion_warning_days) AS days
 		WHERE p.code = $1
-		  AND ($5 + (p.gallery_delete_grace_days * INTERVAL '1 day')) - (days * INTERVAL '1 day') > now()`,
-		policyCode, *order.targetID, order.workspaceID, order.userID, expiresAt, order.orderType,
+		  AND $5 - (days * INTERVAL '1 day') > now()`,
+		policyCode, *order.targetID, order.workspaceID, order.userID, cleanupAt, activeEndsAt, order.orderType,
 	); err != nil {
 		return err
 	}
@@ -913,12 +1019,12 @@ func (h *SubscriptionUpgradeHandler) scheduleGalleryLifecycleJobs(ctx context.Co
 		    due_at, proof_snapshot, metadata
 		)
 		SELECT p.code, 'gallery_delete', 'gallery', $2, $3, $4,
-		       $5 + (p.gallery_delete_grace_days * INTERVAL '1 day'),
-		       jsonb_build_object('gallery_id', $2::text, 'expires_at', $5::text, 'gallery_delete_grace_days', p.gallery_delete_grace_days),
-		       jsonb_build_object('source', $6)
+		       $5,
+		       jsonb_build_object('gallery_id', $2::text, 'expires_at', $6::text, 'cleanup_due_at', $5::text, 'gallery_delete_grace_days', p.gallery_delete_grace_days),
+		       jsonb_build_object('source', $7)
 		FROM billing_lifecycle_policies p
 		WHERE p.code = $1`,
-		policyCode, *order.targetID, order.workspaceID, order.userID, expiresAt, order.orderType,
+		policyCode, *order.targetID, order.workspaceID, order.userID, cleanupAt, activeEndsAt, order.orderType,
 	); err != nil {
 		return err
 	}
@@ -929,11 +1035,11 @@ func (h *SubscriptionUpgradeHandler) scheduleGalleryLifecycleJobs(ctx context.Co
 		)
 		SELECT p.code, 'account_delete', 'workspace', $3, $3, $4,
 		       $5 + (p.account_delete_grace_days * INTERVAL '1 day'),
-		       jsonb_build_object('gallery_id', $2::text, 'expires_at', $5::text, 'account_delete_grace_days', p.account_delete_grace_days),
-		       jsonb_build_object('source', $6)
+		       jsonb_build_object('gallery_id', $2::text, 'expires_at', $6::text, 'cleanup_due_at', $5::text, 'account_delete_grace_days', p.account_delete_grace_days),
+		       jsonb_build_object('source', $7)
 		FROM billing_lifecycle_policies p
 		WHERE p.code = $1`,
-		policyCode, *order.targetID, order.workspaceID, order.userID, expiresAt, order.orderType,
+		policyCode, *order.targetID, order.workspaceID, order.userID, cleanupAt, activeEndsAt, order.orderType,
 	)
 	return err
 }
@@ -958,6 +1064,21 @@ func cancelPendingWorkspaceLifecycleJobs(ctx context.Context, tx pgx.Tx, workspa
 		WHERE workspace_id = $1
 		  AND status IN ('pending', 'failed')
 		  AND job_type IN ('renewal_reminder', 'expiry_warning', 'deletion_warning', 'gallery_delete', 'account_delete', 'conversion_prompt')`,
+		workspaceID,
+	)
+	return err
+}
+
+func markPayPerEventEntitlementsConverted(ctx context.Context, tx pgx.Tx, workspaceID uuid.UUID) error {
+	_, err := tx.Exec(ctx, `
+		UPDATE gallery_event_entitlements
+		   SET status = 'converted',
+		       converted_at = COALESCE(converted_at, now()),
+		       updated_at = now()
+		 WHERE workspace_id = $1
+		   AND converted_at IS NULL
+		   AND cancelled_at IS NULL
+		   AND cleanup_completed_at IS NULL`,
 		workspaceID,
 	)
 	return err

@@ -21,18 +21,20 @@ import { SlideshowImageFrame } from "@/components/gallery/gallery-slideshow";
 export function SlideshowSlide({
   asset,
   assetAccessToken,
+  viewerToken = null,
   position,
   total,
 }: {
   asset: PublicAsset;
   assetAccessToken: string | null;
+  viewerToken?: string | null;
   position: number;
   total: number;
 }) {
   const media = useDecryptedAssetUrl(
     asset,
     LIGHTBOX_VARIANTS,
-    null,
+    viewerToken,
     assetAccessToken,
   );
 

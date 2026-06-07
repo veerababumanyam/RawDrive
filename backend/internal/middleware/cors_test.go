@@ -196,3 +196,29 @@ func TestCORSPreflight_AllowsTusChunkedUploadHeaders(t *testing.T) {
 	assert.Contains(t, expose, "Upload-Offset")
 	assert.Contains(t, expose, "Upload-Length")
 }
+
+func TestCORSPreflight_AllowsGallerySessionHeader(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("GO_ENV", "")
+
+	handler := CORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodOptions, "/api/v1/public/galleries/wedding/favorites", nil)
+	req.Header.Set("Origin", "http://localhost:3000")
+	req.Header.Set("Access-Control-Request-Method", "GET")
+	req.Header.Set("Access-Control-Request-Headers", "x-gallery-session")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+	assert.Equal(t, "http://localhost:3000", rec.Header().Get("Access-Control-Allow-Origin"))
+
+	allow := rec.Header().Get("Access-Control-Allow-Headers")
+	assert.Contains(t, allow, "X-Gallery-Session")
+
+	expose := rec.Header().Get("Access-Control-Expose-Headers")
+	assert.Contains(t, expose, "X-Gallery-Session")
+}

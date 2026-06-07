@@ -66,7 +66,7 @@ import {
   GRID_VARIANTS,
   LIGHTBOX_VARIANTS,
 } from "@/lib/media-encryption/asset-media";
-import { getOrCreateGalleryMediaKey } from "@/lib/media-encryption/media-key-store";
+import { getOrCreateSyncedGalleryMediaKey } from "@/lib/media-encryption/gallery-media-key-sync";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { UploadDropzone, UploadProgress } from "@/components/upload";
 import { TermsAcceptanceModal } from "@/components/legal/terms-acceptance-modal";
@@ -1031,19 +1031,13 @@ function isMeaningfulBrandingConfig(
   if (typeof value.brandColor === "string" && value.brandColor.trim()) {
     return true;
   }
-  if (
-    typeof value.watermarkText === "string" &&
-    value.watermarkText.trim()
-  ) {
+  if (typeof value.watermarkText === "string" && value.watermarkText.trim()) {
     return true;
   }
   if (value.watermarkStyle && value.watermarkStyle !== "none") return true;
   if (value.logoPlacement && value.logoPlacement !== "top-left") return true;
   if (typeof value.logoSize === "number" && value.logoSize !== 40) return true;
-  if (
-    typeof value.logoOpacity === "number" &&
-    value.logoOpacity !== 100
-  ) {
+  if (typeof value.logoOpacity === "number" && value.logoOpacity !== 100) {
     return true;
   }
   if (
@@ -2164,7 +2158,7 @@ export default function CoverDesignPage() {
   const apiUrl = useMemo(() => getApiBaseUrl(), []);
   const uploadEncryption = useMemo(
     () => ({
-      getKey: () => getOrCreateGalleryMediaKey(galleryId),
+      getKey: () => getOrCreateSyncedGalleryMediaKey(galleryId),
     }),
     [galleryId],
   );

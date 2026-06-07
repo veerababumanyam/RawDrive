@@ -21,6 +21,7 @@ import {
   isMediaKeyRecoveryError,
   subscribeMediaKeyStoreChanges,
 } from "@/lib/media-encryption/media-key-store";
+import { syncGalleryMediaKeyBestEffort } from "@/lib/media-encryption/gallery-media-key-sync";
 import {
   classifyMediaKeyRecoveryInput,
   mediaKeyRecoveryTelemetryNameForError,
@@ -97,11 +98,12 @@ export function MediaKeyRecoveryDialog({
       inputKind,
     });
     try {
-      await importGalleryMediaKeyFromInput({
+      const restored = await importGalleryMediaKeyFromInput({
         galleryId,
         input,
         expectedKeyIds,
       });
+      syncGalleryMediaKeyBestEffort(galleryId, restored);
       trackMediaKeyRecovery("key_recovery_import_success", {
         galleryId,
         expectedKeyCount,
@@ -229,7 +231,9 @@ export function LockedMediaFallback({
       .find((id): id is string => Boolean(id)) ||
     null;
   const recoverable =
-    allowRecovery && Boolean(resolvedGalleryId) && isMediaKeyRecoveryError(error);
+    allowRecovery &&
+    Boolean(resolvedGalleryId) &&
+    isMediaKeyRecoveryError(error);
   const label = recoverable
     ? keyGroupCount > 1
       ? "Encrypted photo needs one of several gallery keys"

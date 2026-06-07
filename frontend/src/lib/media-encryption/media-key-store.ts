@@ -11,11 +11,16 @@ const KEY_PREFIX = "rawdrive:media-key:";
 const ACTIVE_KEY_PREFIX = "rawdrive:media-key-active:";
 const VERSION_FINGERPRINT_BYTES = 8;
 const MEDIA_KEY_STORE_CHANGE_EVENT = "rawdrive:media-key-store-changed";
-export const MEDIA_KEY_UNAVAILABLE_MESSAGE = "Photo key unavailable. Reopen with the gallery key or reupload this photo.";
-export const MEDIA_KEY_MISMATCH_MESSAGE = "Photo key does not match this encrypted file.";
-export const MEDIA_KEY_IMPORT_EMPTY_MESSAGE = "Paste a secure gallery link or gallery key.";
-export const MEDIA_KEY_IMPORT_INVALID_MESSAGE = "That gallery key could not be read.";
-export const MEDIA_KEY_IMPORT_WRONG_GALLERY_MESSAGE = "That gallery key does not match these encrypted photos.";
+export const MEDIA_KEY_UNAVAILABLE_MESSAGE =
+  "Photo key unavailable. Reopen with the gallery key or reupload this photo.";
+export const MEDIA_KEY_MISMATCH_MESSAGE =
+  "Photo key does not match this encrypted file.";
+export const MEDIA_KEY_IMPORT_EMPTY_MESSAGE =
+  "Paste a secure gallery link or gallery key.";
+export const MEDIA_KEY_IMPORT_INVALID_MESSAGE =
+  "That gallery key could not be read.";
+export const MEDIA_KEY_IMPORT_WRONG_GALLERY_MESSAGE =
+  "That gallery key does not match these encrypted photos.";
 
 const memoryKeys = new Map<string, string>();
 const memoryActiveKeys = new Map<string, string>();
@@ -34,12 +39,15 @@ export type GalleryMediaKey = {
   exportedKey: string;
 };
 
-export async function getOrCreateGalleryMediaKey(galleryId: string): Promise<GalleryMediaKey> {
+export async function getOrCreateGalleryMediaKey(
+  galleryId: string,
+): Promise<GalleryMediaKey> {
   const baseKeyId = galleryKeyId(galleryId);
 
-  const fragmentKey = typeof window !== "undefined"
-    ? readGalleryKeyFromHash(window.location.hash)
-    : null;
+  const fragmentKey =
+    typeof window !== "undefined"
+      ? readGalleryKeyFromHash(window.location.hash)
+      : null;
   if (fragmentKey) {
     return rememberGalleryMediaKey(galleryId, fragmentKey);
   }
@@ -47,7 +55,11 @@ export async function getOrCreateGalleryMediaKey(galleryId: string): Promise<Gal
   const activeKeyId = readActiveKeyId(baseKeyId);
   const activeKey = activeKeyId ? readStoredKey(activeKeyId) : null;
   if (activeKeyId && activeKey) {
-    return { keyId: activeKeyId, key: await importRawMediaKey(activeKey), exportedKey: activeKey };
+    return {
+      keyId: activeKeyId,
+      key: await importRawMediaKey(activeKey),
+      exportedKey: activeKey,
+    };
   }
 
   const legacyKey = readStoredKey(baseKeyId);
@@ -64,12 +76,16 @@ export async function getOrCreateGalleryMediaKey(galleryId: string): Promise<Gal
   return { keyId, key, exportedKey };
 }
 
-export async function getMediaKeyForKeyId(keyId: string): Promise<CryptoKey | null> {
+export async function getMediaKeyForKeyId(
+  keyId: string,
+): Promise<CryptoKey | null> {
   const keys = await getMediaKeysForKeyId(keyId);
   return keys[0] ?? null;
 }
 
-export async function getMediaKeysForKeyId(keyId: string): Promise<CryptoKey[]> {
+export async function getMediaKeysForKeyId(
+  keyId: string,
+): Promise<CryptoKey[]> {
   const exportedKeys = await getExportedKeysForKeyId(keyId);
   const keys: CryptoKey[] = [];
   for (const exported of exportedKeys) {
@@ -115,8 +131,13 @@ export async function rememberGalleryMediaKey(
 ): Promise<GalleryMediaKey> {
   const baseKeyId = galleryKeyId(galleryId);
   const keyId = await versionedGalleryKeyId(galleryId, exportedKey);
+  const previousActiveKeyId = readActiveKeyId(baseKeyId);
+  const previousStoredKey = readStoredKey(keyId);
   writeStoredKey(keyId, exportedKey);
   writeActiveKeyId(baseKeyId, keyId);
+  if (previousActiveKeyId !== keyId || previousStoredKey !== exportedKey) {
+    notifyMediaKeyStoreChanged({ galleryId, keyId, reason: "imported" });
+  }
   return { keyId, key: await importRawMediaKey(exportedKey), exportedKey };
 }
 
@@ -143,9 +164,10 @@ export function parseGalleryMediaKeyInput(input: string): string | null {
     // Not a full URL; continue with fragment/query/raw parsing below.
   }
 
-  const normalized = trimmed.startsWith("?") || trimmed.includes("=")
-    ? trimmed.replace(/^#/, "")
-    : "";
+  const normalized =
+    trimmed.startsWith("?") || trimmed.includes("=")
+      ? trimmed.replace(/^#/, "")
+      : "";
   if (normalized) {
     try {
       const fromParams = new URLSearchParams(normalized).get("rd_key");
@@ -179,7 +201,10 @@ export async function importGalleryMediaKeyFromInput({
       isVersionedGalleryKeyId(candidate) &&
       galleryIdFromKeyId(candidate) === galleryId,
   );
-  if (expectedVersionedKeys.length > 0 && !expectedVersionedKeys.includes(keyId)) {
+  if (
+    expectedVersionedKeys.length > 0 &&
+    !expectedVersionedKeys.includes(keyId)
+  ) {
     throw new Error(MEDIA_KEY_IMPORT_WRONG_GALLERY_MESSAGE);
   }
 
@@ -190,7 +215,9 @@ export async function importGalleryMediaKeyFromInput({
   return { keyId, key, exportedKey };
 }
 
-export function isMediaKeyRecoveryError(error: string | null | undefined): boolean {
+export function isMediaKeyRecoveryError(
+  error: string | null | undefined,
+): boolean {
   return (
     error === MEDIA_KEY_UNAVAILABLE_MESSAGE ||
     error === MEDIA_KEY_MISMATCH_MESSAGE ||
@@ -203,9 +230,10 @@ export function subscribeMediaKeyStoreChanges(
 ): () => void {
   if (typeof window === "undefined") return () => undefined;
   const listener = (event: Event) => {
-    const detail = event instanceof CustomEvent
-      ? (event.detail as MediaKeyStoreChangeDetail | undefined)
-      : undefined;
+    const detail =
+      event instanceof CustomEvent
+        ? (event.detail as MediaKeyStoreChangeDetail | undefined)
+        : undefined;
     callback(detail ?? { reason: "storage" });
   };
   const storageListener = () => callback({ reason: "storage" });
@@ -239,7 +267,11 @@ async function getExportedKeysForKeyId(keyId: string): Promise<string[]> {
     const fragmentKey = readGalleryKeyFromHash(window.location.hash);
     if (fragmentKey) {
       await addIfMatchesRequestedVersion(fragmentKey);
-      if (galleryId && (!requestedVersionedKey || await versionedGalleryKeyId(galleryId, fragmentKey) === keyId)) {
+      if (
+        galleryId &&
+        (!requestedVersionedKey ||
+          (await versionedGalleryKeyId(galleryId, fragmentKey)) === keyId)
+      ) {
         await rememberGalleryMediaKey(galleryId, fragmentKey);
       }
     }
@@ -248,10 +280,15 @@ async function getExportedKeysForKeyId(keyId: string): Promise<string[]> {
   const baseKeyId = galleryBaseKeyId(keyId);
   if (baseKeyId) {
     const activeKeyId = readActiveKeyId(baseKeyId);
-    if (activeKeyId && activeKeyId !== keyId) await addIfMatchesRequestedVersion(readStoredKey(activeKeyId));
-    if (baseKeyId !== keyId) await addIfMatchesRequestedVersion(readStoredKey(baseKeyId));
+    if (activeKeyId && activeKeyId !== keyId)
+      await addIfMatchesRequestedVersion(readStoredKey(activeKeyId));
+    if (baseKeyId !== keyId)
+      await addIfMatchesRequestedVersion(readStoredKey(baseKeyId));
     for (const candidateKeyId of storedMediaKeyIds()) {
-      if (candidateKeyId === baseKeyId || candidateKeyId.startsWith(`${baseKeyId}:`)) {
+      if (
+        candidateKeyId === baseKeyId ||
+        candidateKeyId.startsWith(`${baseKeyId}:`)
+      ) {
         await addIfMatchesRequestedVersion(readStoredKey(candidateKeyId));
       }
     }
@@ -280,7 +317,10 @@ export function galleryIdFromMediaKeyId(keyId: string): string | null {
   return galleryIdFromKeyId(keyId);
 }
 
-export async function versionedGalleryKeyId(galleryId: string, exportedKey: string): Promise<string> {
+export async function versionedGalleryKeyId(
+  galleryId: string,
+  exportedKey: string,
+): Promise<string> {
   const fingerprint = await keyFingerprint(exportedKey);
   return `${galleryKeyId(galleryId)}:${fingerprint}`;
 }
@@ -343,10 +383,9 @@ function writeActiveKeyId(baseKeyId: string, keyId: string): void {
 function notifyMediaKeyStoreChanged(detail: MediaKeyStoreChangeDetail): void {
   if (typeof window === "undefined") return;
   window.dispatchEvent(
-    new CustomEvent<MediaKeyStoreChangeDetail>(
-      MEDIA_KEY_STORE_CHANGE_EVENT,
-      { detail },
-    ),
+    new CustomEvent<MediaKeyStoreChangeDetail>(MEDIA_KEY_STORE_CHANGE_EVENT, {
+      detail,
+    }),
   );
 }
 
@@ -378,13 +417,19 @@ function galleryIdFromKeyId(keyId: string): string | null {
 
 function isVersionedGalleryKeyId(keyId: string): boolean {
   const parts = keyId.split(":");
-  return parts.length === 3 && parts[0] === "gallery" && Boolean(parts[1]) && /^[a-f0-9]{16}$/.test(parts[2]);
+  return (
+    parts.length === 3 &&
+    parts[0] === "gallery" &&
+    Boolean(parts[1]) &&
+    /^[a-f0-9]{16}$/.test(parts[2])
+  );
 }
 
 async function keyFingerprint(exportedKey: string): Promise<string> {
   const bytes = new TextEncoder().encode(exportedKey);
   const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest).slice(0, VERSION_FINGERPRINT_BYTES), (byte) =>
-    byte.toString(16).padStart(2, "0"),
+  return Array.from(
+    new Uint8Array(digest).slice(0, VERSION_FINGERPRINT_BYTES),
+    (byte) => byte.toString(16).padStart(2, "0"),
   ).join("");
 }

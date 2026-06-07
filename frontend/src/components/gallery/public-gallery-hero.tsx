@@ -743,6 +743,7 @@ export function PublicGalleryHero({
           <SlideshowSlide
             asset={assets[i]}
             assetAccessToken={assetAccessToken ?? null}
+            viewerToken={viewerToken}
             position={i + 1}
             total={assets.length}
           />

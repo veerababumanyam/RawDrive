@@ -28,6 +28,7 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 	if deps.Pool != nil {
 		galleryHandler.WithPool(deps.Pool)
 	}
+	galleryHandler.WithMediaKeyRepo(deps.GalleryMediaKeyRepo)
 	galleryHandler.WithClientPreviewDeps(deps.AlbumService, deps.BannerService, deps.ProductService, deps.PublicBaseURL)
 	// M21: wire face scan deps when available
 	if deps.FaceSvc != nil && deps.AssetService != nil && deps.JobRepo != nil {
@@ -122,6 +123,8 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 		r.Get("/", galleryHandler.List)
 		r.Post("/", galleryHandler.Create)
 		r.Get("/{id}", galleryHandler.GetByID)
+		r.Get("/{id}/media-keys", galleryHandler.ListMediaKeys)
+		r.Put("/{id}/media-keys", galleryHandler.UpsertMediaKey)
 		r.Get("/{id}/client-preview", galleryHandler.ClientPreview)
 		r.Put("/{id}", galleryHandler.Update)
 		r.Delete("/{id}", galleryHandler.SoftDelete)
@@ -674,11 +677,12 @@ type M2Dependencies struct {
 	AssetDerivativeRepo  *repository.AssetDerivativeRepo
 	StorageProvider      storage.Provider
 	// M12 dependencies
-	DesignTemplateSvc *service.DesignTemplateService
-	GalleryRepo       *repository.GalleryRepo
-	GalleryDesignSvc  *service.GalleryDesignService
-	DesignCollabSvc   *service.DesignCollabService
-	DesignAISvc       *service.DesignAIService
+	DesignTemplateSvc   *service.DesignTemplateService
+	GalleryRepo         *repository.GalleryRepo
+	GalleryMediaKeyRepo *repository.GalleryMediaKeyRepo
+	GalleryDesignSvc    *service.GalleryDesignService
+	DesignCollabSvc     *service.DesignCollabService
+	DesignAISvc         *service.DesignAIService
 	// M13 dependencies (nil-safe)
 	GalleryAccessSvc   *service.GalleryAccessService
 	ProofingSessionSvc *service.ProofingSessionService

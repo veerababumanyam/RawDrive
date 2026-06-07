@@ -19,6 +19,7 @@ import {
   versionedGalleryKeyId,
 } from "../media-key-store";
 import type { EncryptedAssetLike } from "../asset-media";
+import { clearAuthTokens, persistAuthTokens } from "@/lib/auth";
 
 // Non-encrypted asset used by the non-encrypted-branch tests below: it must paint
 // the network storage URL synchronously on first commit, then upgrade to the
@@ -66,6 +67,7 @@ describe("useDecryptedAssetUrl", () => {
   });
 
   afterEach(() => {
+    clearAuthTokens();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -181,6 +183,78 @@ describe("useDecryptedAssetUrl", () => {
         credentials: "include",
         headers: { Authorization: "Bearer jwt-token" },
       },
+    );
+  });
+
+  it("hydrates owner-synced gallery media keys when a new browser has no local key", async () => {
+    persistAuthTokens("owner-token");
+    const galleryId = "gallery-owner-hydrate-test";
+    const key = await generateRawMediaKey();
+    const exported = await exportRawMediaKey(key);
+    const keyId = await versionedGalleryKeyId(galleryId, exported);
+
+    const encrypted = await encryptBlob(
+      new Blob(["webp-bytes"], { type: "image/webp" }),
+      {
+        key,
+        keyId,
+        objectType: "thumb_md_webp",
+        contentType: "image/webp",
+      },
+    );
+    const ciphertextBytes = await encrypted.ciphertext.arrayBuffer();
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.includes(`/api/v1/galleries/${galleryId}/media-keys`)) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              keys: [{ key_id: keyId, exported_key: exported }],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
+        );
+      }
+      return Promise.resolve(
+        new Response(ciphertextBytes.slice(0), { status: 200 }),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <Probe
+        token="owner-token"
+        asset={{
+          id: "asset-1",
+          filename: "photo.webp",
+          is_encrypted: true,
+          thumbnail_urls: {
+            thumb_md_webp: "gallery/asset-1/thumb_md.webp.enc",
+          },
+          media_encryption: {
+            scheme: "rawdrive-e2ee-v1",
+            variants: {
+              thumb_md_webp: encrypted.manifest as MediaEncryptionManifest,
+            },
+          },
+        }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("src")).toHaveTextContent(
+        "blob:decrypted-webp",
+      );
+    });
+    expect(
+      fetchMock.mock.calls.some((call) =>
+        String(call[0]).includes(`/api/v1/galleries/${galleryId}/media-keys`),
+      ),
+    ).toBe(true);
+    const mediaKeyCall = fetchMock.mock.calls.find((call) =>
+      String(call[0]).includes(`/api/v1/galleries/${galleryId}/media-keys`),
+    );
+    expect(new Headers(mediaKeyCall?.[1]?.headers).get("Authorization")).toBe(
+      "Bearer owner-token",
     );
   });
 

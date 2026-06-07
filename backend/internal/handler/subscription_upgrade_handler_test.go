@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -260,6 +261,52 @@ func TestSubscriptionPaymentProvidersReflectLivePlatformSettingChanges(t *testin
 	}
 	if !got["phonepe"] {
 		t.Fatal("phonepe should become available from updated platform settings without rebuilding handler")
+	}
+}
+
+func TestEventBillingProductCheckoutRequiresQuotaAndThirtyDayTerms(t *testing.T) {
+	product := billingProductVersion{
+		versionID:       uuid.New(),
+		productCode:     "event_upload_standard",
+		productType:     "event_upload",
+		name:            "Event upload",
+		description:     "One-off upload cycle.",
+		currency:        "INR",
+		pricePaise:      19900,
+		billingInterval: "one_time",
+		metadata: []byte(`{
+			"active_days":30,
+			"upload_window_days":30,
+			"retention_days":30,
+			"upload_credits":500,
+			"quota_bytes":10737418240
+		}`),
+		rank: 10,
+	}
+
+	if err := validateBillingProductForCheckout(product); err != nil {
+		t.Fatalf("valid event product rejected: %v", err)
+	}
+	snapshot, err := billingProductSnapshot(product, "event_upload")
+	if err != nil {
+		t.Fatalf("snapshot: %v", err)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(snapshot, &body); err != nil {
+		t.Fatalf("decode snapshot: %v", err)
+	}
+	productBody := body["product"].(map[string]any)
+	metadata := productBody["metadata"].(map[string]any)
+	if got := metadata["quota_bytes"]; got != float64(10737418240) {
+		t.Fatalf("snapshot quota_bytes = %v", got)
+	}
+	if got := metadata["retention_days"]; got != float64(30) {
+		t.Fatalf("snapshot retention_days = %v", got)
+	}
+
+	product.metadata = []byte(`{"active_days":30,"upload_window_days":30,"retention_days":30}`)
+	if err := validateBillingProductForCheckout(product); err == nil || !strings.Contains(err.Error(), "quota_bytes") {
+		t.Fatalf("expected quota metadata error, got %v", err)
 	}
 }
 

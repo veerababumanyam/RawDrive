@@ -6,6 +6,7 @@ import type { Gallery } from "@/lib/api/galleries";
 import { ShareQrPopover } from "@/components/gallery/share-qr-popover";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { ArrowLeft, Check, Copy, Eye } from "@/components/icons";
+import { copyTextToClipboard } from "@/lib/clipboard";
 
 // Owner-facing chrome bar that sits above the rendered preview. Pinned
 // just below the dashboard header so the photographer can copy the
@@ -17,13 +18,24 @@ interface Props {
   gallery: Gallery;
   publicUrl: string;
   isPublished?: boolean;
+  getShareUrl?: () => string | Promise<string>;
 }
 
-export function PreviewChrome({ gallery, publicUrl, isPublished }: Props) {
+export function PreviewChrome({
+  gallery,
+  publicUrl,
+  isPublished,
+  getShareUrl,
+}: Props) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const published = isPublished ?? gallery.is_published === true;
   const shareEnabled = published && Boolean(publicUrl);
+
+  const resolveShareUrl = useCallback(async () => {
+    if (getShareUrl) return getShareUrl();
+    return publicUrl;
+  }, [getShareUrl, publicUrl]);
 
   const handleCopy = useCallback(async () => {
     setError(null);
@@ -36,30 +48,15 @@ export function PreviewChrome({ gallery, publicUrl, isPublished }: Props) {
       return;
     }
     try {
-      // Prefer the async Clipboard API. Fall back to the textarea +
-      // execCommand trick for environments that block it (older Safari
-      // and non-HTTPS local dev where clipboard API is undefined).
-      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(publicUrl);
-      } else if (typeof document !== "undefined") {
-        const ta = document.createElement("textarea");
-        ta.value = publicUrl;
-        ta.setAttribute("readonly", "");
-        ta.style.position = "fixed";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand("copy");
-        document.body.removeChild(ta);
-      } else {
-        throw new Error("Clipboard unavailable");
-      }
+      const shareUrl = await resolveShareUrl();
+      if (!shareUrl) throw new Error("Share link unavailable.");
+      await copyTextToClipboard(shareUrl);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
       setError("Copy failed — long-press the URL to copy manually.");
     }
-  }, [publicUrl, published, shareEnabled]);
+  }, [published, resolveShareUrl, shareEnabled]);
 
   const friendlyUrl = publicUrl
     ? publicUrl.replace(/^https?:\/\//, "")
@@ -112,7 +109,8 @@ export function PreviewChrome({ gallery, publicUrl, isPublished }: Props) {
             {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
           </GlassIconButton>
           <ShareQrPopover
-            url={publicUrl}
+            url={getShareUrl ? "" : publicUrl}
+            getShareUrl={getShareUrl}
             disabled={!shareEnabled}
             label="Show QR for share link"
             filename={`${gallery.slug || "gallery"}-qr`}

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getPublicGallery,
   getPublicGalleryAssets,
@@ -15,10 +15,23 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
 });
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("public gallery URL/session wiring", () => {
   it("builds music URLs with workspace scope and asset-access token (?at=)", () => {
     expect(publicGalleryMusicUrl("wedding", "kaveri-a1", "a/b+c==")).toBe(
       "http://localhost:8080/api/v1/public/galleries/wedding/music?ws=kaveri-a1&at=a%2Fb%2Bc%3D%3D",
+    );
+  });
+
+  it("keeps server-rendered music URLs on the browser-resolvable public API base", () => {
+    vi.stubEnv("INTERNAL_API_BASE_URL", "http://backend:8080");
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "http://localhost:8080");
+
+    expect(publicGalleryMusicUrl("wedding", null, "asset-token")).toBe(
+      "http://localhost:8080/api/v1/public/galleries/wedding/music?at=asset-token",
     );
   });
 

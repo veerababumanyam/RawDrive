@@ -697,7 +697,7 @@ func billingProductFromMap(values map[string]any) (BillingProductCatalog, error)
 	if raw.Metadata == nil {
 		raw.Metadata = map[string]any{}
 	}
-	return BillingProductCatalog{
+	product := BillingProductCatalog{
 		Code:            raw.Code,
 		ProductType:     raw.ProductType,
 		Name:            strings.TrimSpace(raw.Name),
@@ -708,7 +708,59 @@ func billingProductFromMap(values map[string]any) (BillingProductCatalog, error)
 		Metadata:        raw.Metadata,
 		Rank:            raw.Rank,
 		Active:          active,
-	}, nil
+	}
+	if err := validateBillingProductCatalog(product); err != nil {
+		return BillingProductCatalog{}, err
+	}
+	return product, nil
+}
+
+func validateBillingProductCatalog(product BillingProductCatalog) error {
+	if product.ProductType != "event_upload" || !product.Active {
+		return nil
+	}
+	if metadataInt64(product.Metadata, "quota_bytes", 0) <= 0 {
+		return errors.New("active event upload products require quota_bytes metadata")
+	}
+	activeDays := metadataInt64(product.Metadata, "active_days", 0)
+	if activeDays <= 0 || activeDays > 30 {
+		return errors.New("active event upload products require active_days between 1 and 30")
+	}
+	uploadWindowDays := metadataInt64(product.Metadata, "upload_window_days", 0)
+	if uploadWindowDays <= 0 || uploadWindowDays > activeDays {
+		return errors.New("active event upload products require upload_window_days between 1 and active_days")
+	}
+	retentionDays := metadataInt64(product.Metadata, "retention_days", 0)
+	if retentionDays != 30 {
+		return errors.New("active event upload products require retention_days of 30")
+	}
+	return nil
+}
+
+func metadataInt64(metadata map[string]any, key string, fallback int64) int64 {
+	value, ok := metadata[key]
+	if !ok {
+		return fallback
+	}
+	switch v := value.(type) {
+	case int:
+		return int64(v)
+	case int64:
+		return v
+	case float64:
+		return int64(v)
+	case json.Number:
+		n, err := v.Int64()
+		if err == nil {
+			return n
+		}
+	case string:
+		var parsed int64
+		if _, err := fmt.Sscanf(strings.TrimSpace(v), "%d", &parsed); err == nil {
+			return parsed
+		}
+	}
+	return fallback
 }
 
 func validBillingProductType(productType string) bool {

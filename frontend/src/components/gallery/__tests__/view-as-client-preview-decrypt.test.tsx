@@ -70,7 +70,11 @@ function encryptedAsset(): PublicAsset {
   };
 }
 
-beforeEach(() => decryptSpy.mockClear());
+beforeEach(() => {
+  decryptSpy.mockClear();
+  window.HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
+  window.HTMLMediaElement.prototype.pause = vi.fn();
+});
 
 describe("View-as-client owner preview decryption auth", () => {
   it("PublicGalleryGrid forwards the owner viewerToken into useDecryptedAssetUrl", () => {
@@ -84,12 +88,10 @@ describe("View-as-client owner preview decryption auth", () => {
     expect(decryptSpy).toHaveBeenCalled();
     // 3rd positional arg is the bearer `token` the hook attaches as
     // Authorization. Must be the owner token, never the pre-fix `null`.
-    expect(
-      decryptSpy.mock.calls.some((call) => call[2] === OWNER_TOKEN),
-    ).toBe(true);
-    expect(
-      decryptSpy.mock.calls.some((call) => call[2] === null),
-    ).toBe(false);
+    expect(decryptSpy.mock.calls.some((call) => call[2] === OWNER_TOKEN)).toBe(
+      true,
+    );
+    expect(decryptSpy.mock.calls.some((call) => call[2] === null)).toBe(false);
   });
 
   it("PublicGalleryHero forwards the owner viewerToken into the cover useDecryptedAssetUrl", () => {
@@ -106,8 +108,33 @@ describe("View-as-client owner preview decryption auth", () => {
       />,
     );
     expect(decryptSpy).toHaveBeenCalled();
+    expect(decryptSpy.mock.calls.some((call) => call[2] === OWNER_TOKEN)).toBe(
+      true,
+    );
+  });
+
+  it("PublicGalleryHero forwards the owner viewerToken into slideshow slides", () => {
+    const gallery = {
+      id: "g1",
+      title: "wedding veeru",
+      slug: "wedding-veeru",
+    } as unknown as Gallery;
+    render(
+      <PublicGalleryHero
+        gallery={gallery}
+        assets={[encryptedAsset()]}
+        slug="wedding-veeru"
+        hasMusic
+        viewerToken={OWNER_TOKEN}
+      />,
+    );
     expect(
-      decryptSpy.mock.calls.some((call) => call[2] === OWNER_TOKEN),
+      decryptSpy.mock.calls.some(
+        (call) =>
+          Array.isArray(call[1]) &&
+          call[1][0] === "display_webp" &&
+          call[2] === OWNER_TOKEN,
+      ),
     ).toBe(true);
   });
 });

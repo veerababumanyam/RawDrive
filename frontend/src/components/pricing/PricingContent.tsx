@@ -4,7 +4,11 @@ import { useState } from "react";
 import Link from "next/link";
 import { Check, ChevronDown, Tag } from "lucide-react";
 import { usePlanCatalog } from "@/hooks/use-plan-catalog";
-import type { PlanCatalogPlan, PricingCatalogProduct } from "@/lib/plans";
+import {
+  formatQuotaBytes,
+  type PlanCatalogPlan,
+  type PricingCatalogProduct,
+} from "@/lib/plans";
 
 function formatPrice(price: number): string {
   if (price === -1) return "Custom";
@@ -22,9 +26,13 @@ function productNumber(
   fallback: number,
 ): number {
   const value = product.metadata?.[key];
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : fallback;
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function productStorageLabel(product: PricingCatalogProduct): string {
+  const value = product.metadata?.quota_bytes;
+  const bytes = typeof value === "number" && Number.isFinite(value) ? value : 0;
+  return bytes > 0 ? formatQuotaBytes(bytes) : "Admin-configured storage";
 }
 
 function monthlyEquivalent(plan: PlanCatalogPlan): number {
@@ -85,8 +93,7 @@ export function PricingContent() {
   );
   const starterPlan = activePlans.find((plan) => plan.id === "free");
   const subscriptionPlans = activePlans.filter(
-    (plan) =>
-      plan.paid && plan.id !== "pay_per_event" && plan.id !== "free",
+    (plan) => plan.paid && plan.id !== "pay_per_event" && plan.id !== "free",
   );
 
   const fallbackEventOptions = [
@@ -95,25 +102,29 @@ export function PricingContent() {
       unit: "/ event upload",
       title: "Event upload",
       activePhase: "30-day active phase",
-      summary: "Best for occasional shoots and beginners who do not want a subscription.",
+      summary:
+        "Best for occasional shoots and beginners who do not want a subscription.",
       points: [
+        "Admin-configured storage quota",
         "Upload for 30 days",
         "View-only after 30 days",
         "No new uploads after expiry",
-        "Auto-archive at day 90 unless extended",
+        "Clean sweep after 30 days unless upgraded",
       ],
     },
     {
       price: "Rs. 499",
       unit: "/ wedding upload",
       title: "Wedding upload",
-      activePhase: "60-day active phase",
-      summary: "Built for multi-day weddings, larger delivery sets, and longer client selection cycles.",
+      activePhase: "30-day active phase",
+      summary:
+        "Built for multi-day weddings, larger delivery sets, and longer client selection cycles.",
       points: [
-        "Upload for 60 days",
-        "View-only after 60 days",
+        "Admin-configured storage quota",
+        "Upload window set by approved catalog",
+        "View-only after active phase",
         "No new uploads after expiry",
-        "Auto-archive at day 90 unless extended",
+        "Clean sweep after 30 days unless upgraded",
       ],
     },
   ];
@@ -122,7 +133,7 @@ export function PricingContent() {
     eventPacks.length > 0
       ? eventPacks.map((product) => {
           const activeDays = productNumber(product, "active_days", 30);
-          const retentionDays = productNumber(product, "retention_days", 90);
+          const retentionDays = productNumber(product, "retention_days", 30);
           const uploadWindowDays = productNumber(
             product,
             "upload_window_days",
@@ -138,10 +149,11 @@ export function PricingContent() {
             activePhase: `${activeDays}-day active phase`,
             summary: product.description,
             points: [
+              `${productStorageLabel(product)} managed storage included`,
               `Upload for ${uploadWindowDays} days`,
               `View-only after ${activeDays} days`,
               "No new uploads after expiry",
-              `Auto-archive at day ${retentionDays} unless extended`,
+              `Clean sweep at day ${retentionDays} unless upgraded or extended`,
             ],
           };
         })
@@ -168,8 +180,8 @@ export function PricingContent() {
     ? productNumber(standardEvent, "active_days", 30)
     : 30;
   const weddingActiveDays = weddingEvent
-    ? productNumber(weddingEvent, "active_days", 60)
-    : 60;
+    ? productNumber(weddingEvent, "active_days", 30)
+    : 30;
   const extension30Price = extension30
     ? formatProductPrice(extension30)
     : "Rs. 49";
@@ -186,7 +198,7 @@ export function PricingContent() {
     },
     {
       q: "How does Pay Per Event work?",
-      a: `Pay Per Event gives occasional photographers a one-off upload cycle: ${standardPrice} events include ${standardActiveDays} active days, ${weddingPrice} wedding uploads include ${weddingActiveDays} active days, and both become view-only after the active phase.`,
+      a: `Pay Per Event gives occasional photographers a one-off upload cycle: ${standardPrice} events include ${standardActiveDays} active days, ${weddingPrice} wedding uploads include ${weddingActiveDays} active days, each product carries its own approved storage quota, and galleries are cleaned after 30 days unless upgraded or extended.`,
     },
     {
       q: "Can I switch plans later?",
@@ -256,7 +268,6 @@ export function PricingContent() {
               </div>
             ))}
           </div>
-
         </div>
       </section>
 
@@ -333,8 +344,9 @@ export function PricingContent() {
             </div>
             <p className="text-sm text-text-secondary">
               After the active phase, galleries become view-only and reject new
-              uploads. After 90 days total, they auto-archive unless the
-              photographer extends the gallery.
+              uploads. After 30 days total, RawDrive runs a clean sweep unless
+              the photographer upgrades to a paid subscription or extends the
+              gallery.
             </p>
           </div>
         </section>

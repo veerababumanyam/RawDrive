@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Check, Copy, Download, QRCode } from "@/components/icons";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
 import { components } from "@/lib/tokens";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 import { downloadQrPng, downloadQrSvg, renderQrToCanvas } from "@/lib/qr";
 
@@ -126,8 +127,9 @@ export function GalleryShareQrCard({
   // setters as deps).
   const handleCopy = async () => {
     if (!url) return;
+    setActionError(null);
     try {
-      await navigator.clipboard.writeText(url);
+      await copyTextToClipboard(url);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {

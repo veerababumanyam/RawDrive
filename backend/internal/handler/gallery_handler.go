@@ -41,6 +41,7 @@ type GalleryHandler struct {
 	// fake via WithAssetBatchSource — the same seam the public path uses (F-029).
 	assetBatch    publicAssetBatchSource
 	publicBaseURL string
+	mediaKeyRepo  *repository.GalleryMediaKeyRepo
 }
 
 // NewGalleryHandler creates a new GalleryHandler.
@@ -82,6 +83,14 @@ func (h *GalleryHandler) WithClientPreviewDeps(albumSvc *service.AlbumService, b
 // handler's seam so both list paths share one N+1-free contract. Chainable.
 func (h *GalleryHandler) WithAssetBatchSource(src publicAssetBatchSource) *GalleryHandler {
 	h.assetBatch = src
+	return h
+}
+
+// WithMediaKeyRepo injects the owner-authenticated gallery media-key registry.
+// It is optional so older test harnesses keep compiling; routes return 503 when
+// the repo is not wired.
+func (h *GalleryHandler) WithMediaKeyRepo(repo *repository.GalleryMediaKeyRepo) *GalleryHandler {
+	h.mediaKeyRepo = repo
 	return h
 }
 
@@ -365,6 +374,106 @@ func (h *GalleryHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, gallery)
+}
+
+// ListMediaKeys handles GET /api/v1/galleries/{id}/media-keys.
+func (h *GalleryHandler) ListMediaKeys(w http.ResponseWriter, r *http.Request) {
+	if h.mediaKeyRepo == nil {
+		http.Error(w, `{"error":"gallery media key service unavailable"}`, http.StatusServiceUnavailable)
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+	if _, _, ok := h.requireGalleryInWorkspace(w, r, id); !ok {
+		return
+	}
+
+	keys, err := h.mediaKeyRepo.ListByGallery(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"media keys list failed"}`, http.StatusInternalServerError)
+		return
+	}
+
+	response := make([]galleryMediaKeyResponse, 0, len(keys))
+	for _, key := range keys {
+		response = append(response, galleryMediaKeyResponse{
+			KeyID:       key.KeyID,
+			ExportedKey: key.ExportedKey,
+		})
+	}
+	respondJSON(w, http.StatusOK, map[string]any{"keys": response})
+}
+
+// UpsertMediaKey handles PUT /api/v1/galleries/{id}/media-keys.
+func (h *GalleryHandler) UpsertMediaKey(w http.ResponseWriter, r *http.Request) {
+	if h.mediaKeyRepo == nil {
+		http.Error(w, `{"error":"gallery media key service unavailable"}`, http.StatusServiceUnavailable)
+		return
+	}
+	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+	if _, _, ok := h.requireGalleryInWorkspace(w, r, galleryID); !ok {
+		return
+	}
+
+	var input galleryMediaKeyRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	keyID := strings.TrimSpace(input.KeyID)
+	exportedKey := strings.TrimSpace(input.ExportedKey)
+	if keyID == "" || exportedKey == "" {
+		http.Error(w, `{"error":"key_id and exported_key are required"}`, http.StatusBadRequest)
+		return
+	}
+	if strings.ContainsAny(exportedKey, " \t\r\n") {
+		http.Error(w, `{"error":"exported_key must not contain whitespace"}`, http.StatusBadRequest)
+		return
+	}
+	baseKeyID := "gallery:" + galleryID.String()
+	if keyID != baseKeyID && !strings.HasPrefix(keyID, baseKeyID+":") {
+		http.Error(w, `{"error":"key_id does not match gallery"}`, http.StatusBadRequest)
+		return
+	}
+
+	userID, ok := getUserID(r)
+	var updatedBy *uuid.UUID
+	if ok && userID != uuid.Nil {
+		updatedBy = &userID
+	}
+	key, err := h.mediaKeyRepo.Upsert(r.Context(), repository.GalleryMediaKey{
+		GalleryID:   galleryID,
+		KeyID:       keyID,
+		ExportedKey: exportedKey,
+		UpdatedBy:   updatedBy,
+	})
+	if err != nil {
+		http.Error(w, `{"error":"media key save failed"}`, http.StatusInternalServerError)
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]any{
+		"key": galleryMediaKeyResponse{
+			KeyID:       key.KeyID,
+			ExportedKey: key.ExportedKey,
+		},
+	})
+}
+
+type galleryMediaKeyRequest struct {
+	KeyID       string `json:"key_id"`
+	ExportedKey string `json:"exported_key"`
+}
+
+type galleryMediaKeyResponse struct {
+	KeyID       string `json:"key_id"`
+	ExportedKey string `json:"exported_key"`
 }
 
 // Update handles PUT /api/v1/galleries/{id}

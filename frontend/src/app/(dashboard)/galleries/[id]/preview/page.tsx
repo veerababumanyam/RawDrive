@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PreviewChrome } from "@/components/gallery/preview-chrome";
 import { PublicGalleryBody } from "@/components/gallery/public-gallery-body";
 import { getStoredAccessToken } from "@/lib/auth";
 import {
+  createGalleryShareLink,
   getGalleryClientPreview,
   type Gallery,
   type GalleryBranding,
@@ -24,7 +25,11 @@ import {
   resolveGalleryAccent,
 } from "@/lib/gallery-accent";
 import { readEmbeddedVideos } from "@/lib/embedded-videos";
-import { appendStoredGalleryKeyFragment } from "@/lib/media-encryption/share-url";
+import { galleryShareExpiryDays } from "@/lib/gallery-share-expiry";
+import {
+  appendStoredGalleryKeyFragment,
+  setUrlSearchParamBeforeFragment,
+} from "@/lib/media-encryption/share-url";
 
 interface PreviewPayload {
   gallery: Gallery;
@@ -64,6 +69,7 @@ export default function GalleryPreviewPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewerToken] = useState(() => getStoredAccessToken());
+  const previewShareUrlRef = useRef("");
 
   useEffect(() => {
     let cancelled = false;
@@ -145,6 +151,37 @@ export default function GalleryPreviewPage({
     if (!payload?.publicUrl) return "";
     return appendStoredGalleryKeyFragment(payload.publicUrl, id);
   }, [id, payload]);
+  const getPreviewShareUrl = useCallback(async () => {
+    if (previewShareUrlRef.current) return previewShareUrlRef.current;
+    if (!gallery || !payload?.isPublished) {
+      throw new Error("Publish this gallery before copying the client link.");
+    }
+    const token = getStoredAccessToken();
+    if (!token) {
+      throw new Error("Sign in again to create a share link.");
+    }
+    if (!publicUrl) {
+      throw new Error("Share link unavailable: gallery URL is missing.");
+    }
+
+    const expiryDays = galleryShareExpiryDays(gallery);
+    const created = await createGalleryShareLink(token, gallery.id, {
+      access_mode: "public",
+      download_allowed: gallery.download_enabled !== false,
+      channel: "copy",
+      ...(expiryDays !== undefined ? { expiry_days: expiryDays } : {}),
+    });
+    const shareUrl = setUrlSearchParamBeforeFragment(
+      publicUrl,
+      "share",
+      created.token,
+    );
+    previewShareUrlRef.current = shareUrl;
+    return shareUrl;
+  }, [gallery, payload?.isPublished, publicUrl]);
+  useEffect(() => {
+    previewShareUrlRef.current = "";
+  }, [gallery?.id, publicUrl]);
   const galleryAccent = useMemo(
     () =>
       resolveGalleryAccent({
@@ -184,6 +221,7 @@ export default function GalleryPreviewPage({
         gallery={gallery}
         publicUrl={publicUrl}
         isPublished={payload.isPublished}
+        getShareUrl={getPreviewShareUrl}
       />
 
       <PublicGalleryBody
