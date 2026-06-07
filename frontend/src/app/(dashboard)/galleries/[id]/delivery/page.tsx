@@ -2,10 +2,9 @@
 
 import { use, useEffect, useMemo, useState } from "react";
 import { DeliveryContinuityPanel } from "@/components/gallery/delivery-continuity-panel";
-import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
+import { GalleryPageHeader } from "@/components/gallery/gallery-page-header";
+import { GalleryPageShell } from "@/components/gallery/gallery-page-shell";
 import { InlineAlert } from "@/components/ui/inline-alert";
-import { PageContainer } from "@/components/ui/page-container";
-import { PageHeader } from "@/components/ui/page-header";
 import {
   getGallery,
   listGalleryAssets,
@@ -77,21 +76,16 @@ export default function GalleryDeliveryPage({
   }, [selections]);
 
   return (
-    <PageContainer>
-      {/* Workspace nav first so the section dropdown is the topmost
-          element on mobile (matches the AI and settings sub-pages). */}
-      <GalleryWorkspaceNav galleryId={id} />
-
-      <PageHeader
+    <GalleryPageShell galleryId={id} width="wide">
+      <GalleryPageHeader
         eyebrow="Delivery"
         title={
           gallery?.title
             ? `${gallery.title} delivery continuity`
             : "Delivery continuity"
         }
-        description="Downloads, views, and proofing progress stay attached to this gallery workspace so hand-off status never drifts into a separate module."
+        subtitle="Downloads, views, and proofing progress stay attached to this gallery workspace so hand-off status never drifts into a separate module."
         backHref={`/galleries/${id}`}
-        backLabel="Back to gallery"
       />
 
       {error && <InlineAlert variant="error">{error}</InlineAlert>}
@@ -104,6 +98,6 @@ export default function GalleryDeliveryPage({
           totalCount={totalCount}
         />
       )}
-    </PageContainer>
+    </GalleryPageShell>
   );
 }

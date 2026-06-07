@@ -2,10 +2,9 @@
 
 import dynamic from "next/dynamic";
 import { use, useEffect, useState } from "react";
-import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
+import { GalleryPageHeader } from "@/components/gallery/gallery-page-header";
+import { GalleryPageShell } from "@/components/gallery/gallery-page-shell";
 import { InlineAlert } from "@/components/ui/inline-alert";
-import { PageContainer } from "@/components/ui/page-container";
-import { PageHeader } from "@/components/ui/page-header";
 import { getGallery, type Gallery } from "@/lib/api/galleries";
 import { getStoredAccessToken } from "@/lib/auth";
 
@@ -63,22 +62,17 @@ export default function GalleryAIPage({
   }, [id, token]);
 
   return (
-    <PageContainer>
-      {/* Workspace nav first so the section dropdown is the topmost
-          element on mobile (matches the cover and settings sub-pages). */}
-      <GalleryWorkspaceNav galleryId={id} />
-
-      <PageHeader
+    <GalleryPageShell galleryId={id} width="wide">
+      <GalleryPageHeader
         eyebrow="Gallery AI"
         title={gallery?.title ? `${gallery.title} AI` : "Gallery AI"}
-        description="Run gallery-scoped automation here so face matching, culling support, and client discovery stay attached to the delivery workspace."
+        subtitle="Run gallery-scoped automation here so face matching, culling support, and client discovery stay attached to the delivery workspace."
         backHref={`/galleries/${id}`}
-        backLabel="Back to gallery"
       />
 
       {error && <InlineAlert variant="error">{error}</InlineAlert>}
 
       {token && <GalleryAIPanel galleryId={id} token={token} />}
-    </PageContainer>
+    </GalleryPageShell>
   );
 }

@@ -2,10 +2,9 @@
 
 import { use, useEffect, useState } from "react";
 import { SalesContinuityPanel } from "@/components/gallery/sales-continuity-panel";
-import { GalleryWorkspaceNav } from "@/components/gallery/gallery-workspace-nav";
+import { GalleryPageHeader } from "@/components/gallery/gallery-page-header";
+import { GalleryPageShell } from "@/components/gallery/gallery-page-shell";
 import { InlineAlert } from "@/components/ui/inline-alert";
-import { PageContainer } from "@/components/ui/page-container";
-import { PageHeader } from "@/components/ui/page-header";
 import { getGallery, type Gallery } from "@/lib/api/galleries";
 import { getStoredAccessToken } from "@/lib/auth";
 
@@ -41,21 +40,16 @@ export default function GallerySalesPage({
   }, [id, token]);
 
   return (
-    <PageContainer>
-      {/* Workspace nav first so the section dropdown is the topmost
-          element on mobile (matches the AI and settings sub-pages). */}
-      <GalleryWorkspaceNav galleryId={id} />
-
-      <PageHeader
+    <GalleryPageShell galleryId={id} width="wide">
+      <GalleryPageHeader
         eyebrow="Sales"
         title={
           gallery?.title
             ? `${gallery.title} sales continuity`
             : "Sales continuity"
         }
-        description="Invoices, deals, and projects linked to this gallery roll up here so commerce stays in the same workspace as the photos."
+        subtitle="Invoices, deals, and projects linked to this gallery roll up here so commerce stays in the same workspace as the photos."
         backHref={`/galleries/${id}`}
-        backLabel="Back to gallery"
       />
 
       {error && <InlineAlert variant="error">{error}</InlineAlert>}
@@ -71,6 +65,6 @@ export default function GallerySalesPage({
           cartCount={0}
         />
       )}
-    </PageContainer>
+    </GalleryPageShell>
   );
 }

@@ -24,7 +24,7 @@
 // — otherwise Chrome leaves the camera light on until the tab closes,
 // which is alarming UX for "I just used a face for a quick search."
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 // useRouter import removed 2026-05-18 — the only consumer was the
 // "Open in People view" button (deep-link to the now-deleted People
@@ -68,6 +68,8 @@ type CameraErrorKind =
   | "no-device" // no camera plugged in
   | "in-use" // another app holds the camera
   | "unknown";
+
+const MATCHED_PHOTO_PAGE_SIZE = 60;
 
 interface CameraError {
   kind: CameraErrorKind;
@@ -199,6 +201,14 @@ export default function PhotoSearchPage({
     null,
   );
   const [matchedAssets, setMatchedAssets] = useState<Asset[]>([]);
+  const [matchedAssetLimit, setMatchedAssetLimit] = useState(
+    MATCHED_PHOTO_PAGE_SIZE,
+  );
+  const pagedMatchedAssets = useMemo(
+    () => matchedAssets.slice(0, matchedAssetLimit),
+    [matchedAssets, matchedAssetLimit],
+  );
+  const hasMoreMatchedAssets = matchedAssets.length > pagedMatchedAssets.length;
 
   const stopCamera = useCallback(() => {
     const s = streamRef.current;
@@ -217,6 +227,7 @@ export default function PhotoSearchPage({
     setCameraError(null);
     setSearchResult(null);
     setMatchedAssets([]);
+    setMatchedAssetLimit(MATCHED_PHOTO_PAGE_SIZE);
     setVideoReady(false);
 
     // Up-front secure-context check. If the page is on a LAN IP over
@@ -366,6 +377,7 @@ export default function PhotoSearchPage({
     setErrorDetail("");
     setSearchResult(null);
     setMatchedAssets([]);
+    setMatchedAssetLimit(MATCHED_PHOTO_PAGE_SIZE);
 
     try {
       const result = await searchFaceInGallery(token, id, blob);
@@ -443,12 +455,13 @@ export default function PhotoSearchPage({
   const handleRetry = useCallback(() => {
     setSearchResult(null);
     setMatchedAssets([]);
+    setMatchedAssetLimit(MATCHED_PHOTO_PAGE_SIZE);
     setErrorDetail("");
     void startCamera();
   }, [startCamera]);
 
   return (
-    <GalleryPageShell galleryId={id}>
+    <GalleryPageShell galleryId={id} width="full">
       <GalleryPageHeader
         backHref={`/galleries/${id}`}
         eyebrow="Photo Search"
@@ -456,235 +469,270 @@ export default function PhotoSearchPage({
         subtitle="Point your camera at someone's face and tap Capture. We'll match it against the people already detected in this gallery and show every photo they appear in."
       />
 
-      <FaceIdentityReviewPanel galleryId={id} token={token} />
+      <div className="gallery-photo-search-workbench">
+        <aside
+          className="gallery-photo-search-review"
+          aria-label="People review and FaceID sync"
+        >
+          <FaceIdentityReviewPanel galleryId={id} token={token} />
+        </aside>
 
-      {/* Camera + capture area. The preview shape is a vertical 4:3 so
+        <div className="gallery-photo-search-main">
+          {/* Camera + capture area. The preview shape is a vertical 4:3 so
           it works well for a single face — wider 16:9 makes the face
           smaller on the page than necessary. */}
-      <section className="surface-panel p-4">
-        {stage === "idle" && (
-          <div className="text-center space-y-4 py-8">
-            <Camera
-              className="mx-auto h-12 w-12 text-text-tertiary"
-              aria-hidden
-            />
-            <p className="text-sm text-text-secondary">
-              We&apos;ll ask for camera permission once. Nothing is recorded —
-              only the still frame you capture is sent to the server.
-            </p>
-            <button
-              type="button"
-              onClick={() => void startCamera()}
-              className="inline-flex items-center gap-2 rounded-full bg-accent-primary px-5 py-2.5 text-sm font-semibold text-text-inverse hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2"
-            >
-              <Camera className="h-4 w-4" aria-hidden />
-              Start camera
-            </button>
-          </div>
-        )}
+          <section className="surface-panel p-4">
+            {stage === "idle" && (
+              <div className="text-center space-y-4 py-8">
+                <Camera
+                  className="mx-auto h-12 w-12 text-text-tertiary"
+                  aria-hidden
+                />
+                <p className="text-sm text-text-secondary">
+                  We&apos;ll ask for camera permission once. Nothing is recorded
+                  — only the still frame you capture is sent to the server.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void startCamera()}
+                  className="inline-flex items-center gap-2 rounded-full bg-accent-primary px-5 py-2.5 text-sm font-semibold text-text-inverse hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2"
+                >
+                  <Camera className="h-4 w-4" aria-hidden />
+                  Start camera
+                </button>
+              </div>
+            )}
 
-        {stage === "camera-error" && (
-          <CameraErrorPanel
-            error={cameraError}
-            onRetry={() => void startCamera()}
-          />
-        )}
-
-        {(stage === "preview" || stage === "searching") && (
-          <div className="space-y-3">
-            <div className="relative mx-auto aspect-4/3 max-w-xl overflow-hidden rounded-2xl border border-border-subtle bg-surface-scrim-strong">
-              <video
-                ref={videoRef}
-                className="h-full w-full object-cover"
-                playsInline
-                muted
-                autoPlay
-                aria-label="Camera preview"
+            {stage === "camera-error" && (
+              <CameraErrorPanel
+                error={cameraError}
+                onRetry={() => void startCamera()}
               />
-              {/* Subtle reticle so users know roughly where to put
+            )}
+
+            {(stage === "preview" || stage === "searching") && (
+              <div className="space-y-3">
+                <div className="relative mx-auto aspect-4/3 max-w-xl overflow-hidden rounded-2xl border border-border-subtle bg-surface-scrim-strong">
+                  <video
+                    ref={videoRef}
+                    className="h-full w-full object-cover"
+                    playsInline
+                    muted
+                    autoPlay
+                    aria-label="Camera preview"
+                  />
+                  {/* Subtle reticle so users know roughly where to put
                   their face. Purely cosmetic — backend uses the full
                   frame. */}
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-0 flex items-center justify-center"
-              >
-                <div className="h-2/3 w-2/3 rounded-full border-2 border-text-media/30" />
-              </div>
-            </div>
-            <div className="flex flex-col items-center gap-1">
-              <button
-                type="button"
-                onClick={() => void handleCapture()}
-                disabled={stage === "searching" || !videoReady}
-                className="inline-flex items-center gap-2 rounded-full bg-accent-primary px-5 py-2.5 text-sm font-semibold text-text-inverse hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {stage === "searching" ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 animate-spin" aria-hidden />
-                    Searching…
-                  </>
-                ) : !videoReady ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 animate-spin" aria-hidden />
-                    Warming up camera…
-                  </>
-                ) : (
-                  <>
-                    <Search className="h-4 w-4" aria-hidden />
-                    Capture & search
-                  </>
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                  >
+                    <div className="h-2/3 w-2/3 rounded-full border-2 border-text-media/30" />
+                  </div>
+                </div>
+                <div className="flex flex-col items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => void handleCapture()}
+                    disabled={stage === "searching" || !videoReady}
+                    className="inline-flex items-center gap-2 rounded-full bg-accent-primary px-5 py-2.5 text-sm font-semibold text-text-inverse hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {stage === "searching" ? (
+                      <>
+                        <RefreshCw
+                          className="h-4 w-4 animate-spin"
+                          aria-hidden
+                        />
+                        Searching…
+                      </>
+                    ) : !videoReady ? (
+                      <>
+                        <RefreshCw
+                          className="h-4 w-4 animate-spin"
+                          aria-hidden
+                        />
+                        Warming up camera…
+                      </>
+                    ) : (
+                      <>
+                        <Search className="h-4 w-4" aria-hidden />
+                        Capture & search
+                      </>
+                    )}
+                  </button>
+                  {!videoReady && stage === "preview" && (
+                    <p className="text-2xs text-text-tertiary">
+                      Waiting for the first video frame…
+                    </p>
+                  )}
+                </div>
+                {errorDetail && (
+                  <p className="text-center text-xs text-feedback-error">
+                    {errorDetail}
+                  </p>
                 )}
-              </button>
-              {!videoReady && stage === "preview" && (
-                <p className="text-2xs text-text-tertiary">
-                  Waiting for the first video frame…
-                </p>
-              )}
-            </div>
-            {errorDetail && (
-              <p className="text-center text-xs text-feedback-error">
-                {errorDetail}
-              </p>
+              </div>
             )}
-          </div>
-        )}
 
-        {/* Hidden canvas — used as the off-screen drawing buffer for
+            {/* Hidden canvas — used as the off-screen drawing buffer for
             video→JPEG conversion. Never displayed. */}
-        <canvas ref={canvasRef} className="hidden" aria-hidden />
-      </section>
+            <canvas ref={canvasRef} className="hidden" aria-hidden />
+          </section>
 
-      {/* Result section */}
-      {stage === "result-no-face" && (
-        <section className="surface-panel p-6 text-center space-y-3">
-          <p className="text-sm font-semibold text-text-primary">
-            No face detected
-          </p>
-          <p className="text-xs text-text-secondary">
-            Make sure your face is centered and well lit, then try again.
-          </p>
-          <div className="flex justify-center">
-            <button
-              type="button"
-              onClick={handleRetry}
-              className="inline-flex items-center gap-2 rounded-full border border-border-default bg-surface-container px-4 py-2 text-sm text-text-primary hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2"
-            >
-              <RefreshCw className="h-4 w-4" aria-hidden />
-              Try again
-            </button>
-          </div>
-        </section>
-      )}
-
-      {stage === "result-index-empty" && (
-        <section className="surface-panel p-6 text-center space-y-3">
-          <p className="text-sm font-semibold text-text-primary">
-            FaceID is not synced for this gallery yet
-          </p>
-          <p className="text-xs text-text-secondary">
-            We saw {searchResult?.faces_detected ?? 1}{" "}
-            {(searchResult?.faces_detected ?? 1) === 1 ? "face" : "faces"} in
-            the capture, but this gallery does not have indexed people yet. Use
-            Sync now in People Review, name or link the detected people, then
-            search again.
-          </p>
-          <div className="flex justify-center">
-            <button
-              type="button"
-              onClick={handleRetry}
-              className="inline-flex items-center gap-2 rounded-full border border-border-default bg-surface-container px-4 py-2 text-sm text-text-primary hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2"
-            >
-              <RefreshCw className="h-4 w-4" aria-hidden />
-              Try again
-            </button>
-          </div>
-        </section>
-      )}
-
-      {stage === "result-no-match" && (
-        <section className="surface-panel p-6 text-center space-y-3">
-          <p className="text-sm font-semibold text-text-primary">
-            No matching photos
-          </p>
-          <p className="text-xs text-text-secondary">
-            We saw {searchResult?.faces_detected ?? 1}{" "}
-            {(searchResult?.faces_detected ?? 1) === 1 ? "face" : "faces"} in
-            your capture, but didn&apos;t find a strong match in this
-            gallery&apos;s identified people.
-          </p>
-          <div className="flex justify-center">
-            <button
-              type="button"
-              onClick={handleRetry}
-              className="inline-flex items-center gap-2 rounded-full border border-border-default bg-surface-container px-4 py-2 text-sm text-text-primary hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2"
-            >
-              <RefreshCw className="h-4 w-4" aria-hidden />
-              Try another face
-            </button>
-          </div>
-        </section>
-      )}
-
-      {stage === "result-found" && searchResult?.found && (
-        <section className="space-y-4">
-          <div className="surface-panel p-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="space-y-1">
-              <p className="text-xs uppercase tracking-widest text-text-tertiary">
-                Match
-              </p>
+          {/* Result section */}
+          {stage === "result-no-face" && (
+            <section className="surface-panel p-6 text-center space-y-3">
               <p className="text-sm font-semibold text-text-primary">
-                {searchResult.cluster_name?.trim() || "Unnamed person"}
+                No face detected
               </p>
               <p className="text-xs text-text-secondary">
-                {searchResult.count}{" "}
-                {searchResult.count === 1 ? "photo" : "photos"} in this gallery
-                {typeof searchResult.similarity === "number"
-                  ? ` · ${(searchResult.similarity * 100).toFixed(0)}% confidence`
-                  : ""}
+                Make sure your face is centered and well lit, then try again.
               </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {/* "Open in People view" button removed 2026-05-18 — the
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={handleRetry}
+                  className="inline-flex items-center gap-2 rounded-full border border-border-default bg-surface-container px-4 py-2 text-sm text-text-primary hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2"
+                >
+                  <RefreshCw className="h-4 w-4" aria-hidden />
+                  Try again
+                </button>
+              </div>
+            </section>
+          )}
+
+          {stage === "result-index-empty" && (
+            <section className="surface-panel p-6 text-center space-y-3">
+              <p className="text-sm font-semibold text-text-primary">
+                FaceID is not synced for this gallery yet
+              </p>
+              <p className="text-xs text-text-secondary">
+                We saw {searchResult?.faces_detected ?? 1}{" "}
+                {(searchResult?.faces_detected ?? 1) === 1 ? "face" : "faces"}{" "}
+                in the capture, but this gallery does not have indexed people
+                yet. Use Sync now in People Review, name or link the detected
+                people, then search again.
+              </p>
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={handleRetry}
+                  className="inline-flex items-center gap-2 rounded-full border border-border-default bg-surface-container px-4 py-2 text-sm text-text-primary hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2"
+                >
+                  <RefreshCw className="h-4 w-4" aria-hidden />
+                  Try again
+                </button>
+              </div>
+            </section>
+          )}
+
+          {stage === "result-no-match" && (
+            <section className="surface-panel p-6 text-center space-y-3">
+              <p className="text-sm font-semibold text-text-primary">
+                No matching photos
+              </p>
+              <p className="text-xs text-text-secondary">
+                We saw {searchResult?.faces_detected ?? 1}{" "}
+                {(searchResult?.faces_detected ?? 1) === 1 ? "face" : "faces"}{" "}
+                in your capture, but didn&apos;t find a strong match in this
+                gallery&apos;s identified people.
+              </p>
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={handleRetry}
+                  className="inline-flex items-center gap-2 rounded-full border border-border-default bg-surface-container px-4 py-2 text-sm text-text-primary hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2"
+                >
+                  <RefreshCw className="h-4 w-4" aria-hidden />
+                  Try another face
+                </button>
+              </div>
+            </section>
+          )}
+
+          {stage === "result-found" && searchResult?.found && (
+            <section className="space-y-4">
+              <div className="surface-panel p-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="text-xs uppercase tracking-widest text-text-tertiary">
+                    Match
+                  </p>
+                  <p className="text-sm font-semibold text-text-primary">
+                    {searchResult.cluster_name?.trim() || "Unnamed person"}
+                  </p>
+                  <p className="text-xs text-text-secondary">
+                    {searchResult.count}{" "}
+                    {searchResult.count === 1 ? "photo" : "photos"} in this
+                    gallery
+                    {typeof searchResult.similarity === "number"
+                      ? ` · ${(searchResult.similarity * 100).toFixed(0)}% confidence`
+                      : ""}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* "Open in People view" button removed 2026-05-18 — the
                   dashboard People page is gone (Photo Search subsumes
                   it). The matched cluster's photos already render
                   inline below this header, so the deep link wasn't
                   earning its space anyway. */}
-              <button
-                type="button"
-                onClick={handleRetry}
-                className="inline-flex items-center gap-2 rounded-full border border-border-default bg-surface-container px-4 py-2 text-sm text-text-primary hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2"
-              >
-                <RefreshCw className="h-4 w-4" aria-hidden />
-                Search another face
-              </button>
-            </div>
-          </div>
+                  <button
+                    type="button"
+                    onClick={handleRetry}
+                    className="inline-flex items-center gap-2 rounded-full border border-border-default bg-surface-container px-4 py-2 text-sm text-text-primary hover:bg-surface-sunken focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2"
+                  >
+                    <RefreshCw className="h-4 w-4" aria-hidden />
+                    Search another face
+                  </button>
+                </div>
+              </div>
 
-          {matchedAssets.length === 0 ? (
-            <div className="surface-panel p-6 text-center text-sm text-text-secondary">
-              Match found but no photo previews could be loaded.
-            </div>
-          ) : (
-            <div
-              className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
-              role="list"
-              aria-label="Photos matching this face"
-            >
-              {matchedAssets.map((asset) => (
-                <Link
-                  key={asset.id}
-                  href={`/galleries/${id}?asset=${asset.id}`}
-                  className="group block aspect-square overflow-hidden rounded-xl border border-border-subtle bg-surface-container-high focus:outline-none focus:ring-2 focus:ring-accent-primary"
-                  role="listitem"
-                  aria-label={asset.filename}
+              {matchedAssets.length === 0 ? (
+                <div className="surface-panel p-6 text-center text-sm text-text-secondary">
+                  Match found but no photo previews could be loaded.
+                </div>
+              ) : (
+                <div
+                  className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+                  role="list"
+                  aria-label="Photos matching this face"
                 >
-                  <MatchedAssetPreview asset={asset} token={token} />
-                </Link>
-              ))}
-            </div>
+                  {pagedMatchedAssets.map((asset) => (
+                    <Link
+                      key={asset.id}
+                      href={`/galleries/${id}?asset=${asset.id}`}
+                      className="group block aspect-square overflow-hidden rounded-xl border border-border-subtle bg-surface-container-high focus:outline-none focus:ring-2 focus:ring-accent-primary"
+                      role="listitem"
+                      aria-label={asset.filename}
+                    >
+                      <MatchedAssetPreview asset={asset} token={token} />
+                    </Link>
+                  ))}
+                </div>
+              )}
+              {hasMoreMatchedAssets && (
+                <div className="flex flex-col items-center gap-2 py-4">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMatchedAssetLimit(
+                        (current) => current + MATCHED_PHOTO_PAGE_SIZE,
+                      )
+                    }
+                    className="rounded-xl border border-border-default bg-surface-sunken px-5 py-2 text-sm font-medium text-text-secondary transition-colors hover:border-accent-primary hover:bg-accent-subtle hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
+                  >
+                    Load more matches
+                  </button>
+                  <span className="text-xs text-text-tertiary">
+                    Showing {pagedMatchedAssets.length} of{" "}
+                    {matchedAssets.length}
+                  </span>
+                </div>
+              )}
+            </section>
           )}
-        </section>
-      )}
+        </div>
+      </div>
     </GalleryPageShell>
   );
 }

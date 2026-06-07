@@ -38,6 +38,10 @@ describe("gallery cover page design-system contracts", () => {
     expect(source).toContain('className="cover-design-tile"');
     expect(source).toContain('className="cover-slot-tabs"');
     expect(source).toContain('className="cover-section cover-photo-picker"');
+    expect(source).toContain('label: "Photos"');
+    expect(source).toContain('selectLabel: "Gallery Photos"');
+    expect(source).toContain("PanelGalleryPhotos");
+    expect(source).toContain("PanelBrand");
     expect(source).toContain('className="cover-upload-stack"');
     expect(source).toContain('className="cover-info-panel"');
     expect(source).toContain("className={COVER_RANGE_CLASS}");
@@ -80,6 +84,28 @@ describe("gallery cover page design-system contracts", () => {
     expect(source).not.toContain(
       "bg-gradient-to-br from-surface-container to-surface-container-high",
     );
+  });
+
+  it("renders the desktop split workbench and bounded cover-photo picker", () => {
+    const source = read(coverPagePath);
+    const css = read(globalsPath);
+
+    expect(source).toContain('width="full"');
+    expect(source).toContain('mode="workbench"');
+    expect(source).toContain("cover-workbench");
+    expect(source).not.toContain("cover-photo-rail");
+    expect(source).toContain("cover-preview-pane");
+    expect(source).toContain("cover-inspector-pane");
+    expect(source).toContain("cover-inspector-tabs");
+    expect(source).toContain("COVER_PHOTO_PAGE_SIZE");
+    expect(source).toContain("pagedCoverAssets.map");
+    expect(source).not.toContain("assets.map((a, index)");
+    expect(css).toContain(".gallery-workspace-shell");
+    expect(css).toContain(".cover-workbench");
+    expect(css).not.toContain(".cover-photo-rail");
+    expect(css).toContain(".cover-preview-pane");
+    expect(css).toContain(".cover-inspector-pane");
+    expect(css).toContain(".cover-photo-load-more");
   });
 
   it("keeps the cover-photo picker on token-backed CSS hooks", () => {

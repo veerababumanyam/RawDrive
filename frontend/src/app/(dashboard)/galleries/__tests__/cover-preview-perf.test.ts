@@ -32,6 +32,13 @@ describe("gallery cover & preview — batch hydration (PERF-23)", () => {
     expect(source).toMatch(/entry\.asset !== undefined/);
   });
 
+  it("cover page pages the gallery-photo picker instead of rendering every asset", () => {
+    const source = read(coverPagePath);
+    expect(source).toContain("COVER_PHOTO_PAGE_SIZE");
+    expect(source).toContain("pagedCoverAssets.map");
+    expect(source).not.toContain("assets.map((a, index)");
+  });
+
   it("preview page delegates gallery assets to the client-preview endpoint", () => {
     const source = read(previewPagePath);
     expect(source).toContain("getGalleryClientPreview");

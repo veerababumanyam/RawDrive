@@ -65,9 +65,9 @@ export function PreviewChrome({
   return (
     <div
       data-testid="preview-chrome"
-      className="sticky top-16 z-30 mb-6 -mx-4 lg:-mx-8 border-b border-border-default bg-surface/95 px-4 py-3 glass-blur-soft"
+      className="sticky top-16 z-30 mb-6 -mx-4 border-b border-border-default bg-surface/95 px-4 py-3 glass-blur-soft lg:-mx-8"
     >
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3">
+      <div className="mx-auto flex w-full max-w-none flex-wrap items-center gap-3">
         <Link
           href={`/galleries/${gallery.id}`}
           className="inline-flex items-center gap-1.5 rounded-full bg-surface-container-high px-3 py-1.5 text-xs font-semibold text-text-secondary transition-colors hover:bg-surface-container-highest hover:text-text-primary"
@@ -106,7 +106,11 @@ export function PreviewChrome({
             size="md"
             className={!shareEnabled ? "cursor-not-allowed opacity-50" : ""}
           >
-            {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+            {copied ? (
+              <Check aria-hidden="true" />
+            ) : (
+              <Copy aria-hidden="true" />
+            )}
           </GlassIconButton>
           <ShareQrPopover
             url={getShareUrl ? "" : publicUrl}
@@ -120,7 +124,7 @@ export function PreviewChrome({
       {error && (
         <p
           role="alert"
-          className="mx-auto mt-2 max-w-6xl rounded-xl border border-error/20 bg-error/10 px-3 py-2 text-xs text-error"
+          className="mx-auto mt-2 w-full max-w-none rounded-xl border border-error/20 bg-error/10 px-3 py-2 text-xs text-error"
         >
           {error}
         </p>

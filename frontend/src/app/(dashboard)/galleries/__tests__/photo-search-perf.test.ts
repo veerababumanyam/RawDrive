@@ -33,6 +33,13 @@ describe("gallery photo-search — batch hydration (PERF-23)", () => {
     expect(source).not.toContain("Promise.allSettled");
   });
 
+  it("windows matched result photos for large galleries", () => {
+    const source = read(photoSearchPath);
+    expect(source).toContain("MATCHED_PHOTO_PAGE_SIZE");
+    expect(source).toContain("pagedMatchedAssets.map");
+    expect(source).not.toContain("matchedAssets.map((asset)");
+  });
+
   it("windows photographer face-review thumbnails for large people clusters", () => {
     const source = read(faceReviewPanelPath);
     expect(source).toContain("FACE_REVIEW_PAGE_SIZE");

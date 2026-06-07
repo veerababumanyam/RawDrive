@@ -25,11 +25,27 @@ const SHELL_IMPORT =
 const HEADER_IMPORT =
   /import\s*{[^}]*\bGalleryPageHeader\b[^}]*}\s*from\s*"@\/components\/gallery\/gallery-page-header"/;
 
-// Pages that MUST share the canonical workspace shell. (cover + detail already
-// use it; these two regressed and are the unit under fix.)
+// Pages that MUST share the canonical workspace shell. Preview is deliberately
+// excluded because it renders the exact client gallery with owner chrome.
 const CANONICAL_SHELL_PAGES = [
+  "src/app/(dashboard)/galleries/[id]/page.tsx",
+  "src/app/(dashboard)/galleries/[id]/cover/page.tsx",
   "src/app/(dashboard)/galleries/[id]/settings/page.tsx",
   "src/app/(dashboard)/galleries/[id]/photo-search/page.tsx",
+  "src/app/(dashboard)/galleries/[id]/sales/page.tsx",
+  "src/app/(dashboard)/galleries/[id]/delivery/page.tsx",
+  "src/app/(dashboard)/galleries/[id]/ai/page.tsx",
+] as const;
+
+// Overview keeps a bespoke editable title/publish header; every sub-page with a
+// document/workbench header uses the canonical GalleryPageHeader.
+const CANONICAL_HEADER_PAGES = [
+  "src/app/(dashboard)/galleries/[id]/cover/page.tsx",
+  "src/app/(dashboard)/galleries/[id]/settings/page.tsx",
+  "src/app/(dashboard)/galleries/[id]/photo-search/page.tsx",
+  "src/app/(dashboard)/galleries/[id]/sales/page.tsx",
+  "src/app/(dashboard)/galleries/[id]/delivery/page.tsx",
+  "src/app/(dashboard)/galleries/[id]/ai/page.tsx",
 ] as const;
 
 function readPage(relPath: string): string {
@@ -38,12 +54,20 @@ function readPage(relPath: string): string {
 
 describe("gallery sub-page shell consistency", () => {
   it.each(CANONICAL_SHELL_PAGES)(
-    "%s renders on the canonical GalleryPageShell + GalleryPageHeader",
+    "%s renders on the canonical GalleryPageShell",
     (relPath) => {
       const source = readPage(relPath);
 
       expect(source).toMatch(SHELL_IMPORT);
       expect(source).toContain("<GalleryPageShell");
+    },
+  );
+
+  it.each(CANONICAL_HEADER_PAGES)(
+    "%s renders on the canonical GalleryPageHeader",
+    (relPath) => {
+      const source = readPage(relPath);
+
       expect(source).toMatch(HEADER_IMPORT);
       expect(source).toContain("<GalleryPageHeader");
     },
@@ -58,20 +82,20 @@ describe("gallery sub-page shell consistency", () => {
       // hand-rolled `PageContainer` (+ a directly-imported GalleryWorkspaceNav,
       // which the shell is supposed to own internally). Neither should reappear
       // on these pages.
-      expect(source).not.toMatch(
-        /from\s*"@\/components\/ui\/page-container"/,
-      );
+      expect(source).not.toMatch(/from\s*"@\/components\/ui\/page-container"/);
       expect(source).not.toMatch(
         /from\s*"@\/components\/gallery\/gallery-workspace-nav"/,
       );
     },
   );
 
-  it("cover stays on the same canonical shell (the consistency reference)", () => {
-    // Cover was never reverted — it is the reference the two fixed pages must
-    // match. Pin it so "all sub-pages look the same" can't drift from here.
-    const source = readPage("src/app/(dashboard)/galleries/[id]/cover/page.tsx");
-    expect(source).toMatch(SHELL_IMPORT);
-    expect(source).toContain("<GalleryPageShell");
+  it("preview remains exact client render chrome, not a workspace shell", () => {
+    const source = readPage(
+      "src/app/(dashboard)/galleries/[id]/preview/page.tsx",
+    );
+
+    expect(source).toContain("<PreviewChrome");
+    expect(source).toContain("<PublicGalleryBody");
+    expect(source).not.toContain("<GalleryPageShell");
   });
 });

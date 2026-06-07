@@ -2523,8 +2523,12 @@ export default function GalleryDetailPage({
   }
 
   return (
-    <GalleryPageShell galleryId={gallery.id}>
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <GalleryPageShell
+      galleryId={gallery.id}
+      width="full"
+      className="gallery-overview-page"
+    >
+      <div className="gallery-overview-header flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-3">
           <div>
             {activeAlbumDetails && (
@@ -2700,7 +2704,10 @@ export default function GalleryDetailPage({
           </div>
         </div>
 
-        <div id="share" className="flex flex-wrap gap-3">
+        <div
+          id="share"
+          className="gallery-overview-actions flex flex-wrap gap-3"
+        >
           {/* In-dashboard preview — renders the saved Design Studio
               output through the same Hero+Grid components the public
               /g/[slug] route uses, but keeps the dashboard top menu bar
@@ -2752,8 +2759,8 @@ export default function GalleryDetailPage({
         />
       )}
 
-      <div>
-        <section className="space-y-4">
+      <div className="gallery-overview-workbench">
+        <section className="gallery-overview-main space-y-4">
           <div id="photos" className="surface-panel space-y-4 p-5">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-text-primary">
@@ -3649,6 +3656,71 @@ export default function GalleryDetailPage({
             )}
           </div>
         </section>
+        <aside
+          className="gallery-overview-side surface-panel p-4"
+          aria-label="Gallery workflow shortcuts"
+        >
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-widest text-text-tertiary">
+              Workflow
+            </p>
+            <h2 className="text-sm font-semibold text-text-primary">
+              Gallery status
+            </h2>
+          </div>
+          <dl className="mt-4 grid grid-cols-2 gap-3 text-sm lg:grid-cols-1">
+            <div className="rounded-xl border border-border-subtle bg-surface-sunken px-3 py-2">
+              <dt className="text-xs text-text-secondary">Photos</dt>
+              <dd className="mt-1 font-semibold text-text-primary">
+                {assets.length}
+              </dd>
+            </div>
+            <div className="rounded-xl border border-border-subtle bg-surface-sunken px-3 py-2">
+              <dt className="text-xs text-text-secondary">Sub-galleries</dt>
+              <dd className="mt-1 font-semibold text-text-primary">
+                {albums.length}
+              </dd>
+            </div>
+            <div className="rounded-xl border border-border-subtle bg-surface-sunken px-3 py-2">
+              <dt className="text-xs text-text-secondary">Proofing picks</dt>
+              <dd className="mt-1 font-semibold text-text-primary">
+                {selections.length}
+              </dd>
+            </div>
+            <div className="rounded-xl border border-border-subtle bg-surface-sunken px-3 py-2">
+              <dt className="text-xs text-text-secondary">Client hearts</dt>
+              <dd className="mt-1 font-semibold text-text-primary">
+                {favoritesSummary?.total_favorites ?? 0}
+              </dd>
+            </div>
+          </dl>
+          <div className="mt-4 grid gap-2">
+            <Link
+              href={`/galleries/${gallery.id}/cover`}
+              className="btn-tertiary justify-center px-4 py-2 text-sm"
+            >
+              Edit cover
+            </Link>
+            <Link
+              href={`/galleries/${gallery.id}/photo-search`}
+              className="btn-tertiary justify-center px-4 py-2 text-sm"
+            >
+              Review FaceID
+            </Link>
+            <Link
+              href={`/galleries/${gallery.id}/settings`}
+              className="btn-tertiary justify-center px-4 py-2 text-sm"
+            >
+              Gallery settings
+            </Link>
+            <Link
+              href={`/galleries/${gallery.id}/delivery`}
+              className="btn-tertiary justify-center px-4 py-2 text-sm"
+            >
+              Delivery tools
+            </Link>
+          </div>
+        </aside>
       </div>
 
       {uploadDialogOpen && (

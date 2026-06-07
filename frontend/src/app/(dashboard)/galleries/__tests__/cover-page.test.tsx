@@ -159,6 +159,13 @@ async function renderPage() {
   });
 }
 
+async function openGalleryPhotosPanel() {
+  fireEvent.change(await screen.findByLabelText("Editor section"), {
+    target: { value: "photos" },
+  });
+  return screen.findByRole("heading", { name: "Choose from gallery" });
+}
+
 describe("CoverDesignPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -265,10 +272,13 @@ describe("CoverDesignPage", () => {
       "Scenes",
     );
     expect(
-      within(mobileRail).queryByRole("button", { name: "Brand" }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Editor section")).not.toHaveTextContent(
-      "Brand",
+      within(mobileRail).getByRole("button", { name: "Brand" }),
+    ).toBeInTheDocument();
+    expect(
+      within(mobileRail).getByRole("button", { name: "Photos" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Editor section")).toHaveTextContent(
+      "Gallery Photos",
     );
     expect(
       screen.getByRole("link", { name: /brand defaults/i }),
@@ -285,6 +295,27 @@ describe("CoverDesignPage", () => {
 
     expect(screen.getByLabelText("Editor section")).toHaveValue("grid");
     expect(await screen.findByText("Filename captions")).toBeInTheDocument();
+
+    fireEvent.click(within(mobileRail).getByRole("button", { name: "Photos" }));
+
+    expect(screen.getByLabelText("Editor section")).toHaveValue("photos");
+    expect(await screen.findByText("Choose from gallery")).toBeInTheDocument();
+  });
+
+  it("renders the split cover workbench panes for desktop editing", async () => {
+    await renderPage();
+
+    expect(document.querySelector(".cover-workbench")).toBeInTheDocument();
+    expect(document.querySelector(".cover-photo-rail")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("group", { name: "Cover editor sections" }),
+    ).toHaveClass("cover-inspector-tabs");
+    expect(
+      screen.getByRole("region", { name: "Cover design controls" }),
+    ).toHaveClass("cover-inspector-pane");
+    expect(
+      screen.getByLabelText(/Cover preview/i).closest("section"),
+    ).toHaveClass("cover-preview-pane");
   });
 
   it("preserves legacy branding without exposing brand editing controls", async () => {
@@ -499,6 +530,7 @@ describe("CoverDesignPage", () => {
     );
 
     await renderPage();
+    await openGalleryPhotosPanel();
 
     const choices = await screen.findByRole("group", {
       name: "Cover photo choices",
@@ -525,8 +557,8 @@ describe("CoverDesignPage", () => {
 
   it("always shows drag/drop and browse upload in the Cover photo picker", async () => {
     await renderPage();
+    const title = await openGalleryPhotosPanel();
 
-    const title = await screen.findByRole("heading", { name: "Cover photo" });
     const section = title.closest("section");
     expect(section).not.toBeNull();
 
@@ -817,9 +849,10 @@ describe("CoverDesignPage", () => {
         name: /use proofing first design/i,
       }),
     );
+    await openGalleryPhotosPanel();
 
     const slotHeading = screen.getByRole("heading", {
-      name: "Template photo slots",
+      name: "Gallery photos",
     });
     const slotSection = slotHeading.closest("section");
     expect(slotSection).not.toBeNull();
@@ -898,9 +931,10 @@ describe("CoverDesignPage", () => {
         name: /use proofing first design/i,
       }),
     );
+    await openGalleryPhotosPanel();
 
     const slotSection = screen
-      .getByRole("heading", { name: "Template photo slots" })
+      .getByRole("heading", { name: "Gallery photos" })
       .closest("section");
     expect(slotSection).not.toBeNull();
 
@@ -933,6 +967,7 @@ describe("CoverDesignPage", () => {
         name: /use proofing first design/i,
       }),
     );
+    await openGalleryPhotosPanel();
 
     const secondTile = screen.getByRole("button", {
       name: /use Wedding \(43\)\.jpg as template photo 1/i,
@@ -946,6 +981,7 @@ describe("CoverDesignPage", () => {
     vi.mocked(listGalleryAssets).mockResolvedValueOnce([]);
 
     await renderPage();
+    await openGalleryPhotosPanel();
 
     expect(
       await screen.findByText(

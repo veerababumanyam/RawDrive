@@ -108,14 +108,26 @@ import type {
 type ThemeVariant = "light" | "dark" | "auto";
 type GridLayout = "masonry" | "grid" | "justified" | "carousel";
 type TextAlign = "left" | "center" | "right";
-type TabId = "cover" | "text" | "media" | "grid";
+type TabId = "cover" | "text" | "media" | "brand" | "grid" | "photos";
 type PreviewDevice = CoverDevice;
 
-const EDITOR_TABS: Array<{ id: TabId; label: string; mobileLabel: string }> = [
+const EDITOR_TABS: Array<{
+  id: TabId;
+  label: string;
+  mobileLabel: string;
+  selectLabel?: string;
+}> = [
   { id: "cover", label: "Cover", mobileLabel: "Cover" },
   { id: "text", label: "Text", mobileLabel: "Text" },
   { id: "media", label: "Media", mobileLabel: "Media" },
+  { id: "brand", label: "Brand", mobileLabel: "Brand" },
   { id: "grid", label: "Grid", mobileLabel: "Grid" },
+  {
+    id: "photos",
+    label: "Photos",
+    mobileLabel: "Photos",
+    selectLabel: "Gallery Photos",
+  },
 ];
 
 type CoverPresetId =
@@ -154,6 +166,21 @@ type LogoPlacement =
   | "bottom-left"
   | "bottom-right";
 type WatermarkStyle = "none" | "subtle-corner" | "center-mark" | "tiled";
+
+const LOGO_PLACEMENT_OPTIONS: Array<{ id: LogoPlacement; label: string }> = [
+  { id: "hidden", label: "Hidden" },
+  { id: "top-left", label: "Top left" },
+  { id: "top-right", label: "Top right" },
+  { id: "bottom-left", label: "Bottom left" },
+  { id: "bottom-right", label: "Bottom right" },
+];
+
+const WATERMARK_STYLE_OPTIONS: Array<{ id: WatermarkStyle; label: string }> = [
+  { id: "none", label: "None" },
+  { id: "subtle-corner", label: "Subtle corner" },
+  { id: "center-mark", label: "Center mark" },
+  { id: "tiled", label: "Tiled" },
+];
 
 interface FocalPoint {
   x: number;
@@ -274,6 +301,7 @@ const GRID_LAYOUTS: { id: GridLayout; label: string }[] = [
 // 8px is a tight-but-readable default that mirrors what the public
 // viewer renders with grid.gap=8 — typical wedding gallery spacing.
 const DEFAULT_GRID_GAP = 8;
+const COVER_PHOTO_PAGE_SIZE = 36;
 const COVER_COLORS = designComponents.mediaCover.presetColors;
 const COVER_FIELD_CLASS = "input-base w-full text-sm";
 const COVER_RANGE_CLASS = "cover-range-input";
@@ -2394,6 +2422,7 @@ export default function CoverDesignPage() {
         const slotIndex = Number(slot.dataset.coverSlot);
         if (Number.isFinite(slotIndex)) {
           setActiveCoverSlot(slotIndex);
+          setTab("photos");
         }
       }
       const kind = (handle?.dataset.handle as DragKind) || "focal";
@@ -2571,7 +2600,12 @@ export default function CoverDesignPage() {
   // ───────────── Render ─────────────
 
   return (
-    <GalleryPageShell galleryId={galleryId} className="text-on-surface">
+    <GalleryPageShell
+      galleryId={galleryId}
+      width="full"
+      mode="workbench"
+      className="text-on-surface"
+    >
       <GalleryPageHeader
         backHref={`/galleries/${galleryId}`}
         eyebrow="Cover & Design"
@@ -2596,7 +2630,7 @@ export default function CoverDesignPage() {
             >
               {EDITOR_TABS.map((editorTab) => (
                 <option key={editorTab.id} value={editorTab.id}>
-                  {editorTab.label}
+                  {editorTab.selectLabel || editorTab.label}
                 </option>
               ))}
             </select>
@@ -2693,15 +2727,9 @@ export default function CoverDesignPage() {
         </div>
       )}
 
-      {/* Single-column layout — preview spans the full content width up to
-          a comfortable reading max, then the editor sits directly below.
-          No side panel, no sticky pane: the cover image is the page's
-          subject and gets the entire content rectangle. mx-auto + max-w
-          keeps the cover from stretching absurdly wide on 4K monitors
-          where a 16:9 frame would become a runway. */}
-      <div className="cover-editor-layout flex w-full flex-col gap-5 sm:gap-7 lg:gap-8">
+      <div className="cover-editor-layout cover-workbench">
         {/* ───────── LIVE PREVIEW ───────── */}
-        <section className="cover-preview-section">
+        <section className="cover-preview-section cover-preview-pane">
           <div className="cover-preview-toolbar mb-3 flex flex-wrap items-center justify-between gap-3">
             <div
               className="glass-segmented cover-device-toggle"
@@ -2771,7 +2799,10 @@ export default function CoverDesignPage() {
               token={token}
               previewDevice={previewDevice}
               activeSlot={activeCoverSlotIndex}
-              onSelectSlot={setActiveCoverSlot}
+              onSelectSlot={(slotIndex) => {
+                setActiveCoverSlot(slotIndex);
+                setTab("photos");
+              }}
             />
 
             {activeScrim && (
@@ -2975,84 +3006,121 @@ export default function CoverDesignPage() {
           </div>
         </section>
 
-        <div
-          className="cover-mobile-task-tabs"
-          role="group"
-          aria-label="Mobile cover editor sections"
+        <section
+          className="cover-inspector-pane"
+          aria-label="Cover design controls"
         >
-          {EDITOR_TABS.map((editorTab) => (
-            <button
-              key={editorTab.id}
-              type="button"
-              className="cover-mobile-task-tab"
-              data-state={tab === editorTab.id ? "active" : "idle"}
-              aria-pressed={tab === editorTab.id}
-              onClick={() => setTab(editorTab.id)}
-            >
-              {editorTab.mobileLabel}
-            </button>
-          ))}
-        </div>
+          <div
+            className="cover-inspector-tabs glass-segmented"
+            role="group"
+            aria-label="Cover editor sections"
+          >
+            {EDITOR_TABS.map((editorTab) => (
+              <button
+                key={editorTab.id}
+                type="button"
+                className="glass-segmented-option"
+                data-cover-editor-tab={editorTab.id}
+                aria-pressed={tab === editorTab.id}
+                onClick={() => setTab(editorTab.id)}
+              >
+                {editorTab.label}
+              </button>
+            ))}
+          </div>
 
-        {/* ───────── EDITOR PANEL ───────── */}
-        <section>
-          {/* Section picker moved into the page header as a dropdown
+          <div
+            className="cover-mobile-task-tabs"
+            role="group"
+            aria-label="Mobile cover editor sections"
+          >
+            {EDITOR_TABS.map((editorTab) => (
+              <button
+                key={editorTab.id}
+                type="button"
+                className="cover-mobile-task-tab"
+                data-cover-editor-tab={editorTab.id}
+                data-state={tab === editorTab.id ? "active" : "idle"}
+                aria-pressed={tab === editorTab.id}
+                onClick={() => setTab(editorTab.id)}
+              >
+                {editorTab.mobileLabel}
+              </button>
+            ))}
+          </div>
+
+          {/* ───────── EDITOR PANEL ───────── */}
+          <section>
+            {/* Section picker moved into the page header as a dropdown
               next to Preview/Save. The panel body renders the active
               section's controls without a tab bar above it. */}
-          <Card variant="panel" padding="md" className="cover-editor-panel">
-            {tab === "cover" && (
-              <PanelCover
-                assets={assets}
-                token={token}
-                config={config}
-                setConfig={updateConfig}
-                previewDevice={previewDevice}
-                activeCoverSlot={activeCoverSlotIndex}
-                setActiveCoverSlot={setActiveCoverSlot}
-                onFilesAccepted={upload.addFiles}
-                uploadItems={upload.items}
-                uploadPaused={upload.isPaused}
-                onCancelUpload={upload.cancel}
-                onRetryUpload={upload.retry}
-              />
-            )}
-            {tab === "text" && (
-              <PanelText
-                config={config}
-                setConfig={updateConfig}
-                albumTitle={gallery?.title || ""}
-                albumSubtitle={gallery?.description || ""}
-                previewDevice={previewDevice}
-                activeText={activeText}
-                setActiveText={setActiveText}
-                setTab={setTab}
-              />
-            )}
-            {tab === "media" && (
-              <PanelMedia
-                config={config}
-                setConfig={updateConfig}
-                assets={assets}
-                previewDevice={previewDevice}
-              />
-            )}
-            {tab === "grid" && (
-              <PanelGrid
-                config={config}
-                setConfig={updateConfig}
-                assets={assets}
-                token={token}
-              />
-            )}
-          </Card>
+            <Card variant="panel" padding="md" className="cover-editor-panel">
+              {tab === "cover" && (
+                <PanelCover
+                  assets={assets}
+                  config={config}
+                  setConfig={updateConfig}
+                  previewDevice={previewDevice}
+                  setActiveCoverSlot={setActiveCoverSlot}
+                />
+              )}
+              {tab === "photos" && (
+                <PanelGalleryPhotos
+                  assets={assets}
+                  token={token}
+                  config={config}
+                  setConfig={updateConfig}
+                  previewDevice={previewDevice}
+                  activeCoverSlot={activeCoverSlotIndex}
+                  setActiveCoverSlot={setActiveCoverSlot}
+                  onFilesAccepted={upload.addFiles}
+                  uploadItems={upload.items}
+                  uploadPaused={upload.isPaused}
+                  onCancelUpload={upload.cancel}
+                  onRetryUpload={upload.retry}
+                />
+              )}
+              {tab === "text" && (
+                <PanelText
+                  config={config}
+                  setConfig={updateConfig}
+                  albumTitle={gallery?.title || ""}
+                  albumSubtitle={gallery?.description || ""}
+                  previewDevice={previewDevice}
+                  activeText={activeText}
+                  setActiveText={setActiveText}
+                  setTab={setTab}
+                />
+              )}
+              {tab === "media" && (
+                <PanelMedia
+                  config={config}
+                  setConfig={updateConfig}
+                  assets={assets}
+                  previewDevice={previewDevice}
+                />
+              )}
+              {tab === "brand" && (
+                <PanelBrand config={config} setConfig={updateConfig} />
+              )}
+              {tab === "grid" && (
+                <PanelGrid
+                  config={config}
+                  setConfig={updateConfig}
+                  assets={assets}
+                  token={token}
+                />
+              )}
+            </Card>
+          </section>
         </section>
-        <TermsAcceptanceModal
-          open={termsModalOpen}
-          token={token}
-          onAccepted={() => setTermsModalOpen(false)}
-          onCancel={() => setTermsModalOpen(false)}
-        />
       </div>
+      <TermsAcceptanceModal
+        open={termsModalOpen}
+        token={token}
+        onAccepted={() => setTermsModalOpen(false)}
+        onCancel={() => setTermsModalOpen(false)}
+      />
     </GalleryPageShell>
   );
 }
@@ -3402,30 +3470,16 @@ function CoverTemplateStageSlot({
 
 function PanelCover({
   assets,
-  token,
   config,
   setConfig,
   previewDevice,
-  activeCoverSlot,
   setActiveCoverSlot,
-  onFilesAccepted,
-  uploadItems,
-  uploadPaused,
-  onCancelUpload,
-  onRetryUpload,
 }: {
   assets: Asset[];
-  token: string | null;
   config: DesignConfig;
   setConfig: React.Dispatch<React.SetStateAction<DesignConfig>>;
   previewDevice: PreviewDevice;
-  activeCoverSlot: number;
   setActiveCoverSlot: (slotIndex: number) => void;
-  onFilesAccepted: (files: File[]) => void;
-  uploadItems: ReturnType<typeof useUpload>["items"];
-  uploadPaused: boolean;
-  onCancelUpload: ReturnType<typeof useUpload>["cancel"];
-  onRetryUpload: ReturnType<typeof useUpload>["retry"];
 }) {
   const activeCoverProfile = profileFromConfig(config, previewDevice);
   const activeTemplate = getCoverTemplate(
@@ -3440,32 +3494,6 @@ function PanelCover({
     activeNeutralDesign ||
     COVER_DESIGNS.find((design) => design.presetId === activeLayoutPreset) ||
     COVER_DESIGNS.find((design) => design.template.id === activeTemplate.id);
-  const activeCoverSlotIndex = Math.min(
-    activeCoverSlot,
-    activeTemplate.slotCount - 1,
-  );
-  const usedSlotIndexesByAssetId = useMemo(() => {
-    const next = new Map<string, number[]>();
-    for (const slotIndex of coverTemplateSlotIndices(activeTemplate)) {
-      const assetId = coverAssetIdForSlot(
-        config,
-        assets,
-        slotIndex,
-        previewDevice,
-      );
-      if (!assetId) continue;
-      const slots = next.get(assetId) ?? [];
-      slots.push(slotIndex);
-      next.set(assetId, slots);
-    }
-    return next;
-  }, [activeTemplate, assets, config, previewDevice]);
-  const activeFocalPoint = coverSlotFocalPoint(
-    config,
-    activeCoverSlotIndex,
-    previewDevice,
-  );
-  const activeZoom = coverSlotZoom(config, activeCoverSlotIndex, previewDevice);
   const activeScrimStyle =
     (activeCoverProfile.scrimStyle as ScrimStyle) || config.cover.scrimStyle;
   const activeTextBackdrop =
@@ -3678,6 +3706,99 @@ function PanelCover({
         </div>
       </section>
 
+    </div>
+  );
+}
+
+function PanelGalleryPhotos({
+  assets,
+  token,
+  config,
+  setConfig,
+  previewDevice,
+  activeCoverSlot,
+  setActiveCoverSlot,
+  onFilesAccepted,
+  uploadItems,
+  uploadPaused,
+  onCancelUpload,
+  onRetryUpload,
+}: {
+  assets: Asset[];
+  token: string | null;
+  config: DesignConfig;
+  setConfig: React.Dispatch<React.SetStateAction<DesignConfig>>;
+  previewDevice: PreviewDevice;
+  activeCoverSlot: number;
+  setActiveCoverSlot: (slotIndex: number) => void;
+  onFilesAccepted: (files: File[]) => void;
+  uploadItems: ReturnType<typeof useUpload>["items"];
+  uploadPaused: boolean;
+  onCancelUpload: ReturnType<typeof useUpload>["cancel"];
+  onRetryUpload: ReturnType<typeof useUpload>["retry"];
+}) {
+  const coverPhotoPagingKey = `${assets.length}:${activeCoverSlot}:${previewDevice}`;
+  const [coverPhotoPaging, setCoverPhotoPaging] = useState(() => ({
+    key: coverPhotoPagingKey,
+    limit: COVER_PHOTO_PAGE_SIZE,
+  }));
+  let coverPhotoLimit = coverPhotoPaging.limit;
+  if (coverPhotoPaging.key !== coverPhotoPagingKey) {
+    const nextPaging = {
+      key: coverPhotoPagingKey,
+      limit: COVER_PHOTO_PAGE_SIZE,
+    };
+    setCoverPhotoPaging(nextPaging);
+    coverPhotoLimit = nextPaging.limit;
+  }
+
+  const activeCoverProfile = profileFromConfig(config, previewDevice);
+  const activeTemplate = getCoverTemplate(
+    activeCoverProfile.styleId || config.cover.styleId,
+  );
+  const activeCoverSlotIndex = Math.min(
+    activeCoverSlot,
+    activeTemplate.slotCount - 1,
+  );
+  const activeSlotAssetId = coverAssetIdForSlot(
+    config,
+    assets,
+    activeCoverSlotIndex,
+    previewDevice,
+  );
+  const activeSlotAsset = activeSlotAssetId
+    ? (assets.find((asset) => asset.id === activeSlotAssetId) ?? null)
+    : null;
+  const usedSlotIndexesByAssetId = useMemo(() => {
+    const next = new Map<string, number[]>();
+    for (const slotIndex of coverTemplateSlotIndices(activeTemplate)) {
+      const assetId = coverAssetIdForSlot(
+        config,
+        assets,
+        slotIndex,
+        previewDevice,
+      );
+      if (!assetId) continue;
+      const slots = next.get(assetId) ?? [];
+      slots.push(slotIndex);
+      next.set(assetId, slots);
+    }
+    return next;
+  }, [activeTemplate, assets, config, previewDevice]);
+  const activeFocalPoint = coverSlotFocalPoint(
+    config,
+    activeCoverSlotIndex,
+    previewDevice,
+  );
+  const activeZoom = coverSlotZoom(config, activeCoverSlotIndex, previewDevice);
+  const pagedCoverAssets = useMemo(
+    () => assets.slice(0, coverPhotoLimit),
+    [assets, coverPhotoLimit],
+  );
+  const hasMoreCoverAssets = assets.length > pagedCoverAssets.length;
+
+  return (
+    <div className="cover-panel-stack">
       <section
         className="cover-section cover-slot-controls"
         aria-labelledby="cover-slot-title"
@@ -3685,32 +3806,53 @@ function PanelCover({
         <div className="cover-section-header">
           <div className="cover-section-heading">
             <h3 id="cover-slot-title" className="cover-section-title">
-              Template photo slots
+              Gallery photos
             </h3>
             <p className="cover-section-copy">
-              Pick a slot, then choose, pan, and zoom its photo.
+              Pick the active template slot, choose its photo, then pan and
+              zoom it in the live preview.
             </p>
           </div>
+          <Badge variant="accent" className="uppercase">
+            Photo {activeCoverSlotIndex + 1}
+          </Badge>
         </div>
         <div
           className="cover-slot-tabs"
           role="group"
           aria-label="Template photo slots"
         >
-          {coverTemplateSlotIndices(activeTemplate).map((slotIndex) => (
-            <button
-              key={slotIndex}
-              type="button"
-              className="cover-slot-tab"
-              data-state={
-                slotIndex === activeCoverSlotIndex ? "active" : "idle"
-              }
-              aria-pressed={slotIndex === activeCoverSlotIndex}
-              onClick={() => setActiveCoverSlot(slotIndex)}
-            >
-              Photo {slotIndex + 1}
-            </button>
-          ))}
+          {coverTemplateSlotIndices(activeTemplate).map((slotIndex) => {
+            const slotAssetId = coverAssetIdForSlot(
+              config,
+              assets,
+              slotIndex,
+              previewDevice,
+            );
+            const slotAsset = slotAssetId
+              ? (assets.find((asset) => asset.id === slotAssetId) ?? null)
+              : null;
+            return (
+              <button
+                key={slotIndex}
+                type="button"
+                className="cover-slot-tab"
+                data-state={
+                  slotIndex === activeCoverSlotIndex ? "active" : "idle"
+                }
+                aria-pressed={slotIndex === activeCoverSlotIndex}
+                title={slotAsset?.filename || `Choose photo ${slotIndex + 1}`}
+                onClick={() => setActiveCoverSlot(slotIndex)}
+              >
+                Photo {slotIndex + 1}
+              </button>
+            );
+          })}
+        </div>
+        <div className="cover-info-panel">
+          {activeSlotAsset
+            ? `Photo ${activeCoverSlotIndex + 1}: ${activeSlotAsset.filename}`
+            : `Photo ${activeCoverSlotIndex + 1}: no gallery photo selected`}
         </div>
         <div className="cover-slot-focal-grid">
           <div className="cover-field-stack">
@@ -3812,8 +3954,11 @@ function PanelCover({
         <div className="cover-section-header">
           <div className="cover-section-heading">
             <h3 id="cover-photo-title" className="cover-section-title">
-              Cover photo
+              Choose from gallery
             </h3>
+            <p className="cover-section-copy">
+              These photos are paged so large galleries stay responsive.
+            </p>
           </div>
           <Badge variant="neutral" className="cover-section-count">
             {assets.length} {assets.length === 1 ? "photo" : "photos"}
@@ -3835,7 +3980,7 @@ function PanelCover({
           role="group"
           aria-label="Cover photo choices"
         >
-          {assets.map((a, index) => {
+          {pagedCoverAssets.map((a, index) => {
             const active =
               coverAssetIdForSlot(
                 config,
@@ -3895,6 +4040,26 @@ function PanelCover({
             );
           })}
         </div>
+        {hasMoreCoverAssets && (
+          <div className="cover-photo-load-more">
+            <GlassButton
+              type="button"
+              variant="surface"
+              size="sm"
+              onClick={() =>
+                setCoverPhotoPaging((current) => ({
+                  ...current,
+                  limit: current.limit + COVER_PHOTO_PAGE_SIZE,
+                }))
+              }
+            >
+              Load more photos
+            </GlassButton>
+            <span className="cover-photo-load-more__count">
+              Showing {pagedCoverAssets.length} of {assets.length}
+            </span>
+          </div>
+        )}
         {assets.length === 0 && (
           <p className="cover-empty-note">
             No ready photos are linked to this gallery yet. Upload photos here
@@ -4885,6 +5050,224 @@ function PanelMedia({
           "Short video mode plays the selected video cover when the cover asset is video."}
         {activeMediaMode === "photo-grid" &&
           "Photo grid mode opens with a 2x2 collage using the cover plus the next gallery images."}
+      </div>
+    </div>
+  );
+}
+
+function PanelBrand({
+  config,
+  setConfig,
+}: {
+  config: DesignConfig;
+  setConfig: React.Dispatch<React.SetStateAction<DesignConfig>>;
+}) {
+  const branding = config.branding;
+  const brandColor = branding.brandColor || COVER_COLORS.textMedia;
+  const updateBranding = (patch: Partial<DesignConfig["branding"]>) =>
+    setConfig((c) => ({
+      ...c,
+      legacyBranding: true,
+      branding: {
+        ...DEFAULT_CONFIG.branding,
+        ...c.branding,
+        ...patch,
+      },
+    }));
+
+  return (
+    <div className="cover-panel-stack">
+      <section className="cover-section" aria-labelledby="cover-brand-title">
+        <div className="cover-section-header">
+          <div className="cover-section-heading">
+            <h3 id="cover-brand-title" className="cover-section-title">
+              Cover brand
+            </h3>
+            <p className="cover-section-copy">
+              Use business defaults, or override the logo mark and watermark
+              for this gallery cover only.
+            </p>
+          </div>
+          <Badge variant={config.legacyBranding ? "accent" : "neutral"}>
+            {config.legacyBranding ? "Cover override" : "Business defaults"}
+          </Badge>
+        </div>
+
+        <div className="cover-option-grid cover-option-grid--2">
+          <label className="cover-field-stack">
+            <span className="form-label">Monogram</span>
+            <input
+              type="text"
+              value={branding.monogram}
+              onChange={(event) =>
+                updateBranding({ monogram: event.target.value })
+              }
+              placeholder="Studio initials"
+              className={COVER_FIELD_CLASS}
+            />
+          </label>
+          <label className="cover-field-stack">
+            <span className="form-label">Logo placement</span>
+            <select
+              value={branding.logoPlacement}
+              onChange={(event) =>
+                updateBranding({
+                  logoPlacement: event.target.value as LogoPlacement,
+                })
+              }
+              className={COVER_FIELD_CLASS}
+            >
+              {LOGO_PLACEMENT_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="cover-field-stack">
+            <span className="form-label">Brand color</span>
+            <input
+              type="color"
+              value={brandColor}
+              onChange={(event) =>
+                updateBranding({ brandColor: event.target.value })
+              }
+              aria-label="Cover brand color"
+              className={COVER_COLOR_CLASS}
+            />
+          </label>
+          <div className="cover-field-stack">
+            <div className="cover-field-row">
+              <label htmlFor="cover-logo-size" className="form-label">
+                Logo size
+              </label>
+              <span className="cover-range-value">{branding.logoSize}px</span>
+            </div>
+            <input
+              id="cover-logo-size"
+              type="range"
+              min={LOGO_SIZE_MIN}
+              max={LOGO_SIZE_MAX}
+              step={1}
+              value={branding.logoSize}
+              onChange={(event) =>
+                updateBranding({ logoSize: Number(event.target.value) })
+              }
+              className={COVER_RANGE_CLASS}
+            />
+          </div>
+          <div className="cover-field-stack">
+            <div className="cover-field-row">
+              <label htmlFor="cover-logo-opacity" className="form-label">
+                Logo opacity
+              </label>
+              <span className="cover-range-value">
+                {branding.logoOpacity}%
+              </span>
+            </div>
+            <input
+              id="cover-logo-opacity"
+              type="range"
+              min={10}
+              max={100}
+              step={5}
+              value={branding.logoOpacity}
+              onChange={(event) =>
+                updateBranding({ logoOpacity: Number(event.target.value) })
+              }
+              className={COVER_RANGE_CLASS}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="cover-section" aria-labelledby="cover-watermark-title">
+        <div className="cover-section-header">
+          <div className="cover-section-heading">
+            <h3 id="cover-watermark-title" className="cover-section-title">
+              Watermark
+            </h3>
+            <p className="cover-section-copy">
+              Add a cover watermark without changing public gallery download
+              protection.
+            </p>
+          </div>
+        </div>
+        <div className="cover-option-grid cover-option-grid--2">
+          <label className="cover-field-stack">
+            <span className="form-label">Watermark text</span>
+            <input
+              type="text"
+              value={branding.watermarkText}
+              onChange={(event) =>
+                updateBranding({ watermarkText: event.target.value })
+              }
+              placeholder="Studio or photographer name"
+              className={COVER_FIELD_CLASS}
+            />
+          </label>
+          <label className="cover-field-stack">
+            <span className="form-label">Watermark style</span>
+            <select
+              value={branding.watermarkStyle}
+              onChange={(event) =>
+                updateBranding({
+                  watermarkStyle: event.target.value as WatermarkStyle,
+                })
+              }
+              className={COVER_FIELD_CLASS}
+            >
+              {WATERMARK_STYLE_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="cover-field-stack">
+            <div className="cover-field-row">
+              <label htmlFor="cover-watermark-opacity" className="form-label">
+                Watermark opacity
+              </label>
+              <span className="cover-range-value">
+                {branding.watermarkOpacity}%
+              </span>
+            </div>
+            <input
+              id="cover-watermark-opacity"
+              type="range"
+              min={10}
+              max={100}
+              step={5}
+              value={branding.watermarkOpacity}
+              onChange={(event) =>
+                updateBranding({
+                  watermarkOpacity: Number(event.target.value),
+                })
+              }
+              className={COVER_RANGE_CLASS}
+            />
+          </div>
+        </div>
+      </section>
+
+      <div className="cover-panel-divider">
+        <ToggleSwitch
+          checked={config.legacyBranding}
+          label="Cover-specific brand"
+          checkedLabel="Override on"
+          uncheckedLabel="Using defaults"
+          onCheckedChange={(checked) =>
+            setConfig((c) => ({
+              ...c,
+              legacyBranding: checked,
+              branding: {
+                ...DEFAULT_CONFIG.branding,
+                ...c.branding,
+              },
+            }))
+          }
+        />
       </div>
     </div>
   );

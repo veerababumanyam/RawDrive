@@ -888,7 +888,7 @@ export default function GallerySettingsPage({
 
   if (loading) {
     return (
-      <GalleryPageShell galleryId={id}>
+      <GalleryPageShell galleryId={id} width="full">
         <div className="max-w-3xl animate-pulse space-y-4">
           <div className="h-8 w-48 rounded bg-surface-sunken" />
           <div className="h-64 rounded-2xl bg-surface-sunken" />
@@ -899,7 +899,7 @@ export default function GallerySettingsPage({
 
   if (!gallery) {
     return (
-      <GalleryPageShell galleryId={id}>
+      <GalleryPageShell galleryId={id} width="full">
         <div className="text-center">
           <p className="text-sm text-text-secondary">
             {error || "Gallery not found."}
@@ -950,9 +950,19 @@ export default function GallerySettingsPage({
     { mode: "text", label: "Text", requiresLogo: false },
     { mode: "both", label: "Logo + text", requiresLogo: true },
   ];
+  const settingsSections = [
+    { id: "gallery-settings-downloads", label: "Downloads" },
+    { id: "gallery-settings-access", label: "Access" },
+    { id: "gallery-settings-faceid", label: "AI & FaceID" },
+    { id: "gallery-settings-proofing", label: "Proofing" },
+    { id: "gallery-settings-watermark", label: "Watermark" },
+    { id: "gallery-settings-emails", label: "Emails" },
+    { id: "gallery-settings-music", label: "Music" },
+    { id: "gallery-settings-password", label: "Password" },
+  ] as const;
 
   return (
-    <GalleryPageShell galleryId={id} className="pb-24 overflow-y-auto">
+    <GalleryPageShell galleryId={id} width="full" className="pb-24">
       <GalleryPageHeader
         backHref={`/galleries/${id}`}
         eyebrow="Settings"
@@ -960,703 +970,746 @@ export default function GallerySettingsPage({
         subtitle={gallery.title}
       />
 
-      {/* Settings forms read better in a narrow column; the column is
-          constrained INSIDE the shared shell so the nav/header width
-          still matches every other gallery page. */}
-      <div className="max-w-3xl space-y-6">
-        {error && <InlineAlert variant="error">{error}</InlineAlert>}
+      <div className="gallery-settings-workbench">
+        <aside
+          className="gallery-settings-rail"
+          aria-label="Settings categories"
+        >
+          {settingsSections.map((section) => (
+            <a key={section.id} href={`#${section.id}`}>
+              {section.label}
+            </a>
+          ))}
+        </aside>
 
-        {saveMsg && <InlineAlert variant="success">{saveMsg}</InlineAlert>}
+        <div className="gallery-settings-panels">
+          {error && <InlineAlert variant="error">{error}</InlineAlert>}
 
-        {/* Downloads */}
-        <section className="surface-panel space-y-4 p-5">
-          <h2 className="text-lg font-semibold text-text-primary">Downloads</h2>
-          <p className="text-sm text-text-secondary">
-            Clients can download optimized WebP gallery files or original source
-            files when you allow them.
-          </p>
-          <ToggleRow
-            label="Enable downloads"
-            description="Clients can download individual photos and bulk export from the public gallery."
-            checked={gallery.download_enabled ?? true}
-            disabled={saving}
-            onChange={(v) => handleToggle("download_enabled", v)}
-          />
-          {(gallery.download_enabled ?? true) && (
-            <div className="rounded-xl border border-border-default bg-surface-sunken px-4 py-3">
-              <p className="text-sm font-semibold text-text-primary">
-                Allowed file format
-              </p>
-              <p className="mt-1 text-sm text-text-secondary">
-                Choose the exact format clients can download from this public
-                gallery.
-              </p>
-              <div
-                className="mt-3 grid gap-2 sm:grid-cols-3"
-                role="group"
-                aria-label="Allowed download file format"
-              >
-                {DOWNLOAD_QUALITY_OPTIONS.map((option) => {
-                  const active = selectedDownloadQuality === option.value;
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      disabled={saving}
-                      aria-pressed={active}
-                      onClick={() => void handleDownloadQuality(option.value)}
-                      className={`rounded-xl border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                        active
-                          ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
-                          : "border-border-default bg-surface-container text-text-secondary hover:bg-surface-container-low"
-                      }`}
-                    >
-                      <span className="block text-sm font-semibold">
-                        {option.label}
-                      </span>
-                      <span className="mt-1 block text-xs text-text-secondary">
-                        {option.description}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </section>
+          {saveMsg && <InlineAlert variant="success">{saveMsg}</InlineAlert>}
 
-        {/* Access window / expiry */}
-        <section className="surface-panel space-y-4 p-5">
-          <h2 className="text-lg font-semibold text-text-primary">
-            Access window
-          </h2>
-          <p className="text-sm text-text-secondary">
-            Choose when this gallery stops being accessible to clients. After
-            expiry the public link shows a friendly &ldquo;gallery has
-            expired&rdquo; notice and protects your storage.
-          </p>
-          {gallery.expires_at ? (
-            <p className="text-sm text-text-primary">
-              Expires on{" "}
-              <span className="font-semibold">
-                {formatExpiryDate(gallery.expires_at)}
-              </span>
-              {(() => {
-                const left = expiryDaysLeft(gallery.expires_at);
-                if (left === null) return null;
-                return (
-                  <span className="text-text-secondary">
-                    {" "}
-                    ·{" "}
-                    {left > 0
-                      ? `${left} day${left === 1 ? "" : "s"} left`
-                      : "expired"}
-                  </span>
-                );
-              })()}
-            </p>
-          ) : (
-            <p className="text-sm text-text-secondary">
-              No expiry — clients keep access indefinitely.
-            </p>
-          )}
-          <div
-            className="grid gap-2 sm:grid-cols-4"
-            role="group"
-            aria-label="Access window presets"
+          {/* Downloads */}
+          <section
+            id="gallery-settings-downloads"
+            className="surface-panel space-y-4 p-5"
           >
-            <button
-              type="button"
+            <h2 className="text-lg font-semibold text-text-primary">
+              Downloads
+            </h2>
+            <p className="text-sm text-text-secondary">
+              Clients can download optimized WebP gallery files or original
+              source files when you allow them.
+            </p>
+            <ToggleRow
+              label="Enable downloads"
+              description="Clients can download individual photos and bulk export from the public gallery."
+              checked={gallery.download_enabled ?? true}
               disabled={saving}
-              aria-pressed={!gallery.expires_at}
-              onClick={() => void handleExpiry(null)}
-              className={presetButtonClass(!gallery.expires_at)}
+              onChange={(v) => handleToggle("download_enabled", v)}
+            />
+            {(gallery.download_enabled ?? true) && (
+              <div className="rounded-xl border border-border-default bg-surface-sunken px-4 py-3">
+                <p className="text-sm font-semibold text-text-primary">
+                  Allowed file format
+                </p>
+                <p className="mt-1 text-sm text-text-secondary">
+                  Choose the exact format clients can download from this public
+                  gallery.
+                </p>
+                <div
+                  className="mt-3 grid gap-2 sm:grid-cols-3"
+                  role="group"
+                  aria-label="Allowed download file format"
+                >
+                  {DOWNLOAD_QUALITY_OPTIONS.map((option) => {
+                    const active = selectedDownloadQuality === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        disabled={saving}
+                        aria-pressed={active}
+                        onClick={() => void handleDownloadQuality(option.value)}
+                        className={`rounded-xl border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                          active
+                            ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
+                            : "border-border-default bg-surface-container text-text-secondary hover:bg-surface-container-low"
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold">
+                          {option.label}
+                        </span>
+                        <span className="mt-1 block text-xs text-text-secondary">
+                          {option.description}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* Access window / expiry */}
+          <section
+            id="gallery-settings-access"
+            className="surface-panel space-y-4 p-5"
+          >
+            <h2 className="text-lg font-semibold text-text-primary">
+              Access window
+            </h2>
+            <p className="text-sm text-text-secondary">
+              Choose when this gallery stops being accessible to clients. After
+              expiry the public link shows a friendly &ldquo;gallery has
+              expired&rdquo; notice and protects your storage.
+            </p>
+            {gallery.expires_at ? (
+              <p className="text-sm text-text-primary">
+                Expires on{" "}
+                <span className="font-semibold">
+                  {formatExpiryDate(gallery.expires_at)}
+                </span>
+                {(() => {
+                  const left = expiryDaysLeft(gallery.expires_at);
+                  if (left === null) return null;
+                  return (
+                    <span className="text-text-secondary">
+                      {" "}
+                      ·{" "}
+                      {left > 0
+                        ? `${left} day${left === 1 ? "" : "s"} left`
+                        : "expired"}
+                    </span>
+                  );
+                })()}
+              </p>
+            ) : (
+              <p className="text-sm text-text-secondary">
+                No expiry — clients keep access indefinitely.
+              </p>
+            )}
+            <div
+              className="grid gap-2 sm:grid-cols-4"
+              role="group"
+              aria-label="Access window presets"
             >
-              No expiry
-            </button>
-            {ACCESS_WINDOW_PRESETS.map((days) => (
               <button
-                key={days}
                 type="button"
                 disabled={saving}
-                onClick={() =>
-                  void handleExpiry(
-                    new Date(Date.now() + days * DAY_MS).toISOString(),
-                  )
-                }
-                className={presetButtonClass(false)}
+                aria-pressed={!gallery.expires_at}
+                onClick={() => void handleExpiry(null)}
+                className={presetButtonClass(!gallery.expires_at)}
               >
-                {days} days
+                No expiry
               </button>
-            ))}
-          </div>
-          <div className="space-y-1">
-            <label
-              htmlFor="expiry-custom"
-              className="text-sm font-medium text-text-primary"
-            >
-              Custom date
-            </label>
-            <input
-              id="expiry-custom"
-              type="date"
-              disabled={saving}
-              value={toDateInputValue(gallery.expires_at)}
-              min={toDateInputValue(new Date().toISOString())}
-              onChange={(e) => {
-                if (!e.target.value) {
-                  void handleExpiry(null);
-                  return;
-                }
-                // End of the chosen day so the gallery stays live through that date.
-                void handleExpiry(
-                  new Date(`${e.target.value}T23:59:59`).toISOString(),
-                );
-              }}
-              className="touch-min w-full rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent-primary sm:w-60"
-            />
-          </div>
-        </section>
-
-        {/* AI & FaceID */}
-        <section className="surface-panel space-y-4 p-5">
-          <h2 className="text-lg font-semibold text-text-primary">
-            AI & FaceID
-          </h2>
-          <p className="text-sm text-text-secondary">
-            Configure AI-powered features for this gallery.
-          </p>
-          <ToggleRow
-            label="FaceID entry"
-            description="Allow clients to use their selfie to find their photos in this gallery."
-            checked={gallery.faceid_enabled ?? false}
-            disabled={saving}
-            onChange={(v) => handleToggle("faceid_enabled", v)}
-          />
-          <ToggleRow
-            label="Face detection"
-            description="Automatically detect and cluster faces in uploaded photos for internal use."
-            // 2026-05-18: face_detection_enabled is a top-level column on
-            // galleries (mig 046, default true). The previous version of
-            // this toggle nested the value under `settings` JSONB — the
-            // PUT handler ignored that key entirely so the toggle silently
-            // no-op'd. Now reads/writes the top-level field.
-            checked={gallery.face_detection_enabled ?? true}
-            disabled={saving}
-            onChange={(v) => handleToggle("face_detection_enabled", v)}
-          />
-        </section>
-
-        {/* Proofing */}
-        <section className="surface-panel space-y-4 p-5">
-          <h2 className="text-lg font-semibold text-text-primary">Proofing</h2>
-          <p className="text-sm text-text-secondary">
-            Control how many photos clients can select for proofing.
-          </p>
-          <div className="flex items-center justify-between gap-4 py-2">
-            <div className="space-y-0.5">
-              <p className="text-sm font-medium text-text-primary">
-                Selection limit
-              </p>
-              <p className="text-xs text-text-secondary">
-                Set to 0 for unlimited selections.
-              </p>
+              {ACCESS_WINDOW_PRESETS.map((days) => (
+                <button
+                  key={days}
+                  type="button"
+                  disabled={saving}
+                  onClick={() =>
+                    void handleExpiry(
+                      new Date(Date.now() + days * DAY_MS).toISOString(),
+                    )
+                  }
+                  className={presetButtonClass(false)}
+                >
+                  {days} days
+                </button>
+              ))}
             </div>
-            <input
-              type="number"
-              min={0}
-              value={gallery.max_selections ?? 0}
-              onChange={async (e) => {
-                const val = Math.max(0, parseInt(e.target.value) || 0);
+            <div className="space-y-1">
+              <label
+                htmlFor="expiry-custom"
+                className="text-sm font-medium text-text-primary"
+              >
+                Custom date
+              </label>
+              <input
+                id="expiry-custom"
+                type="date"
+                disabled={saving}
+                value={toDateInputValue(gallery.expires_at)}
+                min={toDateInputValue(new Date().toISOString())}
+                onChange={(e) => {
+                  if (!e.target.value) {
+                    void handleExpiry(null);
+                    return;
+                  }
+                  // End of the chosen day so the gallery stays live through that date.
+                  void handleExpiry(
+                    new Date(`${e.target.value}T23:59:59`).toISOString(),
+                  );
+                }}
+                className="touch-min w-full rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent-primary sm:w-60"
+              />
+            </div>
+          </section>
+
+          {/* AI & FaceID */}
+          <section
+            id="gallery-settings-faceid"
+            className="surface-panel space-y-4 p-5"
+          >
+            <h2 className="text-lg font-semibold text-text-primary">
+              AI & FaceID
+            </h2>
+            <p className="text-sm text-text-secondary">
+              Configure AI-powered features for this gallery.
+            </p>
+            <ToggleRow
+              label="FaceID entry"
+              description="Allow clients to use their selfie to find their photos in this gallery."
+              checked={gallery.faceid_enabled ?? false}
+              disabled={saving}
+              onChange={(v) => handleToggle("faceid_enabled", v)}
+            />
+            <ToggleRow
+              label="Face detection"
+              description="Automatically detect and cluster faces in uploaded photos for internal use."
+              // 2026-05-18: face_detection_enabled is a top-level column on
+              // galleries (mig 046, default true). The previous version of
+              // this toggle nested the value under `settings` JSONB — the
+              // PUT handler ignored that key entirely so the toggle silently
+              // no-op'd. Now reads/writes the top-level field.
+              checked={gallery.face_detection_enabled ?? true}
+              disabled={saving}
+              onChange={(v) => handleToggle("face_detection_enabled", v)}
+            />
+          </section>
+
+          {/* Proofing */}
+          <section
+            id="gallery-settings-proofing"
+            className="surface-panel space-y-4 p-5"
+          >
+            <h2 className="text-lg font-semibold text-text-primary">
+              Proofing
+            </h2>
+            <p className="text-sm text-text-secondary">
+              Control how many photos clients can select for proofing.
+            </p>
+            <div className="flex items-center justify-between gap-4 py-2">
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium text-text-primary">
+                  Selection limit
+                </p>
+                <p className="text-xs text-text-secondary">
+                  Set to 0 for unlimited selections.
+                </p>
+              </div>
+              <input
+                type="number"
+                min={0}
+                value={gallery.max_selections ?? 0}
+                onChange={async (e) => {
+                  const val = Math.max(0, parseInt(e.target.value) || 0);
+                  const token = getStoredAccessToken();
+                  if (!token || !gallery) return;
+                  try {
+                    const updated = await updateGallerySettings(token, id, {
+                      max_selections: val,
+                    });
+                    setGallery(updated);
+                  } catch (err) {
+                    setError(
+                      err instanceof Error
+                        ? err.message
+                        : "Failed to update selection limit",
+                    );
+                  }
+                }}
+                className="touch-min w-24 rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-center text-sm text-text-primary focus:outline-none focus:border-accent-primary"
+                disabled={saving}
+              />
+            </div>
+          </section>
+
+          {/* Watermark */}
+          <section
+            id="gallery-settings-watermark"
+            className="surface-panel space-y-4 p-5"
+          >
+            <h2 className="text-lg font-semibold text-text-primary">
+              Watermark
+            </h2>
+            <p className="text-sm text-text-secondary">
+              Use your Business Profile logo or text watermark on client-facing
+              gallery images.
+            </p>
+            <ToggleRow
+              label="Enable watermark"
+              description="Overlay your Business Profile logo or watermark text on public gallery images."
+              checked={currentWatermark.enabled === true}
+              disabled={saving}
+              onChange={async (v) => {
                 const token = getStoredAccessToken();
                 if (!token || !gallery) return;
+                const preferredMode =
+                  currentWatermarkDraft.mode === "both"
+                    ? "both"
+                    : currentWatermarkDraft.mode === "text"
+                      ? "text"
+                      : hasBusinessProfileLogo(workspaceProfile)
+                        ? "logo"
+                        : "text";
+                const config = watermarkDraftToConfig(
+                  {
+                    ...currentWatermarkDraft,
+                    enabled: v,
+                    mode: preferredMode,
+                    activeLayer: visibleWatermarkLayer(preferredMode),
+                  },
+                  currentWatermark,
+                );
                 try {
                   const updated = await updateGallerySettings(token, id, {
-                    max_selections: val,
+                    watermark_config: config,
                   });
                   setGallery(updated);
                 } catch (err) {
                   setError(
                     err instanceof Error
                       ? err.message
-                      : "Failed to update selection limit",
+                      : "Failed to update watermark",
                   );
                 }
               }}
-              className="touch-min w-24 rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-center text-sm text-text-primary focus:outline-none focus:border-accent-primary"
-              disabled={saving}
             />
-          </div>
-        </section>
-
-        {/* Watermark */}
-        <section className="surface-panel space-y-4 p-5">
-          <h2 className="text-lg font-semibold text-text-primary">Watermark</h2>
-          <p className="text-sm text-text-secondary">
-            Use your Business Profile logo or text watermark on client-facing
-            gallery images.
-          </p>
-          <ToggleRow
-            label="Enable watermark"
-            description="Overlay your Business Profile logo or watermark text on public gallery images."
-            checked={currentWatermark.enabled === true}
-            disabled={saving}
-            onChange={async (v) => {
-              const token = getStoredAccessToken();
-              if (!token || !gallery) return;
-              const preferredMode =
-                currentWatermarkDraft.mode === "both"
-                  ? "both"
-                  : currentWatermarkDraft.mode === "text"
-                    ? "text"
-                    : hasBusinessProfileLogo(workspaceProfile)
-                      ? "logo"
-                      : "text";
-              const config = watermarkDraftToConfig(
-                {
-                  ...currentWatermarkDraft,
-                  enabled: v,
-                  mode: preferredMode,
-                  activeLayer: visibleWatermarkLayer(preferredMode),
-                },
-                currentWatermark,
-              );
-              try {
-                const updated = await updateGallerySettings(token, id, {
-                  watermark_config: config,
-                });
-                setGallery(updated);
-              } catch (err) {
-                setError(
-                  err instanceof Error
-                    ? err.message
-                    : "Failed to update watermark",
-                );
-              }
-            }}
-          />
-          <div className="rounded-xl border border-border-default bg-surface-sunken px-4 py-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border-default bg-surface-raised">
-                  {studioLogoPreviewUrl ? (
-                    <img
-                      src={studioLogoPreviewUrl}
-                      alt={`${studioBrandName(workspaceProfile, gallery.title)} logo preview`}
-                      className="h-full w-full object-contain p-2"
-                    />
-                  ) : (
-                    <span
-                      className="text-xl font-semibold text-text-tertiary"
-                      aria-hidden="true"
-                    >
-                      {studioBrandName(workspaceProfile, gallery.title)
-                        .slice(0, 1)
-                        .toUpperCase()}
-                    </span>
-                  )}
+            <div className="rounded-xl border border-border-default bg-surface-sunken px-4 py-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border-default bg-surface-raised">
+                    {studioLogoPreviewUrl ? (
+                      <img
+                        src={studioLogoPreviewUrl}
+                        alt={`${studioBrandName(workspaceProfile, gallery.title)} logo preview`}
+                        className="h-full w-full object-contain p-2"
+                      />
+                    ) : (
+                      <span
+                        className="text-xl font-semibold text-text-tertiary"
+                        aria-hidden="true"
+                      >
+                        {studioBrandName(workspaceProfile, gallery.title)
+                          .slice(0, 1)
+                          .toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-text-primary">
+                      Business Profile logo watermark
+                    </p>
+                    <p className="truncate text-xs text-text-secondary">
+                      {studioLogoName
+                        ? `${studioLogoName} · automatically linked from Business Profile`
+                        : "No Business Profile logo uploaded yet."}
+                    </p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-text-primary">
-                    Business Profile logo watermark
-                  </p>
-                  <p className="truncate text-xs text-text-secondary">
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    href="/settings/business"
+                    className="btn-tertiary px-4 py-2 text-sm"
+                  >
                     {studioLogoName
-                      ? `${studioLogoName} · automatically linked from Business Profile`
-                      : "No Business Profile logo uploaded yet."}
-                  </p>
+                      ? "Manage Business Profile logo"
+                      : "Upload logo in Business Profile"}
+                  </Link>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={openWatermarkPreview}
+                    className="btn-primary px-4 py-2 text-sm"
+                  >
+                    Preview &amp; adjust
+                  </button>
                 </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Link
-                  href="/settings/business"
-                  className="btn-tertiary px-4 py-2 text-sm"
-                >
-                  {studioLogoName
-                    ? "Manage Business Profile logo"
-                    : "Upload logo in Business Profile"}
-                </Link>
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={openWatermarkPreview}
-                  className="btn-primary px-4 py-2 text-sm"
-                >
-                  Preview &amp; adjust
-                </button>
               </div>
             </div>
-          </div>
-          {currentWatermark.enabled === true && (
-            <div className="space-y-4 pl-1">
-              <div className="space-y-1">
-                <span className="text-sm font-medium text-text-primary">
-                  Watermark type
-                </span>
-                <div className="grid grid-cols-1 gap-2 sm:max-w-2xl sm:grid-cols-3">
-                  {watermarkTypeOptions.map((option) => (
-                    <button
-                      key={option.mode}
-                      type="button"
-                      disabled={
-                        saving ||
-                        (option.requiresLogo && !businessProfileLogoAvailable)
-                      }
-                      onClick={() => void saveWatermarkMode(option.mode)}
-                      className={presetButtonClass(
-                        currentWatermarkDraft.mode === option.mode,
-                      )}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-                {!businessProfileLogoAvailable && (
-                  <p className="text-xs text-text-secondary">
-                    Upload a Business Profile logo to use logo watermarking or
-                    Logo + Text.
-                  </p>
-                )}
-              </div>
-              {currentWatermarkDraft.mode === "both" && (
+            {currentWatermark.enabled === true && (
+              <div className="space-y-4 pl-1">
                 <div className="space-y-1">
                   <span className="text-sm font-medium text-text-primary">
-                    Adjust layer
+                    Watermark type
                   </span>
-                  <div
-                    className="grid grid-cols-2 gap-2 sm:max-w-md"
-                    role="group"
-                    aria-label="Watermark layer"
-                  >
-                    {(["logo", "text"] as const).map((layer) => (
+                  <div className="grid grid-cols-1 gap-2 sm:max-w-2xl sm:grid-cols-3">
+                    {watermarkTypeOptions.map((option) => (
                       <button
-                        key={layer}
+                        key={option.mode}
                         type="button"
-                        disabled={saving}
-                        onClick={() => setWatermarkPanelLayer(layer)}
+                        disabled={
+                          saving ||
+                          (option.requiresLogo && !businessProfileLogoAvailable)
+                        }
+                        onClick={() => void saveWatermarkMode(option.mode)}
                         className={presetButtonClass(
-                          activeWatermarkLayer === layer,
+                          currentWatermarkDraft.mode === option.mode,
                         )}
                       >
-                        {layer === "logo" ? "Logo" : "Text"}
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  {!businessProfileLogoAvailable && (
+                    <p className="text-xs text-text-secondary">
+                      Upload a Business Profile logo to use logo watermarking or
+                      Logo + Text.
+                    </p>
+                  )}
+                </div>
+                {currentWatermarkDraft.mode === "both" && (
+                  <div className="space-y-1">
+                    <span className="text-sm font-medium text-text-primary">
+                      Adjust layer
+                    </span>
+                    <div
+                      className="grid grid-cols-2 gap-2 sm:max-w-md"
+                      role="group"
+                      aria-label="Watermark layer"
+                    >
+                      {(["logo", "text"] as const).map((layer) => (
+                        <button
+                          key={layer}
+                          type="button"
+                          disabled={saving}
+                          onClick={() => setWatermarkPanelLayer(layer)}
+                          className={presetButtonClass(
+                            activeWatermarkLayer === layer,
+                          )}
+                        >
+                          {layer === "logo" ? "Logo" : "Text"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-text-primary">
+                    {currentWatermarkDraft.mode === "logo"
+                      ? "Fallback watermark text"
+                      : "Watermark text"}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Studio Name"
+                    value={currentWatermarkDraft.text}
+                    onBlur={(e) => void saveWatermarkText(e.target.value)}
+                    onChange={(e) => {
+                      setGallery({
+                        ...gallery,
+                        watermark_config: {
+                          ...currentWatermark,
+                          text: e.target.value,
+                        },
+                      });
+                    }}
+                    className="w-full rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary focus:outline-none focus:border-accent-primary"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-text-primary">
+                    Opacity — {activeWatermarkLayerDraft.opacity}%
+                  </label>
+                  <input
+                    type="range"
+                    min={10}
+                    max={90}
+                    step={5}
+                    value={activeWatermarkLayerDraft.opacity}
+                    onChange={(e) =>
+                      void saveWatermarkLayerPatch(activeWatermarkLayer, {
+                        opacity: Number(e.target.value),
+                      })
+                    }
+                    className="w-full accent-accent-primary"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-text-primary">
+                    {activeWatermarkLayer === "logo"
+                      ? "Logo size"
+                      : "Text size"}{" "}
+                    — {activeWatermarkLayerDraft.scale}%
+                  </label>
+                  <input
+                    type="range"
+                    min={60}
+                    max={180}
+                    step={5}
+                    value={activeWatermarkLayerDraft.scale}
+                    onChange={(e) =>
+                      void saveWatermarkLayerPatch(activeWatermarkLayer, {
+                        scale: Number(e.target.value),
+                      })
+                    }
+                    className="w-full accent-accent-primary"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-sm font-medium text-text-primary">
+                    Position
+                  </span>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {WATERMARK_POSITION_PRESETS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() =>
+                          void saveWatermarkLayerPatch(activeWatermarkLayer, {
+                            position: preset.id,
+                            placement:
+                              preset.id === "custom"
+                                ? activeWatermarkLayerDraft.placement
+                                : { x: preset.x, y: preset.y },
+                          })
+                        }
+                        className={`touch-min rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                          activeWatermarkLayerDraft.position === preset.id
+                            ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
+                            : "border-border-default bg-surface-sunken text-text-secondary hover:bg-surface-container-low"
+                        }`}
+                      >
+                        {preset.label}
                       </button>
                     ))}
                   </div>
                 </div>
-              )}
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-text-primary">
-                  {currentWatermarkDraft.mode === "logo"
-                    ? "Fallback watermark text"
-                    : "Watermark text"}
-                </label>
-                <input
-                  type="text"
-                  placeholder="Studio Name"
-                  value={currentWatermarkDraft.text}
-                  onBlur={(e) => void saveWatermarkText(e.target.value)}
-                  onChange={(e) => {
-                    setGallery({
-                      ...gallery,
-                      watermark_config: {
-                        ...currentWatermark,
-                        text: e.target.value,
-                      },
-                    });
-                  }}
-                  className="w-full rounded-xl border border-border-default bg-surface-sunken px-4 py-2.5 text-text-primary focus:outline-none focus:border-accent-primary"
-                />
+                {activeWatermarkLayerDraft.position === "custom" && (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="space-y-1 text-sm font-medium text-text-primary">
+                      <span>
+                        Horizontal —{" "}
+                        {Math.round(activeWatermarkLayerDraft.placement.x)}%
+                      </span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={activeWatermarkLayerDraft.placement.x}
+                        onChange={(e) =>
+                          void saveWatermarkLayerPatch(activeWatermarkLayer, {
+                            position: "custom",
+                            placement: {
+                              ...activeWatermarkLayerDraft.placement,
+                              x: Number(e.target.value),
+                            },
+                          })
+                        }
+                        className="w-full accent-accent-primary"
+                      />
+                    </label>
+                    <label className="space-y-1 text-sm font-medium text-text-primary">
+                      <span>
+                        Vertical —{" "}
+                        {Math.round(activeWatermarkLayerDraft.placement.y)}%
+                      </span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={activeWatermarkLayerDraft.placement.y}
+                        onChange={(e) =>
+                          void saveWatermarkLayerPatch(activeWatermarkLayer, {
+                            position: "custom",
+                            placement: {
+                              ...activeWatermarkLayerDraft.placement,
+                              y: Number(e.target.value),
+                            },
+                          })
+                        }
+                        className="w-full accent-accent-primary"
+                      />
+                    </label>
+                  </div>
+                )}
               </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-text-primary">
-                  Opacity — {activeWatermarkLayerDraft.opacity}%
-                </label>
-                <input
-                  type="range"
-                  min={10}
-                  max={90}
-                  step={5}
-                  value={activeWatermarkLayerDraft.opacity}
-                  onChange={(e) =>
-                    void saveWatermarkLayerPatch(activeWatermarkLayer, {
-                      opacity: Number(e.target.value),
-                    })
-                  }
-                  className="w-full accent-accent-primary"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-text-primary">
-                  {activeWatermarkLayer === "logo" ? "Logo size" : "Text size"}{" "}
-                  — {activeWatermarkLayerDraft.scale}%
-                </label>
-                <input
-                  type="range"
-                  min={60}
-                  max={180}
-                  step={5}
-                  value={activeWatermarkLayerDraft.scale}
-                  onChange={(e) =>
-                    void saveWatermarkLayerPatch(activeWatermarkLayer, {
-                      scale: Number(e.target.value),
-                    })
-                  }
-                  className="w-full accent-accent-primary"
-                />
-              </div>
-              <div className="space-y-1">
-                <span className="text-sm font-medium text-text-primary">
-                  Position
-                </span>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {WATERMARK_POSITION_PRESETS.map((preset) => (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      onClick={() =>
-                        void saveWatermarkLayerPatch(activeWatermarkLayer, {
-                          position: preset.id,
-                          placement:
-                            preset.id === "custom"
-                              ? activeWatermarkLayerDraft.placement
-                              : { x: preset.x, y: preset.y },
-                        })
-                      }
-                      className={`touch-min rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
-                        activeWatermarkLayerDraft.position === preset.id
-                          ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
-                          : "border-border-default bg-surface-sunken text-text-secondary hover:bg-surface-container-low"
-                      }`}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {activeWatermarkLayerDraft.position === "custom" && (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="space-y-1 text-sm font-medium text-text-primary">
-                    <span>
-                      Horizontal —{" "}
-                      {Math.round(activeWatermarkLayerDraft.placement.x)}%
-                    </span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      step={1}
-                      value={activeWatermarkLayerDraft.placement.x}
-                      onChange={(e) =>
-                        void saveWatermarkLayerPatch(activeWatermarkLayer, {
-                          position: "custom",
-                          placement: {
-                            ...activeWatermarkLayerDraft.placement,
-                            x: Number(e.target.value),
-                          },
-                        })
-                      }
-                      className="w-full accent-accent-primary"
-                    />
-                  </label>
-                  <label className="space-y-1 text-sm font-medium text-text-primary">
-                    <span>
-                      Vertical —{" "}
-                      {Math.round(activeWatermarkLayerDraft.placement.y)}%
-                    </span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      step={1}
-                      value={activeWatermarkLayerDraft.placement.y}
-                      onChange={(e) =>
-                        void saveWatermarkLayerPatch(activeWatermarkLayer, {
-                          position: "custom",
-                          placement: {
-                            ...activeWatermarkLayerDraft.placement,
-                            y: Number(e.target.value),
-                          },
-                        })
-                      }
-                      className="w-full accent-accent-primary"
-                    />
-                  </label>
-                </div>
-              )}
-            </div>
-          )}
-        </section>
+            )}
+          </section>
 
-        {/* Client emails */}
-        <section className="surface-panel space-y-4 p-5">
-          <h2 className="text-lg font-semibold text-text-primary">
-            Client emails
-          </h2>
-          <p className="text-sm text-text-secondary">
-            Automatically send your client a branded &ldquo;gallery ready&rdquo;
-            email when this gallery is published, a reminder a week later, and a
-            &ldquo;last chance&rdquo; warning before it expires.
-          </p>
-          <ToggleRow
-            label="Automated client emails"
-            description="Turn off to stop all automated emails for this gallery."
-            checked={gallery.email_automation_enabled ?? true}
-            disabled={saving}
-            onChange={(v) => handleToggle("email_automation_enabled", v)}
-          />
-        </section>
-
-        {/* Slideshow music */}
-        <section className="surface-panel space-y-4 p-5">
-          <h2 className="text-lg font-semibold text-text-primary">
-            Slideshow music
-          </h2>
-          <p className="text-sm text-text-secondary">
-            Build a music library for your studio, preview tracks, and pick one
-            for this gallery&rsquo;s full-screen slideshow. Audio is stored in
-            your workspace storage and counts toward your plan&rsquo;s allocated
-            space.
-          </p>
-
-          <div className="space-y-1">
-            <label
-              htmlFor="music-upload"
-              className="text-sm font-medium text-text-primary"
-            >
-              Upload track
-            </label>
-            <input
-              id="music-upload"
-              type="file"
-              multiple
-              accept="audio/mpeg,audio/mp4,audio/aac,audio/x-m4a,audio/*"
-              disabled={musicUploading || saving}
-              onChange={(e) => {
-                const files = Array.from(e.target.files ?? []);
-                if (files.length > 0) void handleMusicUpload(files);
-                e.target.value = "";
-              }}
-              className="block w-full text-sm text-text-secondary file:mr-4 file:rounded-lg file:border-0 file:bg-accent-primary/10 file:px-4 file:py-2 file:text-sm file:font-medium file:text-accent-primary disabled:opacity-50"
+          {/* Client emails */}
+          <section
+            id="gallery-settings-emails"
+            className="surface-panel space-y-4 p-5"
+          >
+            <h2 className="text-lg font-semibold text-text-primary">
+              Client emails
+            </h2>
+            <p className="text-sm text-text-secondary">
+              Automatically send your client a branded &ldquo;gallery
+              ready&rdquo; email when this gallery is published, a reminder a
+              week later, and a &ldquo;last chance&rdquo; warning before it
+              expires.
+            </p>
+            <ToggleRow
+              label="Automated client emails"
+              description="Turn off to stop all automated emails for this gallery."
+              checked={gallery.email_automation_enabled ?? true}
+              disabled={saving}
+              onChange={(v) => handleToggle("email_automation_enabled", v)}
             />
-            {musicUploading && (
-              <p className="text-xs text-text-secondary" aria-live="polite">
-                {musicUploadStatus || "Uploading…"}
-              </p>
-            )}
-            {musicError && (
-              <p className="text-xs text-feedback-error">{musicError}</p>
-            )}
-          </div>
+          </section>
 
-          <MusicLibraryManager
-            token={accessToken ?? ""}
-            selectedAssetId={gallery.music_asset_id ?? null}
-            reloadKey={musicReloadKey}
-            onSelect={handleMusicSelect}
-            selecting={musicSelecting}
-          />
-        </section>
+          {/* Slideshow music */}
+          <section
+            id="gallery-settings-music"
+            className="surface-panel space-y-4 p-5"
+          >
+            <h2 className="text-lg font-semibold text-text-primary">
+              Slideshow music
+            </h2>
+            <p className="text-sm text-text-secondary">
+              Build a music library for your studio, preview tracks, and pick
+              one for this gallery&rsquo;s full-screen slideshow. Audio is
+              stored in your workspace storage and counts toward your
+              plan&rsquo;s allocated space.
+            </p>
 
-        {/* Password Protection */}
-        <section className="surface-panel space-y-4 p-5">
-          <h2 className="text-lg font-semibold text-text-primary">
-            Password Protection
-          </h2>
-          <p className="text-sm text-text-secondary">
-            Require a password to access this gallery. Leave empty to remove
-            protection.
-          </p>
-
-          {showPasswordField ? (
-            <div className="space-y-3">
+            <div className="space-y-1">
+              <label
+                htmlFor="music-upload"
+                className="text-sm font-medium text-text-primary"
+              >
+                Upload track
+              </label>
               <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter gallery password"
-                className="input-base w-full"
-                autoFocus
+                id="music-upload"
+                type="file"
+                multiple
+                accept="audio/mpeg,audio/mp4,audio/aac,audio/x-m4a,audio/*"
+                disabled={musicUploading || saving}
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  if (files.length > 0) void handleMusicUpload(files);
+                  e.target.value = "";
+                }}
+                className="block w-full text-sm text-text-secondary file:mr-4 file:rounded-lg file:border-0 file:bg-accent-primary/10 file:px-4 file:py-2 file:text-sm file:font-medium file:text-accent-primary disabled:opacity-50"
               />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => void handleSetPassword()}
-                  disabled={saving || (!password && !hasGalleryPassword)}
-                  className="btn-primary px-4 py-2 text-sm"
-                >
-                  {saving
-                    ? "Saving..."
-                    : password
-                      ? "Set Password"
-                      : "Remove Password"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPasswordField(false);
-                    setPassword("");
-                  }}
-                  className="btn-tertiary px-4 py-2 text-sm"
-                >
-                  Cancel
-                </button>
-              </div>
+              {musicUploading && (
+                <p className="text-xs text-text-secondary" aria-live="polite">
+                  {musicUploadStatus || "Uploading…"}
+                </p>
+              )}
+              {musicError && (
+                <p className="text-xs text-feedback-error">{musicError}</p>
+              )}
             </div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {hasGalleryPassword ? (
-                <>
+
+            <MusicLibraryManager
+              token={accessToken ?? ""}
+              selectedAssetId={gallery.music_asset_id ?? null}
+              reloadKey={musicReloadKey}
+              onSelect={handleMusicSelect}
+              selecting={musicSelecting}
+            />
+          </section>
+
+          {/* Password Protection */}
+          <section
+            id="gallery-settings-password"
+            className="surface-panel space-y-4 p-5"
+          >
+            <h2 className="text-lg font-semibold text-text-primary">
+              Password Protection
+            </h2>
+            <p className="text-sm text-text-secondary">
+              Require a password to access this gallery. Leave empty to remove
+              protection.
+            </p>
+
+            {showPasswordField ? (
+              <div className="space-y-3">
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter gallery password"
+                  className="input-base w-full"
+                  autoFocus
+                />
+                <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => void handleSetPassword(null)}
-                    disabled={saving}
-                    className="btn-tertiary px-4 py-2.5 text-sm"
+                    onClick={() => void handleSetPassword()}
+                    disabled={saving || (!password && !hasGalleryPassword)}
+                    className="btn-primary px-4 py-2 text-sm"
                   >
-                    Remove Password
+                    {saving
+                      ? "Saving..."
+                      : password
+                        ? "Set Password"
+                        : "Remove Password"}
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPasswordField(false);
+                      setPassword("");
+                    }}
+                    className="btn-tertiary px-4 py-2 text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {hasGalleryPassword ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => void handleSetPassword(null)}
+                      disabled={saving}
+                      className="btn-tertiary px-4 py-2.5 text-sm"
+                    >
+                      Remove Password
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswordField(true)}
+                      disabled={saving}
+                      className="btn-tertiary px-4 py-2.5 text-sm"
+                    >
+                      Change Password
+                    </button>
+                  </>
+                ) : (
                   <button
                     type="button"
                     onClick={() => setShowPasswordField(true)}
                     disabled={saving}
                     className="btn-tertiary px-4 py-2.5 text-sm"
                   >
-                    Change Password
+                    Set Password
                   </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordField(true)}
-                  disabled={saving}
-                  className="btn-tertiary px-4 py-2.5 text-sm"
-                >
-                  Set Password
-                </button>
-              )}
-            </div>
-          )}
-        </section>
-        <WatermarkPreviewModal
-          open={watermarkPreviewOpen}
-          onClose={() => setWatermarkPreviewOpen(false)}
-          draft={watermarkDraft}
-          onDraftChange={setWatermarkDraft}
-          assets={watermarkPreviewAssets}
-          activeIndex={watermarkPreviewIndex}
-          onActiveIndexChange={setWatermarkPreviewIndex}
-          loading={watermarkPreviewLoading}
-          error={watermarkPreviewError}
-          token={accessToken}
-          saving={saving}
-          onSave={() => void saveWatermarkDraft()}
-        />
-        <TermsAcceptanceModal
-          open={termsModalOpen}
-          token={accessToken}
-          onAccepted={handleTermsAccepted}
-          onCancel={() => setTermsModalOpen(false)}
-        />
+                )}
+              </div>
+            )}
+          </section>
+        </div>
       </div>
+      <WatermarkPreviewModal
+        open={watermarkPreviewOpen}
+        onClose={() => setWatermarkPreviewOpen(false)}
+        draft={watermarkDraft}
+        onDraftChange={setWatermarkDraft}
+        assets={watermarkPreviewAssets}
+        activeIndex={watermarkPreviewIndex}
+        onActiveIndexChange={setWatermarkPreviewIndex}
+        loading={watermarkPreviewLoading}
+        error={watermarkPreviewError}
+        token={accessToken}
+        saving={saving}
+        onSave={() => void saveWatermarkDraft()}
+      />
+      <TermsAcceptanceModal
+        open={termsModalOpen}
+        token={accessToken}
+        onAccepted={handleTermsAccepted}
+        onCancel={() => setTermsModalOpen(false)}
+      />
     </GalleryPageShell>
   );
 }
