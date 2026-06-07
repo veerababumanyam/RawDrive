@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import LandingPage from "@/app/page";
 
 // AuthRedirect (rendered at the top of LandingPage) fires a useEffect on
@@ -88,5 +88,34 @@ describe("Landing Page", () => {
     expect(
       screen.getByText(/Your studio, finally in one place/i),
     ).toBeInTheDocument();
+  });
+
+  it("renders the five requested tier plans on the home page", () => {
+    render(<LandingPage />);
+
+    const heading = screen.getByRole("heading", {
+      name: /Start free, scale studio-wide\./i,
+    });
+    const section = heading.closest("section");
+    expect(section).not.toBeNull();
+    const plans = within(section as HTMLElement);
+
+    expect(plans.getByText("Starter")).toBeInTheDocument();
+    expect(plans.getByText("Creator")).toBeInTheDocument();
+    expect(plans.getByText("Pro Photographer")).toBeInTheDocument();
+    expect(plans.getByText("Studio")).toBeInTheDocument();
+    expect(plans.getByText("Elite Studio")).toBeInTheDocument();
+
+    expect(plans.queryByText("Pay Per Event")).not.toBeInTheDocument();
+    expect(plans.getByText("Most Popular")).toBeInTheDocument();
+    expect(plans.getByText("Best Value")).toBeInTheDocument();
+    expect(plans.getByText(/^₹499/)).toBeInTheDocument();
+    expect(plans.getByText(/^₹999/)).toBeInTheDocument();
+    expect(plans.getByText(/^₹1,999/)).toBeInTheDocument();
+    expect(plans.getByText(/^₹3,999/)).toBeInTheDocument();
+    expect(plans.getByRole("link", { name: /Elite Studio/i })).toHaveAttribute(
+      "href",
+      "/contact",
+    );
   });
 });

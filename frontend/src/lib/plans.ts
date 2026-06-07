@@ -3,22 +3,38 @@ import { pricingPlans } from "@/lib/tokens";
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 export interface ApiPlan {
-  tier: string;
-  name: string;
+  tier?: string;
+  Tier?: string;
+  name?: string;
+  Name?: string;
   description?: string;
+  Description?: string;
   currency?: string;
-  monthly_price_paise: number;
-  annual_price_paise: number;
-  quota_bytes: number;
-  gallery_limit: number;
-  client_limit: number;
+  Currency?: string;
+  monthly_price_paise?: number;
+  MonthlyPricePaise?: number;
+  annual_price_paise?: number;
+  AnnualPricePaise?: number;
+  quota_bytes?: number;
+  QuotaBytes?: number;
+  gallery_limit?: number;
+  GalleryLimit?: number;
+  client_limit?: number;
+  ClientLimit?: number;
   features?: string[];
+  Features?: string[];
   popular?: boolean;
-  rank: number;
+  Popular?: boolean;
+  rank?: number;
+  Rank?: number;
   paid?: boolean;
+  Paid?: boolean;
   active?: boolean;
+  Active?: boolean;
   self_serve?: boolean;
+  SelfServe?: boolean;
   trial_days?: number;
+  TrialDays?: number;
 }
 
 export interface PlansResponse {
@@ -107,33 +123,38 @@ export const fallbackPlanCatalog: PlanCatalogPlan[] = pricingPlans.map(
 );
 
 export function normalizeApiPlan(plan: ApiPlan): PlanCatalogPlan {
-  const tier = String(plan.tier || "").trim().toLowerCase();
-  const monthlyPricePaise = Number(plan.monthly_price_paise) || 0;
-  const annualPricePaise = Number(plan.annual_price_paise) || 0;
-  const quotaBytes = Number(plan.quota_bytes) || 0;
+  const tier = String(plan.tier ?? plan.Tier ?? "")
+    .trim()
+    .toLowerCase();
+  const monthlyPricePaise =
+    Number(plan.monthly_price_paise ?? plan.MonthlyPricePaise) || 0;
+  const annualPricePaise =
+    Number(plan.annual_price_paise ?? plan.AnnualPricePaise) || 0;
+  const quotaBytes = Number(plan.quota_bytes ?? plan.QuotaBytes) || 0;
+  const features = plan.features ?? plan.Features;
   return {
     id: tier,
     tier,
-    name: String(plan.name || tier),
-    description: String(plan.description || ""),
-    currency: String(plan.currency || "INR"),
+    name: String(plan.name ?? plan.Name ?? tier),
+    description: String(plan.description ?? plan.Description ?? ""),
+    currency: String(plan.currency ?? plan.Currency ?? "INR"),
     monthlyPricePaise,
     annualPricePaise,
     monthlyPrice: Math.round(monthlyPricePaise / 100),
     annualPrice: Math.round(annualPricePaise / 100),
     quotaBytes,
     storage: formatQuotaBytes(quotaBytes),
-    galleries: Number(plan.gallery_limit ?? 0),
-    clients: Number(plan.client_limit ?? 0),
-    features: Array.isArray(plan.features)
-      ? plan.features.filter((feature) => feature.trim().length > 0)
+    galleries: Number(plan.gallery_limit ?? plan.GalleryLimit ?? 0),
+    clients: Number(plan.client_limit ?? plan.ClientLimit ?? 0),
+    features: Array.isArray(features)
+      ? features.filter((feature) => feature.trim().length > 0)
       : [],
-    popular: Boolean(plan.popular),
-    rank: Number(plan.rank ?? 0),
-    paid: Boolean(plan.paid),
-    active: plan.active !== false,
-    selfServe: plan.self_serve !== false,
-    trialDays: Number(plan.trial_days ?? 0),
+    popular: Boolean(plan.popular ?? plan.Popular),
+    rank: Number(plan.rank ?? plan.Rank ?? 0),
+    paid: Boolean(plan.paid ?? plan.Paid),
+    active: (plan.active ?? plan.Active) !== false,
+    selfServe: (plan.self_serve ?? plan.SelfServe) !== false,
+    trialDays: Number(plan.trial_days ?? plan.TrialDays ?? 0),
   };
 }
 

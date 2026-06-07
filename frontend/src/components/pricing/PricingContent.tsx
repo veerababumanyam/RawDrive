@@ -73,14 +73,10 @@ function annualNote(plan: PlanCatalogPlan): string {
 }
 
 const subscriptionSummaries: Record<string, string> = {
-  creator:
-    "For solo photographers moving from one-off delivery into a steady monthly client pipeline.",
-  pro_photographer:
-    "For working photographers who need faster AI, stronger branding, and client selection.",
-  studio:
-    "For growing studios that need team access, advanced analytics, and a branded domain.",
-  elite_studio:
-    "For multi-branch teams that need sales-assisted setup, API access, and premium support.",
+  creator: "Side & weekend photographers getting started.",
+  pro_photographer: "The main money plan for working pros.",
+  studio: "Studios with a team and a brand to protect.",
+  elite_studio: "High-end & multi-branch studios.",
 };
 
 function subscriptionPlanLabel(plan: PlanCatalogPlan): string {
@@ -92,7 +88,7 @@ function subscriptionPlanLabel(plan: PlanCatalogPlan): string {
 
 function featuredPlanLabel(plan: PlanCatalogPlan): string {
   if (plan.id === "studio") return "Best Value";
-  if (plan.popular) return "Popular";
+  if (plan.id === "pro_photographer" || plan.popular) return "Most Popular";
   return "";
 }
 
@@ -100,7 +96,7 @@ export function PricingContent() {
   const [isAnnual, setIsAnnual] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [coupon, setCoupon] = useState("");
-  const { plans, eventPacks, galleryExtensions } = usePlanCatalog();
+  const { plans, eventPacks } = usePlanCatalog();
   const activePlans = plans
     .filter((plan) => plan.active)
     .sort((a, b) => a.rank - b.rank);
@@ -112,24 +108,6 @@ export function PricingContent() {
     (plan) =>
       plan.paid && plan.id !== "pay_per_event" && plan.id !== "free",
   );
-
-  const fallbackEventAddOns = [
-    {
-      price: "Rs. 49",
-      title: "Extend +30 days",
-      description: "Keep a gallery live for another month.",
-    },
-    {
-      price: "Rs. 99",
-      title: "Extend +90 days",
-      description: "A full extra quarter of client access.",
-    },
-    {
-      price: "Rs. 199",
-      title: "Download + archive forever",
-      description: "Export the gallery package and keep the event archived.",
-    },
-  ];
 
   const fallbackEventOptions = [
     {
@@ -159,15 +137,6 @@ export function PricingContent() {
       ],
     },
   ];
-
-  const eventAddOns =
-    galleryExtensions.length > 0
-      ? galleryExtensions.map((product) => ({
-          price: formatProductPrice(product),
-          title: product.name,
-          description: product.description,
-        }))
-      : fallbackEventAddOns;
 
   const eventOptions =
     eventPacks.length > 0
@@ -318,7 +287,7 @@ export function PricingContent() {
             <p className="text-sm text-text-secondary">
               After the active phase, galleries become view-only and reject new
               uploads. After 90 days total, they auto-archive unless the
-              photographer buys an extension pack.
+              photographer extends the gallery.
             </p>
           </div>
         </section>
@@ -508,39 +477,6 @@ export function PricingContent() {
             </Link>
           </div>
         )}
-      </section>
-
-      <section className="px-4 pb-16 lg:px-8">
-        <div className="mx-auto max-w-7xl space-y-6 text-center">
-          <div className="space-y-2">
-            <h2 className="font-headline text-2xl font-bold text-text-primary">
-              Add-ons and extension packs
-            </h2>
-            <p className="mx-auto max-w-2xl text-sm leading-7 text-text-secondary">
-              For Pay Per Event galleries that need more time, keep delivery
-              moving without changing the studio plan.
-            </p>
-          </div>
-          <div className="mx-auto grid max-w-3xl gap-4 sm:grid-cols-3">
-            {eventAddOns.map((addon) => (
-              <div key={addon.title} className="surface-panel p-5">
-                <p className="text-2xl font-extrabold text-accent">
-                  {addon.price}
-                </p>
-                <h3 className="mt-2 font-semibold text-text-primary">
-                  {addon.title}
-                </h3>
-                <p className="mt-2 text-xs leading-6 text-text-secondary">
-                  {addon.description}
-                </p>
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-text-tertiary">
-            All prices are in INR and exclusive of GST. Annual plans are billed
-            at 10 months for 12 months of access.
-          </p>
-        </div>
       </section>
 
       {/* Coupon Code */}

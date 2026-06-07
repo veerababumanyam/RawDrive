@@ -70,28 +70,28 @@ const planHighlights: Record<SelfServePlanId, readonly string[]> = {
     "Watermarked galleries",
   ],
   creator: [
-    "100GB storage, 10 events",
+    "100 GB storage, 10 events",
     "AI face search",
-    "Photo selling at 10% commission",
+    "Photo selling · 10% commission",
   ],
   pro_photographer: [
-    "300GB storage, unlimited events",
+    "300 GB storage, unlimited events",
     "WhatsApp delivery",
-    "Photo selling at 5% commission",
+    "Photo selling · 5% commission",
   ],
   studio: [
-    "1TB storage, unlimited everything",
+    "1 TB storage, unlimited everything",
     "Team access and custom domain",
-    "0% photo selling commission",
+    "Photo selling · 0% commission",
   ],
 };
 
 // One-line sub-headers shown under the plan name inside the featured card.
 const planTagline: Record<SelfServePlanId, string> = {
   free: "Free forever for beginners",
-  creator: "For side and weekend photographers",
-  pro_photographer: "The main plan for working pros",
-  studio: "For studios with a team and brand",
+  creator: "Side & weekend photographers getting started",
+  pro_photographer: "The main money plan for working pros",
+  studio: "Studios with a team and brand to protect",
 };
 
 export function RegisterForm() {

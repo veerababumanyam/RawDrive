@@ -16,6 +16,17 @@ import { getStoredAccessToken, getStoredPlatformRole } from "@/lib/auth";
 import { formatQuotaBytes } from "@/lib/plans";
 
 const GB = 2 ** 30;
+const EDITABLE_PAID_TIERS = [
+  "creator",
+  "pro_photographer",
+  "studio",
+  "elite_studio",
+] as const;
+const editablePaidTierSet = new Set<string>(EDITABLE_PAID_TIERS);
+const paidTierBadges: Record<string, string> = {
+  pro_photographer: "MOST POPULAR",
+  studio: "BEST VALUE",
+};
 
 type EditablePlan = AdminPlan & {
   monthly_price_rupees: string;
@@ -32,6 +43,14 @@ function toEditablePlan(plan: AdminPlan): EditablePlan {
     quota_gb: String(Math.round(plan.quota_bytes / GB)),
     features_text: (plan.features || []).join("\n"),
   };
+}
+
+function isEditablePaidTier(plan: Pick<AdminPlan, "tier">): boolean {
+  return editablePaidTierSet.has(plan.tier);
+}
+
+function paidTierBadge(plan: EditablePlan): string {
+  return paidTierBadges[plan.tier] ?? (plan.popular ? "POPULAR" : "");
 }
 
 function toUpdateInput(plan: EditablePlan): Omit<AdminPlan, "tier"> {
@@ -82,7 +101,7 @@ export default function AdminPlansPage() {
       .then((data) => {
         if (!active) return;
         setOriginalPlans(data);
-        setPlans(data.map(toEditablePlan));
+        setPlans(data.filter(isEditablePaidTier).map(toEditablePlan));
         setError(null);
       })
       .catch((err) => {
@@ -168,7 +187,7 @@ export default function AdminPlansPage() {
       listPricingChangeRequests(token),
     ]);
     setOriginalPlans(nextPlans);
-    setPlans(nextPlans.map(toEditablePlan));
+    setPlans(nextPlans.filter(isEditablePaidTier).map(toEditablePlan));
     setChanges(nextChanges);
   }
 
@@ -233,7 +252,9 @@ export default function AdminPlansPage() {
     }
   }
 
-  const visibleChanges = changes.slice(0, 8);
+  const visibleChanges = changes
+    .filter((change) => editablePaidTierSet.has(change.target_key))
+    .slice(0, 8);
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 p-8">
@@ -243,19 +264,19 @@ export default function AdminPlansPage() {
             Super admin
           </p>
           <h1 className="font-headline text-3xl font-extrabold text-text-primary">
-            Tier Plans
+            Paid Tier Plans
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-text-secondary">
-            Manage subscription pricing, limits, public visibility, and feature
-            bullets. Public pricing, signup, onboarding, and upgrade screens
-            read this catalog.
+            Manage Creator, Pro Photographer, Studio, and Elite Studio pricing,
+            limits, public visibility, and feature bullets. Public pricing,
+            signup, onboarding, and upgrade screens read this catalog.
           </p>
         </div>
         <div className="rounded-xl border border-border-subtle bg-surface-container-low px-4 py-3 text-sm text-text-secondary">
           <span className="font-semibold text-text-primary">
             {activePlanCount}
           </span>{" "}
-          active plans
+          active paid plans
         </div>
       </header>
 
@@ -282,8 +303,14 @@ export default function AdminPlansPage() {
         </div>
       ) : (
         <div className="grid gap-5">
+          {plans.length === 0 && (
+            <div className="rounded-xl border border-border-subtle bg-surface-container-low p-8 text-center text-sm text-text-secondary">
+              No editable paid subscription plans are available.
+            </div>
+          )}
           {plans.map((plan) => {
             const saving = savingTier === plan.tier;
+            const badge = paidTierBadge(plan);
             return (
               <form
                 key={plan.tier}
@@ -299,9 +326,9 @@ export default function AdminPlansPage() {
                       <span className="rounded-full bg-surface-container-high px-3 py-1 text-xs font-semibold text-text-tertiary">
                         {plan.tier}
                       </span>
-                      {plan.popular && (
+                      {badge && (
                         <span className="rounded-full bg-accent/10 px-3 py-1 text-xs font-semibold text-accent">
-                          Popular
+                          {badge}
                         </span>
                       )}
                       {!plan.active && (

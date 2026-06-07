@@ -25,8 +25,8 @@ func TestPlanDefaultQuotaBytes(t *testing.T) {
 		{"pro_photographer", 300 * (1 << 30)}, // 300 GB
 		{"professional", 300 * (1 << 30)},     // legacy alias -> pro_photographer
 		{"studio", 1 * (1 << 40)},             // 1 TB
-		{"elite_studio", 6 * (1 << 40)},       // 3 TB+ / custom limit default
-		{"enterprise", 6 * (1 << 40)},         // legacy alias -> elite_studio
+		{"elite_studio", 3 * (1 << 40)},       // 3 TB+ default
+		{"enterprise", 3 * (1 << 40)},         // legacy alias -> elite_studio
 		{"", 5 * (1 << 30)},                   // unknown -> free
 		{"garbage-tier", 5 * (1 << 30)},       // unknown -> free
 	}

@@ -61,9 +61,9 @@ describe("Pricing Page", () => {
     expect(screen.getAllByText("Elite Studio").length).toBeGreaterThan(0);
   });
 
-  it("shows Popular badge on Pro Photographer plan", () => {
+  it("shows Pro Photographer as the most popular plan", () => {
     render(<PricingContent />);
-    expect(screen.getByText("Popular")).toBeInTheDocument();
+    expect(screen.getByText("Most Popular")).toBeInTheDocument();
   });
 
   it("shows Studio as the best value plan", () => {
@@ -71,7 +71,7 @@ describe("Pricing Page", () => {
     expect(screen.getByText("Best Value")).toBeInTheDocument();
   });
 
-  it("renders event validity and extension pack details", () => {
+  it("renders event validity details without add-on packs", () => {
     render(<PricingContent />);
 
     expect(screen.getByText("Event upload")).toBeInTheDocument();
@@ -81,7 +81,12 @@ describe("Pricing Page", () => {
     expect(
       screen.getAllByText("Auto-archive at day 90 unless extended").length,
     ).toBeGreaterThan(0);
-    expect(screen.getByText("Download + archive forever")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Add-ons and extension packs"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Download + archive forever"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("7 days upload window")).not.toBeInTheDocument();
   });
 

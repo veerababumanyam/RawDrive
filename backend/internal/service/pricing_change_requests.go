@@ -586,11 +586,15 @@ func insertPricingAuditEvent(ctx context.Context, q subscriptionCatalogBackfillD
 	return err
 }
 
-func marshalJSONMap(values map[string]any) ([]byte, error) {
+func marshalJSONMap(values map[string]any) (string, error) {
 	if values == nil {
 		values = map[string]any{}
 	}
-	return json.Marshal(values)
+	body, err := json.Marshal(values)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
 }
 
 func unmarshalJSONMap(body []byte) map[string]any {

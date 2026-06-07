@@ -68,19 +68,19 @@ const PLAN_HIGHLIGHTS: Record<string, string[]> = {
     "Watermarked galleries",
   ],
   creator: [
-    "100GB storage · 10 events",
+    "100 GB storage · 10 events",
     "AI face search",
     "Photo selling · 10% commission",
   ],
   pro_photographer: [
-    "300GB storage · unlimited events",
+    "300 GB storage · unlimited events",
     "WhatsApp delivery",
     "Photo selling · 5% commission",
   ],
   studio: [
-    "1TB storage · unlimited everything",
+    "1 TB storage · unlimited everything",
     "Team access + custom domain",
-    "0% selling commission",
+    "Photo selling · 0% commission",
   ],
 };
 
