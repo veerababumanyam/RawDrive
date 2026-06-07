@@ -76,6 +76,41 @@ func (r *FaceRepo) GetFacesByAsset(ctx context.Context, assetID uuid.UUID) ([]*F
 	return scanFaces(rows)
 }
 
+// ListFaceDataForExport returns every stored face row for a workspace as a
+// DPDP/GDPR data-portability projection (FaceExportRecord), for inclusion in a
+// Data Subject Request "access" export bundle. Embeddings and image bytes are
+// intentionally excluded — only the detected/derived metadata is exported (see
+// FaceExportRecord). Ordering is stable (asset, then face_index) so successive
+// exports of an unchanged workspace are byte-identical.
+func (r *FaceRepo) ListFaceDataForExport(ctx context.Context, workspaceID uuid.UUID) ([]FaceExportRecord, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, asset_id, gallery_id, face_index, bounding_box,
+		        cluster_label, cluster_name, confidence, source, created_at, updated_at
+		 FROM face_clusters
+		 WHERE workspace_id = $1
+		 ORDER BY asset_id, face_index`, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("face repo: list face export data: %w", err)
+	}
+	defer rows.Close()
+
+	var out []FaceExportRecord
+	for rows.Next() {
+		var rec FaceExportRecord
+		var bboxJSON []byte
+		if err := rows.Scan(
+			&rec.FaceID, &rec.AssetID, &rec.GalleryID, &rec.FaceIndex, &bboxJSON,
+			&rec.ClusterLabel, &rec.ClusterName, &rec.Confidence, &rec.Source,
+			&rec.CreatedAt, &rec.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("face repo: scan face export row: %w", err)
+		}
+		_ = json.Unmarshal(bboxJSON, &rec.BoundingBox)
+		out = append(out, rec)
+	}
+	return out, rows.Err()
+}
+
 // FindSimilarFaces performs pgvector cosine distance search.
 // Returns faces with cosine similarity >= threshold.
 func (r *FaceRepo) FindSimilarFaces(ctx context.Context, embedding []float32, workspaceID uuid.UUID, threshold float64, limit int) ([]*FaceCluster, error) {
@@ -828,12 +863,6 @@ func (r *FaceRepo) clusterLabelsForCanonical(ctx context.Context, workspaceID, c
 		labels = append(labels, label)
 	}
 	return labels, rows.Err()
-}
-
-// DeleteFacesByAsset removes all face rows for an asset.
-func (r *FaceRepo) DeleteFacesByAsset(ctx context.Context, assetID uuid.UUID) error {
-	_, err := r.pool.Exec(ctx, `DELETE FROM face_clusters WHERE asset_id = $1`, assetID)
-	return err
 }
 
 // DeleteFacesByAssetAndSource removes only the face rows for an asset that were

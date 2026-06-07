@@ -80,6 +80,28 @@ type FaceIdentityContactSummary struct {
 	LinkedAt  *time.Time `json:"linked_at,omitempty"`
 }
 
+// FaceExportRecord is the DPDP/GDPR data-portability projection of one stored
+// face row for a Data Subject Request "access" export. It deliberately carries
+// ONLY the metadata describing what was detected/derived — cluster identity,
+// bounding box, quality/confidence, detection source, gallery/asset provenance,
+// and timestamps. It NEVER carries the raw embedding vector or any image bytes:
+// the embedding is special-category biometric material whose verbatim disclosure
+// would itself be a privacy risk, and the original images are downloadable
+// through the assets export path, not duplicated here.
+type FaceExportRecord struct {
+	FaceID       uuid.UUID   `json:"face_id"`
+	AssetID      uuid.UUID   `json:"asset_id"`
+	GalleryID    *uuid.UUID  `json:"gallery_id,omitempty"`
+	FaceIndex    int         `json:"face_index"`
+	BoundingBox  BoundingBox `json:"bounding_box"`
+	ClusterLabel *uuid.UUID  `json:"cluster_label,omitempty"`
+	ClusterName  string      `json:"cluster_name,omitempty"`
+	Confidence   float64     `json:"confidence"`
+	Source       string      `json:"source"`
+	CreatedAt    time.Time   `json:"created_at"`
+	UpdatedAt    time.Time   `json:"updated_at"`
+}
+
 // FaceIndexStatus summarizes whether a gallery has uploaded photos and whether
 // those photos have a usable FaceID index.
 type FaceIndexStatus struct {

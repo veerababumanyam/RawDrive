@@ -3148,7 +3148,14 @@ func main() {
 		// identifiable from JWT claims; anonymous public submissions can be
 		// added later via a separate public route group.
 		dsrRepo := repository.NewDSRRepo(dbPool)
-		dsrSvc := service.NewDSRService(service.NewPostgresDSRStore(dsrRepo))
+		// Wire the concrete subject-data exporter so "access" DSRs produce a
+		// real bundle (without it, the service fails access requests with
+		// "exporter not configured"). The exporter includes special-category
+		// face-cluster metadata (DPDP/GDPR portability) — embeddings/images
+		// are excluded (slice 3k / B-X1).
+		dsrExporter := service.NewDSRExporter(dbPool, aiFaceRepo)
+		dsrSvc := service.NewDSRService(service.NewPostgresDSRStore(dsrRepo)).
+			WithExporter(dsrExporter)
 		dsrHandler := handler.NewDSRHandler(dsrSvc)
 		api.Post("/api/v1/dsr", dsrHandler.Submit)
 		api.Get("/api/v1/dsr/{id}", dsrHandler.Get)
