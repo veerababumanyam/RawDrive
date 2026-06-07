@@ -46,6 +46,7 @@ import {
 import { GRID_VARIANTS } from "@/lib/media-encryption/asset-media";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { indexAssetFacesFromBrowser } from "@/lib/media-encryption/face-index-browser";
+import { isFaceIndexUnavailableError } from "@/lib/api/ai";
 import { browserE2EEMaxUploadSizeLabel } from "@/lib/media-encryption/browser-upload-support";
 import {
   FILE_PICKER_STILL_IMAGE_ACCEPT,
@@ -1081,6 +1082,7 @@ export default function GalleryDetailPage({
     let indexedFaces = 0;
     let skippedAssets = 0;
     let failedAssets = 0;
+    let serviceUnavailableMessage = "";
 
     const publish = (running: boolean, message: string) => {
       setFaceIndexRun({
@@ -1115,6 +1117,12 @@ export default function GalleryDetailPage({
           }
         } catch (err) {
           if (controller.signal.aborted) break;
+          if (isFaceIndexUnavailableError(err)) {
+            failedAssets += 1;
+            serviceUnavailableMessage = err.message;
+            controller.abort();
+            break;
+          }
           failedAssets += 1;
           console.warn("FaceID browser reindex failed", {
             assetId: asset.id,
@@ -1135,6 +1143,11 @@ export default function GalleryDetailPage({
     );
     await Promise.all(Array.from({ length: workerCount }, () => worker()));
     faceIndexAbortRef.current = null;
+
+    if (serviceUnavailableMessage) {
+      publish(false, serviceUnavailableMessage);
+      return;
+    }
 
     if (controller.signal.aborted) {
       publish(false, "FaceID indexing stopped.");

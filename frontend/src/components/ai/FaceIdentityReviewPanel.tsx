@@ -10,6 +10,7 @@ import {
   renameCluster,
   splitCluster,
   unlinkClusterContact,
+  isFaceIndexUnavailableError,
   type ClusterSummary,
   type FaceIndexStatus,
   type FaceReviewRow,
@@ -73,7 +74,8 @@ function assetCanBrowserIndexFaces(asset: Asset): boolean {
   return (
     asset.status === "ready" &&
     asset.content_type.toLowerCase().startsWith("image/") &&
-    (hasFaceIndexDerivative(asset) || Boolean(asset.storage_key || asset.download_url))
+    (hasFaceIndexDerivative(asset) ||
+      Boolean(asset.storage_key || asset.download_url))
   );
 }
 
@@ -167,9 +169,8 @@ export function FaceIdentityReviewPanel({
   const [faces, setFaces] = useState<FaceReviewRow[]>([]);
   const [assetsById, setAssetsById] = useState<Map<string, Asset>>(new Map());
   const [indexStatus, setIndexStatus] = useState<FaceIndexStatus | null>(null);
-  const [indexRun, setIndexRun] = useState<FaceIndexRunState>(
-    IDLE_FACE_INDEX_RUN,
-  );
+  const [indexRun, setIndexRun] =
+    useState<FaceIndexRunState>(IDLE_FACE_INDEX_RUN);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [selectedClusterId, setSelectedClusterId] = useState("");
@@ -206,12 +207,7 @@ export function FaceIdentityReviewPanel({
     if (!query) return clusters;
     return clusters.filter((cluster) => {
       const linked = cluster.linked_contact;
-      return [
-        faceLabel(cluster),
-        linked?.name,
-        linked?.email,
-        linked?.phone,
-      ]
+      return [faceLabel(cluster), linked?.name, linked?.email, linked?.phone]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query));
     });
@@ -481,6 +477,7 @@ export function FaceIdentityReviewPanel({
     let stored = 0;
     let failed = 0;
     let lastError: unknown;
+    let serviceUnavailableMessage = "";
 
     setError("");
     setIndexRun({
@@ -517,6 +514,13 @@ export function FaceIdentityReviewPanel({
           stored += result.stored;
         } catch (err) {
           if (controller.signal.aborted) return;
+          if (isFaceIndexUnavailableError(err)) {
+            failed += 1;
+            lastError = err;
+            serviceUnavailableMessage = err.message;
+            controller.abort();
+            return;
+          }
           failed += 1;
           lastError = err;
         } finally {
@@ -542,7 +546,9 @@ export function FaceIdentityReviewPanel({
       );
       let finalError = "";
       if (controller.signal.aborted) {
-        finalError = "FaceID sync stopped before all photos were indexed.";
+        finalError =
+          serviceUnavailableMessage ||
+          "FaceID sync stopped before all photos were indexed.";
       } else if (failed > 0) {
         const suffix =
           lastError instanceof Error ? ` ${lastError.message}` : "";

@@ -6,6 +6,21 @@ const apiUrl = (path: string) => `${getApiBaseUrl()}${path}`;
 
 // ---- Types ----
 
+export class FaceIndexUnavailableError extends Error {
+  constructor(
+    message = "FaceID service is unavailable right now. Try again after the service is healthy.",
+  ) {
+    super(message);
+    this.name = "FaceIndexUnavailableError";
+  }
+}
+
+export function isFaceIndexUnavailableError(
+  err: unknown,
+): err is FaceIndexUnavailableError {
+  return err instanceof FaceIndexUnavailableError;
+}
+
 // SampleBoundingBox mirrors the backend ai.BoundingBox shape (pixels of
 // the original image — sourced from face_clusters.bounding_box JSONB).
 // PR-3 people tab uses this to crop the cluster cover thumbnail to just
@@ -593,6 +608,9 @@ export async function uploadAssetFaceIndexImage(
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
+    if (res.status === 503 && text.includes("face_index_unavailable")) {
+      throw new FaceIndexUnavailableError();
+    }
     throw new Error(text || `Face index image upload failed: ${res.status}`);
   }
   return res.json();

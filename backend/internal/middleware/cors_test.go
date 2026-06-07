@@ -73,6 +73,26 @@ func TestCORSProductionAllowsRawDriveFirstPartyOrigins(t *testing.T) {
 	}
 }
 
+func TestCORSProductionPreservesFirstPartyHeadersOnBackendError(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("GO_ENV", "")
+	t.Setenv("FRONTEND_URL", "https://app.rawdrive.in")
+
+	handler := CORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"error":"face_index_unavailable"}`, http.StatusServiceUnavailable)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/assets/asset-1/face-index-image", nil)
+	req.Header.Set("Origin", "https://rawdrive.in")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.Equal(t, "https://rawdrive.in", rec.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, "true", rec.Header().Get("Access-Control-Allow-Credentials"))
+}
+
 func TestCORSProductionRejectsDeprecatedStudioSubdomainOrigins(t *testing.T) {
 	t.Setenv("APP_ENV", "production")
 	t.Setenv("GO_ENV", "")

@@ -120,7 +120,7 @@ func (s *FaceService) DetectAndStore(ctx context.Context, assetID, workspaceID u
 	}
 
 	if s.faceClient == nil {
-		return 0, fmt.Errorf("face service: face-svc client not configured for asset %s", assetID)
+		return 0, fmt.Errorf("face service: %w: face-svc client not configured for asset %s", face.ErrServiceUnavailable, assetID)
 	}
 	// face-svc path. insightface buffalo_l: 512-d L2-normalized embeddings,
 	// det_score ∈ [0,1], no per-request cost so spend logging is skipped.
@@ -191,7 +191,7 @@ func (s *FaceService) DetectImageAndStoreFaces(ctx context.Context, assetID, wor
 		}
 	}
 	if s.faceClient == nil {
-		return 0, fmt.Errorf("face service: face-svc client not configured for asset %s", assetID)
+		return 0, fmt.Errorf("face service: %w: face-svc client not configured for asset %s", face.ErrServiceUnavailable, assetID)
 	}
 
 	resp, err := s.faceClient.DetectAndEmbed(ctx, imageData, filename)

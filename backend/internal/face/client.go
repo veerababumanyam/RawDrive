@@ -226,6 +226,9 @@ func (c *Client) DetectAndEmbed(ctx context.Context, imageBytes []byte, filename
 			return out, nil
 		}
 		if !retryable || attempt >= c.maxRetries {
+			if retryable && !errors.Is(derr, ErrServiceUnavailable) {
+				return nil, fmt.Errorf("%w: %v", ErrServiceUnavailable, derr)
+			}
 			return nil, derr
 		}
 		// Linear backoff, cancellable via the caller's context.

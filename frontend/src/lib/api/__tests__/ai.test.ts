@@ -16,6 +16,7 @@ import {
   triggerFaceDetect,
   getAssetTags,
   getDuplicates,
+  isFaceIndexUnavailableError,
   splitCluster,
   setSpendCap,
   validateAIKey,
@@ -562,5 +563,24 @@ describe("uploadAssetFaceIndexImage (server-assisted encrypted face index)", () 
         new Blob(["webp"], { type: "image/webp" }),
       ),
     ).rejects.toThrow(/failed to index|502/);
+  });
+
+  it("maps face index service unavailability to a typed error", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      text: () => Promise.resolve('{"error":"face_index_unavailable"}'),
+    });
+
+    let caught: unknown;
+    try {
+      await uploadAssetFaceIndexImage(
+        "asset-1",
+        new Blob(["webp"], { type: "image/webp" }),
+      );
+    } catch (err) {
+      caught = err;
+    }
+    expect(isFaceIndexUnavailableError(caught)).toBe(true);
   });
 });

@@ -4,16 +4,20 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"math"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"github.com/rawdrive/backend/internal/ai"
+	"github.com/rawdrive/backend/internal/face"
 	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
 )
@@ -561,6 +565,41 @@ func TestFaceIndexImage_GalleryOptOutClearsClientFacesAndSkipsIndex(t *testing.T
 	}
 	if out.Stored != 0 {
 		t.Fatalf("stored = %d, want 0", out.Stored)
+	}
+}
+
+func TestFaceIndexImage_FaceServiceUnavailable_503(t *testing.T) {
+	ws := uuid.New()
+	assetID := uuid.New()
+	assets := &fakeAssetResolver{asset: &repository.Asset{ID: assetID, WorkspaceID: ws, ContentType: "image/jpeg"}}
+	imageIndexer := &fakeImageIndexer{err: fmt.Errorf("face service: %w: cold start", face.ErrServiceUnavailable)}
+	h := NewFaceEmbeddingHandler(assets, &fakeFaceStore{}, &fakeIndexer{recEnabled: true}, fakeFlag{enabled: false}).
+		WithImageIndexer(imageIndexer)
+
+	rec := httptest.NewRecorder()
+	h.StoreIndexImage(rec, newFaceImageReq(t, assetID.String(), ws, []byte("WEBP"), nil))
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("face-svc unavailable should 503, got %d (%s)", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "face_index_unavailable") {
+		t.Fatalf("response should name unavailable face index, got %q", rec.Body.String())
+	}
+}
+
+func TestFaceIndexImage_IndexingFailure_502(t *testing.T) {
+	ws := uuid.New()
+	assetID := uuid.New()
+	assets := &fakeAssetResolver{asset: &repository.Asset{ID: assetID, WorkspaceID: ws, ContentType: "image/jpeg"}}
+	imageIndexer := &fakeImageIndexer{err: errors.New("embedding dimension mismatch")}
+	h := NewFaceEmbeddingHandler(assets, &fakeFaceStore{}, &fakeIndexer{recEnabled: true}, fakeFlag{enabled: false}).
+		WithImageIndexer(imageIndexer)
+
+	rec := httptest.NewRecorder()
+	h.StoreIndexImage(rec, newFaceImageReq(t, assetID.String(), ws, []byte("WEBP"), nil))
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("terminal indexing errors should remain 502, got %d (%s)", rec.Code, rec.Body.String())
 	}
 }
 

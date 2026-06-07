@@ -20,7 +20,9 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"log"
 	"math"
 	"mime/multipart"
 	"net/http"
@@ -30,6 +32,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/rawdrive/backend/internal/ai"
+	"github.com/rawdrive/backend/internal/face"
 )
 
 const (
@@ -275,7 +278,7 @@ func (h *FaceEmbeddingHandler) StoreIndexImage(w http.ResponseWriter, r *http.Re
 		return
 	}
 	if h.imageIndexer == nil {
-		http.Error(w, `{"error":"face image indexer unavailable"}`, http.StatusServiceUnavailable)
+		http.Error(w, `{"error":"face_index_unavailable"}`, http.StatusServiceUnavailable)
 		return
 	}
 
@@ -360,11 +363,23 @@ func (h *FaceEmbeddingHandler) StoreIndexImage(w http.ResponseWriter, r *http.Re
 	}
 	stored, err := h.imageIndexer.DetectImageAndStoreFaces(r.Context(), assetID, workspaceID, galleryID, imageData, filename, clientFaceSource)
 	if err != nil {
+		log.Printf("face index image: asset=%s workspace=%s gallery=%s failed: %v", assetID, workspaceID, uuidValueForLog(galleryID), err)
+		if errors.Is(err, face.ErrServiceUnavailable) {
+			http.Error(w, `{"error":"face_index_unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
 		http.Error(w, `{"error":"failed to index faces"}`, http.StatusBadGateway)
 		return
 	}
 
 	respondJSON(w, http.StatusOK, storeFaceEmbeddingsResponse{Stored: stored})
+}
+
+func uuidValueForLog(id *uuid.UUID) string {
+	if id == nil {
+		return ""
+	}
+	return id.String()
 }
 
 func readLimitedMultipartFile(file multipart.File, limit int64) ([]byte, error) {

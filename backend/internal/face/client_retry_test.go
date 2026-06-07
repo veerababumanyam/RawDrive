@@ -3,6 +3,7 @@ package face
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -100,6 +101,24 @@ func TestDetectAndEmbed_RetriesOnGatewayError(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&calls); got != 2 {
 		t.Fatalf("expected 2 attempts, got %d", got)
+	}
+}
+
+func TestDetectAndEmbed_ExhaustedGatewayErrorIsUnavailable(t *testing.T) {
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		http.Error(w, "bad gateway", http.StatusBadGateway)
+	}))
+	defer srv.Close()
+
+	c, _ := NewClient(Config{BaseURL: srv.URL, Timeout: 5 * time.Second, MaxRetries: 2, RetryBackoff: time.Millisecond})
+	_, err := c.DetectAndEmbed(context.Background(), []byte("x"), "")
+	if !errors.Is(err, ErrServiceUnavailable) {
+		t.Fatalf("got %v, want ErrServiceUnavailable", err)
+	}
+	if got := atomic.LoadInt32(&calls); got != 3 {
+		t.Fatalf("expected 3 attempts, got %d", got)
 	}
 }
 
