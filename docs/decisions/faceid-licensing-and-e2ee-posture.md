@@ -1,6 +1,26 @@
 # Decision: FaceID / Find-Me — `buffalo_l` licensing posture + E2EE recognition posture
 
-- **Status:** Proposed (recommendations recorded for owner ratification, 2026-06-07)
+> **UPDATE (2026-06-08) — FaceID TURNED ON; active posture is (a).** The owner
+> ratified operating posture **(a) server-side match** now (not the off-until-
+> consent-UI interim). Two changes ship this:
+> 1. **Migration 191** reverts migration 190 — `workspaces.face_recognition_enabled`
+>    defaults TRUE again and existing rows are backfilled to TRUE.
+> 2. **`server_face_index_plaintext` now defaults ON** (`backend/cmd/api/main.go`),
+>    re-opening the plaintext face-index path (`StoreIndexImage`). The kill switch
+>    stays available — `FEATURE_SERVER_FACE_INDEX_PLAINTEXT=false` (or the
+>    platform_settings row) re-closes it.
+>
+> **E2EE consequence (explicit):** under posture (a) the server **transiently
+> processes a DECRYPTED face frame** at index time — it does NOT honor the
+> "server never sees plaintext" bar. This is the accepted interim while posture
+> **(b)** (client-side embedding, slice 2b) remains owner-blocked on commercial
+> model licensing + ONNX hosting + parity (§3 below). The DPDP/GDPR Art 9
+> special-category-at-rest risk-acceptance (consent capture + audit, slice 3b)
+> applies. Re-closing the off-posture = roll back migration 191 + set the kill
+> switch to false.
+
+- **Status:** Active posture (a) — owner-ratified ON 2026-06-08 (superseding the
+  2026-06-07 "off until consent UI" proposal).
 - **Scope:** Documentation/decision only — no code or runtime change.
 - **Refs:** roadmap slice `3j`; GitHub issue #289; audit
   `docs/audits/faceid-findme-audit-2026-06-07.md` §7.4, §8.1, §8.2, §8.5;
