@@ -242,6 +242,126 @@ func (r *FaceRepo) UpdateClusterAssignment(ctx context.Context, faceID, clusterL
 	return nil
 }
 
+// ClusterAssignment is the resolved outcome of FindOrAssignCluster: the
+// canonical cluster label a face was assigned to and the cluster's display
+// name (empty for a freshly-minted cluster, the matched cluster's name when a
+// similar face already existed).
+type ClusterAssignment struct {
+	Label uuid.UUID
+	Name  string
+}
+
+// FindOrAssignCluster atomically performs the no-match → new-cluster decision
+// that ClusterFaces used to do non-transactionally. It runs the whole
+// find-or-create inside ONE transaction guarded by a Postgres advisory
+// transaction lock keyed on the workspace, so two concurrent first-faces of the
+// same brand-new person cannot both observe "no cluster" and mint DIFFERENT
+// labels (issue #285). The lock is held only for the sub-millisecond cluster
+// decision + the single UPDATE — the expensive ML detection happens earlier in
+// DetectAndStore, well outside this lock, so the worker is never serialized.
+//
+// Scope rationale: the lock is keyed on workspace_id (not workspace+embedding
+// bucket). A coarse embedding bucket cannot GUARANTEE that two faces of the
+// same person hash to the same bucket without a learned LSH; any bucket
+// false-negative would re-open the exact duplicate-cluster split this fixes.
+// Workspace scope guarantees convergence and only serializes the tiny DB-side
+// decision, satisfying the NFR ("narrow ... to avoid serializing the whole
+// worker") — the worker's heavy work is unaffected.
+//
+// Behaviour mirrors the previous inline logic exactly: a match above threshold
+// adopts the matched cluster's canonical (alias-resolved) label + name; no
+// match mints a new uuid with an empty name. Alias resolution and the manual
+// MergeClusters transactional path are unchanged.
+func (r *FaceRepo) FindOrAssignCluster(ctx context.Context, faceID uuid.UUID, embedding []float32, workspaceID uuid.UUID, threshold float64) (ClusterAssignment, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return ClusterAssignment{}, fmt.Errorf("face repo: begin find-or-assign: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after Commit
+
+	// Serialize concurrent first-face assignments within this workspace. The
+	// lock is released automatically on Commit/Rollback (xact-scoped). Keyed on
+	// a stable hashtextextended of the workspace UUID so the key space is the
+	// whole int8 range and distinct workspaces almost never collide.
+	if _, err := tx.Exec(ctx,
+		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		workspaceID.String()); err != nil {
+		return ClusterAssignment{}, fmt.Errorf("face repo: acquire cluster lock: %w", err)
+	}
+
+	// Re-run the similarity search INSIDE the lock so a concurrent caller that
+	// just committed its new cluster is visible here.
+	maxDistance := 1.0 - threshold
+	var matchLabel *uuid.UUID
+	var matchName string
+	err = tx.QueryRow(ctx,
+		`SELECT cluster_label, cluster_name
+		   FROM face_clusters
+		  WHERE workspace_id = $1
+		    AND cluster_label IS NOT NULL
+		    AND (embedding <=> $2) <= $3
+		  ORDER BY embedding <=> $2 ASC
+		  LIMIT 1`,
+		workspaceID, pgvector.NewVector(embedding), maxDistance,
+	).Scan(&matchLabel, &matchName)
+	if err != nil && err != pgx.ErrNoRows {
+		return ClusterAssignment{}, fmt.Errorf("face repo: find similar (locked): %w", err)
+	}
+
+	var assignment ClusterAssignment
+	if err != pgx.ErrNoRows && matchLabel != nil {
+		// Existing cluster: adopt its canonical label + name (alias-resolved
+		// inside the same tx so a concurrently-committed merge is honoured).
+		canonical, rerr := r.resolveClusterLabelTx(ctx, tx, workspaceID, *matchLabel)
+		if rerr != nil {
+			return ClusterAssignment{}, rerr
+		}
+		assignment = ClusterAssignment{Label: canonical, Name: matchName}
+	} else {
+		// No match → mint a brand-new cluster label.
+		assignment = ClusterAssignment{Label: uuid.New(), Name: ""}
+	}
+
+	if _, err := tx.Exec(ctx,
+		`UPDATE face_clusters SET cluster_label = $2, cluster_name = $3, updated_at = now()
+		 WHERE id = $1`, faceID, assignment.Label, assignment.Name); err != nil {
+		return ClusterAssignment{}, fmt.Errorf("face repo: assign cluster (locked): %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return ClusterAssignment{}, fmt.Errorf("face repo: commit find-or-assign: %w", err)
+	}
+	return assignment, nil
+}
+
+// resolveClusterLabelTx is the tx-scoped twin of ResolveClusterLabel: it
+// follows manual face identity aliases to the canonical label inside the caller's
+// transaction so the lock's snapshot governs the resolution. The standalone
+// ResolveClusterLabel (pool-scoped) is unchanged.
+func (r *FaceRepo) resolveClusterLabelTx(ctx context.Context, tx pgx.Tx, workspaceID, label uuid.UUID) (uuid.UUID, error) {
+	var out uuid.UUID
+	err := tx.QueryRow(ctx,
+		`WITH RECURSIVE chain(alias_label, canonical_label, depth) AS (
+			SELECT alias_label, canonical_label, 1
+			FROM face_identity_aliases
+			WHERE workspace_id = $1 AND alias_label = $2
+			UNION ALL
+			SELECT a.alias_label, a.canonical_label, chain.depth + 1
+			FROM face_identity_aliases a
+			INNER JOIN chain ON a.alias_label = chain.canonical_label
+			WHERE a.workspace_id = $1 AND chain.depth < 8
+		)
+		SELECT canonical_label FROM chain ORDER BY depth DESC LIMIT 1`,
+		workspaceID, label).Scan(&out)
+	if err == pgx.ErrNoRows {
+		return label, nil
+	}
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("face repo: resolve cluster label (tx): %w", err)
+	}
+	return out, nil
+}
+
 // ListClusters returns cluster summaries for a workspace, optionally filtered by gallery.
 func (r *FaceRepo) ListClusters(ctx context.Context, workspaceID uuid.UUID, galleryID *uuid.UUID) ([]*ClusterSummary, error) {
 	// 2026-05-18: gallery scope resolves through gallery_assets (the source

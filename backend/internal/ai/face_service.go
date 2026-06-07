@@ -305,28 +305,20 @@ func (s *FaceService) ClusterFaces(ctx context.Context, faces []*FaceCluster, wo
 		// recognition operating point for buffalo_l in production setups;
 		// raise toward 0.6 if false-positive merges become a problem,
 		// lower toward 0.5 if same-person clusters still split.
-		similar, err := s.faceRepo.FindSimilarFaces(ctx, face.Embedding, workspaceID, s.thresholds.ClusterMerge, 1)
-		if err != nil {
-			log.Printf("face service: find similar failed for face %s: %v", face.ID, err)
+		//
+		// 2026-06-07 (B-C1 / #285): the find-similar → assign decision now runs
+		// inside FindOrAssignCluster, a single transaction guarded by a
+		// workspace-scoped advisory lock. The previous non-transactional
+		// read-then-write let two concurrent first-faces of the SAME new person
+		// (worker batch + client ingest, or two workers) both see "no cluster"
+		// and mint DIFFERENT labels, splitting one person into duplicate
+		// clusters. The lock serializes only the tiny DB-side decision (the ML
+		// detection already happened in DetectAndStore), so the worker is not
+		// serialized. Alias resolution and the manual MergeClusters path are
+		// unchanged.
+		if _, err := s.faceRepo.FindOrAssignCluster(ctx, face.ID, face.Embedding, workspaceID, s.thresholds.ClusterMerge); err != nil {
+			log.Printf("face service: cluster assignment failed for face %s: %v", face.ID, err)
 			continue
-		}
-
-		var label uuid.UUID
-		var name string
-		if len(similar) > 0 && similar[0].ClusterLabel != nil {
-			label = *similar[0].ClusterLabel
-			if resolved, err := s.faceRepo.ResolveClusterLabel(ctx, workspaceID, label); err != nil {
-				log.Printf("face service: resolve cluster alias failed for %s: %v", label, err)
-			} else {
-				label = resolved
-			}
-			name = similar[0].ClusterName
-		} else {
-			label = uuid.New()
-		}
-
-		if err := s.faceRepo.UpdateClusterAssignment(ctx, face.ID, label, name); err != nil {
-			log.Printf("face service: update cluster failed for face %s: %v", face.ID, err)
 		}
 	}
 	return nil
