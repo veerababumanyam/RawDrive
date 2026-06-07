@@ -80,7 +80,16 @@ func TestDefaultValues(t *testing.T) {
 	assert.Equal(t, 8080, cfg.Port, "default port should be 8080")
 	assert.Equal(t, "development", cfg.Environment, "default environment should be development")
 	assert.Equal(t, 5*time.Minute, cfg.OTPExpiry, "default OTP expiry should be 5 minutes")
-	assert.Equal(t, 5, cfg.MaxConcurrentSessions, "default max concurrent sessions should be 5")
+	assert.Equal(t, 10, cfg.MaxConcurrentSessions, "default max concurrent sessions should be 10 (raised from 5 so multi-device users are not blocked)")
+}
+
+func TestMaxConcurrentSessionsEnvOverride(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	t.Setenv("MAX_CONCURRENT_SESSIONS", "25")
+
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, 25, cfg.MaxConcurrentSessions, "MAX_CONCURRENT_SESSIONS env var must override the default")
 }
 
 func TestOTPExpiryConfig(t *testing.T) {

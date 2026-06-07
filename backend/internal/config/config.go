@@ -69,7 +69,7 @@ func Load() (*Config, error) {
 		OTPExpiry:             time.Duration(envIntOrDefault("OTP_EXPIRY_MINUTES", 5)) * time.Minute,
 		AccessTokenExpiry:     time.Duration(envIntOrDefault("ACCESS_TOKEN_EXPIRY_MINUTES", 15)) * time.Minute,
 		RefreshTokenExpiry:    time.Duration(envIntOrDefault("REFRESH_TOKEN_EXPIRY_DAYS", 7)) * 24 * time.Hour,
-		MaxConcurrentSessions: envIntOrDefault("MAX_CONCURRENT_SESSIONS", 5),
+		MaxConcurrentSessions: envIntOrDefault("MAX_CONCURRENT_SESSIONS", 10),
 		RateLimitPerMinute:    envIntOrDefault("RATE_LIMIT_PER_MINUTE", 60),
 		RLSEnforced:           envBoolOrDefault("RLS_ENFORCED", false),
 	}

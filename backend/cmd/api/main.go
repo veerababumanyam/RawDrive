@@ -1475,7 +1475,16 @@ func main() {
 	jwtSvc := auth.NewJWTService(auth.JWTConfig{
 		AccessTokenExpiry:  15 * time.Minute,
 		RefreshTokenExpiry: 7 * 24 * time.Hour,
-		MaxSessions:        5,
+		// Per-user concurrent active-session cap. Hitting it surfaces the
+		// "active session limit — sign out on another device" error on
+		// login (incl. Google sign-in: enforceSessionLimit ->
+		// ErrMaxConcurrentSessions -> OAuthErrTooManySessions). Previously
+		// hardcoded to 5, which ignored MAX_CONCURRENT_SESSIONS (the env var
+		// config.go already reads) — so ops could not tune it. Now env-driven
+		// with a higher default of 10 so multi-device photographers (phone +
+		// laptop + studio machine + client-preview browsers) are not blocked
+		// at 5. Keep this default in sync with config.go's MaxConcurrentSessions.
+		MaxSessions: envIntOrDefault("MAX_CONCURRENT_SESSIONS", 10),
 	})
 	// F-006 Part B (audit 2026-04-10): wire the DB-backed refresh
 	// session store so refresh tokens survive service restarts. The
