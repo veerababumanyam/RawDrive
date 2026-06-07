@@ -40,6 +40,31 @@ func NewEdgeDeliveryHandler(assetRepo *repository.AssetRepo, thumbnailSvc *servi
 	return &EdgeDeliveryHandler{assetRepo: assetRepo, thumbnailSvc: thumbnailSvc, watermarkSvc: watermarkSvc}
 }
 
+// derivativeFallbackStorageKey reconstructs a derivative's storage key when the
+// asset_derivatives row is absent (legacy assets predating the table, or a race
+// with the worker). It MUST agree with the keys the upload paths actually write:
+//   - thumb-sized WebPs live under thumbnails/<id>/<variant>.webp
+//   - full-res display_webp + any other variant lives under derivatives/<id>/
+//
+// For E2EE assets the encrypted-derivative handler stores the full-res display
+// variant as ciphertext under …/display_webp.webp.enc (see
+// encryptedDerivativeStorageKey). The previous fallback always emitted the plain
+// .webp key, so for encrypted assets it pointed at a key that never exists →
+// guaranteed 404 even though the object was present at the .enc key. Honor the
+// asset's encryption state so the fallback resolves the real object. Thumbnails
+// are stored without the .enc suffix in both modes, so they are unaffected.
+func derivativeFallbackStorageKey(assetID uuid.UUID, variant string, encrypted bool) string {
+	switch variant {
+	case "thumb_sm_webp", "thumb_md_webp", "thumb_lg_webp":
+		return fmt.Sprintf("thumbnails/%s/%s.webp", assetID, variant)
+	default:
+		if encrypted {
+			return fmt.Sprintf("derivatives/%s/%s.webp.enc", assetID, variant)
+		}
+		return fmt.Sprintf("derivatives/%s/%s.webp", assetID, variant)
+	}
+}
+
 func (h *EdgeDeliveryHandler) ServeDerivative(w http.ResponseWriter, r *http.Request) {
 	assetIDStr := chi.URLParam(r, "assetId")
 	variant := chi.URLParam(r, "variant")
@@ -49,7 +74,8 @@ func (h *EdgeDeliveryHandler) ServeDerivative(w http.ResponseWriter, r *http.Req
 		return
 	}
 	// tenant-ownership guard (integration audit 2026-05-31)
-	if _, _, ok := guardAssetWorkspace(w, r, h.assetRepo, assetID); !ok {
+	asset, _, ok := guardAssetWorkspace(w, r, h.assetRepo, assetID)
+	if !ok {
 		return
 	}
 	if variant == "" {
@@ -61,16 +87,8 @@ func (h *EdgeDeliveryHandler) ServeDerivative(w http.ResponseWriter, r *http.Req
 		`SELECT storage_key FROM asset_derivatives WHERE asset_id = $1 AND variant = $2`, assetID, variant).Scan(&storageKey)
 	if err != nil {
 		// Fallback when asset_derivatives doesn't have the row yet (legacy
-		// assets predating the table, or a race with the worker). The path
-		// prefix must mirror service.webpStorageKey: thumb-sized WebPs live
-		// under thumbnails/<id>/ (public path), full-res display_webp + any
-		// other variants live under derivatives/<id>/.
-		switch variant {
-		case "thumb_sm_webp", "thumb_md_webp", "thumb_lg_webp":
-			storageKey = fmt.Sprintf("thumbnails/%s/%s.webp", assetID, variant)
-		default:
-			storageKey = fmt.Sprintf("derivatives/%s/%s.webp", assetID, variant)
-		}
+		// assets predating the table, or a race with the worker).
+		storageKey = derivativeFallbackStorageKey(assetID, variant, asset.IsEncrypted)
 	}
 
 	reader, err := h.thumbnailSvc.GetStore().Get(r.Context(), storageKey)
