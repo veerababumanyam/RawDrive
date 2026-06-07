@@ -202,20 +202,6 @@ export interface AIConfig {
 // httpOnly refresh cookie. authFetch handles that race + auto-retries
 // on 401. The `_token` parameter is kept for backward-compatible call
 // sites; the actual token comes from authFetch via getStoredAccessToken.
-export async function triggerFaceDetect(
-  _token: string,
-  assetIds: string[],
-  galleryId?: string,
-): Promise<{ job_id: string; status: string }> {
-  const res = await authFetch(`/api/v1/ai/face-detect`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ asset_ids: assetIds, gallery_id: galleryId }),
-  });
-  if (!res.ok) throw new Error(`Face detect failed: ${res.status}`);
-  return res.json();
-}
-
 export async function getFaceClusters(
   _token: string,
   galleryId?: string,
@@ -240,16 +226,6 @@ export async function getGalleryFaceIndexStatus(
   );
   if (!res.ok) throw new Error(`Face index status failed: ${res.status}`);
   return res.json();
-}
-
-export async function getClusterContact(
-  _token: string,
-  clusterId: string,
-): Promise<FaceIdentityContactSummary | null> {
-  const res = await authFetch(`/api/v1/ai/clusters/${clusterId}/contact`);
-  if (!res.ok) throw new Error(`Get cluster contact failed: ${res.status}`);
-  const body = await res.json();
-  return body?.contact ?? null;
 }
 
 export async function linkClusterContact(
@@ -322,36 +298,6 @@ export async function splitCluster(
     }),
   });
   if (!res.ok) throw new Error(`Split cluster failed: ${res.status}`);
-  return res.json();
-}
-
-// ClusterAssets is the response shape of GET /api/v1/ai/clusters/{id}/assets.
-// The backend returns distinct asset IDs in the cluster, scoped to the
-// caller's workspace. The FaceFilter component feeds these IDs into a
-// gallery grid filter event so the user sees only photos containing the
-// selected face.
-export interface ClusterAssetsResponse {
-  cluster_label: string;
-  asset_ids: string[];
-  count: number;
-}
-
-export async function getClusterAssets(
-  _token: string,
-  clusterId: string,
-  // Optional gallery scope. When provided, the backend joins through
-  // gallery_assets so the response lists ONLY the photos in this
-  // gallery that contain the person — the dashboard People-tab tile
-  // click passes the current gallery here so the user doesn't land on
-  // a grid of photos from other galleries they might not even have
-  // open. Omit to get the workspace-wide list (smart-album behavior).
-  galleryId?: string,
-): Promise<ClusterAssetsResponse> {
-  const url = galleryId
-    ? `/api/v1/ai/clusters/${clusterId}/assets?gallery_id=${encodeURIComponent(galleryId)}`
-    : `/api/v1/ai/clusters/${clusterId}/assets`;
-  const res = await authFetch(url);
-  if (!res.ok) throw new Error(`Get cluster assets failed: ${res.status}`);
   return res.json();
 }
 
@@ -659,6 +605,16 @@ export interface ClientFaceEmbeddingInput {
 // to the slice-1 ingest endpoint. Authenticated owner call (the photographer
 // uploading), so it goes through authFetch. Inert end-to-end until the
 // client_face_index flag is enabled AND a browser embedder is wired (slice 2b).
+//
+// RETAINED, OWNER-BLOCKED FUTURE-SLICE (2b) STUB — do NOT remove.
+// This is the client half of the E2EE-safe face-index path (slice 2b): the
+// browser computes insightface buffalo_l embeddings on decrypted plaintext and
+// POSTs only the 512-d vectors here, so the server never sees a key. It has no
+// live caller yet because slice 2b is blocked pending model hosting + licensing
+// sign-off. The backend ingest endpoint (StoreEmbeddings) already exists behind
+// the client_face_index flag. Keep this in sync with that endpoint; wire it in
+// when 2b is unblocked.
+// See: docs/decisions/faceid-licensing-and-e2ee-posture.md
 export async function uploadAssetFaceEmbeddings(
   assetId: string,
   faces: ClientFaceEmbeddingInput[],

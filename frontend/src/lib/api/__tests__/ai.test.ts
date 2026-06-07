@@ -13,7 +13,6 @@ import {
   searchAssets,
   getAIConfig,
   getCredits,
-  triggerFaceDetect,
   getAssetTags,
   getDuplicates,
   isFaceIndexUnavailableError,
@@ -247,19 +246,6 @@ describe("AI API Client", () => {
 
     const credits = await getCredits(token);
     expect(credits.monthly_cap_paisa).toBe(500000);
-  });
-
-  it("triggerFaceDetect sends asset IDs", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ job_id: "job-1", status: "pending" }),
-    });
-
-    const result = await triggerFaceDetect(token, ["asset-1", "asset-2"]);
-    expect(result.job_id).toBe("job-1");
-
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(body.asset_ids).toEqual(["asset-1", "asset-2"]);
   });
 
   it("getAssetTags returns tags and caption", async () => {
