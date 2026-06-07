@@ -3,7 +3,10 @@ name: cd-production
 # Production deploy from GitHub.
 #
 # Automatic path:
-#   main push -> production-gates succeeds -> this workflow rolls production.
+#   main push -> this workflow rolls production from the self-hosted runner.
+#
+# production-gates remains the full CI gate set for PR/main hygiene, but the
+# production deploy path must not depend on GitHub-hosted runner availability.
 #
 # Manual path:
 #   workflow_dispatch remains available for rollback or operator-triggered
@@ -20,9 +23,7 @@ name: cd-production
 #      ~/.ssh/rawdrive_hostinger).
 
 on:
-  workflow_run:
-    workflows: ["production-gates"]
-    types: [completed]
+  push:
     branches: [main]
   workflow_dispatch:
     inputs:
@@ -44,9 +45,10 @@ permissions:
   deployments: write
 
 jobs:
-  # Re-run the full CI gate set so un-gated code cannot deploy. Skippable only
-  # for rollbacks to a ref that already passed on main. Automatic deploys do not
-  # re-run this because workflow_run only fires after production-gates completed.
+  # Re-run the full CI gate set for manual operator deploys. Skippable only for
+  # rollbacks/redeploys to a ref that already passed on main. Automatic deploys
+  # from main do not wait on this job because they run on the self-hosted runner
+  # path even when GitHub-hosted runners are degraded.
   gate:
     if: ${{ github.event_name == 'workflow_dispatch' && !inputs.skip_gates }}
     uses: ./.github/workflows/production-gates.yml
@@ -57,11 +59,7 @@ jobs:
       ${{
         always() &&
         (
-          (
-            github.event_name == 'workflow_run' &&
-            github.event.workflow_run.event == 'push' &&
-            github.event.workflow_run.conclusion == 'success'
-          ) ||
+          github.event_name == 'push' ||
           (
             github.event_name == 'workflow_dispatch' &&
             (inputs.skip_gates || needs.gate.result == 'success')
@@ -73,7 +71,7 @@ jobs:
       name: production
       url: https://app.rawdrive.in
     env:
-      DEPLOY_REF: ${{ github.event.workflow_run.head_sha || inputs.deploy_ref || github.sha }}
+      DEPLOY_REF: ${{ inputs.deploy_ref || github.sha }}
     steps:
       - uses: actions/checkout@v6.0.3
         with:

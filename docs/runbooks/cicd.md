@@ -27,18 +27,18 @@
   GitHub squash-merges into main + deletes the branch    ← automatic, no clicks
         │
         ▼
-  production-gates on main passes
-        │
-        ▼
   cd-production deploys from the self-hosted rawdrive-prod runner
         │   guards: on main · clean tree · local main == origin/main
         ▼
   rolling deploy: Node .42 → health check → Node .44      ← reuses deploy-prod.sh
 ```
 
-**GitHub merge and production release are automatic when the GitHub runner path is
-healthy.** The local `npm run deploy:prod` command remains the manual break-glass
-release path and uses the same guarded rolling deploy engine.
+**GitHub merge and production release are automatic through repo-native CD.**
+`cd-production` runs on the self-hosted `rawdrive-prod` runner after each `main`
+push, so production release does not depend on hourly Codex automation or
+GitHub-hosted runner availability. The local `npm run deploy:prod` command
+remains the manual break-glass release path and uses the same guarded rolling
+deploy engine.
 
 ---
 
@@ -74,9 +74,10 @@ Useful flags:
 The default production path is automatic:
 
 1. A PR squash-merges into `main`.
-2. `production-gates` runs on the main push.
-3. When those gates pass, `cd-production` deploys the exact main SHA from the
-   self-hosted `rawdrive-prod` runner.
+2. `cd-production` deploys the exact main SHA from the self-hosted
+   `rawdrive-prod` runner.
+3. `production-gates` continues to run as CI hygiene for PR/main validation, but
+   deploy does not wait on GitHub-hosted runners.
 
 Manual deploy remains available when GitHub Actions is down or when an operator
 needs to redeploy/rollback deliberately:
@@ -194,13 +195,13 @@ The automatic production path requires:
    deploys over the internal network.
 2. **Create a `production` Environment** (Settings → Environments). Add a required
    reviewer only if you want a human approval pause; omit the reviewer for fully
-   automatic deploys after green `production-gates`.
+   automatic deploys after `main` updates.
 3. **Add the Environment secret** `RAWDRIVE_DEPLOY_SSH_KEY` = the private half of
    `~/.ssh/rawdrive_hostinger`.
 
-Automatic deploys trigger from `workflow_run` after `production-gates` succeeds
-on a `main` push. Manual deploys and rollbacks are still available from
-Actions → `cd-production` → Run workflow.
+Automatic deploys trigger directly from `push` to `main` and run on the
+self-hosted `rawdrive-prod` runner. Manual deploys and rollbacks are still
+available from Actions → `cd-production` → Run workflow.
 
 ---
 
