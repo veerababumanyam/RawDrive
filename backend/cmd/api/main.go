@@ -2654,8 +2654,19 @@ func main() {
 			platformSettingsRepo,
 			strings.EqualFold(os.Getenv("FEATURE_CLIENT_FACE_INDEX"), "true"),
 		)
+		// The plaintext face-index path (StoreIndexImage) lets the server see a
+		// decrypted upload frame, defeating the E2EE "server never sees
+		// plaintext" contract. Gate it behind its own kill switch
+		// (platform_settings → env FEATURE_SERVER_FACE_INDEX_PLAINTEXT → default
+		// off) so it fails closed until the client-side embedding path (slice
+		// 2b) is unblocked. See docs/decisions/faceid-licensing-and-e2ee-posture.md.
+		serverPlaintextFaceIndexFlag := featureflag.NewServerPlaintextFaceIndexFlag(
+			platformSettingsRepo,
+			strings.EqualFold(os.Getenv("FEATURE_SERVER_FACE_INDEX_PLAINTEXT"), "true"),
+		)
 		faceEmbeddingHandler := handler.NewFaceEmbeddingHandler(assetRepo, aiFaceRepo, faceSvc, clientFaceIndexFlag).
-			WithImageIndexer(faceSvc)
+			WithImageIndexer(faceSvc).
+			WithPlaintextFaceIndexGate(serverPlaintextFaceIndexFlag)
 		api.Post("/api/v1/assets/{id}/face-embeddings", faceEmbeddingHandler.StoreEmbeddings)
 		api.Post("/api/v1/assets/{id}/face-index-image", faceEmbeddingHandler.StoreIndexImage)
 

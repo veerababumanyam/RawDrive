@@ -90,12 +90,13 @@ type clientFaceIndexGate interface {
 
 // FaceEmbeddingHandler serves POST /api/v1/assets/{id}/face-embeddings.
 type FaceEmbeddingHandler struct {
-	assets       assetWorkspaceResolver
-	membership   assetGalleryMembershipChecker
-	store        faceEmbeddingStore
-	indexer      faceClusterIndexer
-	imageIndexer faceImageIndexer
-	flag         clientFaceIndexGate
+	assets        assetWorkspaceResolver
+	membership    assetGalleryMembershipChecker
+	store         faceEmbeddingStore
+	indexer       faceClusterIndexer
+	imageIndexer  faceImageIndexer
+	flag          clientFaceIndexGate
+	plaintextGate clientFaceIndexGate
 }
 
 // NewFaceEmbeddingHandler wires the ingest handler.
@@ -112,6 +113,19 @@ func NewFaceEmbeddingHandler(assets assetWorkspaceResolver, store faceEmbeddingS
 // closed with 503 while /face-embeddings continues to work.
 func (h *FaceEmbeddingHandler) WithImageIndexer(indexer faceImageIndexer) *FaceEmbeddingHandler {
 	h.imageIndexer = indexer
+	return h
+}
+
+// WithPlaintextFaceIndexGate gates the server-side plaintext face-index path
+// (StoreIndexImage / POST /face-index-image). That path accepts a decrypted
+// upload frame and runs face-svc server-side, so it defeats the E2EE "server
+// never sees plaintext" contract. The path fails CLOSED (404) until a gate is
+// wired AND enabled, so the privacy contract holds by default until the
+// client-side embedding path (slice 2b) is unblocked. Satisfied by
+// *featureflag.ServerPlaintextFaceIndexFlag.
+// See docs/decisions/faceid-licensing-and-e2ee-posture.md.
+func (h *FaceEmbeddingHandler) WithPlaintextFaceIndexGate(gate clientFaceIndexGate) *FaceEmbeddingHandler {
+	h.plaintextGate = gate
 	return h
 }
 
@@ -262,6 +276,13 @@ func (h *FaceEmbeddingHandler) StoreEmbeddings(w http.ResponseWriter, r *http.Re
 // generating encrypted WebP derivatives, then sends it here over the
 // authenticated owner API. The backend never persists the image bytes; it runs
 // face-svc and stores only embeddings/bounding boxes in face_clusters.
+//
+// NOTE: this path transiently exposes the DECRYPTED frame to the server, which
+// defeats the E2EE "server never sees plaintext" contract. It is therefore
+// gated behind WithPlaintextFaceIndexGate (server_face_index_plaintext, OFF by
+// default) and fails closed when the gate is absent or disabled, so the
+// contract holds until the client-side embedding path (slice 2b) ships. See
+// docs/decisions/faceid-licensing-and-e2ee-posture.md.
 func (h *FaceEmbeddingHandler) StoreIndexImage(w http.ResponseWriter, r *http.Request) {
 	assetID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
@@ -273,6 +294,21 @@ func (h *FaceEmbeddingHandler) StoreIndexImage(w http.ResponseWriter, r *http.Re
 	if !ok {
 		return
 	}
+
+	// Plaintext-frame kill switch (E2EE law). Fail closed: if the gate is not
+	// wired, or is disabled for this workspace, refuse the path so the server
+	// never reads a decrypted frame. Disclosure-safe 404 (mirrors the
+	// client-face-index gate on StoreEmbeddings) so the endpoint's existence
+	// isn't revealed while disabled — checked BEFORE any request body is read.
+	if h.plaintextGate == nil {
+		http.Error(w, `{"error":"feature not available"}`, http.StatusNotFound)
+		return
+	}
+	if enabled, _ := h.plaintextGate.IsEnabled(r.Context(), workspaceID); !enabled {
+		http.Error(w, `{"error":"feature not available"}`, http.StatusNotFound)
+		return
+	}
+
 	if asset == nil || !strings.HasPrefix(strings.ToLower(strings.TrimSpace(asset.ContentType)), "image/") {
 		http.Error(w, `{"error":"asset is not an image"}`, http.StatusBadRequest)
 		return

@@ -428,7 +428,8 @@ func TestFaceIndexImage_HappyPath_IndexesClientSource(t *testing.T) {
 	indexer := &fakeIndexer{recEnabled: true, galleryEnabled: true}
 	imageIndexer := &fakeImageIndexer{stored: 2}
 	h := NewFaceEmbeddingHandler(assets, &fakeFaceStore{}, indexer, fakeFlag{enabled: false}).
-		WithImageIndexer(imageIndexer)
+		WithImageIndexer(imageIndexer).
+		WithPlaintextFaceIndexGate(fakeFlag{enabled: true})
 
 	rec := httptest.NewRecorder()
 	h.StoreIndexImage(rec, newFaceImageReq(t, assetID.String(), ws, []byte("WEBP"), &galleryID))
@@ -464,13 +465,58 @@ func TestFaceIndexImage_DoesNotRequireClientFaceFlag(t *testing.T) {
 	assets := &fakeAssetResolver{asset: &repository.Asset{ID: assetID, WorkspaceID: ws, ContentType: "image/jpeg"}}
 	imageIndexer := &fakeImageIndexer{}
 	h := NewFaceEmbeddingHandler(assets, &fakeFaceStore{}, &fakeIndexer{recEnabled: true}, fakeFlag{enabled: false}).
-		WithImageIndexer(imageIndexer)
+		WithImageIndexer(imageIndexer).
+		WithPlaintextFaceIndexGate(fakeFlag{enabled: true})
 
 	rec := httptest.NewRecorder()
 	h.StoreIndexImage(rec, newFaceImageReq(t, assetID.String(), ws, []byte("WEBP"), nil))
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("server-assisted image indexing should not be blocked by client_face_index flag, got %d", rec.Code)
+		t.Fatalf("server-assisted image indexing should not be blocked by client_face_index flag (it has its own server_face_index_plaintext gate), got %d", rec.Code)
+	}
+}
+
+// The plaintext frame path defeats E2EE, so it is gated behind its own kill
+// switch and must fail closed when that gate is disabled — no frame is read,
+// no face-svc call happens. Disclosure-safe 404 (mirrors StoreEmbeddings).
+func TestFaceIndexImage_PlaintextGateDisabled_404(t *testing.T) {
+	ws := uuid.New()
+	assetID := uuid.New()
+	assets := &fakeAssetResolver{asset: &repository.Asset{ID: assetID, WorkspaceID: ws, ContentType: "image/jpeg"}}
+	imageIndexer := &fakeImageIndexer{}
+	h := NewFaceEmbeddingHandler(assets, &fakeFaceStore{}, &fakeIndexer{recEnabled: true}, fakeFlag{enabled: true}).
+		WithImageIndexer(imageIndexer).
+		WithPlaintextFaceIndexGate(fakeFlag{enabled: false})
+
+	rec := httptest.NewRecorder()
+	h.StoreIndexImage(rec, newFaceImageReq(t, assetID.String(), ws, []byte("WEBP"), nil))
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("plaintext face-index path must 404 when its gate is off, got %d", rec.Code)
+	}
+	if len(imageIndexer.calls) != 0 {
+		t.Fatal("must not run face-svc on the plaintext frame when the gate is off")
+	}
+}
+
+// Fail closed when the plaintext gate is never wired: the server must never
+// accept a decrypted frame by default, preserving the E2EE contract.
+func TestFaceIndexImage_PlaintextGateUnwired_404(t *testing.T) {
+	ws := uuid.New()
+	assetID := uuid.New()
+	assets := &fakeAssetResolver{asset: &repository.Asset{ID: assetID, WorkspaceID: ws, ContentType: "image/jpeg"}}
+	imageIndexer := &fakeImageIndexer{}
+	h := NewFaceEmbeddingHandler(assets, &fakeFaceStore{}, &fakeIndexer{recEnabled: true}, fakeFlag{enabled: true}).
+		WithImageIndexer(imageIndexer) // no WithPlaintextFaceIndexGate
+
+	rec := httptest.NewRecorder()
+	h.StoreIndexImage(rec, newFaceImageReq(t, assetID.String(), ws, []byte("WEBP"), nil))
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("plaintext face-index path must fail closed (404) when no gate is wired, got %d", rec.Code)
+	}
+	if len(imageIndexer.calls) != 0 {
+		t.Fatal("must not run face-svc when the plaintext gate is unwired")
 	}
 }
 
@@ -480,7 +526,8 @@ func TestFaceIndexImage_BiometricOptInDisabled_403(t *testing.T) {
 	assets := &fakeAssetResolver{asset: &repository.Asset{ID: assetID, WorkspaceID: ws, ContentType: "image/jpeg"}}
 	imageIndexer := &fakeImageIndexer{}
 	h := NewFaceEmbeddingHandler(assets, &fakeFaceStore{}, &fakeIndexer{recEnabled: false}, fakeFlag{enabled: false}).
-		WithImageIndexer(imageIndexer)
+		WithImageIndexer(imageIndexer).
+		WithPlaintextFaceIndexGate(fakeFlag{enabled: true})
 
 	rec := httptest.NewRecorder()
 	h.StoreIndexImage(rec, newFaceImageReq(t, assetID.String(), ws, []byte("WEBP"), nil))
@@ -497,7 +544,8 @@ func TestFaceIndexImage_CrossTenantAsset_404(t *testing.T) {
 	assets := &fakeAssetResolver{asset: nil}
 	imageIndexer := &fakeImageIndexer{}
 	h := NewFaceEmbeddingHandler(assets, &fakeFaceStore{}, &fakeIndexer{recEnabled: true}, fakeFlag{enabled: false}).
-		WithImageIndexer(imageIndexer)
+		WithImageIndexer(imageIndexer).
+		WithPlaintextFaceIndexGate(fakeFlag{enabled: true})
 
 	rec := httptest.NewRecorder()
 	h.StoreIndexImage(rec, newFaceImageReq(t, uuid.NewString(), uuid.New(), []byte("WEBP"), nil))
@@ -517,7 +565,8 @@ func TestFaceIndexImage_StaleGalleryID_404(t *testing.T) {
 	assets := &fakeAssetResolver{asset: &repository.Asset{ID: assetID, WorkspaceID: ws, ContentType: "image/jpeg"}, galleryOK: false}
 	imageIndexer := &fakeImageIndexer{}
 	h := NewFaceEmbeddingHandler(assets, &fakeFaceStore{}, &fakeIndexer{recEnabled: true}, fakeFlag{enabled: false}).
-		WithImageIndexer(imageIndexer)
+		WithImageIndexer(imageIndexer).
+		WithPlaintextFaceIndexGate(fakeFlag{enabled: true})
 
 	rec := httptest.NewRecorder()
 	h.StoreIndexImage(rec, newFaceImageReq(t, assetID.String(), ws, []byte("WEBP"), &galleryID))
@@ -542,7 +591,8 @@ func TestFaceIndexImage_GalleryOptOutClearsClientFacesAndSkipsIndex(t *testing.T
 	indexer := &fakeIndexer{recEnabled: true, galleryEnabled: false}
 	imageIndexer := &fakeImageIndexer{stored: 2}
 	h := NewFaceEmbeddingHandler(assets, store, indexer, fakeFlag{enabled: false}).
-		WithImageIndexer(imageIndexer)
+		WithImageIndexer(imageIndexer).
+		WithPlaintextFaceIndexGate(fakeFlag{enabled: true})
 
 	rec := httptest.NewRecorder()
 	h.StoreIndexImage(rec, newFaceImageReq(t, assetID.String(), ws, []byte("WEBP"), &galleryID))
@@ -574,7 +624,8 @@ func TestFaceIndexImage_FaceServiceUnavailable_503(t *testing.T) {
 	assets := &fakeAssetResolver{asset: &repository.Asset{ID: assetID, WorkspaceID: ws, ContentType: "image/jpeg"}}
 	imageIndexer := &fakeImageIndexer{err: fmt.Errorf("face service: %w: cold start", face.ErrServiceUnavailable)}
 	h := NewFaceEmbeddingHandler(assets, &fakeFaceStore{}, &fakeIndexer{recEnabled: true}, fakeFlag{enabled: false}).
-		WithImageIndexer(imageIndexer)
+		WithImageIndexer(imageIndexer).
+		WithPlaintextFaceIndexGate(fakeFlag{enabled: true})
 
 	rec := httptest.NewRecorder()
 	h.StoreIndexImage(rec, newFaceImageReq(t, assetID.String(), ws, []byte("WEBP"), nil))
@@ -593,7 +644,8 @@ func TestFaceIndexImage_IndexingFailure_502(t *testing.T) {
 	assets := &fakeAssetResolver{asset: &repository.Asset{ID: assetID, WorkspaceID: ws, ContentType: "image/jpeg"}}
 	imageIndexer := &fakeImageIndexer{err: errors.New("embedding dimension mismatch")}
 	h := NewFaceEmbeddingHandler(assets, &fakeFaceStore{}, &fakeIndexer{recEnabled: true}, fakeFlag{enabled: false}).
-		WithImageIndexer(imageIndexer)
+		WithImageIndexer(imageIndexer).
+		WithPlaintextFaceIndexGate(fakeFlag{enabled: true})
 
 	rec := httptest.NewRecorder()
 	h.StoreIndexImage(rec, newFaceImageReq(t, assetID.String(), ws, []byte("WEBP"), nil))
@@ -609,7 +661,8 @@ func TestFaceIndexImage_EmptyImage_400(t *testing.T) {
 	assets := &fakeAssetResolver{asset: &repository.Asset{ID: assetID, WorkspaceID: ws, ContentType: "image/jpeg"}}
 	imageIndexer := &fakeImageIndexer{}
 	h := NewFaceEmbeddingHandler(assets, &fakeFaceStore{}, &fakeIndexer{recEnabled: true}, fakeFlag{enabled: false}).
-		WithImageIndexer(imageIndexer)
+		WithImageIndexer(imageIndexer).
+		WithPlaintextFaceIndexGate(fakeFlag{enabled: true})
 
 	rec := httptest.NewRecorder()
 	h.StoreIndexImage(rec, newFaceImageReq(t, assetID.String(), ws, nil, nil))
