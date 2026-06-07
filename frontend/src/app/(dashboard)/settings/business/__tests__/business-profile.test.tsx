@@ -45,20 +45,19 @@ describe("BusinessProfilePage studio identity", () => {
     expect(
       screen.getByLabelText(/show studio branding on public galleries/i),
     ).toBeInTheDocument();
+    // A logo is set in the mock, so the crop uploader offers Change + Remove.
     expect(
-      screen.getByRole("button", { name: /upload studio logo/i }),
+      screen.getByRole("button", { name: /change logo/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("img", { name: /kaveri stories logo preview/i }),
-    ).toHaveAttribute(
-      "src",
-      expect.stringContaining("/storage/workspaces/logo.webp"),
+      screen.getByRole("button", { name: /remove logo/i }),
+    ).toBeInTheDocument();
+    const logoFrame = screen.getByRole("img", { name: /studio logo/i });
+    const logoImg = logoFrame.querySelector("img");
+    expect(logoImg?.getAttribute("src")).toContain(
+      "/storage/workspaces/logo.webp",
     );
-    expect(
-      screen
-        .getByRole("img", { name: /kaveri stories logo preview/i })
-        .getAttribute("src"),
-    ).not.toContain("token=");
+    expect(logoImg?.getAttribute("src")).not.toContain("token=");
     expect(screen.queryByText(/rawdrive\.in/)).not.toBeInTheDocument();
 
     for (const preview of [

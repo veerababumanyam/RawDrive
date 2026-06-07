@@ -1,24 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
 import {
-  ArrowUpTray,
   Banknote,
   Building2,
   CheckCircle,
   Palette,
   ReceiptText,
-  Trash,
 } from "@/components/icons";
 import {
   EMPTY_WORKSPACE_PROFILE,
   getWorkspaceProfile,
   updateWorkspaceProfile,
-  uploadWorkspaceLogo,
   type WorkspaceProfile,
 } from "@/lib/api/workspace-profile";
-import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import { viewportThemeColors } from "@/lib/tokens";
 import { GlassButton } from "@/components/ui/glass-button";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
@@ -28,6 +24,7 @@ import {
   SettingsPageShell,
   SettingsPanel,
 } from "../_components/settings-page-shell";
+import { WorkspaceLogoCrop } from "./_components/workspace-logo-crop";
 
 const inputClass = "input-base settings-input";
 
@@ -37,10 +34,8 @@ export default function BusinessProfilePage() {
   );
   const [loading, setLoading] = useState(() => Boolean(getStoredAccessToken()));
   const [saving, setSaving] = useState(false);
-  const [logoUploading, setLogoUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -76,62 +71,9 @@ export default function BusinessProfilePage() {
     (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setProfile((current) => ({ ...current, [key]: event.target.value }));
 
-  const uploadLogo = async (file: File | undefined) => {
-    if (!file) return;
-    const token = getStoredAccessToken();
-    if (!token) {
-      setError("Your session expired. Please log in again.");
-      return;
-    }
-    setLogoUploading(true);
-    setError(null);
-    setSavedNotice(null);
-    try {
-      const asset = await uploadWorkspaceLogo(token, file);
-      await updateWorkspaceProfile(token, { logo_asset_id: asset.id });
-      const nextProfile = await getWorkspaceProfile(token);
-      setProfile(nextProfile);
-      setSavedNotice("Studio logo uploaded and linked to your public brand.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to upload logo");
-    } finally {
-      setLogoUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  };
-
-  const removeLogo = async () => {
-    const token = getStoredAccessToken();
-    if (!token) return;
-    setLogoUploading(true);
-    setError(null);
-    try {
-      await updateWorkspaceProfile(token, { logo_asset_id: "" });
-      setProfile((current) => ({
-        ...current,
-        logo_asset_id: "",
-        logo_url: "",
-        logo_metadata: {},
-      }));
-      setSavedNotice("Studio logo removed from public branding.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to remove logo");
-    } finally {
-      setLogoUploading(false);
-    }
-  };
-
   const studioBrandName = profile.brand_name || profile.name || "Your Studio";
   const accentColor =
     profile.brand_accent_color || viewportThemeColors.publicGallery;
-  const logoFilename =
-    profile.logo_metadata?.filename ||
-    (profile.logo_asset_id ? "Uploaded logo" : "");
-  const logoPreviewSource =
-    profile.logo_url || profile.logo_metadata?.storage_key || "";
-  const logoPreviewUrl = logoPreviewSource
-    ? getStorageBackedUrl(logoPreviewSource, getStoredAccessToken())
-    : "";
 
   if (loading) {
     return (
@@ -310,64 +252,13 @@ export default function BusinessProfilePage() {
               }
             />
           </div>
-          <div className="settings-inset-panel settings-form-field--full">
-            <div className="settings-control-row">
-              <div className="settings-business-logo-row">
-                <div className="settings-logo-preview">
-                  {logoPreviewUrl ? (
-                    <img
-                      src={logoPreviewUrl}
-                      alt={`${studioBrandName} logo preview`}
-                      className="settings-logo-image"
-                    />
-                  ) : (
-                    <span
-                      className="settings-logo-placeholder"
-                      aria-hidden="true"
-                    >
-                      {studioBrandName.slice(0, 1).toUpperCase()}
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <p className="settings-panel-label">Studio logo</p>
-                  <p className="settings-panel-note settings-panel-note--compact">
-                    {logoFilename ||
-                      "Upload a transparent PNG, JPEG, WebP, or SVG logo. It is stored as an authenticated asset."}
-                  </p>
-                </div>
-              </div>
-              <div className="settings-action-row">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                  className="settings-file-input"
-                  onChange={(event) => void uploadLogo(event.target.files?.[0])}
-                />
-                <GlassButton
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={logoUploading}
-                  variant="surface"
-                  icon={<ArrowUpTray />}
-                >
-                  {logoUploading ? "Uploading..." : "Upload studio logo"}
-                </GlassButton>
-                {profile.logo_asset_id && (
-                  <GlassButton
-                    type="button"
-                    onClick={() => void removeLogo()}
-                    disabled={logoUploading}
-                    variant="danger"
-                    icon={<Trash />}
-                  >
-                    Remove logo
-                  </GlassButton>
-                )}
-              </div>
-            </div>
-          </div>
+          <WorkspaceLogoCrop
+            profile={profile}
+            brandName={studioBrandName}
+            onProfileChange={setProfile}
+            onError={(message) => setError(message || null)}
+            onNotice={(message) => setSavedNotice(message || null)}
+          />
         </div>
       </SettingsPanel>
 

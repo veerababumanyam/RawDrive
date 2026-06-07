@@ -4,6 +4,15 @@ import { authFetch } from "./authFetch";
 
 const API_BASE = getApiBaseUrl();
 
+// WorkspaceLogoCropPosition is the persisted crop contract for the free-aspect
+// (fit-to-contain) business logo. x/y are normalized offsets in -1..1; zoom
+// starts at 1 (the whole logo). Mirrors the backend service.LogoCropPosition.
+export interface WorkspaceLogoCropPosition {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
 export interface WorkspaceLogoMetadata {
   asset_id?: string;
   filename?: string;
@@ -11,6 +20,10 @@ export interface WorkspaceLogoMetadata {
   size_bytes?: number;
   storage_key?: string;
   storage_driver?: "r2" | string;
+  // Set by the server-side crop pipeline: the kept original (re-cropped without
+  // re-upload) and the last applied crop position.
+  original_storage_key?: string;
+  crop?: WorkspaceLogoCropPosition;
 }
 
 export interface WorkspaceProfile {
@@ -115,4 +128,53 @@ export async function uploadWorkspaceLogo(
   if (!res.ok) throw new Error(`Failed to upload studio logo: ${res.status}`);
   const body = await res.json();
   return body.asset ?? body.Asset ?? body;
+}
+
+// uploadWorkspaceLogoCrop uploads a raw logo image and asks the backend to
+// render a free-aspect WebP brand mark at the given crop, returning the updated
+// workspace profile (logo_asset_id / logo_url / logo_metadata pointed at the
+// rendered mark). This is the crop-on-upload path that supersedes the raw
+// uploadWorkspaceLogo + updateWorkspaceProfile two-step for the settings UI.
+export async function uploadWorkspaceLogoCrop(
+  token: string,
+  file: File,
+  position: WorkspaceLogoCropPosition,
+): Promise<WorkspaceProfile> {
+  void token;
+  const form = new FormData();
+  form.append("logo", file);
+  form.append("x", String(position.x));
+  form.append("y", String(position.y));
+  form.append("zoom", String(position.zoom));
+
+  const res = await authFetch("/api/v1/workspaces/current/logo/upload", {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Failed to upload studio logo: ${res.status}`);
+  }
+  const body = await res.json();
+  return { ...EMPTY_WORKSPACE_PROFILE, ...body };
+}
+
+// cropWorkspaceLogo re-renders the workspace's stored ORIGINAL logo at a new
+// crop position without requiring a re-upload, returning the updated profile.
+export async function cropWorkspaceLogo(
+  token: string,
+  position: WorkspaceLogoCropPosition,
+): Promise<WorkspaceProfile> {
+  void token;
+  const res = await authFetch("/api/v1/workspaces/current/logo/crop", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(position),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Failed to crop studio logo: ${res.status}`);
+  }
+  const body = await res.json();
+  return { ...EMPTY_WORKSPACE_PROFILE, ...body };
 }
