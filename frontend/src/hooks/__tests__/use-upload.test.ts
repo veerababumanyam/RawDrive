@@ -65,6 +65,38 @@ describe("useUpload", () => {
     expect(source).toContain("FaceID indexing failed after upload completion");
   });
 
+  it("flags a 503 face-index failure as honest 'unavailable', not a swallowed warn (3e)", async () => {
+    const { classifyFaceIndexFailure } = await import("../use-upload");
+    const { FaceIndexUnavailableError } = await import("@/lib/api/ai");
+
+    // A 503/unavailable from the sidecar surfaces an honest unavailable signal
+    // the caller can flag on the (still-complete) row.
+    expect(
+      classifyFaceIndexFailure(new FaceIndexUnavailableError()).unavailable,
+    ).toBe(true);
+
+    // A transient/size failure (e.g. 502/413) is NOT "unavailable" — it stays a
+    // quiet warn and the explicit Sync-Now path handles downscale/retry.
+    expect(
+      classifyFaceIndexFailure(new Error("502 Bad Gateway")).unavailable,
+    ).toBe(false);
+    expect(
+      classifyFaceIndexFailure(new Error("image file too large"))
+        .unavailable,
+    ).toBe(false);
+  });
+
+  it("carries the honest faceIndexUnavailable flag onto the complete row (3e)", async () => {
+    const source = await readFile(
+      join(process.cwd(), "src/hooks/use-upload.ts"),
+      "utf8",
+    );
+    // The classifier result is threaded into the final complete update so the
+    // UI can show it instead of the upload silently no-indexing.
+    expect(source).toContain("classifyFaceIndexFailure");
+    expect(source).toContain("faceIndexUnavailable,");
+  });
+
   it("parses server upload offsets for resumable recovery", async () => {
     const { parseUploadOffsetHeader } = await import("../use-upload");
     expect(parseUploadOffsetHeader("10485760")).toBe(10485760);

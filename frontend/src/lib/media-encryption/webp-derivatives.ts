@@ -53,6 +53,26 @@ const DERIVATIVE_SPECS: Array<{
   { variant: "display_webp", maxWidth: 2400, maxHeight: 2400, quality: 0.86 },
 ];
 
+// The face-index endpoint caps the multipart body at 10MB
+// (backend handler `maxFaceIndexImageBody = 10 << 20`). A blind 2400px
+// display_webp can exceed that on dense, high-detail frames — in prod the
+// over-cap body triggers a MaxBytesReader reset (nginx 502), not a clean 413,
+// so the upload silently no-indexed. We pick the face-index frame BELOW this
+// cap before the first POST. The budget is well under 10MB so the multipart
+// envelope (form boundary + headers) still fits comfortably.
+export const FACE_INDEX_MAX_BYTES = 9 * 1024 * 1024;
+
+// Progressive shrink ladder applied to the SAME already-decoded source if the
+// display-sized frame is over the cap. Each step re-renders from the decoded
+// pixels we already hold (no re-fetch, no re-decode of the file). Ordered
+// largest → smallest; the first frame under the cap wins.
+const FACE_INDEX_FALLBACK_STEPS: Array<{ maxEdge: number; quality: number }> = [
+  { maxEdge: 2400, quality: 0.8 },
+  { maxEdge: 1600, quality: 0.8 },
+  { maxEdge: 1200, quality: 0.78 },
+  { maxEdge: 1000, quality: 0.75 },
+];
+
 type DecodedImage = {
   source: CanvasImageSource;
   width: number;
@@ -82,7 +102,15 @@ export async function createEncryptedWebPDerivativeSet(
       const { width, height } = fitWithin(decoded.width, decoded.height, spec.maxWidth, spec.maxHeight);
       const webp = await renderWebP(decoded.source, width, height, spec.quality);
       if (spec.variant === "display_webp") {
-        faceIndexImage = { blob: webp, width, height };
+        // Proactively pick a face-index frame UNDER the server's 10MB cap. The
+        // display_webp is the starting candidate (already rendered above, so no
+        // extra decode); if it is over budget we shrink from the SAME decoded
+        // source until it fits, rather than blindly shipping the 2400px frame
+        // and relying on a server reject + downscale-retry round trip.
+        faceIndexImage =
+          webp.size <= FACE_INDEX_MAX_BYTES
+            ? { blob: webp, width, height }
+            : await buildCappedFaceIndexFrame(decoded);
       }
       const encrypted = await encryptBlob(webp, {
         key,
@@ -109,6 +137,32 @@ export async function createEncryptedWebPDerivativeSet(
   } finally {
     decoded.close?.();
   }
+}
+
+// buildCappedFaceIndexFrame walks the progressive shrink ladder against the
+// already-decoded source and returns the first WebP frame that fits under the
+// face-index body cap. Every step re-renders from the decoded pixels we already
+// hold — no re-fetch of the file and no second decode (perf hot-path law: no
+// double full-file reads). If even the smallest step is still over the cap we
+// return it anyway: a too-big frame that the server may still reject is strictly
+// better than shipping the full 2400px frame, and the browser retry classifier
+// will fall back to a smaller stored derivative from there.
+async function buildCappedFaceIndexFrame(
+  decoded: DecodedImage,
+): Promise<EncryptedDerivativeSet["faceIndexImage"]> {
+  let last: { blob: Blob; width: number; height: number } | undefined;
+  for (const step of FACE_INDEX_FALLBACK_STEPS) {
+    const { width, height } = fitWithin(
+      decoded.width,
+      decoded.height,
+      step.maxEdge,
+      step.maxEdge,
+    );
+    const blob = await renderWebP(decoded.source, width, height, step.quality);
+    last = { blob, width, height };
+    if (blob.size <= FACE_INDEX_MAX_BYTES) return last;
+  }
+  return last;
 }
 
 async function decodeImage(file: File): Promise<DecodedImage> {

@@ -21,7 +21,10 @@ import {
 import type { GalleryMediaKey } from "@/lib/media-encryption/media-key-store";
 import { extractSourceImageMetadata } from "@/lib/media-encryption/source-metadata";
 import { getBrowserE2EEUploadBlockReason } from "@/lib/media-encryption/browser-upload-support";
-import { uploadAssetFaceIndexImage } from "@/lib/api/ai";
+import {
+  uploadAssetFaceIndexImage,
+  isFaceIndexUnavailableError,
+} from "@/lib/api/ai";
 
 const CHUNK_SIZE = 5 * 1024 * 1024;
 const DEFAULT_METADATA_BUDGET = 512 * 1024;
@@ -127,6 +130,21 @@ export function isRetryableUploadStatus(status: number): boolean {
     status === 429 ||
     (status >= 500 && status <= 599)
   );
+}
+
+/**
+ * 3e: decide how a post-upload face-index failure should surface. The asset is
+ * already durably stored, so the upload row stays "complete" either way — but a
+ * 503/unavailable from the FaceID sidecar means the photo went in with NO
+ * embeddings, which previously vanished into a silent console.warn. This returns
+ * `unavailable: true` for that case so the caller can flag the (still-complete)
+ * row honestly instead of pretending Find-Me indexed the photo. Aborts are not a
+ * face-index outcome and re-throw upstream.
+ */
+export function classifyFaceIndexFailure(err: unknown): {
+  unavailable: boolean;
+} {
+  return { unavailable: isFaceIndexUnavailableError(err) };
 }
 
 export function uploadRetryDelayMs(
@@ -637,6 +655,16 @@ export function useUpload(
           }
         }
 
+        // 3e: the upload itself is durable once the bytes are stored; a
+        // post-upload face-index failure must NOT fail the row. But a 503
+        // "service unavailable" from the sidecar means the photo went in with
+        // NO embeddings — silently swallowing that as a console.warn left
+        // Find-Me honestly empty with no signal. Surface an explicit
+        // index-unavailable flag on the (still-successful) complete row so the
+        // UI can tell the photographer to re-sync, while a transient/size
+        // failure stays a quiet warn (the explicit FaceID "Sync Now" path and
+        // its own downscale/retry classifier cover recovery).
+        let faceIndexUnavailable = false;
         if (finalAssetId && faceIndexImage) {
           updateItem(item.id, {
             status: "indexing_faces",
@@ -651,8 +679,10 @@ export function useUpload(
             });
           } catch (err) {
             if (isAbortError(err)) throw err;
+            faceIndexUnavailable = classifyFaceIndexFailure(err).unavailable;
             console.warn("FaceID indexing failed after upload completion", {
               assetId: finalAssetId,
+              unavailable: faceIndexUnavailable,
               error: err,
             });
           }
@@ -662,6 +692,7 @@ export function useUpload(
           status: "complete",
           progress: 100,
           assetId: finalAssetId,
+          faceIndexUnavailable,
         });
       } catch (err) {
         if ((err as Error).name === "AbortError") {

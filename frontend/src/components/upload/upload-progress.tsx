@@ -31,6 +31,12 @@ export interface UploadItem {
   /** Asset UUID returned by the backend on finalization. Set once upload
    *  is complete so callers (e.g. gallery page) can link the asset. */
   assetId?: string;
+  /** 3e: the upload finished and the asset is stored, but face indexing could
+   *  not run because the FaceID sidecar returned 503/unavailable. The upload is
+   *  still "complete" (not "error" — the photo is safely stored), but we surface
+   *  this honest flag instead of silently no-indexing so the UI can tell the
+   *  photographer Find-Me may be empty for this asset until they re-sync. */
+  faceIndexUnavailable?: boolean;
 }
 
 interface UploadProgressProps {
@@ -84,6 +90,9 @@ export function UploadProgress({
                 {item.status === "screening" && " • screening…"}
                 {item.status === "encrypting" && " • encrypting…"}
                 {item.status === "indexing_faces" && " • indexing faces…"}
+                {item.status === "complete" &&
+                  item.faceIndexUnavailable &&
+                  " • face indexing unavailable — re-sync later"}
                 {item.status === "paused" && " • paused"}
                 {item.status === "blocked" && item.error && ` • ${item.error}`}
                 {item.status === "needs_desktop" &&
@@ -124,8 +133,17 @@ export function UploadProgress({
               </div>
             )}
 
-            {item.status === "complete" && (
+            {item.status === "complete" && !item.faceIndexUnavailable && (
               <span className="text-xs font-medium text-success">Done</span>
+            )}
+
+            {item.status === "complete" && item.faceIndexUnavailable && (
+              <span
+                className="text-xs font-medium text-warning"
+                title="Photo uploaded, but face indexing was unavailable. Re-sync FaceID later so Find-Me can match this photo."
+              >
+                Indexing unavailable
+              </span>
             )}
 
             {item.status === "blocked" && (

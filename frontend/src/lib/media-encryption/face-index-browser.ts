@@ -56,10 +56,31 @@ async function fetchStorageBlob(
   return res.blob();
 }
 
+// A frame is worth re-sending smaller when the server (or the proxy in front of
+// it) rejected the body for being too big. The documented prod symptom is NOT a
+// clean 413: the backend's MaxBytesReader resets the request body mid-read, so
+// nginx returns a 502 / connection reset instead of a 413. Matching only
+// "too large"/413 silently aborted those uploads with no downscale, so treat
+// 502 / bad gateway / connection-reset / body-reset / generic network failures
+// as retryable too — re-sending a smaller frame is the correct recovery for all
+// of them, and a genuinely fatal error simply fails again on the smaller frame.
 function canRetryWithSmallerVariant(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   const message = err.message.toLowerCase();
-  return message.includes("too large") || message.includes("413");
+  return (
+    message.includes("too large") ||
+    message.includes("413") ||
+    message.includes("502") ||
+    message.includes("bad gateway") ||
+    message.includes("connection reset") ||
+    message.includes("connection closed") ||
+    message.includes("econnreset") ||
+    message.includes("body reset") ||
+    message.includes("body stream") ||
+    message.includes("request body") ||
+    message.includes("network error") ||
+    message.includes("failed to fetch")
+  );
 }
 
 function pickFaceIndexCandidates(asset: EncryptedAssetLike): PickedAssetMedia[] {
