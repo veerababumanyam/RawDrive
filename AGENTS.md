@@ -145,6 +145,11 @@ The bullets above are the TLDR. The sections below are the authoritative referen
 - Download API offers three formats: original, WebP optimized, thumbnail.
 - EXIF metadata is extracted and persisted in the database on every upload.
 
+### Asset Deletion (synchronous hard-delete — no retention window)
+- Deleting a photo or gallery **synchronously hard-deletes** the bytes: `AssetService` removes the original **plus every** WebP derivative + thumbnail from B2 (awaited, not fire-and-forget), then `HardDelete`s the row (FK cascade). There is **no** soft-delete retention window and **no** background purge worker — the legacy 30-day `AssetPurgeWorker` was removed (galleries are client-E2EE, so retention is pointless and only leaks billable orphan objects).
+- The B2 delete runs **before** the row delete and **aborts on first failure** (handler returns 500), so the row is never hard-deleted while objects orphan in B2 — the caller retries, and re-deleting an already-gone B2 object is an idempotent no-op.
+- `HardDelete` pre-nulls the two `RESTRICT` FKs (`gallery_products.asset_id`, `burst_groups.best_pick_id`) before the row delete; every other asset FK is `ON DELETE CASCADE`/`SET NULL`. **Anti-pattern:** do **not** reintroduce a soft-delete + delayed-purge path for assets.
+
 ### Service Configuration
 - `platform_settings` table (migration `039_platform_settings`) stores admin-editable service configs.
 - Categories: `storage`, `auth`, `payments`, `ai`, `email`, `messaging`.

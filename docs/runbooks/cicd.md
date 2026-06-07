@@ -236,6 +236,8 @@ Three layers, fastest first:
 | pre-push too slow right now | `SKIP_PREPUSH=1 git push` (CI still gates the PR). |
 | hooks not running | `node scripts/install-git-hooks.mjs`. |
 | `deploy:prod` "deploy key not found" | Ensure `~/.ssh/rawdrive_hostinger` exists, or set `SSH_KEY=`. |
+| `deploy:prod` build fails on a removed export / stale import, but `main` builds clean | A file deleted from `main` lingered on a node (older deploys' `tar -x` overwrote but never deleted it). `push_code` now wipes `frontend/src`, `backend/cmd`, `backend/internal` before extract, so this should not recur. If it does (orphan outside those dirs): from a clean `origin/main` checkout, `rsync -a --delete <dir>/ root@<node>:/opt/rawdrive/app/<dir>/` on **both** nodes, then redeploy. A failed build never swaps containers, so prod keeps serving the previous image. |
+| `deploy:prod` refuses but your checkout is a live multi-agent (Codex) tree | Don't fight the dirty/occupied tree. Deploy from an isolated worktree: `git worktree add /tmp/rd-deploy main && cd /tmp/rd-deploy && git merge --ff-only origin/main`, then `npm run deploy:prod` from there. |
 
 ---
 
@@ -248,7 +250,7 @@ Three layers, fastest first:
 | `scripts/rawdrive-ship.mjs` | `npm run ship` — local → clean PR |
 | `scripts/setup-repo-hygiene.sh` | One-time GitHub policy + labels + ruleset |
 | `deploy/scripts/deploy-from-main.sh` | `npm run deploy:prod` guarded wrapper |
-| `deploy/scripts/deploy-prod.sh` | The rolling deploy engine (unchanged) |
+| `deploy/scripts/deploy-prod.sh` | The rolling deploy engine (delete-aware source push: mirrors `main` to each node) |
 | `.github/workflows/production-gates.yml` | CI gates (PR + push) |
 | `.github/workflows/pr-hygiene.yml` | Conventional-Commit PR-title check |
 | `.github/workflows/branch-hygiene.yml` | Weekly merged-branch cleanup |
