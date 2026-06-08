@@ -54,6 +54,7 @@ func TestIsSelfServePaidPlanTierExcludesPayPerEvent(t *testing.T) {
 	require.False(t, IsSelfServePaidPlanTier("free"))
 	require.False(t, IsSelfServePaidPlanTier("pay_per_event"))
 	require.False(t, IsSelfServePaidPlanTier("elite_studio"))
+	require.False(t, IsSelfServePaidPlanTier("enterprise"))
 }
 
 func TestPlanCatalogFallbackHasOneFeaturedPlan(t *testing.T) {

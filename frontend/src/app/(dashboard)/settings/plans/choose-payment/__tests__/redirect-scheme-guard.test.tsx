@@ -40,6 +40,28 @@ const mockPlanCatalog = vi.hoisted(() => ({
         selfServe: true,
         trialDays: 0,
       },
+      {
+        id: "elite_studio",
+        tier: "elite_studio",
+        name: "Elite Studio",
+        description: "Sales-assisted studio plan.",
+        currency: "INR",
+        monthlyPricePaise: 399900,
+        annualPricePaise: 3999000,
+        monthlyPrice: 3999,
+        annualPrice: 39990,
+        quotaBytes: 3 * 2 ** 40,
+        storage: "3TB",
+        galleries: -1,
+        clients: -1,
+        features: ["Sales-assisted billing"],
+        popular: false,
+        rank: 5,
+        paid: true,
+        active: true,
+        selfServe: false,
+        trialDays: 0,
+      },
     ],
     eventPacks: [
       {
@@ -224,6 +246,41 @@ describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
     expect(
       screen.getByRole("button", { name: /phonepe not configured/i }),
     ).toBeDisabled();
+  });
+
+  it("does not start a self-serve upgrade for Elite Studio checkout URLs", async () => {
+    navigationState.search = "tier=elite_studio&interval=monthly";
+    const fetchMock = vi.fn(async () => {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          default_provider: "razorpay",
+          providers: [
+            { id: "razorpay", configured: true },
+            { id: "phonepe", configured: true },
+          ],
+        }),
+      } as unknown as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ChoosePaymentPage />);
+
+    expect(await screen.findByText("Sales-assisted plan")).toBeInTheDocument();
+    expect(screen.getByText("Elite Studio")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Contact sales" })).toHaveAttribute(
+      "href",
+      "/contact",
+    );
+    expect(
+      screen.queryByRole("button", { name: /pay .* with/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        String(input).includes("/workspace/subscription/upgrade"),
+      ),
+    ).toBe(false);
   });
 
   it("posts product_code, provider, target type, and target id for gallery product orders", async () => {

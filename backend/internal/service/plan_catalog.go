@@ -195,7 +195,7 @@ func IsPaidPlanTier(tier string) bool {
 
 func IsSelfServePaidPlanTier(tier string) bool {
 	p, ok := planByTier(tier)
-	return ok && p.Paid && p.Active && p.SelfServe && p.Tier != "pay_per_event"
+	return ok && p.Paid && p.Active && p.SelfServe && !isCatalogSalesAssistedTier(p.Tier)
 }
 
 func (s *PlanCatalogService) IsSelfServeSignupPlan(ctx context.Context, tier string) (bool, error) {
@@ -203,7 +203,16 @@ func (s *PlanCatalogService) IsSelfServeSignupPlan(ctx context.Context, tier str
 	if err != nil {
 		return false, err
 	}
-	return ok && p.Active && p.SelfServe && p.Tier != "pay_per_event", nil
+	return ok && p.Active && p.SelfServe && !isCatalogSalesAssistedTier(p.Tier), nil
+}
+
+func isCatalogSalesAssistedTier(tier string) bool {
+	switch NormalizePlanTierSlug(tier) {
+	case "pay_per_event", "elite_studio":
+		return true
+	default:
+		return false
+	}
 }
 
 var ErrPlanNotFound = errors.New("plan not found")

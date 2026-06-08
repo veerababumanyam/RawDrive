@@ -154,6 +154,18 @@ function ChoosePaymentContent() {
       ),
     [plans, tier],
   );
+  const salesAssistedPlan = useMemo(
+    () =>
+      plans.find(
+        (p) =>
+          p.id === tier &&
+          p.id !== "free" &&
+          p.active &&
+          p.paid &&
+          !p.selfServe,
+      ),
+    [plans, tier],
+  );
   const product = useMemo<PricingCatalogProduct | undefined>(
     () =>
       [...eventPacks, ...galleryExtensions, ...storageBoosters].find(
@@ -464,6 +476,40 @@ function ChoosePaymentContent() {
       targetType,
     ],
   );
+
+  if (!product && salesAssistedPlan) {
+    return (
+      <div className="max-w-3xl mx-auto space-y-6 p-8">
+        <div className="surface-panel p-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-tertiary">
+            Sales-assisted plan
+          </p>
+          <h1 className="mt-2 font-headline text-2xl font-extrabold tracking-tight text-text-primary">
+            {salesAssistedPlan.name}
+          </h1>
+          <p className="mt-3 text-sm text-text-secondary">
+            This plan is handled by the RawDrive team so storage, billing, and
+            workspace setup can be confirmed before activation.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link
+              href="/contact"
+              className="inline-flex items-center rounded-full bg-accent px-4 py-2 text-sm font-semibold text-text-inverse hover:opacity-90"
+            >
+              Contact sales
+            </Link>
+            <Link
+              href="/settings/plans"
+              className="inline-flex items-center gap-2 rounded-full border border-border-default px-4 py-2 text-sm font-semibold text-text-secondary hover:border-accent hover:text-accent"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Back to plans
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Invalid / missing purchase target — bounce back to the relevant surface.
   if (!plan && !product) {

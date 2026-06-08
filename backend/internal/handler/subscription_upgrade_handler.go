@@ -274,7 +274,7 @@ func isStrictUpgrade(fromTier, toTier string) bool {
 
 func (h *SubscriptionUpgradeHandler) validUpgradeTier(ctx context.Context, tier string) (bool, error) {
 	normalizedTier := service.NormalizePlanTierSlug(tier)
-	if normalizedTier == "pay_per_event" {
+	if normalizedTier == "pay_per_event" || normalizedTier == "elite_studio" {
 		return false, nil
 	}
 	if h.planCatalog == nil {

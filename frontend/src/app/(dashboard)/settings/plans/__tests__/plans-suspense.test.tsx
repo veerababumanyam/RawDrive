@@ -16,6 +16,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 const pushMock = vi.fn();
 const replaceMock = vi.fn();
 let mockPlatformRole = "photographer";
+let mockAccessToken: string | null = null;
 
 // A one-shot resource that suspends on first read, exactly like Next's
 // useSearchParams() does during prerender before params are available.
@@ -46,20 +47,186 @@ vi.mock("next/navigation", () => ({
 // No auth token -> the page skips the subscription fetch and lands in the
 // not-loading state, keeping the test free of network/DB concerns.
 vi.mock("@/lib/auth", () => ({
-  getStoredAccessToken: () => null,
+  getStoredAccessToken: () => mockAccessToken,
   getStoredPlatformRole: () => mockPlatformRole,
+}));
+
+vi.mock("@/hooks/use-plan-catalog", () => ({
+  usePlanCatalog: () => ({
+    plans: [
+      {
+        id: "free",
+        tier: "free",
+        name: "Starter",
+        description: "",
+        currency: "INR",
+        monthlyPricePaise: 0,
+        annualPricePaise: 0,
+        monthlyPrice: 0,
+        annualPrice: 0,
+        quotaBytes: 5,
+        storage: "5GB",
+        galleries: 1,
+        clients: 0,
+        features: ["Starter storage"],
+        popular: false,
+        rank: 0,
+        paid: false,
+        active: true,
+        selfServe: true,
+        trialDays: 0,
+      },
+      {
+        id: "pay_per_event",
+        tier: "pay_per_event",
+        name: "Pay Per Event",
+        description: "",
+        currency: "INR",
+        monthlyPricePaise: 19900,
+        annualPricePaise: 0,
+        monthlyPrice: 199,
+        annualPrice: 0,
+        quotaBytes: 0,
+        storage: "Per event",
+        galleries: 1,
+        clients: 0,
+        features: ["One-off event upload"],
+        popular: false,
+        rank: 1,
+        paid: true,
+        active: true,
+        selfServe: false,
+        trialDays: 0,
+      },
+      {
+        id: "creator",
+        tier: "creator",
+        name: "Creator",
+        description: "",
+        currency: "INR",
+        monthlyPricePaise: 49900,
+        annualPricePaise: 499000,
+        monthlyPrice: 499,
+        annualPrice: 4990,
+        quotaBytes: 100,
+        storage: "100GB",
+        galleries: 10,
+        clients: -1,
+        features: ["Creator galleries"],
+        popular: false,
+        rank: 2,
+        paid: true,
+        active: true,
+        selfServe: true,
+        trialDays: 0,
+      },
+      {
+        id: "pro_photographer",
+        tier: "pro_photographer",
+        name: "Pro Photographer",
+        description: "",
+        currency: "INR",
+        monthlyPricePaise: 99900,
+        annualPricePaise: 999000,
+        monthlyPrice: 999,
+        annualPrice: 9990,
+        quotaBytes: 300,
+        storage: "300GB",
+        galleries: -1,
+        clients: -1,
+        features: ["Pro galleries"],
+        popular: false,
+        rank: 3,
+        paid: true,
+        active: true,
+        selfServe: true,
+        trialDays: 0,
+      },
+      {
+        id: "studio",
+        tier: "studio",
+        name: "Studio",
+        description: "",
+        currency: "INR",
+        monthlyPricePaise: 299900,
+        annualPricePaise: 2999000,
+        monthlyPrice: 2999,
+        annualPrice: 29990,
+        quotaBytes: 1024,
+        storage: "1TB",
+        galleries: -1,
+        clients: -1,
+        features: ["Studio workflows"],
+        popular: true,
+        rank: 4,
+        paid: true,
+        active: true,
+        selfServe: true,
+        trialDays: 0,
+      },
+      {
+        id: "elite_studio",
+        tier: "elite_studio",
+        name: "Elite Studio",
+        description: "",
+        currency: "INR",
+        monthlyPricePaise: 0,
+        annualPricePaise: 0,
+        monthlyPrice: 0,
+        annualPrice: 0,
+        quotaBytes: 3072,
+        storage: "3TB",
+        galleries: -1,
+        clients: -1,
+        features: ["Elite support"],
+        popular: false,
+        rank: 5,
+        paid: true,
+        active: true,
+        selfServe: false,
+        trialDays: 0,
+      },
+    ],
+    eventPacks: [],
+    galleryExtensions: [],
+    storageBoosters: [],
+    loading: false,
+    error: null,
+  }),
 }));
 
 import PlansPage from "../page";
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   pushMock.mockReset();
   replaceMock.mockReset();
   mockPlatformRole = "photographer";
+  mockAccessToken = null;
   resolved = false;
   pending = null;
 });
+
+function mockCurrentSubscriptionTier(tier: string) {
+  mockAccessToken = "test-token";
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/v1/workspace/subscription")) {
+        return new Response(JSON.stringify({ plan_tier: tier }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response("{}", {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }),
+  );
+}
 
 describe("PlansPage (/settings/plans) Suspense boundary — F-048", () => {
   it("wraps useSearchParams in a Suspense boundary: shows fallback then content", async () => {
@@ -85,8 +252,37 @@ describe("PlansPage (/settings/plans) Suspense boundary — F-048", () => {
       screen.getByRole("heading", { name: "Elite Studio" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Talk to sales" }),
+      screen.getAllByRole("link", { name: "Talk to sales" })[0],
     ).toHaveAttribute("href", "/contact");
+  });
+
+  it("shows Pay Per Event only while the logged-in workspace is on Starter", async () => {
+    mockCurrentSubscriptionTier("free");
+
+    render(<PlansPage />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Pay Per Event" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Creator" }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides Pay Per Event after the logged-in workspace upgrades past Starter", async () => {
+    mockCurrentSubscriptionTier("creator");
+
+    render(<PlansPage />);
+
+    await waitFor(() => {
+      expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
+    });
+    expect(
+      screen.queryByRole("heading", { name: "Pay Per Event" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Creator" }),
+    ).toBeInTheDocument();
   });
 
   it("redirects super admins to the admin plan catalog", async () => {
