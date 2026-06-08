@@ -537,14 +537,14 @@ export default function PhotoSearchPage({
                     autoPlay
                     aria-label="Camera preview"
                   />
-                  {/* Subtle reticle so users know roughly where to put
+                  {/* Portrait reticle so users know roughly where to put
                   their face. Purely cosmetic — backend uses the full
                   frame. */}
                   <div
                     aria-hidden
                     className="pointer-events-none absolute inset-0 flex items-center justify-center"
                   >
-                    <div className="h-2/3 w-2/3 rounded-full border-2 border-text-media/30" />
+                    <div className="h-4/5 w-2/5 rounded-full border-2 border-text-media/30" />
                   </div>
                 </div>
                 <div className="flex flex-col items-center gap-1">

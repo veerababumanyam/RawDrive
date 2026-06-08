@@ -83,4 +83,10 @@ describe("gallery photo-search — batch hydration (PERF-23)", () => {
     expect(source).not.toContain('mode="review"');
     expect(source).not.toContain("gallery-photo-search-review");
   });
+
+  it("uses a portrait camera focus reticle for face capture", () => {
+    const source = read(photoSearchPath);
+    expect(source).toContain("h-4/5 w-2/5 rounded-full");
+    expect(source).not.toContain("h-2/3 w-2/3 rounded-full");
+  });
 });
