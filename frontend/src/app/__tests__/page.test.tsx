@@ -115,7 +115,7 @@ describe("Landing Page", () => {
     expect(plans.getByText(/^₹3,999/)).toBeInTheDocument();
     expect(plans.getByRole("link", { name: /Elite Studio/i })).toHaveAttribute(
       "href",
-      "/contact",
+      "/register?plan=elite_studio",
     );
   });
 });
