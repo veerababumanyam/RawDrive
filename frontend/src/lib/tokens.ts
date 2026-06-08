@@ -365,7 +365,7 @@ export const pricingPlans = [
     galleries: -1,
     clients: -1,
     popular: false,
-    selfServe: false,
+    selfServe: true,
     features: [
       "3 TB+ storage",
       "Multi-branch studio support",

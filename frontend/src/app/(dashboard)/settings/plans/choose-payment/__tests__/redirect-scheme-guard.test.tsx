@@ -44,7 +44,7 @@ const mockPlanCatalog = vi.hoisted(() => ({
         id: "elite_studio",
         tier: "elite_studio",
         name: "Elite Studio",
-        description: "Sales-assisted studio plan.",
+        description: "High-end studio plan.",
         currency: "INR",
         monthlyPricePaise: 399900,
         annualPricePaise: 3999000,
@@ -54,12 +54,12 @@ const mockPlanCatalog = vi.hoisted(() => ({
         storage: "3TB",
         galleries: -1,
         clients: -1,
-        features: ["Sales-assisted billing"],
+        features: ["Payment gateway checkout"],
         popular: false,
         rank: 5,
         paid: true,
         active: true,
-        selfServe: false,
+        selfServe: true,
         trialDays: 0,
       },
     ],
@@ -248,39 +248,74 @@ describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
     ).toBeDisabled();
   });
 
-  it("does not start a self-serve upgrade for Elite Studio checkout URLs", async () => {
+  it("starts a self-serve upgrade for Elite Studio checkout URLs", async () => {
     navigationState.search = "tier=elite_studio&interval=monthly";
-    const fetchMock = vi.fn(async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : (input as Request).url;
+      if (url.includes("/workspace/subscription/payment-providers")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            default_provider: "razorpay",
+            providers: [
+              { id: "razorpay", configured: true },
+              { id: "phonepe", configured: true },
+            ],
+          }),
+        } as unknown as Response;
+      }
+      if (url.includes("/workspace/subscription/upgrade")) {
+        expect(init?.body).toBe(
+          JSON.stringify({
+            to_tier: "elite_studio",
+            provider: "phonepe",
+            billing_interval: "monthly",
+          }),
+        );
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            provider: "phonepe",
+            upgrade_order_id: "uo-elite-1",
+            amount_paise: 399900,
+            currency: "INR",
+            redirect_url: "https://mercury.phonepe.com/pay/elite123",
+          }),
+        } as unknown as Response;
+      }
       return {
         ok: true,
         status: 200,
-        json: async () => ({
-          default_provider: "razorpay",
-          providers: [
-            { id: "razorpay", configured: true },
-            { id: "phonepe", configured: true },
-          ],
-        }),
+        json: async () => ({}),
       } as unknown as Response;
     });
     vi.stubGlobal("fetch", fetchMock);
 
     render(<ChoosePaymentPage />);
 
-    expect(await screen.findByText("Sales-assisted plan")).toBeInTheDocument();
-    expect(screen.getByText("Elite Studio")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Contact sales" })).toHaveAttribute(
-      "href",
-      "/contact",
-    );
-    expect(
-      screen.queryByRole("button", { name: /pay .* with/i }),
-    ).not.toBeInTheDocument();
-    expect(
-      fetchMock.mock.calls.some(([input]) =>
-        String(input).includes("/workspace/subscription/upgrade"),
-      ),
-    ).toBe(false);
+    const payButton = await screen.findByRole("button", {
+      name: /pay .* with phonepe/i,
+    });
+    fireEvent.click(payButton);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/workspace/subscription/upgrade"),
+        expect.objectContaining({
+          method: "POST",
+        }),
+      );
+      expect(assignSpy).toHaveBeenCalledWith(
+        "https://mercury.phonepe.com/pay/elite123",
+      );
+    });
   });
 
   it("posts product_code, provider, target type, and target id for gallery product orders", async () => {

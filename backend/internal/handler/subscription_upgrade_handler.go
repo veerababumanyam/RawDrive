@@ -274,7 +274,7 @@ func isStrictUpgrade(fromTier, toTier string) bool {
 
 func (h *SubscriptionUpgradeHandler) validUpgradeTier(ctx context.Context, tier string) (bool, error) {
 	normalizedTier := service.NormalizePlanTierSlug(tier)
-	if normalizedTier == "pay_per_event" || normalizedTier == "elite_studio" {
+	if normalizedTier == "pay_per_event" {
 		return false, nil
 	}
 	if h.planCatalog == nil {
@@ -568,7 +568,7 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 			     plan_version_id, catalog_snapshot, order_type)
 			VALUES ($1, $2, $3, $4, $5, 'phonepe', $6, $7, $8, $9, $10::jsonb, $11)`,
 			upgradeOrderID, wsID, fromTier, body.ToTier, amountPaise,
-			upgradeOrderID.String(), userID, billingInterval, planVersionID, catalogSnapshot, orderType,
+			upgradeOrderID.String(), userID, billingInterval, planVersionID, string(catalogSnapshot), orderType,
 		)
 		if err != nil {
 			log.Printf("subscription upgrade: persist phonepe order failed: %v", err)
@@ -599,7 +599,7 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 		     plan_version_id, catalog_snapshot, order_type)
 		VALUES ($1, $2, $3, $4, $5, $6, 'razorpay', $6, $7, $8, $9, $10::jsonb, $11)`,
 		upgradeOrderID, wsID, fromTier, body.ToTier, amountPaise, rzpOrderID, userID,
-		billingInterval, planVersionID, catalogSnapshot, orderType,
+		billingInterval, planVersionID, string(catalogSnapshot), orderType,
 	)
 	if err != nil {
 		log.Printf("subscription upgrade: persist razorpay order failed: %v", err)
@@ -918,7 +918,7 @@ func (h *SubscriptionUpgradeHandler) settlePaidSubscriptionOrder(ctx context.Con
 			       updated_at = NOW()
 			 WHERE workspace_id = $1 AND status = 'active'
 			RETURNING expires_at`,
-			wsID, amountPaise, now, billingInterval, expiresAt, planVersionID, catalogSnapshot,
+			wsID, amountPaise, now, billingInterval, expiresAt, planVersionID, string(catalogSnapshot),
 		).Scan(&expiresAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			_, err = tx.Exec(ctx, `
@@ -927,7 +927,7 @@ func (h *SubscriptionUpgradeHandler) settlePaidSubscriptionOrder(ctx context.Con
 				     billing_interval, plan_version_id, catalog_snapshot)
 				VALUES ($1, $2, $3, 'active', $4, $5, $6,
 				        NULLIF($7::uuid, '00000000-0000-0000-0000-000000000000'::uuid), $8::jsonb)`,
-				wsID, toTier, amountPaise, now, expiresAt, billingInterval, planVersionID, catalogSnapshot,
+				wsID, toTier, amountPaise, now, expiresAt, billingInterval, planVersionID, string(catalogSnapshot),
 			)
 		}
 		if err != nil {
@@ -964,7 +964,7 @@ func (h *SubscriptionUpgradeHandler) settlePaidSubscriptionOrder(ctx context.Con
 		     billing_interval, plan_version_id, catalog_snapshot)
 		VALUES ($1, $2, $3, 'active', $4, $5, $6,
 		        NULLIF($7::uuid, '00000000-0000-0000-0000-000000000000'::uuid), $8::jsonb)`,
-		wsID, toTier, amountPaise, now, expiresAt, billingInterval, planVersionID, catalogSnapshot,
+		wsID, toTier, amountPaise, now, expiresAt, billingInterval, planVersionID, string(catalogSnapshot),
 	); err != nil {
 		return time.Time{}, fmt.Errorf("insert subscription: %w", err)
 	}

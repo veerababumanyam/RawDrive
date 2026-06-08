@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 // Regression test for F-048: useSearchParams() must sit inside a <Suspense>
 // boundary (Next 15/16 requirement). Without the boundary, a client page that
@@ -183,7 +183,7 @@ vi.mock("@/hooks/use-plan-catalog", () => ({
         rank: 5,
         paid: true,
         active: true,
-        selfServe: false,
+        selfServe: true,
         trialDays: 0,
       },
     ],
@@ -251,9 +251,10 @@ describe("PlansPage (/settings/plans) Suspense boundary — F-048", () => {
     expect(
       screen.getByRole("heading", { name: "Elite Studio" }),
     ).toBeInTheDocument();
-    expect(
-      screen.getAllByRole("link", { name: "Talk to sales" })[0],
-    ).toHaveAttribute("href", "/contact");
+    fireEvent.click(screen.getByRole("button", { name: "Talk to sales" }));
+    expect(pushMock).toHaveBeenCalledWith(
+      "/settings/plans/choose-payment?tier=elite_studio&interval=monthly",
+    );
   });
 
   it("shows Pay Per Event only while the logged-in workspace is on Starter", async () => {

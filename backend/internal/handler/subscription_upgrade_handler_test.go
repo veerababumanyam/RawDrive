@@ -124,9 +124,9 @@ func TestSubscriptionUpgradeValidTierRequiresSelfServePaidPlan(t *testing.T) {
 		{tier: "creator", want: true},
 		{tier: "pro_photographer", want: true},
 		{tier: "studio", want: true},
+		{tier: "elite_studio", want: true},
 		{tier: "free", want: false},
 		{tier: "pay_per_event", want: false},
-		{tier: "elite_studio", want: false},
 		{tier: "unknown", want: false},
 	}
 	for _, tt := range tests {

@@ -138,7 +138,7 @@ const elitePlan = planFixture({
   annual_price_paise: 3999000,
   quota_bytes: 3 * 1024 * 2 ** 30,
   gallery_limit: -1,
-  self_serve: false,
+  self_serve: true,
   rank: 5,
 });
 

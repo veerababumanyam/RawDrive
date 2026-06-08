@@ -133,7 +133,7 @@ const mockPlanCatalog = vi.hoisted(() => ({
         rank: 5,
         paid: true,
         active: true,
-        selfServe: false,
+        selfServe: true,
         trialDays: 0,
       },
     ],
@@ -215,6 +215,10 @@ describe("Pricing Page", () => {
     expect(screen.getAllByText("Pro Photographer").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Studio").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Elite Studio").length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "Talk to sales" })).toHaveAttribute(
+      "href",
+      "/register?plan=elite_studio&interval=monthly",
+    );
   });
 
   it("does not hard-code Pro Photographer as the most popular plan", () => {

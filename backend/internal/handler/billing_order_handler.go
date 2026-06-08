@@ -480,7 +480,7 @@ func (h *SubscriptionUpgradeHandler) insertBillingOrder(ctx context.Context, in 
 		        $12::jsonb, jsonb_build_object('source', 'billing_product_checkout'))`,
 		in.id, in.workspaceID, in.userID, in.orderType, in.targetType, in.targetID,
 		in.amountPaise, in.currency, in.provider, in.providerOrderID, in.idempotencyKey,
-		in.snapshot,
+		string(in.snapshot),
 	)
 	return err
 }

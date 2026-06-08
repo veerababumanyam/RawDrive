@@ -54,6 +54,7 @@ var selfServePlans = map[string]struct{}{
 	"creator":          {},
 	"pro_photographer": {},
 	"studio":           {},
+	"elite_studio":     {},
 }
 
 // normalizePlan coerces a user-supplied plan id into a canonical self-serve

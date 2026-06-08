@@ -140,7 +140,7 @@ var planCatalog = []PlanCatalogEntry{
 		Rank:              5,
 		Paid:              true,
 		Active:            true,
-		SelfServe:         false,
+		SelfServe:         true,
 	},
 }
 
@@ -208,7 +208,7 @@ func (s *PlanCatalogService) IsSelfServeSignupPlan(ctx context.Context, tier str
 
 func isCatalogSalesAssistedTier(tier string) bool {
 	switch NormalizePlanTierSlug(tier) {
-	case "pay_per_event", "elite_studio":
+	case "pay_per_event":
 		return true
 	default:
 		return false

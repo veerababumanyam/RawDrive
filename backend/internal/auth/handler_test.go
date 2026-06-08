@@ -464,9 +464,7 @@ func TestRegisterHandler_PlanInvalidFallback(t *testing.T) {
 	assert.Equal(t, "free", result["plan"])
 }
 
-// TestRegisterHandler_PlanEliteStudioFallback asserts that sales-led tiers are
-// not self-serve registration options.
-func TestRegisterHandler_PlanEliteStudioFallback(t *testing.T) {
+func TestRegisterHandler_PlanEliteStudioSelfServe(t *testing.T) {
 	handler, _, _, _ := setupAuthRouter()
 	ts := newTestServer(handler)
 	defer ts.Close()
@@ -483,7 +481,7 @@ func TestRegisterHandler_PlanEliteStudioFallback(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
-	assert.Equal(t, "free", result["plan"])
+	assert.Equal(t, "elite_studio", result["plan"])
 }
 
 // ──────────────────────────── OAuth Google ────────────────────────────
