@@ -20,7 +20,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -53,11 +52,8 @@ type paymentSettingsReader interface {
 
 // SubscriptionUpgradeHandler creates orders for plan-tier upgrades and
 // processes the resulting payment confirmations. Supports two providers
-// in parallel — Razorpay (modal-based Checkout SDK) and PhonePe v2
-// Standard Checkout (redirect-based hosted page). The provider is
-// chosen per-order via the request body; either can be missing creds
-// and the other will still serve as long as the user picks the
-// configured one.
+// with Razorpay Checkout. PhonePe verification/webhook support remains for
+// legacy pending orders, but new checkout initiation is Razorpay-only.
 type SubscriptionUpgradeHandler struct {
 	db                     *pgxpool.Pool
 	rzp                    RazorpayUpgradeConfig
@@ -272,6 +268,18 @@ func isStrictUpgrade(fromTier, toTier string) bool {
 	return fromKnown && toKnown && toRank > fromRank
 }
 
+const (
+	gstRateBasisPoints = int64(1800)
+	basisPointsDivisor = int64(10000)
+)
+
+func amountWithGSTPaise(netAmountPaise int64) int64 {
+	if netAmountPaise <= 0 {
+		return netAmountPaise
+	}
+	return netAmountPaise + ((netAmountPaise*gstRateBasisPoints + basisPointsDivisor/2) / basisPointsDivisor)
+}
+
 func (h *SubscriptionUpgradeHandler) validUpgradeTier(ctx context.Context, tier string) (bool, error) {
 	normalizedTier := service.NormalizePlanTierSlug(tier)
 	if normalizedTier == "pay_per_event" {
@@ -391,19 +399,14 @@ type paymentProvidersResponse struct {
 func (h *SubscriptionUpgradeHandler) PaymentProviders(w http.ResponseWriter, r *http.Request) {
 	cfg := h.currentPaymentConfig(r.Context())
 	razorpayConfigured := cfg.razorpayConfigured()
-	phonepeConfigured := cfg.phonepeConfigured()
 	defaultProvider := ""
-	switch {
-	case razorpayConfigured:
+	if razorpayConfigured {
 		defaultProvider = "razorpay"
-	case phonepeConfigured:
-		defaultProvider = "phonepe"
 	}
 	writeJSON(w, http.StatusOK, paymentProvidersResponse{
 		DefaultProvider: defaultProvider,
 		Providers: []paymentProviderAvailability{
 			{ID: "razorpay", Configured: razorpayConfigured},
-			{ID: "phonepe", Configured: phonepeConfigured},
 		},
 	})
 }
@@ -415,7 +418,6 @@ type upgradeRequest struct {
 	// 2026-05-18: optional provider selector. Empty / "razorpay" routes
 	// through the existing Razorpay path (default for backward compat —
 	// older frontend builds that don't send Provider still work).
-	// "phonepe" routes through PhonePe v2 Standard Checkout.
 	Provider string `json:"provider,omitempty"`
 	// BillingInterval selects the pricing tier. "annual" charges the annual
 	// price and sets expires_at to +1 year; anything else defaults to monthly.
@@ -424,7 +426,7 @@ type upgradeRequest struct {
 
 type upgradeResponse struct {
 	UpgradeOrderID string `json:"upgrade_order_id"`
-	Provider       string `json:"provider"` // "razorpay" | "phonepe"
+	Provider       string `json:"provider"`
 	// Razorpay-specific fields — present only when Provider="razorpay".
 	RazorpayOrderID string `json:"razorpay_order_id,omitempty"`
 	RazorpayKeyID   string `json:"razorpay_key_id,omitempty"`
@@ -475,6 +477,7 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no price for tier"})
 		return
 	}
+	amountPaise = amountWithGSTPaise(amountPaise)
 
 	provider := strings.ToLower(strings.TrimSpace(body.Provider))
 	if provider == "" {
@@ -487,10 +490,8 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 			return
 		}
 	case "phonepe":
-		if !cfg.phonepeConfigured() {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "phonepe not configured"})
-			return
-		}
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "phonepe checkout removed"})
+		return
 	default:
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid provider"})
 		return
@@ -527,66 +528,7 @@ func (h *SubscriptionUpgradeHandler) Upgrade(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if provider == "phonepe" {
-		if strings.TrimSpace(cfg.publicBaseURL) == "" {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "payment callback base URL not configured"})
-			return
-		}
-		// PhonePe expects a redirectUrl on its side; the user is
-		// bounced there after paying so the frontend can fire /verify
-		// with the merchantOrderId echoed in the URL. Tier/interval are
-		// carried back only for UX so a failed or expired hosted checkout
-		// can restart the same purchase without making the user rebuild
-		// the selection from the plans grid.
-		callbackQuery := url.Values{}
-		callbackQuery.Set("provider", "phonepe")
-		callbackQuery.Set("order_id", upgradeOrderID.String())
-		callbackQuery.Set("tier", body.ToTier)
-		callbackQuery.Set("interval", billingInterval)
-		redirectURL := strings.TrimRight(cfg.publicBaseURL, "/") +
-			"/settings/plans/payment-callback?" + callbackQuery.Encode()
-		phResult, err := cfg.phonepe.CreateOrder(r.Context(), CreateOrderInput{
-			MerchantOrderID: upgradeOrderID.String(),
-			AmountPaise:     amountPaise,
-			RedirectURL:     redirectURL,
-			Message:         "RawDrive — upgrade to " + body.ToTier,
-			WorkspaceID:     wsID,
-			ToTier:          body.ToTier,
-			// PhoneNumber left blank — not collected on upgrade form.
-			// The official SDK omits prefillUserLoginDetails when the
-			// value is unknown; PhonePe prompts on the hosted page.
-		})
-		if err != nil {
-			log.Printf("phonepe.CreateOrder failed: %v", err)
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "phonepe order create failed"})
-			return
-		}
-		_, err = h.db.Exec(r.Context(), `
-			INSERT INTO subscription_upgrade_orders
-			    (id, workspace_id, from_tier, to_tier, amount_paise,
-			     provider, provider_order_id, initiated_by, billing_interval,
-			     plan_version_id, catalog_snapshot, order_type)
-			VALUES ($1, $2, $3, $4, $5, 'phonepe', $6, $7, $8, $9, $10::jsonb, $11)`,
-			upgradeOrderID, wsID, fromTier, body.ToTier, amountPaise,
-			upgradeOrderID.String(), userID, billingInterval, planVersionID, string(catalogSnapshot), orderType,
-		)
-		if err != nil {
-			log.Printf("subscription upgrade: persist phonepe order failed: %v", err)
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not persist upgrade order"})
-			return
-		}
-		writeJSON(w, http.StatusCreated, upgradeResponse{
-			UpgradeOrderID: upgradeOrderID.String(),
-			Provider:       "phonepe",
-			RedirectURL:    phResult.RedirectURL,
-			PhonePeOrderID: phResult.PhonePeOrderID,
-			AmountPaise:    amountPaise,
-			Currency:       "INR",
-		})
-		return
-	}
-
-	// Razorpay path — unchanged from pre-2026-05-18 behaviour.
+	// Razorpay path.
 	rzpOrderID, err := h.createRazorpayOrder(r.Context(), cfg.rzp, amountPaise, upgradeOrderID.String())
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "payment provider unavailable"})

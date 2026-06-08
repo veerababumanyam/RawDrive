@@ -138,6 +138,26 @@ func TestSubscriptionUpgradeValidTierRequiresSelfServePaidPlan(t *testing.T) {
 	}
 }
 
+func TestAmountWithGSTPaiseAddsEighteenPercent(t *testing.T) {
+	tests := []struct {
+		name string
+		net  int64
+		want int64
+	}{
+		{name: "free amount stays zero", net: 0, want: 0},
+		{name: "creator monthly", net: 49900, want: 58882},
+		{name: "event upload product", net: 19900, want: 23482},
+		{name: "rounds fractional paise half up", net: 101, want: 119},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := amountWithGSTPaise(tt.net); got != tt.want {
+				t.Fatalf("amountWithGSTPaise(%d) = %d, want %d", tt.net, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestSubscriptionUpgradeConfigReadsPlatformSettings(t *testing.T) {
 	h := NewSubscriptionUpgradeHandlerFromSettings(context.Background(), nil, fakePaymentSettings{
 		"payments.razorpay_key_id":          "rzp-key",
@@ -216,8 +236,11 @@ func TestSubscriptionPaymentProvidersReflectConfiguration(t *testing.T) {
 	for _, p := range body.Providers {
 		got[p.ID] = p.Configured
 	}
-	if !got["phonepe"] {
-		t.Fatal("phonepe checkout should be configured when v2 client and public base URL are present")
+	if got["phonepe"] {
+		t.Fatal("phonepe checkout should remain hidden even when legacy phonepe settings are present")
+	}
+	if len(body.Providers) != 1 {
+		t.Fatalf("providers = %v, want razorpay only", body.Providers)
 	}
 }
 
@@ -259,8 +282,11 @@ func TestSubscriptionPaymentProvidersReflectLivePlatformSettingChanges(t *testin
 	for _, p := range body.Providers {
 		got[p.ID] = p.Configured
 	}
-	if !got["phonepe"] {
-		t.Fatal("phonepe should become available from updated platform settings without rebuilding handler")
+	if got["phonepe"] {
+		t.Fatal("phonepe should remain unavailable from provider discovery after live settings change")
+	}
+	if !got["razorpay"] {
+		t.Fatal("razorpay should remain available")
 	}
 }
 

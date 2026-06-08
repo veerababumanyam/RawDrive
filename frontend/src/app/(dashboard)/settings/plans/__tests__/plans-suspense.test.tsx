@@ -257,21 +257,8 @@ describe("PlansPage (/settings/plans) Suspense boundary — F-048", () => {
     );
   });
 
-  it("shows Pay Per Event only while the logged-in workspace is on Starter", async () => {
+  it("hides Pay Per Event from the upgrade grid even for Starter workspaces", async () => {
     mockCurrentSubscriptionTier("free");
-
-    render(<PlansPage />);
-
-    expect(
-      await screen.findByRole("heading", { name: "Pay Per Event" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Creator" }),
-    ).toBeInTheDocument();
-  });
-
-  it("hides Pay Per Event after the logged-in workspace upgrades past Starter", async () => {
-    mockCurrentSubscriptionTier("creator");
 
     render(<PlansPage />);
 

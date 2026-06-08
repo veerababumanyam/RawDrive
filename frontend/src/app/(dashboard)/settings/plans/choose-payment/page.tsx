@@ -4,7 +4,7 @@
 //
 // Flow:
 //   /settings/plans  --[click Upgrade to <Plan>]-->  /settings/plans/choose-payment?tier=<tier>
-//     (this page) --[click a payment method card]--> Razorpay modal OR PhonePe hosted page
+//     (this page) --[click Razorpay auto-debit card]--> Razorpay modal
 //
 // Why an intermediate page (not an upfront toggle): cleaner UX, the choice is
 // made in context of the actual purchase, browser-back works, and the route
@@ -30,7 +30,6 @@ import {
   Loader2,
   Lock,
   ShieldCheck,
-  Smartphone,
 } from "lucide-react";
 import { ChevronLeft } from "@/components/icons";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
@@ -41,7 +40,7 @@ import { viewportThemeColors } from "@/lib/tokens";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
-type ProviderId = "razorpay" | "phonepe";
+type ProviderId = "razorpay";
 
 interface ProviderDescriptor {
   id: ProviderId;
@@ -49,7 +48,6 @@ interface ProviderDescriptor {
   tagline: string;
   description: string;
   methods: string[];
-  flow: "modal" | "redirect";
   icon: typeof CreditCard;
   // Accent color class for the icon badge — uses design tokens.
   accentClass: string;
@@ -58,25 +56,13 @@ interface ProviderDescriptor {
 const ALL_PROVIDERS: ProviderDescriptor[] = [
   {
     id: "razorpay",
-    name: "Razorpay",
-    tagline: "Cards, UPI, Netbanking, Wallets",
+    name: "Razorpay Auto Debit",
+    tagline: "Recurring-ready checkout",
     description:
-      "Pay securely without leaving RawDrive. Razorpay's checkout opens in a popup; supports all major Indian banks and wallets.",
-    methods: ["Credit / Debit Cards", "UPI", "Netbanking", "Wallets", "EMI"],
-    flow: "modal",
+      "Use Razorpay Checkout for this payment and keep renewals on the Razorpay billing rail.",
+    methods: ["Cards", "UPI", "Netbanking", "Wallets", "Auto debit"],
     icon: CreditCard,
     accentClass: "bg-accent/10 text-accent",
-  },
-  {
-    id: "phonepe",
-    name: "PhonePe",
-    tagline: "UPI, PhonePe Wallet, Cards",
-    description:
-      "You'll be redirected to PhonePe's secure hosted page to complete payment, then brought back here automatically.",
-    methods: ["PhonePe Wallet", "UPI", "Credit / Debit Cards", "Netbanking"],
-    flow: "redirect",
-    icon: Smartphone,
-    accentClass: "bg-feedback-info/10 text-feedback-info",
   },
 ];
 
@@ -89,8 +75,21 @@ interface PaymentProvidersResponse {
 
 const NO_PROVIDERS: ProviderAvailability = {
   razorpay: false,
-  phonepe: false,
 };
+const GST_RATE_PERCENT = 18;
+
+function gstAmountPaise(netAmountPaise: number): number {
+  if (netAmountPaise <= 0) return netAmountPaise;
+  return Math.round((netAmountPaise * GST_RATE_PERCENT) / 100);
+}
+
+function formatINRPaise(amountPaise: number): string {
+  const amount = amountPaise / 100;
+  return `₹${amount.toLocaleString("en-IN", {
+    minimumFractionDigits: amountPaise % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
 
 // Minimal Razorpay types (no @types/razorpay needed).
 interface RazorpayOptions {
@@ -122,12 +121,8 @@ interface PaymentOrderResponse {
   billing_order_id?: string;
   amount_paise: number;
   currency: string;
-  // Razorpay fields:
   razorpay_order_id?: string;
   razorpay_key_id?: string;
-  // PhonePe fields:
-  redirect_url?: string;
-  phonepe_order_id?: string;
 }
 
 function ChoosePaymentContent() {
@@ -196,7 +191,7 @@ function ChoosePaymentContent() {
     if (typeof window === "undefined") return null;
     try {
       const v = window.localStorage.getItem("rawdrive-payment-provider");
-      if (v === "razorpay" || v === "phonepe") {
+      if (v === "razorpay") {
         return providerAvailability[v] ? v : null;
       }
     } catch {
@@ -229,7 +224,7 @@ function ChoosePaymentContent() {
         }
         const next: ProviderAvailability = { ...NO_PROVIDERS };
         for (const provider of json.providers ?? []) {
-          if (provider.id === "razorpay" || provider.id === "phonepe") {
+          if (provider.id === "razorpay") {
             next[provider.id] = provider.configured;
           }
         }
@@ -335,28 +330,6 @@ function ChoosePaymentContent() {
           throw new Error(err.error ?? `HTTP ${res.status}`);
         }
         const order = (await res.json()) as PaymentOrderResponse;
-
-        if (order.provider === "phonepe") {
-          if (!order.redirect_url)
-            throw new Error("PhonePe order missing redirect URL");
-          // Scheme guard: only navigate to https URLs. Mirrors the guard in
-          // components/streams/RechargeModal.tsx. Blocks javascript:/data:/http:
-          // payloads in case the backend response is misconfigured or tampered
-          // with (open redirect / XSS defense-in-depth) before window.location.
-          if (!isAllowedPhonePeRedirect(order.redirect_url)) {
-            throw new Error("Invalid payment redirect URL");
-          }
-          try {
-            window.sessionStorage.setItem(
-              "rawdrive-pending-plan-name",
-              plan?.name ?? product?.name ?? "RawDrive purchase",
-            );
-          } catch {
-            /* non-critical */
-          }
-          window.location.assign(order.redirect_url);
-          return;
-        }
 
         // Razorpay modal path.
         if (!order.razorpay_order_id || !order.razorpay_key_id) {
@@ -531,12 +504,15 @@ function ChoosePaymentContent() {
     );
   }
 
-  const displayPrice =
+  const baseAmountPaise =
     product
-      ? Math.round(product.price_paise / 100)
+      ? product.price_paise
       : interval === "annual"
-        ? (plan?.annualPrice ?? 0)
-        : (plan?.monthlyPrice ?? 0);
+        ? (plan?.annualPricePaise ?? (plan?.annualPrice ?? 0) * 100)
+        : (plan?.monthlyPricePaise ?? (plan?.monthlyPrice ?? 0) * 100);
+  const taxAmountPaise = gstAmountPaise(baseAmountPaise);
+  const totalAmountPaise = baseAmountPaise + taxAmountPaise;
+  const formattedTotalAmount = formatINRPaise(totalAmountPaise);
   const periodLabel = product
     ? product.billing_interval === "monthly"
       ? "mo"
@@ -556,8 +532,7 @@ function ChoosePaymentContent() {
   const purchaseDescription = product
     ? product.description
     : `${plan?.storage} storage · ${billingNote}`;
-  // GST is backend-owned; keep this copy aligned with the order amount the
-  // upgrade endpoint returns.
+  // Backend creates gateway orders with the same GST-inclusive total.
   return (
     <div className="max-w-4xl mx-auto space-y-8 p-8">
       {/* Header */}
@@ -595,17 +570,27 @@ function ChoosePaymentContent() {
             </h2>
             <p className="text-sm text-text-secondary">{purchaseDescription}</p>
           </div>
-          <div className="text-right">
+          <div className="min-w-[220px] text-right">
             <p className="text-xs text-text-tertiary">Total today</p>
             <p className="text-3xl font-extrabold text-text-primary">
-              ₹{displayPrice.toLocaleString("en-IN")}
+              {formattedTotalAmount}
               <span className="text-sm font-medium text-text-tertiary">
                 {" "}
                 / {periodLabel}
               </span>
             </p>
-            <p className="text-[11px] text-text-tertiary">
-              18% GST applicable at checkout
+            <div className="mt-3 space-y-1 text-[11px] text-text-tertiary">
+              <div className="flex items-center justify-between gap-4">
+                <span>Subtotal</span>
+                <span>{formatINRPaise(baseAmountPaise)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <span>GST ({GST_RATE_PERCENT}%)</span>
+                <span>{formatINRPaise(taxAmountPaise)}</span>
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] text-text-tertiary">
+              Gateway charge includes GST
             </p>
           </div>
         </div>
@@ -643,7 +628,7 @@ function ChoosePaymentContent() {
       {!providersLoading && (
         <section
           aria-label="Payment methods"
-          className="grid grid-cols-1 gap-4 md:grid-cols-2"
+          className="grid grid-cols-1 gap-4"
         >
           {providers.map((provider) => {
             const Icon = provider.icon;
@@ -718,9 +703,7 @@ function ChoosePaymentContent() {
                   <span className="text-xs text-text-tertiary">
                     {isUnavailable
                       ? "Unavailable right now"
-                      : provider.flow === "modal"
-                        ? "Opens secure popup"
-                        : "Redirects to PhonePe"}
+                      : "Opens secure Razorpay popup"}
                   </span>
                   <span
                     className={[
@@ -741,7 +724,7 @@ function ChoosePaymentContent() {
                         <Lock className="h-3.5 w-3.5" />
                         {isUnavailable
                           ? `${provider.name} not configured`
-                          : `Pay ₹${displayPrice.toLocaleString("en-IN")} with ${provider.name}`}
+                          : `Pay ${formattedTotalAmount} with ${provider.name}`}
                       </>
                     )}
                   </span>
@@ -760,19 +743,6 @@ function ChoosePaymentContent() {
       </footer>
     </div>
   );
-}
-
-function isAllowedPhonePeRedirect(rawUrl: string): boolean {
-  try {
-    const parsed = new URL(rawUrl);
-    return (
-      parsed.protocol === "https:" &&
-      (parsed.hostname === "phonepe.com" ||
-        parsed.hostname.endsWith(".phonepe.com"))
-    );
-  } catch {
-    return false;
-  }
 }
 
 export default function ChoosePaymentPage() {

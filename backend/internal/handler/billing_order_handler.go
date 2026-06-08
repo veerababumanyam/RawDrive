@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -107,10 +106,8 @@ func (h *SubscriptionUpgradeHandler) CreateBillingOrder(w http.ResponseWriter, r
 			return
 		}
 	case "phonepe":
-		if !cfg.phonepeConfigured() {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "phonepe not configured"})
-			return
-		}
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "phonepe checkout removed"})
+		return
 	default:
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid provider"})
 		return
@@ -118,70 +115,14 @@ func (h *SubscriptionUpgradeHandler) CreateBillingOrder(w http.ResponseWriter, r
 
 	orderID := uuid.New()
 	userID := userIDFromSubscriptionCtx(r)
+	amountPaise := amountWithGSTPaise(product.pricePaise)
 	snapshot, err := billingProductSnapshot(product, orderType)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "snapshot failed"})
 		return
 	}
 
-	if provider == "phonepe" {
-		if strings.TrimSpace(cfg.publicBaseURL) == "" {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "payment callback base URL not configured"})
-			return
-		}
-		callbackQuery := url.Values{}
-		callbackQuery.Set("provider", "phonepe")
-		callbackQuery.Set("order_id", orderID.String())
-		callbackQuery.Set("product", product.productCode)
-		redirectURL := strings.TrimRight(cfg.publicBaseURL, "/") +
-			"/settings/billing/payment-callback?" + callbackQuery.Encode()
-		phonePeOrder, err := cfg.phonepe.CreateOrder(r.Context(), CreateOrderInput{
-			MerchantOrderID: orderID.String(),
-			AmountPaise:     product.pricePaise,
-			RedirectURL:     redirectURL,
-			Message:         "RawDrive - " + product.name,
-			WorkspaceID:     wsID.String(),
-			ToTier:          product.productCode,
-		})
-		if err != nil {
-			log.Printf("billing order: phonepe create failed: %v", err)
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "phonepe order create failed"})
-			return
-		}
-		if err := h.insertBillingOrder(r.Context(), billingOrderInsert{
-			id:              orderID,
-			workspaceID:     wsID,
-			userID:          userID,
-			orderType:       orderType,
-			targetType:      targetType,
-			targetID:        targetID,
-			amountPaise:     product.pricePaise,
-			currency:        product.currency,
-			provider:        "phonepe",
-			providerOrderID: orderID.String(),
-			idempotencyKey:  strings.TrimSpace(body.IdempotencyKey),
-			snapshot:        snapshot,
-		}); err != nil {
-			log.Printf("billing order: persist phonepe order failed: %v", err)
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not persist billing order"})
-			return
-		}
-		writeJSON(w, http.StatusCreated, billingOrderResponse{
-			BillingOrderID: orderID.String(),
-			Provider:       "phonepe",
-			RedirectURL:    phonePeOrder.RedirectURL,
-			PhonePeOrderID: phonePeOrder.PhonePeOrderID,
-			AmountPaise:    product.pricePaise,
-			Currency:       product.currency,
-			OrderType:      orderType,
-			ProductCode:    product.productCode,
-			TargetType:     targetType,
-			TargetID:       targetIDString(targetID),
-		})
-		return
-	}
-
-	rzpOrderID, err := h.createRazorpayOrder(r.Context(), cfg.rzp, product.pricePaise, orderID.String())
+	rzpOrderID, err := h.createRazorpayOrder(r.Context(), cfg.rzp, amountPaise, orderID.String())
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "payment provider unavailable"})
 		return
@@ -193,7 +134,7 @@ func (h *SubscriptionUpgradeHandler) CreateBillingOrder(w http.ResponseWriter, r
 		orderType:       orderType,
 		targetType:      targetType,
 		targetID:        targetID,
-		amountPaise:     product.pricePaise,
+		amountPaise:     amountPaise,
 		currency:        product.currency,
 		provider:        "razorpay",
 		providerOrderID: rzpOrderID,
@@ -209,7 +150,7 @@ func (h *SubscriptionUpgradeHandler) CreateBillingOrder(w http.ResponseWriter, r
 		Provider:        "razorpay",
 		RazorpayOrderID: rzpOrderID,
 		RazorpayKeyID:   cfg.rzp.KeyID,
-		AmountPaise:     product.pricePaise,
+		AmountPaise:     amountPaise,
 		Currency:        product.currency,
 		OrderType:       orderType,
 		ProductCode:     product.productCode,

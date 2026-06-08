@@ -1,15 +1,5 @@
-import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-
-// Regression test for F-052: the PhonePe redirect_url returned by
-// /workspace/subscription/upgrade must be scheme-checked (https only)
-// before window.location.assign(). Without the guard a javascript:/data:/http:
-// payload in a misconfigured or tampered backend response would navigate
-// (open redirect / XSS). This mirrors the existing guard in
-// components/streams/RechargeModal.tsx.
-//
-// PhonePe is visible in the payment picker; clicking it exercises the guarded
-// redirect branch directly.
 
 const pushMock = vi.fn();
 const navigationState = vi.hoisted(() => ({
@@ -104,9 +94,7 @@ vi.mock("@/hooks/use-plan-catalog", () => ({
 
 import ChoosePaymentPage from "../page";
 
-// Build a fetch stub whose /upgrade response carries a PhonePe order with the
-// supplied redirect_url.
-function stubUpgradeFetch(redirectUrl: string, phonePeConfigured = true) {
+function stubProvidersFetch(razorpayConfigured = true) {
   return vi.fn(async (input: RequestInfo | URL) => {
     const url =
       typeof input === "string"
@@ -119,24 +107,11 @@ function stubUpgradeFetch(redirectUrl: string, phonePeConfigured = true) {
         ok: true,
         status: 200,
         json: async () => ({
-          default_provider: "razorpay",
+          default_provider: razorpayConfigured ? "razorpay" : "",
           providers: [
-            { id: "razorpay", configured: true },
-            { id: "phonepe", configured: phonePeConfigured },
+            { id: "razorpay", configured: razorpayConfigured },
+            { id: "phonepe", configured: true },
           ],
-        }),
-      } as unknown as Response;
-    }
-    if (url.includes("/workspace/subscription/upgrade")) {
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({
-          provider: "phonepe",
-          upgrade_order_id: "uo-1",
-          amount_paise: 9900,
-          currency: "INR",
-          redirect_url: redirectUrl,
         }),
       } as unknown as Response;
     }
@@ -148,108 +123,56 @@ function stubUpgradeFetch(redirectUrl: string, phonePeConfigured = true) {
   });
 }
 
-let assignSpy: ReturnType<typeof vi.fn>;
-
-beforeEach(() => {
-  navigationState.search = "tier=creator&interval=monthly";
-  assignSpy = vi.fn();
-  // jsdom's window.location is not configurable to reassign wholesale across
-  // versions; replacing just .assign is the portable approach.
-  Object.defineProperty(window, "location", {
-    configurable: true,
-    writable: true,
-    value: { ...window.location, assign: assignSpy } as unknown as Location,
-  });
-});
-
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   pushMock.mockReset();
+  navigationState.search = "tier=creator&interval=monthly";
 });
 
-describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
-  it("does NOT navigate and surfaces an error for a non-https redirect_url", async () => {
-    vi.stubGlobal(
-      "fetch",
-      stubUpgradeFetch("javascript:alert(document.cookie)"),
-    );
+describe("ChoosePaymentPage Razorpay auto-debit checkout", () => {
+  it("shows GST-inclusive Razorpay auto-debit checkout and hides PhonePe", async () => {
+    vi.stubGlobal("fetch", stubProvidersFetch());
 
     render(<ChoosePaymentPage />);
 
-    const payButton = await screen.findByRole("button", {
-      name: /pay .* with phonepe/i,
-    });
-    fireEvent.click(payButton);
-
-    // Guard must reject the URL: error banner shown, no navigation.
-    await waitFor(() => {
-      expect(
-        screen.getByText("Invalid payment redirect URL"),
-      ).toBeInTheDocument();
-    });
-    expect(assignSpy).not.toHaveBeenCalled();
-  });
-
-  it("does NOT navigate to a non-PhonePe https redirect_url", async () => {
-    vi.stubGlobal("fetch", stubUpgradeFetch("https://evil.example/pay/abc123"));
-
-    render(<ChoosePaymentPage />);
-
-    const payButton = await screen.findByRole("button", {
-      name: /pay .* with phonepe/i,
-    });
-    fireEvent.click(payButton);
-
-    await waitFor(() => {
-      expect(
-        screen.getByText("Invalid payment redirect URL"),
-      ).toBeInTheDocument();
-    });
-    expect(assignSpy).not.toHaveBeenCalled();
-  });
-
-  it("navigates for a valid https redirect_url (control)", async () => {
-    vi.stubGlobal(
-      "fetch",
-      stubUpgradeFetch("https://mercury.phonepe.com/pay/abc123"),
-    );
-
-    render(<ChoosePaymentPage />);
-
-    const payButton = await screen.findByRole("button", {
-      name: /pay .* with phonepe/i,
-    });
-    fireEvent.click(payButton);
-
-    await waitFor(() => {
-      expect(assignSpy).toHaveBeenCalledWith(
-        "https://mercury.phonepe.com/pay/abc123",
-      );
-    });
+    await screen.findByText("GST (18%)");
+    expect(screen.getByText("Subtotal")).toBeInTheDocument();
+    expect(screen.getByText("₹499")).toBeInTheDocument();
+    expect(screen.getByText("₹89.82")).toBeInTheDocument();
+    expect(screen.getAllByText(/₹588\.82/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Razorpay Auto Debit")).toBeInTheDocument();
+    expect(screen.getByText("Auto debit")).toBeInTheDocument();
     expect(
-      screen.queryByText("Invalid payment redirect URL"),
-    ).not.toBeInTheDocument();
+      await screen.findByRole("button", {
+        name: /pay ₹588\.82 with razorpay auto debit/i,
+      }),
+    ).toBeEnabled();
+    expect(screen.queryByText(/phonepe/i)).not.toBeInTheDocument();
   });
 
-  it("keeps PhonePe visible but disabled when the backend reports it is not configured", async () => {
-    vi.stubGlobal(
-      "fetch",
-      stubUpgradeFetch("https://mercury.phonepe.com/pay/abc123", false),
-    );
+  it("does not show a PhonePe fallback when Razorpay is not configured", async () => {
+    vi.stubGlobal("fetch", stubProvidersFetch(false));
 
     render(<ChoosePaymentPage />);
 
-    await screen.findByRole("button", {
-      name: /pay .* with razorpay/i,
+    const payButton = await screen.findByRole("button", {
+      name: /razorpay auto debit not configured/i,
     });
-    expect(screen.getByText("Not configured")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /phonepe not configured/i }),
-    ).toBeDisabled();
+    expect(payButton).toBeDisabled();
+    expect(screen.queryByText(/phonepe/i)).not.toBeInTheDocument();
   });
 
-  it("starts a self-serve upgrade for Elite Studio checkout URLs", async () => {
+  it("starts a self-serve upgrade through Razorpay for Elite Studio URLs", async () => {
     navigationState.search = "tier=elite_studio&interval=monthly";
+    const razorpayOpen = vi.fn();
+    Object.defineProperty(window, "Razorpay", {
+      configurable: true,
+      writable: true,
+      value: vi.fn(function Razorpay() {
+        return { open: razorpayOpen };
+      }),
+    });
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url =
         typeof input === "string"
@@ -263,10 +186,7 @@ describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
           status: 200,
           json: async () => ({
             default_provider: "razorpay",
-            providers: [
-              { id: "razorpay", configured: true },
-              { id: "phonepe", configured: true },
-            ],
+            providers: [{ id: "razorpay", configured: true }],
           }),
         } as unknown as Response;
       }
@@ -274,7 +194,7 @@ describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
         expect(init?.body).toBe(
           JSON.stringify({
             to_tier: "elite_studio",
-            provider: "phonepe",
+            provider: "razorpay",
             billing_interval: "monthly",
           }),
         );
@@ -282,11 +202,12 @@ describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
           ok: true,
           status: 200,
           json: async () => ({
-            provider: "phonepe",
+            provider: "razorpay",
             upgrade_order_id: "uo-elite-1",
-            amount_paise: 399900,
+            amount_paise: 471882,
             currency: "INR",
-            redirect_url: "https://mercury.phonepe.com/pay/elite123",
+            razorpay_order_id: "rzp-elite-1",
+            razorpay_key_id: "rzp-key",
           }),
         } as unknown as Response;
       }
@@ -301,7 +222,7 @@ describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
     render(<ChoosePaymentPage />);
 
     const payButton = await screen.findByRole("button", {
-      name: /pay .* with phonepe/i,
+      name: /pay .* with razorpay auto debit/i,
     });
     fireEvent.click(payButton);
 
@@ -312,9 +233,7 @@ describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
           method: "POST",
         }),
       );
-      expect(assignSpy).toHaveBeenCalledWith(
-        "https://mercury.phonepe.com/pay/elite123",
-      );
+      expect(razorpayOpen).toHaveBeenCalled();
     });
   });
 
@@ -342,10 +261,7 @@ describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
           status: 200,
           json: async () => ({
             default_provider: "razorpay",
-            providers: [
-              { id: "razorpay", configured: true },
-              { id: "phonepe", configured: true },
-            ],
+            providers: [{ id: "razorpay", configured: true }],
           }),
         } as unknown as Response;
       }
@@ -356,7 +272,7 @@ describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
           json: async () => ({
             provider: "razorpay",
             billing_order_id: "bo-1",
-            amount_paise: 19900,
+            amount_paise: 23482,
             currency: "INR",
             order_type: "event_upload",
             product_code: "event_upload_standard",
@@ -378,7 +294,7 @@ describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
     render(<ChoosePaymentPage />);
 
     const payButton = await screen.findByRole("button", {
-      name: /pay .* with razorpay/i,
+      name: /pay .* with razorpay auto debit/i,
     });
     fireEvent.click(payButton);
 
@@ -395,6 +311,7 @@ describe("ChoosePaymentPage PhonePe redirect scheme guard — F-052", () => {
           }),
         }),
       );
+      expect(razorpayOpen).toHaveBeenCalled();
     });
   });
 });

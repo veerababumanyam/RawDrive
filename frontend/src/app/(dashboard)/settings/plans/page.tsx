@@ -20,12 +20,6 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 type BillingInterval = "monthly" | "annual";
 
-const STARTER_PLAN_TIERS = new Set(["free", "standard", "starter"]);
-
-function isStarterPlanTier(tier: string) {
-  return STARTER_PLAN_TIERS.has(tier.trim().toLowerCase());
-}
-
 // 2026-05-18 — payment-method picker moved to /settings/plans/choose-payment.
 // The plans page is now purely a tier-selection surface; the chooser page
 // owns the order summary, the Razorpay vs PhonePe decision, the SDK
@@ -48,14 +42,13 @@ function PlansPageContent() {
   const [billingInterval, setBillingInterval] =
     useState<BillingInterval>("monthly");
   const { plans } = usePlanCatalog();
-  const showPayPerEvent = isStarterPlanTier(currentTier);
   const upgradePlans = useMemo(
     () =>
       plans
         .filter(
           (plan) =>
             plan.id !== "free" &&
-            (plan.id !== "pay_per_event" || showPayPerEvent) &&
+            plan.id !== "pay_per_event" &&
             plan.active &&
             plan.paid,
         )
@@ -70,7 +63,7 @@ function PlansPageContent() {
           selfServe: plan.selfServe,
           rank: plan.rank,
         })),
-    [plans, showPayPerEvent],
+    [plans],
   );
   const currentRank =
     plans.find((plan) => plan.id === currentTier)?.rank ??

@@ -74,6 +74,7 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
+      data-scroll-behavior="smooth"
       // No hardcoded data-theme attribute on SSR — the theme-init
       // bootstrap script sets it before first paint
       // based on localStorage → OS `prefers-color-scheme` → fallback.
