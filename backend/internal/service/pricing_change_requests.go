@@ -281,7 +281,7 @@ func updatePricingChangeRequestStatus(ctx context.Context, q subscriptionCatalog
 	case "pending_approval":
 		row = q.QueryRow(ctx, `
 			UPDATE pricing_change_requests
-			   SET status = 'pending_approval', submitted_by = COALESCE($2, submitted_by),
+			   SET status = 'pending_approval', submitted_by = COALESCE($2::uuid, submitted_by),
 			       submitted_at = NOW(), updated_at = NOW()
 			 WHERE id = $1 AND status = 'draft'
 			RETURNING id, request_type, target_type, target_key, status,
@@ -293,8 +293,8 @@ func updatePricingChangeRequestStatus(ctx context.Context, q subscriptionCatalog
 	case "approved":
 		row = q.QueryRow(ctx, `
 			UPDATE pricing_change_requests
-			   SET status = 'approved', approved_by = $2, approved_at = NOW(),
-			       approval_comment = $3, effective_from = COALESCE($4, NOW()),
+			   SET status = 'approved', approved_by = $2::uuid, approved_at = NOW(),
+			       approval_comment = $3::text, effective_from = COALESCE($4::timestamptz, NOW()),
 			       updated_at = NOW()
 			 WHERE id = $1 AND status = 'pending_approval'
 			RETURNING id, request_type, target_type, target_key, status,
@@ -306,8 +306,8 @@ func updatePricingChangeRequestStatus(ctx context.Context, q subscriptionCatalog
 	case "rejected":
 		row = q.QueryRow(ctx, `
 			UPDATE pricing_change_requests
-			   SET status = 'rejected', rejected_by = $2, rejected_at = NOW(),
-			       rejection_reason = $3, updated_at = NOW()
+			   SET status = 'rejected', rejected_by = $2::uuid, rejected_at = NOW(),
+			       rejection_reason = $3::text, updated_at = NOW()
 			 WHERE id = $1 AND status = 'pending_approval'
 			RETURNING id, request_type, target_type, target_key, status,
 			          submitted_by, submitted_at, approved_by, approved_at,
@@ -388,7 +388,11 @@ func publishSubscriptionPlanChange(ctx context.Context, q subscriptionCatalogBac
 			tier, name, description, currency, monthly_price_paise,
 			annual_price_paise, quota_bytes, gallery_limit, client_limit,
 			features, popular, paid, active, self_serve, trial_days, rank
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		) VALUES (
+			$1::text, $2::text, $3::text, $4::text, $5::bigint, $6::bigint,
+			$7::bigint, $8::integer, $9::integer, $10::text[], $11::boolean,
+			$12::boolean, $13::boolean, $14::boolean, $15::integer, $16::integer
+		)
 		ON CONFLICT (tier) DO UPDATE
 		   SET name = EXCLUDED.name,
 		       description = EXCLUDED.description,
@@ -425,9 +429,11 @@ func publishSubscriptionPlanChange(ctx context.Context, q subscriptionCatalogBac
 			gallery_limit, client_limit, features, popular, paid, active,
 			self_serve, trial_days, rank, effective_from, approved_at
 		)
-		SELECT $1, next_version.version, 'approved', $2, $3, $4,
-		       $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-		       COALESCE($17, NOW()), NOW()
+		SELECT $1::text, next_version.version, 'approved'::text, $2::text, $3::text, $4::text,
+		       $5::bigint, $6::bigint, $7::bigint, $8::integer, $9::integer,
+		       $10::text[], $11::boolean, $12::boolean, $13::boolean,
+		       $14::boolean, $15::integer, $16::integer,
+		       COALESCE($17::timestamptz, NOW()), NOW()
 		  FROM next_version
 	`, plan.Tier, plan.Name, plan.Description, plan.Currency, plan.MonthlyPricePaise,
 		plan.AnnualPricePaise, plan.QuotaBytes, plan.GalleryLimit, plan.ClientLimit,
@@ -470,7 +476,7 @@ func publishBillingProductChange(ctx context.Context, q subscriptionCatalogBackf
 				price_paise, billing_interval, metadata, active, rank,
 				effective_from, approved_at, archived_at
 			)
-			SELECT $1, next_version.version, 'approved', current_version.name,
+			SELECT $1::text, next_version.version, 'approved'::text, current_version.name,
 			       current_version.description, current_version.currency,
 			       current_version.price_paise, current_version.billing_interval,
 			       current_version.metadata, FALSE, current_version.rank,
@@ -498,7 +504,7 @@ func publishBillingProductChange(ctx context.Context, q subscriptionCatalogBackf
 	_, err = q.Exec(ctx, `
 		INSERT INTO billing_products (
 			code, product_type, name, description, active, rank, archived_at
-		) VALUES ($1, $2, $3, $4, $5, $6, NULL)
+		) VALUES ($1::text, $2::text, $3::text, $4::text, $5::boolean, $6::integer, NULL)
 		ON CONFLICT (code) DO UPDATE
 		   SET product_type = billing_products.product_type,
 		       name = EXCLUDED.name,
@@ -522,8 +528,9 @@ func publishBillingProductChange(ctx context.Context, q subscriptionCatalogBackf
 			price_paise, billing_interval, metadata, active, rank,
 			effective_from, approved_at
 		)
-		SELECT $1, next_version.version, 'approved', $2, $3, $4,
-		       $5, $6, $7::jsonb, $8, $9, COALESCE($10::timestamptz, NOW()), NOW()
+		SELECT $1::text, next_version.version, 'approved'::text, $2::text, $3::text, $4::text,
+		       $5::bigint, $6::text, $7::jsonb, $8::boolean, $9::integer,
+		       COALESCE($10::timestamptz, NOW()), NOW()
 		  FROM next_version
 	`, product.Code, product.Name, product.Description, product.Currency,
 		product.PricePaise, product.BillingInterval, metadataJSON, product.Active,
@@ -541,12 +548,12 @@ func enqueuePricingChangeNotices(ctx context.Context, q subscriptionCatalogBackf
 		    pricing_change_request_id, template_key, template_version,
 		    recipient_count, status, metadata
 		)
-		SELECT $1, 'pricing_change_notice', '2026-06-06',
+		SELECT $1::uuid, 'pricing_change_notice', '2026-06-06',
 		       COUNT(DISTINCT s.workspace_id), 'queued',
-		       jsonb_build_object('target_type', $2, 'target_key', $3)
+		       jsonb_build_object('target_type', $2::text, 'target_key', $3::text)
 		  FROM subscriptions s
 		 WHERE s.status = 'active'
-		   AND s.tier_slug = $3
+		   AND s.tier_slug = $3::text
 		RETURNING id`,
 		req.ID, req.TargetType, req.TargetKey,
 	).Scan(&batchID); err != nil {
@@ -561,7 +568,7 @@ func enqueuePricingChangeNotices(ctx context.Context, q subscriptionCatalogBackf
 		       w.owner_id, NOW(),
 		       jsonb_build_object(
 		           'pricing_change_request_id', $1::text,
-		           'target_key', $2,
+		           'target_key', $2::text,
 		           'notice_channel', 'email'
 		       ),
 		       jsonb_build_object(
@@ -571,7 +578,7 @@ func enqueuePricingChangeNotices(ctx context.Context, q subscriptionCatalogBackf
 		  FROM subscriptions s
 		  JOIN workspaces w ON w.id = s.workspace_id
 		 WHERE s.status = 'active'
-		   AND s.tier_slug = $2`,
+		   AND s.tier_slug = $2::text`,
 		req.ID, req.TargetKey, batchID,
 	)
 	return err
@@ -879,7 +886,7 @@ func insertPricingAuditEvent(ctx context.Context, q subscriptionCatalogBackfillD
 		INSERT INTO pricing_audit_events (
 			change_request_id, target_type, target_key, event_type,
 			actor_id, comment, metadata
-		) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+		) VALUES ($1::uuid, $2::text, $3::text, $4::text, $5::uuid, $6::text, $7::jsonb)
 	`, requestID, targetType, targetKey, eventType, actorID, comment, payload)
 	return err
 }
