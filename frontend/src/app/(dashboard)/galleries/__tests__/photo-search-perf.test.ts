@@ -15,6 +15,10 @@ const photoSearchPath = path.join(
   repoRoot,
   "src/app/(dashboard)/galleries/[id]/photo-search/page.tsx",
 );
+const publicPhotoSearchPath = path.join(
+  repoRoot,
+  "src/app/g/[slug]/photo-search/page.tsx",
+);
 const faceReviewPanelPath = path.join(
   repoRoot,
   "src/components/ai/FaceIdentityReviewPanel.tsx",
@@ -40,11 +44,33 @@ describe("gallery photo-search — batch hydration (PERF-23)", () => {
     expect(source).not.toContain("matchedAssets.map((asset)");
   });
 
+  it("hides duplicate photo-search matches for the same photo", () => {
+    const dashboardSource = read(photoSearchPath);
+    const publicSource = read(publicPhotoSearchPath);
+
+    expect(dashboardSource).toContain("uniqueAssetsById");
+    expect(dashboardSource).toContain("setMatchedAssets(ok)");
+    expect(dashboardSource).toContain("matchedAssets.length");
+
+    expect(publicSource).toContain("uniquePublicAssetsById");
+    expect(publicSource).toContain("uniqueSearchResultAssets.map");
+    expect(publicSource).not.toContain("(searchResult.assets ?? []).map");
+  });
+
   it("windows photographer face-review thumbnails for large people clusters", () => {
     const source = read(faceReviewPanelPath);
     expect(source).toContain("FACE_REVIEW_PAGE_SIZE");
     expect(source).toContain("visibleFaces.map");
     expect(source).not.toContain("faces.map((face)");
+  });
+
+  it("defaults detected-person review to all detected people", () => {
+    const source = read(faceReviewPanelPath);
+    expect(source).toContain("All detected persons");
+    expect(source).toContain('return "";');
+    expect(source).toContain("clusters.map((cluster) =>");
+    expect(source).toContain("uniqueFacesById");
+    expect(source).not.toContain("return next[0]?.cluster_label");
   });
 
   it("offers browser FaceID sync from the batched gallery asset list", () => {

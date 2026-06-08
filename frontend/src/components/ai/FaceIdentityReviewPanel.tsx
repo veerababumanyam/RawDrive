@@ -6,9 +6,7 @@ import {
   getGalleryFaceIndexStatus,
   getFaceClusters,
   linkClusterContact,
-  mergeClusters,
   renameCluster,
-  splitCluster,
   unlinkClusterContact,
   isFaceIndexUnavailableError,
   type ClusterSummary,
@@ -25,7 +23,6 @@ import {
 } from "@/lib/media-encryption/face-index-browser";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { LockedMediaFallback } from "@/components/gallery/media-key-recovery";
-import { cn } from "@/lib/utils";
 
 const FACE_REVIEW_PAGE_SIZE = 48;
 const FACE_INDEX_CONCURRENCY = 3;
@@ -86,18 +83,25 @@ function contactLabel(contact: Contact): string {
   return detail ? `${contact.name} (${detail})` : contact.name;
 }
 
+function uniqueFacesById(faces: FaceReviewRow[]): FaceReviewRow[] {
+  const seen = new Set<string>();
+  const unique: FaceReviewRow[] = [];
+  for (const face of faces) {
+    if (seen.has(face.id)) continue;
+    seen.add(face.id);
+    unique.push(face);
+  }
+  return unique;
+}
+
 function FaceTile({
   asset,
   face,
-  selected,
   token,
-  onToggle,
 }: {
   asset?: Asset | null;
   face: FaceReviewRow;
-  selected: boolean;
   token: string | null;
-  onToggle: (faceId: string) => void;
 }) {
   const media = useDecryptedAssetUrl(asset, GRID_VARIANTS, token);
   const centerX = Math.max(
@@ -110,20 +114,7 @@ function FaceTile({
   );
 
   return (
-    <button
-      type="button"
-      onClick={() => onToggle(face.id)}
-      className={cn(
-        "group overflow-hidden rounded-lg border bg-surface-container-high text-left transition focus:outline-none focus:ring-2 focus:ring-border-focus",
-        selected
-          ? "border-accent bg-accent-muted"
-          : "border-border-subtle hover:border-border-focus",
-      )}
-      aria-pressed={selected}
-      aria-label={`Face ${face.face_index + 1} from ${
-        asset?.filename ?? "photo"
-      }`}
-    >
+    <div className="group overflow-hidden rounded-lg border border-border-subtle bg-surface-container-high text-left">
       <div className="aspect-square overflow-hidden bg-surface-sunken">
         {media.loading ? (
           <div
@@ -156,7 +147,7 @@ function FaceTile({
           {Math.round(face.confidence * 100)}% · {face.source}
         </p>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -181,15 +172,9 @@ export function FaceIdentityReviewPanel({
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [selectedClusterId, setSelectedClusterId] = useState("");
-  const [selectedFaceIds, setSelectedFaceIds] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const [targetClusterId, setTargetClusterId] = useState("");
   const [selectedContactId, setSelectedContactId] = useState("");
-  const [personQuery, setPersonQuery] = useState("");
   const [contactQuery, setContactQuery] = useState("");
   const [renameValue, setRenameValue] = useState("");
-  const [splitName, setSplitName] = useState("");
   const [loadingClusters, setLoadingClusters] = useState(true);
   const [loadingFaces, setLoadingFaces] = useState(false);
   const [visibleFaceCount, setVisibleFaceCount] = useState(
@@ -203,23 +188,10 @@ export function FaceIdentityReviewPanel({
   const selectedCluster = clusters.find(
     (cluster) => cluster.cluster_label === selectedClusterId,
   );
-  const mergeTargets = clusters.filter(
-    (cluster) => cluster.cluster_label !== selectedClusterId,
-  );
   const indexableAssets = useMemo(
     () => Array.from(assetsById.values()).filter(assetCanBrowserIndexFaces),
     [assetsById],
   );
-  const visibleClusters = useMemo(() => {
-    const query = personQuery.trim().toLowerCase();
-    if (!query) return clusters;
-    return clusters.filter((cluster) => {
-      const linked = cluster.linked_contact;
-      return [faceLabel(cluster), linked?.name, linked?.email, linked?.phone]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query));
-    });
-  }, [clusters, personQuery]);
   const visibleContacts = useMemo(() => {
     const query = contactQuery.trim().toLowerCase();
     if (!query) return contacts;
@@ -230,9 +202,6 @@ export function FaceIdentityReviewPanel({
     );
   }, [contactQuery, contacts]);
 
-  const selectedCount = selectedFaceIds.size;
-  const canSplit = selectedCount > 0 && selectedCount < faces.length;
-  const canMerge = Boolean(selectedClusterId && targetClusterId);
   const visibleFaces = useMemo(
     () => faces.slice(0, visibleFaceCount),
     [faces, visibleFaceCount],
@@ -251,7 +220,7 @@ export function FaceIdentityReviewPanel({
         ) {
           return current;
         }
-        return next[0]?.cluster_label ?? "";
+        return "";
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "People review failed");
@@ -341,19 +310,16 @@ export function FaceIdentityReviewPanel({
     if (!showReview) {
       const timer = window.setTimeout(() => {
         setFaces([]);
-        setSelectedFaceIds(new Set());
         setRenameValue("");
-        setTargetClusterId("");
         setVisibleFaceCount(FACE_REVIEW_PAGE_SIZE);
       }, 0);
       return () => window.clearTimeout(timer);
     }
-    if (!selectedClusterId) {
+    if (clusters.length === 0) {
       const timer = window.setTimeout(() => {
         setFaces([]);
-        setSelectedFaceIds(new Set());
         setRenameValue("");
-        setTargetClusterId("");
+        setSelectedContactId("");
         setVisibleFaceCount(FACE_REVIEW_PAGE_SIZE);
       }, 0);
       return () => window.clearTimeout(timer);
@@ -363,13 +329,20 @@ export function FaceIdentityReviewPanel({
     const timer = window.setTimeout(() => {
       if (ignore) return;
       setLoadingFaces(true);
-      setSelectedFaceIds(new Set());
-      setTargetClusterId("");
       setVisibleFaceCount(FACE_REVIEW_PAGE_SIZE);
       setError("");
-      getClusterFaces(token ?? "", selectedClusterId, galleryId)
-        .then((result) => {
-          if (!ignore) setFaces(result.faces);
+      const requests = selectedClusterId
+        ? [getClusterFaces(token ?? "", selectedClusterId, galleryId)]
+        : clusters.map((cluster) =>
+            getClusterFaces(token ?? "", cluster.cluster_label, galleryId),
+          );
+      Promise.all(requests)
+        .then((results) => {
+          if (!ignore) {
+            setFaces(
+              uniqueFacesById(results.flatMap((result) => result.faces)),
+            );
+          }
         })
         .catch((err) => {
           if (!ignore) {
@@ -385,34 +358,18 @@ export function FaceIdentityReviewPanel({
       ignore = true;
       window.clearTimeout(timer);
     };
-  }, [galleryId, selectedClusterId, showReview, token]);
+  }, [clusters, galleryId, selectedClusterId, showReview, token]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setRenameValue(selectedCluster ? faceLabel(selectedCluster) : "");
       setSelectedContactId(selectedCluster?.linked_contact?.contact_id ?? "");
-      setSplitName("");
     }, 0);
     return () => window.clearTimeout(timer);
   }, [selectedCluster]);
 
-  const toggleFace = useCallback((faceId: string) => {
-    setSelectedFaceIds((current) => {
-      const next = new Set(current);
-      if (next.has(faceId)) {
-        next.delete(faceId);
-      } else {
-        next.add(faceId);
-      }
-      return next;
-    });
-  }, []);
-
   const selectCluster = useCallback((clusterId: string) => {
     setSelectedClusterId(clusterId);
-    setSelectedFaceIds(new Set());
-    setTargetClusterId("");
-    setSplitName("");
     setVisibleFaceCount(FACE_REVIEW_PAGE_SIZE);
   }, []);
 
@@ -433,28 +390,6 @@ export function FaceIdentityReviewPanel({
       if (!selectedClusterId || !renameValue.trim()) return;
       await renameCluster(token ?? "", selectedClusterId, renameValue.trim());
       await loadClusters();
-    });
-
-  const handleMerge = () =>
-    runAction("Merge", async () => {
-      if (!canMerge) return;
-      const target = targetClusterId;
-      await mergeClusters(token ?? "", selectedClusterId, target);
-      await loadClusters();
-      selectCluster(target);
-    });
-
-  const handleSplit = () =>
-    runAction("Split", async () => {
-      if (!canSplit) return;
-      const result = await splitCluster(
-        token ?? "",
-        selectedClusterId,
-        Array.from(selectedFaceIds),
-        splitName.trim() || "New person",
-      );
-      await loadClusters();
-      selectCluster(result.new_cluster_label);
     });
 
   const handleContactLink = () =>
@@ -647,6 +582,75 @@ export function FaceIdentityReviewPanel({
     token,
   ]);
 
+  const peoplePicker = (
+    <div className="space-y-3">
+      <label className="block space-y-1">
+        <span className="text-xs font-medium text-text-secondary">
+          Detected person
+        </span>
+        <select
+          value={selectedClusterId}
+          onChange={(event) => selectCluster(event.target.value)}
+          className="touch-min w-full rounded-xl border border-border-subtle bg-surface px-3 text-sm font-semibold text-text-primary focus:outline-none focus:ring-2 focus:ring-border-focus"
+        >
+          <option value="">
+            All detected persons · {clusterStats.people}{" "}
+            {clusterStats.people === 1 ? "person" : "people"} ·{" "}
+            {clusterStats.faces} {clusterStats.faces === 1 ? "face" : "faces"}
+          </option>
+          {clusters.map((cluster, index) => (
+            <option key={cluster.cluster_label} value={cluster.cluster_label}>
+              {faceLabel(cluster)} {index + 1} · {cluster.face_count}{" "}
+              {cluster.face_count === 1 ? "face" : "faces"} ·{" "}
+              {cluster.asset_count}{" "}
+              {cluster.asset_count === 1 ? "photo" : "photos"}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+
+  const faceGrid = loadingFaces ? (
+    <div className="h-48 animate-pulse rounded-lg bg-surface-container" />
+  ) : faces.length === 0 ? (
+    <div className="rounded-xl border border-border-subtle bg-surface-container p-4 text-sm text-text-secondary">
+      Select another detected person, or run FaceID sync again if this person
+      should have visible face crops.
+    </div>
+  ) : (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-4">
+      {visibleFaces.map((face) => (
+        <FaceTile
+          key={face.id}
+          face={face}
+          asset={assetsById.get(face.asset_id)}
+          token={token}
+        />
+      ))}
+    </div>
+  );
+
+  const facePagination =
+    visibleFaces.length < faces.length ? (
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-border-subtle bg-surface-container px-3 py-2 text-xs text-text-secondary">
+        <span>
+          Showing {visibleFaces.length} of {faces.length} faces
+        </span>
+        <button
+          type="button"
+          className="surface-button text-xs"
+          onClick={() =>
+            setVisibleFaceCount((current) =>
+              Math.min(current + FACE_REVIEW_PAGE_SIZE, faces.length),
+            )
+          }
+        >
+          Show more
+        </button>
+      </div>
+    ) : null;
+
   if (mode === "headless") {
     return null;
   }
@@ -831,126 +835,65 @@ export function FaceIdentityReviewPanel({
           ) : null}
         </div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-12">
-          <div className="space-y-2 lg:col-span-4">
-            <label className="block space-y-1">
-              <span className="text-xs font-medium text-text-secondary">
-                Search people
-              </span>
-              <input
-                value={personQuery}
-                onChange={(event) => setPersonQuery(event.target.value)}
-                placeholder="Name, client, email, phone"
-                className="touch-min w-full rounded-lg border border-border-subtle bg-surface px-3 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-border-focus"
-              />
-            </label>
-            {visibleClusters.length === 0 ? (
-              <div className="rounded-lg border border-border-subtle bg-surface-container p-3 text-xs text-text-secondary">
-                No people match this search.
+        <div className="grid gap-4 xl:grid-cols-12">
+          <div className="space-y-3 xl:col-span-5">
+            <div className="rounded-xl border border-border-subtle bg-surface-container p-3">
+              <p className="text-sm font-semibold text-text-primary">
+                Detected people
+              </p>
+              <p className="mt-1 text-xs text-text-secondary">
+                {clusterStats.people}{" "}
+                {clusterStats.people === 1 ? "person" : "people"} grouped from{" "}
+                {clusterStats.faces}{" "}
+                {clusterStats.faces === 1 ? "face" : "faces"}.
+              </p>
+            </div>
+            {peoplePicker}
+            <div className="space-y-3">
+              <div className="rounded-xl border border-border-subtle bg-surface-container p-3">
+                <p className="text-sm font-semibold text-text-primary">
+                  Face photos
+                </p>
+                <p className="mt-1 text-xs text-text-secondary">
+                  {faces.length}{" "}
+                  {faces.length === 1 ? "face crop" : "face crops"} from{" "}
+                  {selectedClusterId
+                    ? "this detected person"
+                    : "all detected persons"}
+                  .
+                </p>
               </div>
-            ) : null}
-            {visibleClusters.map((cluster) => (
-              <button
-                key={cluster.cluster_label}
-                type="button"
-                onClick={() => selectCluster(cluster.cluster_label)}
-                className={cn(
-                  "touch-min w-full rounded-lg border px-3 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-border-focus",
-                  selectedClusterId === cluster.cluster_label
-                    ? "border-accent bg-accent-muted"
-                    : "border-border-subtle bg-surface-container hover:bg-surface-container-high",
-                )}
-              >
-                <span className="block truncate text-sm font-semibold text-text-primary">
-                  {faceLabel(cluster)}
-                </span>
-                <span className="text-xs text-text-secondary">
-                  {cluster.face_count} faces · {cluster.asset_count} photos
-                </span>
-                {cluster.linked_contact ? (
-                  <span className="mt-1 block truncate text-xs text-accent">
-                    Linked to {cluster.linked_contact.name}
-                  </span>
-                ) : null}
-              </button>
-            ))}
+              {faceGrid}
+              {facePagination}
+            </div>
           </div>
 
-          <div className="space-y-4 lg:col-span-8">
-            <div className="grid gap-3 md:grid-cols-3">
-              <label className="space-y-1">
+          <div className="space-y-4 xl:col-span-7">
+            <div className="space-y-3 rounded-xl border border-border-subtle bg-surface-container p-3">
+              <label className="block space-y-1">
                 <span className="text-xs font-medium text-text-secondary">
-                  Name
+                  Rename
                 </span>
-                <input
-                  value={renameValue}
-                  onChange={(event) => setRenameValue(event.target.value)}
-                  className="touch-min w-full rounded-lg border border-border-subtle bg-surface px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-focus"
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs font-medium text-text-secondary">
-                  Merge into
-                </span>
-                <select
-                  value={targetClusterId}
-                  onChange={(event) => setTargetClusterId(event.target.value)}
-                  className="touch-min w-full rounded-lg border border-border-subtle bg-surface px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-focus"
-                >
-                  <option value="">Choose person</option>
-                  {mergeTargets.map((cluster) => (
-                    <option
-                      key={cluster.cluster_label}
-                      value={cluster.cluster_label}
-                    >
-                      {faceLabel(cluster)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs font-medium text-text-secondary">
-                  Split name
-                </span>
-                <input
-                  value={splitName}
-                  onChange={(event) => setSplitName(event.target.value)}
-                  placeholder="New person"
-                  className="touch-min w-full rounded-lg border border-border-subtle bg-surface px-3 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-border-focus"
-                />
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    value={renameValue}
+                    onChange={(event) => setRenameValue(event.target.value)}
+                    disabled={!selectedClusterId}
+                    className="touch-min min-w-0 flex-1 rounded-lg border border-border-subtle bg-surface px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-focus"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRename}
+                    disabled={Boolean(busyAction) || !renameValue.trim()}
+                    className="surface-button text-sm disabled:opacity-60"
+                  >
+                    {busyAction === "Rename" ? "Saving" : "Save"}
+                  </button>
+                </div>
               </label>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={handleRename}
-                disabled={Boolean(busyAction) || !renameValue.trim()}
-                className="surface-button text-sm"
-              >
-                {busyAction === "Rename" ? "Saving" : "Save name"}
-              </button>
-              <button
-                type="button"
-                onClick={handleMerge}
-                disabled={Boolean(busyAction) || !canMerge}
-                className="surface-button text-sm"
-              >
-                {busyAction === "Merge" ? "Merging" : "Merge people"}
-              </button>
-              <button
-                type="button"
-                onClick={handleSplit}
-                disabled={Boolean(busyAction) || !canSplit}
-                className="surface-button text-sm"
-              >
-                {busyAction === "Split"
-                  ? "Splitting"
-                  : `Split ${selectedCount || ""}`.trim()}
-              </button>
-            </div>
-
-            <div className="space-y-3 rounded-lg border border-border-subtle bg-surface-container p-3">
+            <div className="space-y-3 rounded-xl border border-border-subtle bg-surface-container p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="text-xs font-medium text-text-secondary">
@@ -979,6 +922,7 @@ export function FaceIdentityReviewPanel({
                   <input
                     value={contactQuery}
                     onChange={(event) => setContactQuery(event.target.value)}
+                    disabled={!selectedClusterId}
                     placeholder="Search CRM clients"
                     className="touch-min w-full rounded-lg border border-border-subtle bg-surface px-3 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-border-focus"
                   />
@@ -992,7 +936,7 @@ export function FaceIdentityReviewPanel({
                     onChange={(event) =>
                       setSelectedContactId(event.target.value)
                     }
-                    disabled={loadingContacts}
+                    disabled={loadingContacts || !selectedClusterId}
                     className="touch-min w-full rounded-lg border border-border-subtle bg-surface px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-focus disabled:opacity-60"
                   >
                     <option value="">
@@ -1007,41 +951,6 @@ export function FaceIdentityReviewPanel({
                 </label>
               </div>
             </div>
-
-            {loadingFaces ? (
-              <div className="h-48 animate-pulse rounded-lg bg-surface-container" />
-            ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-                {visibleFaces.map((face) => (
-                  <FaceTile
-                    key={face.id}
-                    face={face}
-                    asset={assetsById.get(face.asset_id)}
-                    selected={selectedFaceIds.has(face.id)}
-                    token={token}
-                    onToggle={toggleFace}
-                  />
-                ))}
-              </div>
-            )}
-            {visibleFaces.length < faces.length ? (
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-border-subtle bg-surface-container px-3 py-2 text-xs text-text-secondary">
-                <span>
-                  Showing {visibleFaces.length} of {faces.length} faces
-                </span>
-                <button
-                  type="button"
-                  className="surface-button text-xs"
-                  onClick={() =>
-                    setVisibleFaceCount((current) =>
-                      Math.min(current + FACE_REVIEW_PAGE_SIZE, faces.length),
-                    )
-                  }
-                >
-                  Show more
-                </button>
-              </div>
-            ) : null}
           </div>
         </div>
       )}

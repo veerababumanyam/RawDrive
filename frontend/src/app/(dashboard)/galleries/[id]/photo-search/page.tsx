@@ -73,6 +73,17 @@ type CameraErrorKind =
 
 const MATCHED_PHOTO_PAGE_SIZE = 60;
 
+function uniqueAssetsById(assets: Asset[]): Asset[] {
+  const seen = new Set<string>();
+  const unique: Asset[] = [];
+  for (const asset of assets) {
+    if (seen.has(asset.id)) continue;
+    seen.add(asset.id);
+    unique.push(asset);
+  }
+  return unique;
+}
+
 interface CameraError {
   kind: CameraErrorKind;
   rawName?: string;
@@ -419,9 +430,11 @@ export default function PhotoSearchPage({
           byId.set(entry.asset_id, entry.asset);
         }
       }
-      const ok = result.asset_ids
-        .map((aid) => byId.get(aid))
-        .filter((a): a is Asset => Boolean(a));
+      const ok = uniqueAssetsById(
+        result.asset_ids
+          .map((aid) => byId.get(aid))
+          .filter((a): a is Asset => Boolean(a)),
+      );
       setMatchedAssets(ok);
       stopCamera();
       setStage("result-found");
@@ -679,8 +692,8 @@ export default function PhotoSearchPage({
                     {searchResult.cluster_name?.trim() || "Unnamed person"}
                   </p>
                   <p className="text-xs text-text-secondary">
-                    {searchResult.count}{" "}
-                    {searchResult.count === 1 ? "photo" : "photos"} in this
+                    {matchedAssets.length}{" "}
+                    {matchedAssets.length === 1 ? "photo" : "photos"} in this
                     gallery
                     {typeof searchResult.similarity === "number"
                       ? ` · ${(searchResult.similarity * 100).toFixed(0)}% confidence`

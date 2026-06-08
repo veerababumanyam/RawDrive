@@ -14,7 +14,7 @@
 // faces just by hitting this endpoint — see
 // public_gallery_handler.PhotoSearch.
 
-import { use, useCallback, useEffect, useRef, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Camera, ChevronLeft, RefreshCw, Search } from "lucide-react";
@@ -25,6 +25,7 @@ import {
   withPublicScope,
   type PublicFaceSearchResponse,
 } from "@/lib/api/ai";
+import type { PublicAsset } from "@/lib/api/galleries";
 import { DecryptedThumb } from "@/components/gallery/decrypted-thumb";
 
 // Per-visitor, share-scoped, camera-driven page — never statically prerendered.
@@ -58,6 +59,17 @@ interface CameraError {
   kind: CameraErrorKind;
   rawName?: string;
   rawMessage: string;
+}
+
+function uniquePublicAssetsById(assets: PublicAsset[]): PublicAsset[] {
+  const seen = new Set<string>();
+  const unique: PublicAsset[] = [];
+  for (const asset of assets) {
+    if (seen.has(asset.id)) continue;
+    seen.add(asset.id);
+    unique.push(asset);
+  }
+  return unique;
 }
 
 function classifyCameraError(err: unknown): CameraError {
@@ -142,6 +154,11 @@ export default function PublicPhotoSearchPage({
     reason: "disabled" | "unavailable";
     detail: string;
   } | null>(null);
+  const uniqueSearchResultAssets = useMemo(
+    () => uniquePublicAssetsById(searchResult?.assets ?? []),
+    [searchResult?.assets],
+  );
+  const uniqueSearchResultCount = uniqueSearchResultAssets.length;
 
   const stopCamera = useCallback(() => {
     const s = streamRef.current;
@@ -376,8 +393,8 @@ export default function PublicPhotoSearchPage({
       case "searching":
         return "Searching this gallery for your photos.";
       case "result-found":
-        return `Match found. ${searchResult?.count ?? 0} ${
-          (searchResult?.count ?? 0) === 1 ? "photo" : "photos"
+        return `Match found. ${uniqueSearchResultCount} ${
+          uniqueSearchResultCount === 1 ? "photo" : "photos"
         } in this gallery.`;
       case "result-no-face":
         return "No face detected in your capture. Try again.";
@@ -467,9 +484,7 @@ export default function PublicPhotoSearchPage({
               <input
                 type="checkbox"
                 checked={consentAccepted}
-                onChange={(event) =>
-                  setConsentAccepted(event.target.checked)
-                }
+                onChange={(event) => setConsentAccepted(event.target.checked)}
                 className="mt-1 h-4 w-4 rounded border-border text-accent focus:ring-accent focus:ring-offset-2"
                 aria-describedby="findme-consent-text"
               />
@@ -490,8 +505,7 @@ export default function PublicPhotoSearchPage({
               disabled={!consentAccepted}
               className="inline-flex min-h-11 items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-text-inverse hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <Camera className="h-4 w-4" aria-hidden />
-              I agree — start camera
+              <Camera className="h-4 w-4" aria-hidden />I agree — start camera
             </button>
           </div>
         )}
@@ -673,8 +687,9 @@ export default function PublicPhotoSearchPage({
                 {searchResult.cluster_name?.trim() || "Found you"}
               </p>
               <p className="text-xs text-text-secondary">
-                {searchResult.count}{" "}
-                {searchResult.count === 1 ? "photo" : "photos"} in this gallery
+                {uniqueSearchResultCount}{" "}
+                {uniqueSearchResultCount === 1 ? "photo" : "photos"} in this
+                gallery
                 {typeof searchResult.similarity === "number"
                   ? ` · ${(searchResult.similarity * 100).toFixed(0)}% confidence`
                   : ""}
@@ -708,7 +723,7 @@ export default function PublicPhotoSearchPage({
             </div>
           </div>
 
-          {searchResult.asset_ids.length === 0 ? (
+          {uniqueSearchResultAssets.length === 0 ? (
             <div className="surface-panel p-6 text-center text-sm text-text-secondary">
               Match found but no photo previews could be loaded.
             </div>
@@ -718,7 +733,7 @@ export default function PublicPhotoSearchPage({
               role="list"
               aria-label="Photos matching this face"
             >
-              {(searchResult.assets ?? []).map((asset) => (
+              {uniqueSearchResultAssets.map((asset) => (
                 <Link
                   key={asset.id}
                   href={`/g/${slug}/photo/${asset.id}`}
