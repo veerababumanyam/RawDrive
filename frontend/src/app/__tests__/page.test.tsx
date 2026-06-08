@@ -107,7 +107,7 @@ describe("Landing Page", () => {
     expect(plans.getByText("Elite Studio")).toBeInTheDocument();
 
     expect(plans.queryByText("Pay Per Event")).not.toBeInTheDocument();
-    expect(plans.getByText("Most Popular")).toBeInTheDocument();
+    expect(plans.queryByText("Most Popular")).not.toBeInTheDocument();
     expect(plans.getByText("Best Value")).toBeInTheDocument();
     expect(plans.getByText(/^₹499/)).toBeInTheDocument();
     expect(plans.getByText(/^₹999/)).toBeInTheDocument();

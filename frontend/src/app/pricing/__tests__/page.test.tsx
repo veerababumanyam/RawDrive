@@ -85,7 +85,7 @@ const mockPlanCatalog = vi.hoisted(() => ({
         galleries: -1,
         clients: -1,
         features: ["300GB storage"],
-        popular: true,
+        popular: false,
         rank: 3,
         paid: true,
         active: true,
@@ -217,12 +217,12 @@ describe("Pricing Page", () => {
     expect(screen.getAllByText("Elite Studio").length).toBeGreaterThan(0);
   });
 
-  it("shows Pro Photographer as the most popular plan", () => {
+  it("does not hard-code Pro Photographer as the most popular plan", () => {
     render(<PricingContent />);
-    expect(screen.getByText("Most Popular")).toBeInTheDocument();
+    expect(screen.queryByText("Most Popular")).not.toBeInTheDocument();
   });
 
-  it("shows Studio as the best value plan", () => {
+  it("shows the catalog-featured plan as the best value plan", () => {
     render(<PricingContent />);
     expect(screen.getByText("Best Value")).toBeInTheDocument();
   });

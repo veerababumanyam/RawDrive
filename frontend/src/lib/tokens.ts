@@ -326,7 +326,7 @@ export const pricingPlans = [
     storage: "300GB",
     galleries: -1,
     clients: -1,
-    popular: true,
+    popular: false,
     features: [
       "300 GB storage",
       "Unlimited events",

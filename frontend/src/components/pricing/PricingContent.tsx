@@ -60,8 +60,7 @@ function subscriptionPlanLabel(plan: PlanCatalogPlan): string {
 }
 
 function featuredPlanLabel(plan: PlanCatalogPlan): string {
-  if (plan.id === "studio") return "Best Value";
-  if (plan.id === "pro_photographer" || plan.popular) return "Most Popular";
+  if (plan.popular) return "Best Value";
   return "";
 }
 

@@ -123,9 +123,7 @@ export function RegisterForm() {
 
   const selectablePlans = useMemo(
     () =>
-      plans.filter(
-        (p) => p.id !== "pay_per_event" && p.active && p.selfServe,
-      ),
+      plans.filter((p) => p.id !== "pay_per_event" && p.active && p.selfServe),
     [plans],
   );
   const selectablePlanIds = useMemo(
@@ -302,7 +300,9 @@ export function RegisterForm() {
 
         {/* Featured detail card — dynamic, shows the currently selected plan */}
         {(() => {
-          const currentPlan = selectablePlans.find((p) => p.id === selectedPlan);
+          const currentPlan = selectablePlans.find(
+            (p) => p.id === selectedPlan,
+          );
           if (!currentPlan) return null;
           const isFree = currentPlan.monthlyPrice === 0;
           const highlights =
@@ -328,7 +328,7 @@ export function RegisterForm() {
               {currentPlan.popular && (
                 <span className="micro-badge absolute right-4 top-4 bg-accent text-text-inverse shadow-sm">
                   <Sparkle className="h-2.5 w-2.5" aria-hidden="true" />
-                  Most Popular
+                  Best Value
                 </span>
               )}
 
@@ -464,10 +464,7 @@ export function RegisterForm() {
       </div>
 
       <div className="space-y-1.5">
-        <label
-          htmlFor="register-email"
-          className="form-label ml-1"
-        >
+        <label htmlFor="register-email" className="form-label ml-1">
           Email address <span className="text-feedback-error">*</span>
         </label>
         <input
@@ -505,10 +502,7 @@ export function RegisterForm() {
       </div>
 
       <div className="space-y-1.5">
-        <label
-          htmlFor="register-password"
-          className="form-label ml-1"
-        >
+        <label htmlFor="register-password" className="form-label ml-1">
           Password <span className="text-feedback-error">*</span>
         </label>
         <div className="relative">

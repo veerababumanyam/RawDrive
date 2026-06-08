@@ -380,10 +380,21 @@ export default function AdminPlansPage() {
         },
       });
       const submitted = await submitPricingChangeRequest(token, created.id);
-      setChanges((current) => [submitted, ...current]);
-      setMessage(
-        `${plan.name || plan.tier} catalog change submitted for approval.`,
-      );
+      if (canManage) {
+        const approved = await approvePricingChangeRequest(
+          token,
+          submitted.id,
+          "Super admin direct publish",
+        );
+        await publishPricingChangeRequest(token, approved.id);
+        await reloadCatalogAndChanges();
+        setMessage(`${plan.name || plan.tier} plan saved and published.`);
+      } else {
+        setChanges((current) => [submitted, ...current]);
+        setMessage(
+          `${plan.name || plan.tier} catalog change submitted for approval.`,
+        );
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to submit plan change",
@@ -432,10 +443,23 @@ export default function AdminPlansPage() {
         },
       });
       const submitted = await submitPricingChangeRequest(token, created.id);
-      setChanges((current) => [submitted, ...current]);
-      setMessage(
-        `${product.name || product.code} change submitted for approval.`,
-      );
+      if (canManage) {
+        const approved = await approvePricingChangeRequest(
+          token,
+          submitted.id,
+          "Super admin direct publish",
+        );
+        await publishPricingChangeRequest(token, approved.id);
+        await reloadCatalogAndChanges();
+        setMessage(
+          `${product.name || product.code} product saved and published.`,
+        );
+      } else {
+        setChanges((current) => [submitted, ...current]);
+        setMessage(
+          `${product.name || product.code} change submitted for approval.`,
+        );
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to submit product change",
@@ -641,7 +665,7 @@ export default function AdminPlansPage() {
                         disabled={saving || !canManage}
                         className="touch-min rounded-full bg-accent px-5 py-2 text-sm font-semibold text-text-inverse transition-opacity hover:opacity-90 disabled:opacity-60"
                       >
-                        {saving ? "Submitting..." : "Submit plan change"}
+                        {saving ? "Publishing..." : "Save & publish plan"}
                       </button>
                     </div>
 
@@ -877,7 +901,7 @@ export default function AdminPlansPage() {
                         disabled={saving || !canManage}
                         className="touch-min rounded-full bg-accent px-5 py-2 text-sm font-semibold text-text-inverse transition-opacity hover:opacity-90 disabled:opacity-60"
                       >
-                        {saving ? "Submitting..." : "Submit product change"}
+                        {saving ? "Publishing..." : "Save & publish product"}
                       </button>
                     </div>
 

@@ -13,8 +13,7 @@ const planSummaries: Record<string, string> = {
 };
 
 function planBadge(plan: PlanCatalogPlan): string {
-  if (plan.id === "studio") return "Best Value";
-  if (plan.id === "pro_photographer" || plan.popular) return "Most Popular";
+  if (plan.popular) return "Best Value";
   if (plan.id === "free") return "Free";
   if (!plan.selfServe) return "Sales";
   return "";
@@ -84,7 +83,7 @@ export function PlanStrip() {
               href={planHref(plan)}
               data-plan={plan.id}
               className={`flex min-h-full flex-col rounded-2xl border p-5 transition-colors hover:bg-surface-container-high ${
-                plan.id === "studio"
+                plan.popular
                   ? "border-accent bg-accent-subtle"
                   : "border-border-subtle bg-surface-container-low"
               }`}

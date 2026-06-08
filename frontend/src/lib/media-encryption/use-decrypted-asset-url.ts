@@ -284,7 +284,9 @@ export function useDecryptedAssetUrl(
               objectUrl = URL.createObjectURL(plaintext);
               setState({ src: objectUrl, loading: false, error: null });
             }
-            void syncStoredGalleryMediaKeyForKeyId(picked.manifest.key_id);
+            void syncStoredGalleryMediaKeyForKeyId(
+              picked.manifest.key_id,
+            ).catch(() => undefined);
             return;
           } catch (err) {
             lastError =

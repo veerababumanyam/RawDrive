@@ -60,7 +60,6 @@ function PlansPageContent() {
           storage: plan.storage,
           features: [...plan.features],
           highlighted: plan.popular,
-          bestValue: plan.id === "studio",
           selfServe: plan.selfServe,
           rank: plan.rank,
         })),
@@ -234,9 +233,7 @@ function PlansPageContent() {
           {upgradePlans.map((plan) => {
             const isCurrent = plan.tier === currentTier;
             const isUpgrade = plan.rank > currentRank;
-            const isBestValue = plan.bestValue && !isCurrent;
-            const isHighlighted =
-              (plan.highlighted || plan.bestValue) && !isCurrent;
+            const isHighlighted = plan.highlighted && !isCurrent;
             const isAutoTarget = plan.tier === upgradeTo;
             const displayPrice =
               billingInterval === "annual"
@@ -266,7 +263,7 @@ function PlansPageContent() {
                 {!isCurrent && isHighlighted && (
                   <span className="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 rounded-full bg-surface-container-highest border border-border-default px-3 py-0.5 text-[11px] font-semibold text-text-secondary">
                     <Zap className="h-3 w-3" />
-                    {isBestValue ? "Best Value" : "Popular"}
+                    Best Value
                   </span>
                 )}
                 {!isCurrent && isAutoTarget && !isHighlighted && (

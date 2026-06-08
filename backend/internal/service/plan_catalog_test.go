@@ -55,3 +55,13 @@ func TestIsSelfServePaidPlanTierExcludesPayPerEvent(t *testing.T) {
 	require.False(t, IsSelfServePaidPlanTier("pay_per_event"))
 	require.False(t, IsSelfServePaidPlanTier("elite_studio"))
 }
+
+func TestPlanCatalogFallbackHasOneFeaturedPlan(t *testing.T) {
+	var popular []string
+	for _, plan := range PlanCatalog() {
+		if plan.Popular {
+			popular = append(popular, plan.Tier)
+		}
+	}
+	require.Equal(t, []string{"studio"}, popular)
+}

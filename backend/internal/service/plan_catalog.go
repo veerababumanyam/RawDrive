@@ -104,7 +104,6 @@ var planCatalog = []PlanCatalogEntry{
 		GalleryLimit:      -1,
 		ClientLimit:       -1,
 		Features:          []string{"300 GB storage", "Unlimited events", "AI face search (fast)", "Client album selection", "WhatsApp delivery", "Branding & watermark control", "Photo selling · 5% commission"},
-		Popular:           true,
 		Rank:              3,
 		Paid:              true,
 		Active:            true,

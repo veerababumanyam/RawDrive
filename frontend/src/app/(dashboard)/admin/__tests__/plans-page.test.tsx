@@ -17,9 +17,11 @@ vi.mock("@/lib/api/admin", () => ({
 }));
 
 import {
+  approvePricingChangeRequest,
   createPricingChangeRequest,
   getAdminPricingCatalog,
   listPricingChangeRequests,
+  publishPricingChangeRequest,
   submitPricingChangeRequest,
   type AdminBillingProduct,
   type AdminPlan,
@@ -30,6 +32,8 @@ const mockGetAdminPricingCatalog = vi.mocked(getAdminPricingCatalog);
 const mockListPricingChangeRequests = vi.mocked(listPricingChangeRequests);
 const mockCreatePricingChangeRequest = vi.mocked(createPricingChangeRequest);
 const mockSubmitPricingChangeRequest = vi.mocked(submitPricingChangeRequest);
+const mockApprovePricingChangeRequest = vi.mocked(approvePricingChangeRequest);
+const mockPublishPricingChangeRequest = vi.mocked(publishPricingChangeRequest);
 
 function planFixture(overrides: Partial<AdminPlan>): AdminPlan {
   return {
@@ -227,6 +231,35 @@ beforeEach(() => {
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   });
+  mockApprovePricingChangeRequest.mockResolvedValue({
+    id: "change-1",
+    request_type: "plan_update",
+    target_type: "subscription_plan",
+    target_key: "creator",
+    status: "approved",
+    before_state: creatorPlan as unknown as Record<string, unknown>,
+    after_state: {},
+    impact_summary: {},
+    email_preview: {},
+    approval_comment: "Super admin direct publish",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+  mockPublishPricingChangeRequest.mockResolvedValue({
+    id: "change-1",
+    request_type: "plan_update",
+    target_type: "subscription_plan",
+    target_key: "creator",
+    status: "published",
+    before_state: creatorPlan as unknown as Record<string, unknown>,
+    after_state: {},
+    impact_summary: {},
+    email_preview: {},
+    approval_comment: "Super admin direct publish",
+    published_at: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
 });
 
 describe("AdminPlansPage", () => {
@@ -255,7 +288,7 @@ describe("AdminPlansPage", () => {
     expect(screen.getByText("active products")).toBeInTheDocument();
   });
 
-  it("submits plan edits for approval", async () => {
+  it("saves and publishes plan edits for a super admin", async () => {
     render(<AdminPlansPage />);
 
     expect(await screen.findByDisplayValue("Creator")).toBeInTheDocument();
@@ -264,7 +297,7 @@ describe("AdminPlansPage", () => {
       target: { value: "149" },
     });
     fireEvent.click(
-      screen.getAllByRole("button", { name: "Submit plan change" })[2],
+      screen.getAllByRole("button", { name: "Save & publish plan" })[2],
     );
 
     await waitFor(() => {
@@ -285,9 +318,19 @@ describe("AdminPlansPage", () => {
       "test-token",
       "change-1",
     );
+    expect(mockApprovePricingChangeRequest).toHaveBeenCalledWith(
+      "test-token",
+      "change-1",
+      "Super admin direct publish",
+    );
+    expect(mockPublishPricingChangeRequest).toHaveBeenCalledWith(
+      "test-token",
+      "change-1",
+    );
     expect(
-      await screen.findByText("Creator catalog change submitted for approval."),
+      await screen.findByText("Creator plan saved and published."),
     ).toBeInTheDocument();
+    expect(mockGetAdminPricingCatalog).toHaveBeenCalledTimes(2);
   });
 
   it("submits billing product edits with structured metadata", async () => {
@@ -304,7 +347,7 @@ describe("AdminPlansPage", () => {
       target: { value: "Event Upload Plus" },
     });
     fireEvent.click(
-      screen.getAllByRole("button", { name: "Submit product change" })[0],
+      screen.getAllByRole("button", { name: "Save & publish product" })[0],
     );
 
     await waitFor(() => {
@@ -352,7 +395,7 @@ describe("AdminPlansPage", () => {
       (await screen.findAllByDisplayValue("Event upload")).length,
     ).toBeGreaterThan(0);
     fireEvent.click(
-      screen.getAllByRole("button", { name: "Submit product change" })[0],
+      screen.getAllByRole("button", { name: "Save & publish product" })[0],
     );
 
     expect(
