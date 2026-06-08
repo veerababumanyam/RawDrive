@@ -177,8 +177,9 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain('aria-modal="true"');
     expect(source).toContain("Upload photos to gallery");
     expect(source).toContain("Camera JPEG/JFIF");
-    expect(source).toContain("RAW, TIFF");
-    expect(source).toContain("HEIC and AVIF use RawDrive Desktop");
+    expect(source).toContain("HEIC/HEIF, AVIF");
+    expect(source).toContain("common RAW");
+    expect(source).toContain("TIFF and unsupported RAW use RawDrive Desktop");
     expect(source).toContain("Details");
     expect(source).toContain("Processing");
     expect(source).toContain("Visibility");
@@ -358,7 +359,10 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(labelIndex).toBeGreaterThan(-1);
     const linkStart = source.lastIndexOf("<Link", labelIndex);
     expect(linkStart).toBeGreaterThan(-1);
-    const linkBlock = source.slice(linkStart, labelIndex + "View as client".length);
+    const linkBlock = source.slice(
+      linkStart,
+      labelIndex + "View as client".length,
+    );
 
     expect(source).toContain("View as client");
     // Owner-scoped preview route opened in a new tab, not the anonymous public URL.

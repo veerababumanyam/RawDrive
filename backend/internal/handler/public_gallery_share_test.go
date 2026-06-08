@@ -15,6 +15,7 @@ import (
 
 type staleWorkspaceShareResolver struct {
 	byID       map[uuid.UUID]*repository.Gallery
+	bySlug     map[string]*repository.Gallery
 	scopedHits int
 }
 
@@ -22,8 +23,11 @@ func (f *staleWorkspaceShareResolver) GetByID(_ context.Context, id uuid.UUID) (
 	return f.byID[id], nil
 }
 
-func (f *staleWorkspaceShareResolver) GetBySlug(context.Context, string) (*repository.Gallery, error) {
-	return nil, nil
+func (f *staleWorkspaceShareResolver) GetBySlug(_ context.Context, slug string) (*repository.Gallery, error) {
+	if f.bySlug == nil {
+		return nil, nil
+	}
+	return f.bySlug[slug], nil
 }
 
 func (f *staleWorkspaceShareResolver) GetByBusinessSubdomainAndSlug(context.Context, string, string) (*repository.Gallery, error) {
@@ -129,6 +133,55 @@ func TestResolveGalleryForRequest_ShareTokenCannotRecoverDifferentSlug(t *testin
 	}
 	if got != nil {
 		t.Fatalf("share token for a different slug must not recover gallery, got %#v", got)
+	}
+}
+
+func TestResolveGalleryForRequest_ApexShareTokenRecoversMissingSlug(t *testing.T) {
+	g := publishedPublicGallery()
+	g.Slug = "canonical-gallery-aaaaaaaa"
+	resolver := &staleWorkspaceShareResolver{byID: map[uuid.UUID]*repository.Gallery{g.ID: g}}
+	src := &fakeShareSource{galleryID: g.ID, valid: true}
+	h := NewPublicGalleryHandler(resolver, nil, nil).WithShareSessionSource(src)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/public/galleries/stale-gallery-bbbbbbbb?share=share-token",
+		nil,
+	)
+
+	got, err := h.resolveGalleryForRequest(req, "stale-gallery-bbbbbbbb")
+	if err != nil {
+		t.Fatalf("resolve gallery: %v", err)
+	}
+	if got == nil || got.ID != g.ID {
+		t.Fatalf("valid share token should recover from a stale apex slug miss, got %#v", got)
+	}
+}
+
+func TestResolveGalleryForRequest_ApexExistingSlugWinsOverOtherShareToken(t *testing.T) {
+	shared := publishedPublicGallery()
+	shared.Slug = "shared-gallery-aaaaaaaa"
+	requested := publishedPublicGallery()
+	requested.Slug = "requested-gallery-bbbbbbbb"
+	resolver := &staleWorkspaceShareResolver{
+		byID:   map[uuid.UUID]*repository.Gallery{shared.ID: shared, requested.ID: requested},
+		bySlug: map[string]*repository.Gallery{requested.Slug: requested},
+	}
+	src := &fakeShareSource{galleryID: shared.ID, valid: true}
+	h := NewPublicGalleryHandler(resolver, nil, nil).WithShareSessionSource(src)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/public/galleries/requested-gallery-bbbbbbbb?share=share-token",
+		nil,
+	)
+
+	got, err := h.resolveGalleryForRequest(req, "requested-gallery-bbbbbbbb")
+	if err != nil {
+		t.Fatalf("resolve gallery: %v", err)
+	}
+	if got == nil || got.ID != requested.ID {
+		t.Fatalf("existing apex slug must win over an unrelated share token, got %#v", got)
 	}
 }
 

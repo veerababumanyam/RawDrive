@@ -6,6 +6,7 @@ import {
   getPublicGalleryAssets,
   getPublicGalleryBranding,
   getPublicGalleryWithSession,
+  PublicGalleryFetchError,
 } from "@/lib/api/galleries";
 import { listPublicBanners, listPublicProducts } from "@/lib/api/commerce";
 import { GalleryPasswordGate } from "@/components/gallery/gallery-password-gate";
@@ -119,7 +120,11 @@ export default async function PublicGalleryPage({
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
-    if (msg.includes("410") || msg.includes("expired")) {
+    if (
+      (err instanceof PublicGalleryFetchError && err.status === 410) ||
+      msg.includes("410") ||
+      msg.includes("expired")
+    ) {
       return (
         <PublicGalleryUnavailable
           title="Gallery Has Expired"
@@ -128,11 +133,27 @@ export default async function PublicGalleryPage({
         />
       );
     }
-    if (msg.includes("404") || msg.includes("not found")) {
+    if (
+      err instanceof PublicGalleryFetchError &&
+      err.code === "gallery not published"
+    ) {
       return (
         <PublicGalleryUnavailable
           title="Gallery Not Yet Available"
           body="This gallery has not been published yet. Please check back soon or contact the photographer for access."
+          icon="photo"
+        />
+      );
+    }
+    if (
+      (err instanceof PublicGalleryFetchError && err.status === 404) ||
+      msg.includes("404") ||
+      msg.includes("not found")
+    ) {
+      return (
+        <PublicGalleryUnavailable
+          title="Gallery Link Unavailable"
+          body="This gallery link is no longer available or was copied incorrectly. Please ask the photographer for a fresh link."
           icon="photo"
         />
       );

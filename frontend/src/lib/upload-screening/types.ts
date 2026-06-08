@@ -17,9 +17,9 @@
  * - "pass": all checks cleared, upload should proceed
  * - "block": structural or metadata violation, upload should be rejected
  *   locally (worker never sends the bytes over the wire)
- * - "needs_desktop_scan": format requires the desktop companion (TIFF / HEIC /
- *   AVIF / RAW); the user sees a RawDrive Desktop CTA rather than an upload
- *   button.
+ * - "needs_desktop_scan": format requires the desktop companion (TIFF or an
+ *   unsupported/exotic RAW); the user sees a RawDrive Desktop CTA rather than
+ *   an upload button.
  */
 export type ScanDecision = "pass" | "block" | "needs_desktop_scan";
 
@@ -118,7 +118,10 @@ export interface ScanManifest {
 export interface WorkerInput {
   type: "scan";
   fileId: string; // correlation id for the main-thread side
-  file: File; // transferred by reference
+  fileName: string;
+  declaredType: string;
+  sizeBytes: number;
+  bytes: ArrayBuffer;
   policyVersion: string;
   metadataBudgetBytes: number;
 }

@@ -10,9 +10,12 @@ type ScreeningWorker = Pick<Worker, "postMessage" | "terminate"> & {
 export type ScreeningWorkerFactory = () => ScreeningWorker;
 
 function defaultWorkerFactory(): ScreeningWorker {
-  return new Worker(new URL("../../workers/upload-screening.worker.ts", import.meta.url), {
-    type: "module",
-  });
+  return new Worker(
+    new URL("../../workers/upload-screening.worker.ts", import.meta.url),
+    {
+      type: "module",
+    },
+  );
 }
 
 export function canUseScreeningWorker(): boolean {
@@ -30,11 +33,15 @@ export async function runScreeningWorker(
     throw new Error("upload screening worker is not available in this browser");
   }
 
+  const bytes = await file.arrayBuffer();
   const worker = createWorker();
   const input: WorkerInput = {
     type: "scan",
     fileId,
-    file,
+    fileName: file.name,
+    declaredType: file.type,
+    sizeBytes: file.size,
+    bytes,
     policyVersion,
     metadataBudgetBytes,
   };
@@ -70,6 +77,6 @@ export async function runScreeningWorker(
 
     worker.addEventListener("message", onMessage);
     worker.addEventListener("error", onError);
-    worker.postMessage(input);
+    worker.postMessage(input, [input.bytes]);
   });
 }

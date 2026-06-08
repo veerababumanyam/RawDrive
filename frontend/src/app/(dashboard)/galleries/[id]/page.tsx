@@ -1609,6 +1609,9 @@ export default function GalleryDetailPage({
   const failedUploadCount = upload.items.filter(
     (i) => i.status === "error",
   ).length;
+  const retryableFailedUploadCount = upload.items.filter(
+    (i) => i.status === "error" && !i.requiresReselect,
+  ).length;
   // 2026-05-21: pre-flight rejections that also keep the panel mounted so
   // the user can see why a file didn't go through. Not retryable (same file
   // would block again) but explicitly dismissible.
@@ -1628,7 +1631,7 @@ export default function GalleryDetailPage({
       i.status === "indexing_faces" ||
       i.status === "paused" ||
       i.status === "complete" ||
-      i.status === "error",
+      (i.status === "error" && !i.requiresReselect),
   );
   const bytesTotal = byteProgressItems.reduce((sum, i) => sum + i.file.size, 0);
   const bytesUploaded = byteProgressItems.reduce(
@@ -3445,9 +3448,9 @@ export default function GalleryDetailPage({
                   : "Drag photos or folders here, or click to open upload"}
               </p>
               <p className="text-xs text-text-tertiary mt-1">
-                Browser upload: JPEG, PNG, WebP, GIF up to{" "}
-                {browserE2EEMaxUploadSizeLabel()}. RAW, TIFF, HEIC/AVIF use
-                RawDrive Desktop for source-side encryption.
+                Browser upload supports JPEG/JFIF, PNG, WebP, GIF, HEIC/HEIF,
+                AVIF and common RAW up to {browserE2EEMaxUploadSizeLabel()}.
+                TIFF and unsupported RAW use RawDrive Desktop.
               </p>
             </div>
 
@@ -3995,9 +3998,9 @@ export default function GalleryDetailPage({
                         : "Add photos"}
                     </h3>
                     <p className="mt-2 max-w-md text-sm text-text-secondary">
-                      Camera JPEG/JFIF, PNG, WebP and GIF up to{" "}
-                      {browserE2EEMaxUploadSizeLabel()} per file. RAW, TIFF,
-                      HEIC and AVIF use RawDrive Desktop.
+                      Camera JPEG/JFIF, PNG, WebP, GIF, HEIC/HEIF, AVIF and
+                      common RAW up to {browserE2EEMaxUploadSizeLabel()} per
+                      file. TIFF and unsupported RAW use RawDrive Desktop.
                     </p>
                     <div className="mt-5 flex w-full flex-col items-stretch justify-center gap-2 sm:mt-6 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
                       <button
@@ -4066,14 +4069,15 @@ export default function GalleryDetailPage({
                           </button>
                         </>
                       )}
-                      {activeUploadCount === 0 && failedUploadCount > 0 && (
-                        <button
-                          onClick={upload.retryAll}
-                          className="btn-tertiary px-3 py-1.5 text-xs"
-                        >
-                          Retry all ({failedUploadCount})
-                        </button>
-                      )}
+                      {activeUploadCount === 0 &&
+                        retryableFailedUploadCount > 0 && (
+                          <button
+                            onClick={upload.retryAll}
+                            className="btn-tertiary px-3 py-1.5 text-xs"
+                          >
+                            Retry all ({retryableFailedUploadCount})
+                          </button>
+                        )}
                       {activeUploadCount === 0 &&
                         (failedUploadCount > 0 || blockedUploadCount > 0) && (
                           <button
@@ -4117,6 +4121,7 @@ export default function GalleryDetailPage({
                           item.scanManifest?.findings,
                         );
                         const isFailed = item.status === "error";
+                        const needsReselect = isFailed && item.requiresReselect;
                         const isTerminal =
                           item.status === "complete" ||
                           item.status === "error" ||
@@ -4125,34 +4130,38 @@ export default function GalleryDetailPage({
                         const statusLabel =
                           item.status === "complete"
                             ? "Done"
-                            : isFailed
-                              ? "Failed"
-                              : item.status === "uploading"
-                                ? "Uploading..."
-                                : item.status === "encrypting"
-                                  ? "Encrypting"
-                                  : item.status === "paused"
-                                    ? "Paused"
-                                    : item.status === "screening"
-                                      ? "Screening"
-                                      : item.status === "pending"
-                                        ? "Queued"
-                                        : item.status === "blocked"
-                                          ? "Blocked"
-                                          : item.status === "needs_desktop"
-                                            ? "Desktop"
-                                            : item.status;
+                            : needsReselect
+                              ? "Re-select"
+                              : isFailed
+                                ? "Failed"
+                                : item.status === "uploading"
+                                  ? "Uploading..."
+                                  : item.status === "encrypting"
+                                    ? "Encrypting"
+                                    : item.status === "paused"
+                                      ? "Paused"
+                                      : item.status === "screening"
+                                        ? "Screening"
+                                        : item.status === "pending"
+                                          ? "Queued"
+                                          : item.status === "blocked"
+                                            ? "Blocked"
+                                            : item.status === "needs_desktop"
+                                              ? "Desktop"
+                                              : item.status;
                         const statusTone =
                           item.status === "complete"
                             ? "text-success"
-                            : isFailed
-                              ? "text-error"
-                              : item.status === "paused"
-                                ? "text-feedback-warning"
-                                : item.status === "blocked" ||
-                                    item.status === "needs_desktop"
+                            : needsReselect
+                              ? "text-feedback-warning"
+                              : isFailed
+                                ? "text-error"
+                                : item.status === "paused"
                                   ? "text-feedback-warning"
-                                  : "text-text-secondary";
+                                  : item.status === "blocked" ||
+                                      item.status === "needs_desktop"
+                                    ? "text-feedback-warning"
+                                    : "text-text-secondary";
                         return (
                           <div
                             key={item.id}
@@ -4173,7 +4182,7 @@ export default function GalleryDetailPage({
                               >
                                 {statusLabel}
                               </span>
-                              {isFailed && (
+                              {isFailed && !needsReselect && (
                                 <button
                                   type="button"
                                   onClick={() => upload.retry(item.id)}

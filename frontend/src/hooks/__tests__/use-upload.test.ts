@@ -81,8 +81,7 @@ describe("useUpload", () => {
       classifyFaceIndexFailure(new Error("502 Bad Gateway")).unavailable,
     ).toBe(false);
     expect(
-      classifyFaceIndexFailure(new Error("image file too large"))
-        .unavailable,
+      classifyFaceIndexFailure(new Error("image file too large")).unavailable,
     ).toBe(false);
   });
 
@@ -108,11 +107,29 @@ describe("useUpload", () => {
   it("threads the filename into the screener's non-worker fallback (CD5b)", async () => {
     // CD5b: the screener disambiguates TIFF-based RAW by extension, so
     // runScreener must forward file.name as declaredName on the direct-screen
-    // fallback path (the worker path carries it on the File itself).
+    // fallback path (the worker path sends filename metadata with the bytes).
     const source = await readFile(
       join(process.cwd(), "src/hooks/use-upload.ts"),
       "utf8",
     );
     expect(source).toContain("declaredName: file.name");
+  });
+
+  it("classifies browser file-read permission failures with reselection guidance", async () => {
+    const { fileReadPermissionRecoveryMessage, isFileReadPermissionError } =
+      await import("../use-upload");
+
+    expect(
+      isFileReadPermissionError(
+        new DOMException(
+          "The requested file could not be read, typically due to permission problems that have occurred after a reference to a file was acquired.",
+          "NotReadableError",
+        ),
+      ),
+    ).toBe(true);
+    expect(isFileReadPermissionError(new Error("decode failed"))).toBe(false);
+    expect(fileReadPermissionRecoveryMessage("IMG_7634.JPG")).toContain(
+      "Re-select the files or folder",
+    );
   });
 });

@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import type { UploadItem } from "@/components/upload/upload-progress";
 import type { ScanManifest } from "@/lib/upload-screening/types";
 import { screen } from "@/lib/upload-screening/screen";
-import { sha256HexChunked } from "@/lib/upload-screening/hash";
+import { sha256Hex } from "@/lib/upload-screening/hash";
 import { buildManifest } from "@/lib/upload-screening/manifest";
 import { activePolicyVersion } from "@/lib/upload-screening/policy";
 import {
@@ -83,8 +83,27 @@ async function runScreener(
     // TIFF-based RAW by extension when the browser reports a generic/empty MIME.
     declaredName: file.name,
   });
-  const sha256 = await sha256HexChunked(file);
+  const sha256 = await sha256Hex(bytes);
   return buildManifest({ file, policyVersion, sha256, result });
+}
+
+export function isFileReadPermissionError(err: unknown): boolean {
+  const value = err as { name?: unknown; message?: unknown };
+  const name = typeof value?.name === "string" ? value.name : "";
+  const message =
+    typeof value?.message === "string" ? value.message : String(err ?? "");
+  return (
+    name === "NotReadableError" ||
+    name === "SecurityError" ||
+    /could not be read|not readable|permission problem|permission denied|reference to a file was acquired|failed to read/i.test(
+      message,
+    )
+  );
+}
+
+export function fileReadPermissionRecoveryMessage(fileName?: string): string {
+  const prefix = fileName ? `${fileName}: ` : "";
+  return `${prefix}RawDrive could not read this file after it was selected. Re-select the files or folder from the original camera card, drive, Photos/WhatsApp export, or local folder, and keep that source connected until upload finishes.`;
 }
 
 async function uploadEncryptedDerivative(
@@ -402,9 +421,13 @@ export function useUpload(
         try {
           manifest = await runScreener(item.file, apiUrl, item.id);
         } catch (err) {
+          const fileReadPermissionError = isFileReadPermissionError(err);
           updateItem(item.id, {
             status: "error",
-            error: `screening failed: ${(err as Error).message}`,
+            requiresReselect: fileReadPermissionError,
+            error: fileReadPermissionError
+              ? fileReadPermissionRecoveryMessage(item.file.name)
+              : `screening failed: ${(err as Error).message}`,
           });
           return;
         }
@@ -803,9 +826,15 @@ export function useUpload(
     (id: string) => {
       const item = items.find((entry) => entry.id === id);
       if (item) {
+        if (item.requiresReselect) return;
         pausedItems.current.delete(id);
         const retryItem = { ...item, status: "pending" as const, progress: 0 };
-        updateItem(id, { status: "pending", progress: 0, error: undefined });
+        updateItem(id, {
+          status: "pending",
+          progress: 0,
+          error: undefined,
+          requiresReselect: undefined,
+        });
         enqueueUploads([retryItem]);
       }
     },
@@ -817,7 +846,9 @@ export function useUpload(
   // Blocked / needs_desktop items are intentionally excluded — those were
   // rejected at the screening stage and the same file would block again.
   const retryAll = useCallback(() => {
-    const failed = items.filter((i) => i.status === "error");
+    const failed = items.filter(
+      (i) => i.status === "error" && !i.requiresReselect,
+    );
     const retryItems = failed.map((item) => ({
       ...item,
       status: "pending" as const,
@@ -826,7 +857,13 @@ export function useUpload(
     setItems((prev) =>
       prev.map((item) =>
         item.status === "error"
-          ? { ...item, status: "pending", progress: 0, error: undefined }
+          ? {
+              ...item,
+              status: item.requiresReselect ? item.status : "pending",
+              progress: item.requiresReselect ? item.progress : 0,
+              error: item.requiresReselect ? item.error : undefined,
+              requiresReselect: item.requiresReselect ? true : undefined,
+            }
           : item,
       ),
     );

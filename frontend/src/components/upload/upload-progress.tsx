@@ -23,6 +23,9 @@ export interface UploadItem {
     | "blocked"
     | "needs_desktop";
   error?: string;
+  /** The browser lost access to the selected File reference. Retrying the same
+   *  File will fail again, so the user must re-select the source files/folder. */
+  requiresReselect?: boolean;
   /** M16: the scan manifest produced by the local screener. Present once
    *  screening finishes regardless of decision. Used by the UI to render
    *  finding details and by the upload hook to attach to the session
@@ -163,8 +166,10 @@ export function UploadProgress({
 
             {item.status === "error" && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-error">Failed</span>
-                {onRetry && (
+                <span className="text-xs text-error">
+                  {item.requiresReselect ? "Re-select needed" : "Failed"}
+                </span>
+                {onRetry && !item.requiresReselect && (
                   <button
                     type="button"
                     onClick={() => onRetry(item.id)}

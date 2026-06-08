@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // M16 E47-S1: Upload screening Web Worker entry point.
 //
-// Receives { file, policyVersion, metadataBudgetBytes } from the main thread,
+// Receives file bytes plus metadata from the main thread,
 // runs the structural screener + SHA-256 + manifest builder, then posts the
 // resulting ScanManifest back (or an error).
 //
@@ -11,7 +11,7 @@
 
 import type { WorkerInput, WorkerOutput } from "../lib/upload-screening/types";
 import { screen } from "../lib/upload-screening/screen";
-import { sha256HexChunked } from "../lib/upload-screening/hash";
+import { sha256Hex } from "../lib/upload-screening/hash";
 import { buildManifest } from "../lib/upload-screening/manifest";
 
 // TypeScript doesn't type `self` as DedicatedWorkerGlobalScope by default —
@@ -23,7 +23,7 @@ const ctx = self as unknown as {
   postMessage: (data: WorkerOutput) => void;
   addEventListener: (
     type: "message",
-    listener: (event: MessageEvent<WorkerInput>) => void
+    listener: (event: MessageEvent<WorkerInput>) => void,
   ) => void;
 };
 
@@ -34,7 +34,15 @@ ctx.addEventListener("message", async (event: MessageEvent<WorkerInput>) => {
     return;
   }
 
-  const { fileId, file, policyVersion, metadataBudgetBytes } = input;
+  const {
+    fileId,
+    fileName,
+    declaredType,
+    sizeBytes,
+    bytes,
+    policyVersion,
+    metadataBudgetBytes,
+  } = input;
 
   try {
     // Read the file bytes for the structural screener. For very large
@@ -42,24 +50,27 @@ ctx.addEventListener("message", async (event: MessageEvent<WorkerInput>) => {
     // the screener only needs the markers, not the pixel data. In M16
     // the files we care about (jpeg/png/webp/gif) are <50 MB so we just
     // read the whole buffer.
-    const bytes = new Uint8Array(await file.arrayBuffer());
+    const fileBytes = new Uint8Array(bytes);
 
-    const result = screen(bytes, {
+    const result = screen(fileBytes, {
       metadataBudgetBytes,
-      declaredType: file.type,
+      declaredType,
       // CD5b: forward the filename so the screener can backstop TIFF-based RAW
       // (NEF/ARW/DNG/ORF/RW2) by extension when the browser/OS reports a
-      // generic `image/tiff` or empty MIME. File.name survives the structured
-      // clone of the File across postMessage, so no separate string is needed.
-      declaredName: file.name,
+      // generic `image/tiff` or empty MIME.
+      declaredName: fileName,
     });
 
     // Compute the manifest hash. This is the canonical hash of the full
     // file bytes — matches what the backend recomputes at finalize time.
-    const sha256 = await sha256HexChunked(file);
+    const sha256 = await sha256Hex(fileBytes);
 
     const manifest = buildManifest({
-      file,
+      file: {
+        name: fileName,
+        type: declaredType,
+        size: sizeBytes,
+      },
       policyVersion,
       sha256,
       result,

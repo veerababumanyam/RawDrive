@@ -1006,6 +1006,18 @@ export interface PublicGalleryFetchResult {
   gallerySessionToken: string | null;
 }
 
+export class PublicGalleryFetchError extends Error {
+  status: number;
+  code: string;
+
+  constructor(status: number, code: string) {
+    super(`${code}: ${status}`);
+    this.name = "PublicGalleryFetchError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
 export async function getPublicGalleryWithSession(
   slug: string,
   ws?: string | null,
@@ -1027,7 +1039,13 @@ export async function getPublicGalleryWithSession(
     sessionToken,
     { cache: "no-store" },
   );
-  if (!res.ok) throw new Error(`Gallery not found: ${res.status}`);
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new PublicGalleryFetchError(
+      res.status,
+      body.error || `public_gallery_${res.status}`,
+    );
+  }
   const mintedSessionToken =
     typeof res.headers?.get === "function"
       ? res.headers.get("X-Gallery-Session")

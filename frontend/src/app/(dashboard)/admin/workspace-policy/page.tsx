@@ -37,7 +37,7 @@ const MODE_OPTIONS: ModeOption[] = [
     value: "strict_client_scan",
     label: "Strict client scan",
     description:
-      "Browser screening required for every upload. JPEG, PNG, WebP, and GIF must produce a passing local scan before the session opens. RAW/TIFF/HEIC require the RawDrive Desktop companion (coming in M17).",
+      "Browser screening required for every upload. JPEG, PNG, WebP, GIF, HEIC/HEIF, AVIF, and common camera RAW must produce a passing local scan before the session opens. TIFF and unsupported RAW require RawDrive Desktop.",
   },
   {
     value: "strict_original_preservation",

@@ -45,7 +45,7 @@ export function getBrowserE2EEUploadBlockReason(file: File): string | null {
     type.startsWith("image/x-") ||
     isDesktopRequiredStillImageName(file.name)
   ) {
-    return "RAW, TIFF, HEIC/HEIF, and AVIF require RawDrive Desktop so WebP derivatives can be created and encrypted at source.";
+    return "TIFF and unsupported camera RAW require RawDrive Desktop so WebP derivatives can be created and encrypted at source.";
   }
 
   if (type.startsWith("image/")) {

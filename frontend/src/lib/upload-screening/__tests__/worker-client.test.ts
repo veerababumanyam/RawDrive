@@ -4,6 +4,7 @@ import type { ScanManifest, WorkerInput, WorkerOutput } from "../types";
 
 class FakeWorker {
   posted?: WorkerInput;
+  transfer?: Transferable[];
   terminated = false;
   listeners = new Map<string, Set<EventListener>>();
 
@@ -17,8 +18,9 @@ class FakeWorker {
     this.listeners.get(type)?.delete(listener);
   }
 
-  postMessage(input: WorkerInput) {
+  postMessage(input: WorkerInput, transfer?: Transferable[]) {
     this.posted = input;
+    this.transfer = transfer;
   }
 
   terminate() {
@@ -30,6 +32,14 @@ class FakeWorker {
       listener(new MessageEvent("message", { data: output }));
     }
   }
+}
+
+async function waitForPosted(worker: FakeWorker): Promise<WorkerInput> {
+  for (let i = 0; i < 10; i += 1) {
+    if (worker.posted) return worker.posted;
+    await Promise.resolve();
+  }
+  throw new Error("worker did not receive a postMessage call");
 }
 
 function minimalManifest(file: File): ScanManifest {
@@ -50,9 +60,13 @@ function minimalManifest(file: File): ScanManifest {
 
 describe("runScreeningWorker", () => {
   it("posts the scan request to a worker and resolves the correlated result", async () => {
-    const file = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], "Wedding (42).jpg", {
-      type: "image/jpeg",
-    });
+    const file = new File(
+      [new Uint8Array([0xff, 0xd8, 0xff, 0xd9])],
+      "Wedding (42).jpg",
+      {
+        type: "image/jpeg",
+      },
+    );
     const worker = new FakeWorker();
     const promise = runScreeningWorker(
       file,
@@ -62,15 +76,26 @@ describe("runScreeningWorker", () => {
       () => worker as unknown as Worker,
     );
 
-    expect(worker.posted).toMatchObject({
+    const posted = await waitForPosted(worker);
+    expect(posted).toMatchObject({
       type: "scan",
       fileId: "file-1",
-      file,
+      fileName: "Wedding (42).jpg",
+      declaredType: "image/jpeg",
+      sizeBytes: file.size,
       policyVersion: "test-policy",
       metadataBudgetBytes: 512,
     });
+    expect(new Uint8Array(posted.bytes)).toEqual(
+      new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+    );
+    expect(worker.transfer).toEqual([posted.bytes]);
 
-    worker.emit({ type: "result", fileId: "other-file", manifest: minimalManifest(file) });
+    worker.emit({
+      type: "result",
+      fileId: "other-file",
+      manifest: minimalManifest(file),
+    });
     expect(worker.terminated).toBe(false);
 
     const manifest = minimalManifest(file);
@@ -79,14 +104,18 @@ describe("runScreeningWorker", () => {
     expect(worker.terminated).toBe(true);
   });
 
-  it("forwards the File (including its name) so the worker can screen by extension (CD5b)", () => {
+  it("forwards bytes plus filename metadata so the worker can screen by extension (CD5b)", async () => {
     // CD5b: the screener disambiguates TIFF-based RAW (NEF/ARW/DNG/ORF/RW2) by
-    // filename extension. The client posts the whole File — File.name survives
-    // the structured clone across postMessage — so no separate name string is
-    // needed; the worker reads file.name and passes it as declaredName.
-    const file = new File([new Uint8Array([0x49, 0x49, 0x2a, 0x00])], "IMG_1234.nef", {
-      type: "image/tiff",
-    });
+    // filename extension. The client reads the File in the main context and
+    // posts bytes + metadata so stale structured-cloned File handles are not
+    // re-read inside the worker.
+    const file = new File(
+      [new Uint8Array([0x49, 0x49, 0x2a, 0x00])],
+      "IMG_1234.nef",
+      {
+        type: "image/tiff",
+      },
+    );
     const worker = new FakeWorker();
     void runScreeningWorker(
       file,
@@ -96,15 +125,26 @@ describe("runScreeningWorker", () => {
       () => worker as unknown as Worker,
     );
 
-    expect(worker.posted?.file).toBe(file);
-    expect(worker.posted?.file.name).toBe("IMG_1234.nef");
+    const posted = await waitForPosted(worker);
+    expect(posted.fileName).toBe("IMG_1234.nef");
+    expect(posted.declaredType).toBe("image/tiff");
+    expect(new Uint8Array(posted.bytes)).toEqual(
+      new Uint8Array([0x49, 0x49, 0x2a, 0x00]),
+    );
   });
 
   it("rejects worker errors with the worker message", async () => {
     const file = new File(["bad"], "bad.jpg", { type: "image/jpeg" });
     const worker = new FakeWorker();
-    const promise = runScreeningWorker(file, "test-policy", 512, "file-1", () => worker as unknown as Worker);
+    const promise = runScreeningWorker(
+      file,
+      "test-policy",
+      512,
+      "file-1",
+      () => worker as unknown as Worker,
+    );
 
+    await waitForPosted(worker);
     worker.emit({ type: "error", fileId: "file-1", message: "decode failed" });
     await expect(promise).rejects.toThrow("decode failed");
     expect(worker.terminated).toBe(true);
@@ -114,9 +154,18 @@ describe("runScreeningWorker", () => {
     vi.useFakeTimers();
     const file = new File(["slow"], "slow.jpg", { type: "image/jpeg" });
     const worker = new FakeWorker();
-    const promise = runScreeningWorker(file, "test-policy", 512, "file-1", () => worker as unknown as Worker);
-    const expectation = expect(promise).rejects.toThrow("upload screening timed out");
+    const promise = runScreeningWorker(
+      file,
+      "test-policy",
+      512,
+      "file-1",
+      () => worker as unknown as Worker,
+    );
+    const expectation = expect(promise).rejects.toThrow(
+      "upload screening timed out",
+    );
 
+    await waitForPosted(worker);
     await vi.advanceTimersByTimeAsync(120_000);
     await expectation;
     expect(worker.terminated).toBe(true);

@@ -640,20 +640,32 @@ func (h *PublicGalleryHandler) resolveGalleryForRequest(r *http.Request, slug st
 		// the bound gallery still has the exact requested slug. Ordinary
 		// wrong-subdomain URLs continue to 404 and cross-workspace slug fallback
 		// stays closed.
-		if recovered, err := h.resolveGalleryFromShareToken(r, slug); err != nil || recovered != nil {
+		if recovered, err := h.resolveGalleryFromShareToken(r, slug, false); err != nil || recovered != nil {
 			return recovered, err
 		}
-		if recovered, err := h.resolveGalleryFromSession(r, slug); err != nil || recovered != nil {
+		if recovered, err := h.resolveGalleryFromSession(r, slug, false); err != nil || recovered != nil {
 			return recovered, err
 		}
-		return h.resolveGalleryFromAssetToken(r, slug)
+		return h.resolveGalleryFromAssetToken(r, slug, false)
 	}
-	// No workspace context (apex `/g/<slug>` path) — fall through to the
-	// legacy unscoped lookup chain.
-	return h.gallerySvc.GetBySlug(r.Context(), slug)
+	// No workspace context (apex `/g/<slug>` path) — use the legacy unscoped
+	// lookup first. If the slug is missing, a valid share/session/asset token is
+	// an explicit gallery capability, so it can recover from an old copied URL
+	// after a slug edit or stale share card.
+	gallery, err := h.gallerySvc.GetBySlug(r.Context(), slug)
+	if err != nil || gallery != nil {
+		return gallery, err
+	}
+	if recovered, err := h.resolveGalleryFromShareToken(r, slug, true); err != nil || recovered != nil {
+		return recovered, err
+	}
+	if recovered, err := h.resolveGalleryFromSession(r, slug, true); err != nil || recovered != nil {
+		return recovered, err
+	}
+	return h.resolveGalleryFromAssetToken(r, slug, true)
 }
 
-func (h *PublicGalleryHandler) resolveGalleryFromShareToken(r *http.Request, slug string) (*repository.Gallery, error) {
+func (h *PublicGalleryHandler) resolveGalleryFromShareToken(r *http.Request, slug string, allowSlugMismatch bool) (*repository.Gallery, error) {
 	if h.gallerySvc == nil || h.shareSession == nil {
 		return nil, nil
 	}
@@ -672,13 +684,13 @@ func (h *PublicGalleryHandler) resolveGalleryFromShareToken(r *http.Request, slu
 	if err != nil || gallery == nil {
 		return gallery, err
 	}
-	if gallery.Slug != slug {
+	if !allowSlugMismatch && gallery.Slug != slug {
 		return nil, nil
 	}
 	return gallery, nil
 }
 
-func (h *PublicGalleryHandler) resolveGalleryFromSession(r *http.Request, slug string) (*repository.Gallery, error) {
+func (h *PublicGalleryHandler) resolveGalleryFromSession(r *http.Request, slug string, allowSlugMismatch bool) (*repository.Gallery, error) {
 	if h.gallerySvc == nil || h.accessSvc == nil {
 		return nil, nil
 	}
@@ -690,13 +702,13 @@ func (h *PublicGalleryHandler) resolveGalleryFromSession(r *http.Request, slug s
 	if err != nil || gallery == nil {
 		return gallery, err
 	}
-	if gallery.Slug != slug {
+	if !allowSlugMismatch && gallery.Slug != slug {
 		return nil, nil
 	}
 	return gallery, nil
 }
 
-func (h *PublicGalleryHandler) resolveGalleryFromAssetToken(r *http.Request, slug string) (*repository.Gallery, error) {
+func (h *PublicGalleryHandler) resolveGalleryFromAssetToken(r *http.Request, slug string, allowSlugMismatch bool) (*repository.Gallery, error) {
 	if h.gallerySvc == nil || h.accessSvc == nil {
 		return nil, nil
 	}
@@ -708,7 +720,7 @@ func (h *PublicGalleryHandler) resolveGalleryFromAssetToken(r *http.Request, slu
 	if err != nil || gallery == nil {
 		return gallery, err
 	}
-	if gallery.Slug != slug {
+	if !allowSlugMismatch && gallery.Slug != slug {
 		return nil, nil
 	}
 	return gallery, nil

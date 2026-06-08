@@ -20,7 +20,7 @@ import { MANIFEST_KEY_ORDER } from "./types";
 const ENGINE_VERSION = "1.0.0";
 
 export interface BuildManifestInput {
-  file: File;
+  file: Pick<File, "name" | "type" | "size">;
   policyVersion: string;
   sha256: string;
   result: ScanResult;
@@ -72,7 +72,9 @@ export function canonicalizeManifest(m: ScanManifest): string {
  * Quick helper for tests that want to construct a minimal manifest with
  * mostly-default fields.
  */
-export function makeTestManifest(overrides: Partial<ScanManifest> = {}): ScanManifest {
+export function makeTestManifest(
+  overrides: Partial<ScanManifest> = {},
+): ScanManifest {
   return {
     policy_version: "upload-screening/2026-04-10",
     engine: "browser-worker",
