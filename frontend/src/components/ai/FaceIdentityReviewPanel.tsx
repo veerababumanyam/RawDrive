@@ -48,6 +48,8 @@ const IDLE_FACE_INDEX_RUN: FaceIndexRunState = {
   current: "",
 };
 
+type FaceIdentityReviewPanelMode = "review" | "sync-status" | "headless";
+
 function faceLabel(cluster: ClusterSummary): string {
   return cluster.cluster_name?.trim() || "Unnamed person";
 }
@@ -161,10 +163,15 @@ function FaceTile({
 export function FaceIdentityReviewPanel({
   galleryId,
   token,
+  autoSync = false,
+  mode = "review",
 }: {
   galleryId: string;
   token: string | null;
+  autoSync?: boolean;
+  mode?: FaceIdentityReviewPanelMode;
 }) {
+  const showReview = mode === "review";
   const [clusters, setClusters] = useState<ClusterSummary[]>([]);
   const [faces, setFaces] = useState<FaceReviewRow[]>([]);
   const [assetsById, setAssetsById] = useState<Map<string, Asset>>(new Map());
@@ -191,6 +198,7 @@ export function FaceIdentityReviewPanel({
   const [busyAction, setBusyAction] = useState("");
   const [error, setError] = useState("");
   const faceIndexAbortRef = useRef<AbortController | null>(null);
+  const autoSyncAttemptedRef = useRef<Set<string>>(new Set());
 
   const selectedCluster = clusters.find(
     (cluster) => cluster.cluster_label === selectedClusterId,
@@ -301,6 +309,7 @@ export function FaceIdentityReviewPanel({
   }, [galleryId, token]);
 
   useEffect(() => {
+    if (!showReview) return;
     let ignore = false;
     const timer = window.setTimeout(() => {
       if (ignore) return;
@@ -320,7 +329,7 @@ export function FaceIdentityReviewPanel({
       ignore = true;
       window.clearTimeout(timer);
     };
-  }, [token]);
+  }, [showReview, token]);
 
   useEffect(() => {
     return () => {
@@ -329,6 +338,16 @@ export function FaceIdentityReviewPanel({
   }, []);
 
   useEffect(() => {
+    if (!showReview) {
+      const timer = window.setTimeout(() => {
+        setFaces([]);
+        setSelectedFaceIds(new Set());
+        setRenameValue("");
+        setTargetClusterId("");
+        setVisibleFaceCount(FACE_REVIEW_PAGE_SIZE);
+      }, 0);
+      return () => window.clearTimeout(timer);
+    }
     if (!selectedClusterId) {
       const timer = window.setTimeout(() => {
         setFaces([]);
@@ -366,7 +385,7 @@ export function FaceIdentityReviewPanel({
       ignore = true;
       window.clearTimeout(timer);
     };
-  }, [galleryId, selectedClusterId, token]);
+  }, [galleryId, selectedClusterId, showReview, token]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -576,23 +595,129 @@ export function FaceIdentityReviewPanel({
     token,
   ]);
 
+  const uploadedPhotoCount = indexStatus?.uploaded_photos ?? assetsById.size;
+  const syncablePhotoCount = indexableAssets.length;
+  const indexablePhotoTarget =
+    indexStatus?.indexable_photos ?? syncablePhotoCount;
+  const indexedPhotoCount = indexStatus?.indexed_photos ?? 0;
   const clusterStats = useMemo(
     () => ({
       people: indexStatus?.indexed_people ?? clusters.length,
       faces:
         indexStatus?.indexed_faces ??
         clusters.reduce((sum, cluster) => sum + cluster.face_count, 0),
-      photos:
-        indexStatus?.uploaded_photos ??
-        clusters.reduce((sum, cluster) => sum + cluster.asset_count, 0),
-      indexedPhotos:
-        indexStatus?.indexed_photos ??
-        clusters.reduce((sum, cluster) => sum + cluster.asset_count, 0),
+      photos: uploadedPhotoCount,
+      indexedPhotos: indexedPhotoCount,
     }),
-    [clusters, indexStatus],
+    [clusters, indexStatus, indexedPhotoCount, uploadedPhotoCount],
   );
-  const uploadedPhotoCount = indexStatus?.uploaded_photos ?? assetsById.size;
-  const syncablePhotoCount = indexableAssets.length;
+  const autoSyncSignature = useMemo(
+    () =>
+      indexableAssets
+        .map((asset) => asset.id)
+        .sort()
+        .join("|"),
+    [indexableAssets],
+  );
+
+  useEffect(() => {
+    if (!autoSync || !token || indexRun.running) return;
+    if (!indexStatus) return;
+    if (!autoSyncSignature || syncablePhotoCount === 0) return;
+    if (indexablePhotoTarget <= 0 || indexedPhotoCount >= indexablePhotoTarget)
+      return;
+
+    const key = `rawdrive:faceid:auto-sync:${galleryId}:${autoSyncSignature}`;
+    if (autoSyncAttemptedRef.current.has(key)) return;
+    autoSyncAttemptedRef.current.add(key);
+    const timer = window.setTimeout(() => {
+      void handleSyncNow();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [
+    autoSync,
+    autoSyncSignature,
+    galleryId,
+    handleSyncNow,
+    indexRun.running,
+    indexStatus,
+    indexablePhotoTarget,
+    indexedPhotoCount,
+    syncablePhotoCount,
+    token,
+  ]);
+
+  if (mode === "headless") {
+    return null;
+  }
+
+  if (mode === "sync-status") {
+    const hasIndexedFaces = clusterStats.faces > 0;
+    return (
+      <section
+        className="rounded-xl border border-border-subtle bg-surface-container px-4 py-3 text-sm"
+        aria-label="FaceID sync status"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-1">
+            <p className="font-medium text-text-primary">
+              {indexRun.running
+                ? "Syncing gallery photos for FaceID"
+                : hasIndexedFaces
+                  ? "FaceID ready"
+                  : "FaceID sync"}
+            </p>
+            <p className="text-xs text-text-secondary">
+              {indexRun.running
+                ? `Processing ${indexRun.processed}/${indexRun.total} photos${
+                    indexRun.current ? ` · ${indexRun.current}` : ""
+                  }`
+                : hasIndexedFaces
+                  ? `${clusterStats.people} ${
+                      clusterStats.people === 1 ? "person" : "people"
+                    } detected across ${clusterStats.faces} ${
+                      clusterStats.faces === 1 ? "face" : "faces"
+                    }.`
+                  : syncablePhotoCount > 0
+                    ? "Ready gallery photos sync automatically when this page opens."
+                    : uploadedPhotoCount > 0
+                      ? "Gallery media is still preparing for FaceID sync."
+                      : "Upload gallery photos to enable FaceID search."}
+            </p>
+          </div>
+          <span className="rounded-full bg-surface-sunken px-3 py-1 text-xs text-text-secondary">
+            {clusterStats.indexedPhotos}/
+            {clusterStats.photos || uploadedPhotoCount} photos with faces
+          </span>
+        </div>
+        {indexRun.running ? (
+          <div
+            className="mt-3 h-2 overflow-hidden rounded-full bg-surface-sunken"
+            aria-label={`FaceID sync progress ${indexRun.processed} of ${indexRun.total}`}
+          >
+            <div
+              className="h-full rounded-full bg-accent transition-all"
+              style={{
+                width: `${
+                  indexRun.total > 0
+                    ? Math.min(100, (indexRun.processed / indexRun.total) * 100)
+                    : 0
+                }%`,
+              }}
+            />
+          </div>
+        ) : null}
+        {error ? (
+          <p
+            role="alert"
+            className="mt-3 rounded-lg border border-feedback-error/20 bg-feedback-error/10 px-3 py-2 text-xs text-feedback-error"
+          >
+            {error}
+          </p>
+        ) : null}
+      </section>
+    );
+  }
 
   return (
     <section className="surface-panel space-y-4 p-4">
@@ -624,7 +749,7 @@ export function FaceIdentityReviewPanel({
             {clusterStats.faces} faces
           </span>
           <span className="rounded-full bg-surface-container px-3 py-1">
-            {clusterStats.indexedPhotos}/{clusterStats.photos} photos indexed
+            {clusterStats.indexedPhotos}/{clusterStats.photos} photos with faces
           </span>
           {indexRun.running ? (
             <button

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import GalleriesPage from "../page";
 
@@ -37,6 +37,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 const authFetch = vi.fn();
+const deleteGallery = vi.fn();
 vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: vi.fn(() => "token-1"),
 }));
@@ -56,7 +57,7 @@ vi.mock("@/lib/api/workspace-profile", () => ({
 vi.mock("@/lib/api/galleries", () => ({
   createGallery: vi.fn(),
   createGalleryShareLink: vi.fn(),
-  deleteGallery: vi.fn(),
+  deleteGallery: (...args: unknown[]) => deleteGallery(...args),
   updateGallery: vi.fn(),
   galleryPublicUrl: vi.fn(
     (g: { slug: string }) => `https://app.rawdrive.test/g/${g.slug}`,
@@ -85,17 +86,21 @@ function gallery(id: string, title: string, slug: string) {
 
 beforeEach(() => {
   authFetch.mockReset();
-  authFetch.mockResolvedValue(
-    new Response(
-      JSON.stringify({
-        galleries: [
-          gallery("g-beach", "Beach Wedding", "beach-wedding"),
-          gallery("g-trek", "Mountain Trek", "mountain-trek"),
-        ],
-      }),
-      { status: 200, headers: { "Content-Type": "application/json" } },
+  authFetch.mockImplementation(() =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({
+          galleries: [
+            gallery("g-beach", "Beach Wedding", "beach-wedding"),
+            gallery("g-trek", "Mountain Trek", "mountain-trek"),
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
     ),
   );
+  deleteGallery.mockReset();
+  deleteGallery.mockResolvedValue(undefined);
 });
 
 describe("GalleriesPage search query (BUG-4)", () => {
@@ -133,5 +138,22 @@ describe("GalleriesPage search query (BUG-4)", () => {
     expect(
       screen.getByRole("searchbox", { name: "Filter galleries" }),
     ).toHaveAttribute("placeholder", "Filter galleries...");
+  });
+
+  it("shows a delete status bar while gallery deletion is pending", async () => {
+    nav.search = new URLSearchParams();
+    deleteGallery.mockReturnValueOnce(new Promise(() => {}));
+    render(<GalleriesPage />);
+
+    await waitFor(() => expect(screen.getByText("Beach Wedding")).toBeTruthy());
+    fireEvent.click(
+      screen.getByRole("button", { name: /delete beach wedding/i }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent(/deleting gallery/i);
+    expect(screen.getByRole("button", { name: /deleting/i })).toBeDisabled();
+    expect(deleteGallery).toHaveBeenCalledWith("token-1", "g-beach");
   });
 });

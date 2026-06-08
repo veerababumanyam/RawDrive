@@ -46,6 +46,8 @@ describe("dashboard affordances (UAT 2026-06-04)", () => {
     );
     expect(source).toContain("<RecentGalleryMenu");
     expect(source).toContain("onDeleted={handleGalleryDeleted}");
+    expect(source).toContain("const refreshStorageUsage = useCallback(");
+    expect(source).toContain("refreshStorageUsage();");
     // The bare, behaviourless ⋮ glyph that used to sit in the card header is gone.
     expect(source).not.toContain(
       '<MoreVertical className="h-4 w-4 text-text-tertiary',

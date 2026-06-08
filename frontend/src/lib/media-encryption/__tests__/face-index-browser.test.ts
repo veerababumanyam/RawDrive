@@ -97,7 +97,7 @@ describe("indexAssetFacesFromBrowser", () => {
     );
   });
 
-  it("retries a smaller derivative on a 502 / body-reset (not just 413)", async () => {
+  it("retries a smaller derivative on backend 502 indexing failures", async () => {
     // The documented prod symptom: the over-cap body trips MaxBytesReader, nginx
     // returns 502 (not a clean 413). The classifier must treat that as
     // retryable and fall through to the smaller stored derivative instead of
@@ -106,7 +106,9 @@ describe("indexAssetFacesFromBrowser", () => {
       .mockResolvedValueOnce(
         new Response(new Blob(["large"], { type: "image/webp" })),
       )
-      .mockResolvedValueOnce(new Response("502 Bad Gateway", { status: 502 }))
+      .mockResolvedValueOnce(
+        new Response(`{"error":"failed to index faces"}`, { status: 502 }),
+      )
       .mockResolvedValueOnce(
         new Response(new Blob(["small"], { type: "image/webp" })),
       )
@@ -131,6 +133,39 @@ describe("indexAssetFacesFromBrowser", () => {
     expect(mockFetch).toHaveBeenCalledTimes(4);
     expect(String(mockFetch.mock.calls[2][0])).toContain(
       "/storage/thumb-md.webp",
+    );
+  });
+
+  it("tries the original image when a display derivative stores zero faces", async () => {
+    mockFetch
+      .mockResolvedValueOnce(
+        new Response(new Blob(["display"], { type: "image/webp" })),
+      )
+      .mockResolvedValueOnce(jsonResponse({ stored: 0 }))
+      .mockResolvedValueOnce(
+        new Response(new Blob(["original"], { type: "image/jpeg" })),
+      )
+      .mockResolvedValueOnce(jsonResponse({ stored: 2 }));
+
+    const result = await indexAssetFacesFromBrowser(
+      {
+        id: "asset-original",
+        is_encrypted: false,
+        storage_key: "originals/asset-original/original.jpeg",
+        thumbnail_urls: {
+          display_webp: "/storage/display.webp",
+        },
+      },
+      { galleryId: "gallery-1", token: "owner-token" },
+    );
+
+    expect(result).toEqual({
+      stored: 2,
+      variant: "original",
+      encrypted: false,
+    });
+    expect(String(mockFetch.mock.calls[2][0])).toContain(
+      "/storage/originals/asset-original/original.jpeg",
     );
   });
 

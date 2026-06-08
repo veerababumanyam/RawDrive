@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import Link from "next/link";
 import {
   Cloud,
@@ -58,6 +64,13 @@ function greetingName(user: CurrentUser | null): string {
   const email = (user.email || "").trim();
   if (email) return email.split("@")[0];
   return "there";
+}
+
+function formatStorageBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const index = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, index)).toFixed(1)} ${units[index]}`;
 }
 
 function initials(name: string) {
@@ -190,12 +203,46 @@ export default function DashboardPage() {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [token] = useState(() => getStoredAccessToken());
   const [coverAssets, setCoverAssets] = useState<Record<string, Asset>>({});
+  const [storageUsed, setStorageUsed] = useState<string>("— / —");
+  const [storageMeta, setStorageMeta] = useState<string>("loading");
+  const [storagePercent, setStoragePercent] = useState<number>(0);
+
+  const refreshStorageUsage = useCallback(() => {
+    if (!token) return;
+    authFetch("/api/v1/storage/usage")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.data) {
+          // 2026-05-21: prefer total_bytes (originals + WebP derivatives)
+          // when present. Older clients saw only originals which understated
+          // real B2 footprint by 40-80% on image-heavy workspaces.
+          const used = (data.data.total_bytes ?? data.data.used_bytes) || 0;
+          const quota = data.data.quota_bytes || 0;
+          const pct = data.data.percent_used || 0;
+          setStorageUsed(
+            `${formatStorageBytes(used)} / ${formatStorageBytes(quota)}`,
+          );
+          setStorageMeta(`${Math.round(pct)}% used`);
+          setStoragePercent(Math.min(Math.round(pct), 100));
+        }
+      })
+      .catch(() => {
+        setStorageUsed("— / —");
+        setStorageMeta("unavailable");
+      });
+  }, [token]);
 
   // BUG-2: drop a gallery from the Recent list after the overflow menu deletes
-  // it, so the card disappears without a full refetch.
-  const handleGalleryDeleted = (id: string) => {
-    setGalleries((prev) => prev.filter((g) => g.id !== id));
-  };
+  // it, so the card disappears without a full refetch. Also refresh storage:
+  // gallery deletion hard-deletes unshared assets server-side and returns quota
+  // immediately, so the dashboard card should reflect that in the background.
+  const handleGalleryDeleted = useCallback(
+    (id: string) => {
+      setGalleries((prev) => prev.filter((g) => g.id !== id));
+      refreshStorageUsage();
+    },
+    [refreshStorageUsage],
+  );
 
   useEffect(() => {
     listGalleries(token)
@@ -285,39 +332,9 @@ export default function DashboardPage() {
     });
   }, [galleries]);
 
-  // Fetch real storage usage from API
-  const [storageUsed, setStorageUsed] = useState<string>("— / —");
-  const [storageMeta, setStorageMeta] = useState<string>("loading");
-  const [storagePercent, setStoragePercent] = useState<number>(0);
-
   useEffect(() => {
-    if (!getStoredAccessToken()) return;
-    authFetch("/api/v1/storage/usage")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data?.data) {
-          // 2026-05-21: prefer total_bytes (originals + WebP derivatives)
-          // when present. Older clients saw only originals which understated
-          // real B2 footprint by 40-80% on image-heavy workspaces.
-          const used = (data.data.total_bytes ?? data.data.used_bytes) || 0;
-          const quota = data.data.quota_bytes || 0;
-          const pct = data.data.percent_used || 0;
-          const fmt = (b: number) => {
-            if (b === 0) return "0 B";
-            const u = ["B", "KB", "MB", "GB", "TB"];
-            const i = Math.floor(Math.log(b) / Math.log(1024));
-            return `${(b / Math.pow(1024, i)).toFixed(1)} ${u[i]}`;
-          };
-          setStorageUsed(`${fmt(used)} / ${fmt(quota)}`);
-          setStorageMeta(`${Math.round(pct)}% used`);
-          setStoragePercent(Math.min(Math.round(pct), 100));
-        }
-      })
-      .catch(() => {
-        setStorageUsed("— / —");
-        setStorageMeta("unavailable");
-      });
-  }, []);
+    refreshStorageUsage();
+  }, [refreshStorageUsage]);
 
   const stats = useMemo(
     () => [

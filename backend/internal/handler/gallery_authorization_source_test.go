@@ -26,6 +26,21 @@ func TestGalleryHandler_ObjectRoutesResolveWorkspaceScopedGallery(t *testing.T) 
 	}
 }
 
+func TestGalleryHandler_SoftDeleteFinishesAfterClientDisconnect(t *testing.T) {
+	source := readHandlerSource(t, "gallery_handler.go")
+	body := functionBody(t, source, "func (h *GalleryHandler) SoftDelete")
+
+	if !strings.Contains(body, "context.WithoutCancel(r.Context())") {
+		t.Fatalf("SoftDelete must detach destructive cleanup from request cancellation; got:\n%s", body)
+	}
+	if !strings.Contains(body, "requireGalleryInWorkspace(w, r, id)") {
+		t.Fatalf("SoftDelete must still authorize the gallery on the request context before detaching; got:\n%s", body)
+	}
+	if !strings.Contains(body, "SoftDeleteForWorkspace(deleteCtx, id, workspaceID)") {
+		t.Fatalf("SoftDelete must pass the detached context to gallery cleanup; got:\n%s", body)
+	}
+}
+
 func TestAlbumHandler_ObjectRoutesResolveWorkspaceScopedAlbum(t *testing.T) {
 	source := readHandlerSource(t, "album_handler.go")
 

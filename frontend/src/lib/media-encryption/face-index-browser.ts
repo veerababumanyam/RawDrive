@@ -46,9 +46,7 @@ async function fetchStorageBlob(
     credentials: "include",
     signal: opts.signal,
   };
-  if (
-    storageFetchNeedsBearer(storageUrl, opts.token, opts.assetAccessToken)
-  ) {
+  if (storageFetchNeedsBearer(storageUrl, opts.token, opts.assetAccessToken)) {
     init.headers = { Authorization: `Bearer ${opts.token}` };
   }
   const res = await fetch(storageUrl, init);
@@ -70,8 +68,12 @@ function canRetryWithSmallerVariant(err: unknown): boolean {
   return (
     message.includes("too large") ||
     message.includes("413") ||
+    message.includes("request entity too large") ||
+    message.includes("payload too large") ||
+    message.includes("failed to index faces") ||
     message.includes("502") ||
     message.includes("bad gateway") ||
+    message.includes("upstream") ||
     message.includes("connection reset") ||
     message.includes("connection closed") ||
     message.includes("econnreset") ||
@@ -83,11 +85,18 @@ function canRetryWithSmallerVariant(err: unknown): boolean {
   );
 }
 
-function pickFaceIndexCandidates(asset: EncryptedAssetLike): PickedAssetMedia[] {
-  const candidates = pickAssetMediaCandidates(asset, FACE_INDEX_BROWSER_VARIANTS);
+function pickFaceIndexCandidates(
+  asset: EncryptedAssetLike,
+): PickedAssetMedia[] {
+  const candidates = pickAssetMediaCandidates(
+    asset,
+    FACE_INDEX_BROWSER_VARIANTS,
+  );
   const originalKey = asset.storage_key || asset.download_url;
   if (!originalKey) return candidates;
-  const alreadyPicked = candidates.some((candidate) => candidate.key === originalKey);
+  const alreadyPicked = candidates.some(
+    (candidate) => candidate.key === originalKey,
+  );
   if (alreadyPicked) return candidates;
   return [
     ...candidates,
@@ -116,6 +125,7 @@ export async function indexAssetFacesFromBrowser(
 
   const encrypted = assetUsesClientMediaEncryption(asset);
   let lastError: unknown;
+  let emptyResult: BrowserFaceIndexResult | null = null;
   for (const picked of candidates) {
     if (opts.signal?.aborted) {
       throw new DOMException("Aborted", "AbortError");
@@ -138,11 +148,13 @@ export async function indexAssetFacesFromBrowser(
           galleryId: opts.galleryId,
           signal: opts.signal,
         });
-        return {
+        const browserResult = {
           stored: result.stored,
           variant: picked.variant,
           encrypted,
         };
+        if (result.stored > 0) return browserResult;
+        emptyResult = browserResult;
       } catch (err) {
         lastError = err;
         if (!canRetryWithSmallerVariant(err)) throw err;
@@ -153,6 +165,7 @@ export async function indexAssetFacesFromBrowser(
     }
   }
 
+  if (emptyResult) return emptyResult;
   throw lastError instanceof Error
     ? lastError
     : new Error("FaceID indexing failed");

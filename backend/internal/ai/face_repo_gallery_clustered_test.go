@@ -36,7 +36,7 @@ func TestFindSimilarFacesInGallery_ExcludesUnclusteredCandidates(t *testing.T) {
 	// Clustered candidate — must be retrievable.
 	clusteredAsset := seedFaceIdentityAsset(t, ctx, pool, workspaceID, galleryID, "clustered.jpg")
 	clusterLabel := uuid.New()
-	seedFaceIdentityFaceWithEmbedding(t, ctx, repo, workspaceID, clusteredAsset, &galleryID, &clusterLabel, embedding, 0)
+	seedFaceIdentityFaceWithEmbedding(t, ctx, repo, workspaceID, clusteredAsset, &galleryID, clusterLabel, "Cluster", 0, embedding)
 
 	// Unclustered candidate (cluster_label NULL) — must be excluded.
 	unclusteredAsset := seedFaceIdentityAsset(t, ctx, pool, workspaceID, galleryID, "unclustered.jpg")
@@ -68,7 +68,7 @@ func TestFindSimilarFacesInGallery_AndScored_ShareCandidateSet(t *testing.T) {
 
 	clusterLabel := uuid.New()
 	clusteredAsset := seedFaceIdentityAsset(t, ctx, pool, workspaceID, galleryID, "shared-clustered.jpg")
-	seedFaceIdentityFaceWithEmbedding(t, ctx, repo, workspaceID, clusteredAsset, &galleryID, &clusterLabel, embedding, 0)
+	seedFaceIdentityFaceWithEmbedding(t, ctx, repo, workspaceID, clusteredAsset, &galleryID, clusterLabel, "Cluster", 0, embedding)
 
 	// Noise: an unclustered face neither path should surface.
 	unclusteredAsset := seedFaceIdentityAsset(t, ctx, pool, workspaceID, galleryID, "shared-unclustered.jpg")
@@ -92,25 +92,6 @@ func TestFindSimilarFacesInGallery_AndScored_ShareCandidateSet(t *testing.T) {
 		"FaceMatch and PhotoSearch must search the same gallery-scoped, clustered-only candidate set")
 	require.Contains(t, plainAssets, clusteredAsset)
 	require.NotContains(t, plainAssets, unclusteredAsset)
-}
-
-// seedFaceIdentityFaceWithEmbedding stores a clustered face with a caller-chosen
-// embedding (the existing seedFaceIdentityFace derives its embedding from the
-// face index, which we don't want when pinning the candidate-set contract).
-func seedFaceIdentityFaceWithEmbedding(t *testing.T, ctx context.Context, repo *FaceRepo, workspaceID, assetID uuid.UUID, galleryID *uuid.UUID, clusterLabel *uuid.UUID, embedding []float32, faceIndex int) {
-	t.Helper()
-	require.NoError(t, repo.StoreFaces(ctx, []*FaceCluster{{
-		WorkspaceID:  workspaceID,
-		AssetID:      assetID,
-		GalleryID:    galleryID,
-		FaceIndex:    faceIndex,
-		BoundingBox:  BoundingBox{X: 0.1, Y: 0.2, W: 0.3, H: 0.4},
-		Embedding:    embedding,
-		ClusterLabel: clusterLabel,
-		ClusterName:  "Cluster",
-		Confidence:   0.95,
-		Source:       "client",
-	}}))
 }
 
 func facesToAssetIDs(faces []*FaceCluster) []uuid.UUID {

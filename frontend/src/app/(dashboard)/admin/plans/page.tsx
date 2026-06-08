@@ -211,6 +211,35 @@ function productQuotaSummary(product: EditableProduct): string {
   return formatQuotaBytes(bytes >= TB ? Math.round(bytes) : bytes);
 }
 
+function stableCatalogValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(stableCatalogValue);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entry]) => [key, stableCatalogValue(entry)]),
+    );
+  }
+  return value;
+}
+
+function sameCatalogPayload(left: unknown, right: unknown): boolean {
+  return (
+    JSON.stringify(stableCatalogValue(left)) ===
+    JSON.stringify(stableCatalogValue(right))
+  );
+}
+
+function currentPlanPayload(plan: AdminPlan): Record<string, unknown> {
+  return { tier: plan.tier, ...toPlanUpdateInput(toEditablePlan(plan)) };
+}
+
+function currentProductPayload(product: AdminBillingProduct): AdminBillingProduct {
+  return toProductUpdateInput(toEditableProduct(product));
+}
+
 function eventProductValidationError(product: EditableProduct): string {
   if (product.product_type !== "event_upload" || !product.active) return "";
   const quotaGB = Number(product.quota_gb);
@@ -353,6 +382,14 @@ export default function AdminPlansPage() {
       ) ?? {
         tier: plan.tier,
       };
+      if (
+        "name" in beforeState &&
+        sameCatalogPayload(afterState, currentPlanPayload(beforeState))
+      ) {
+        await reloadCatalogAndChanges();
+        setMessage(`${plan.name || plan.tier} plan has no changes to publish.`);
+        return;
+      }
       const created = await createPricingChangeRequest(token, {
         request_type: "plan_update",
         target_type: "subscription_plan",
@@ -422,6 +459,16 @@ export default function AdminPlansPage() {
       ) ?? {
         code: product.code,
       };
+      if (
+        "name" in beforeState &&
+        sameCatalogPayload(afterState, currentProductPayload(beforeState))
+      ) {
+        await reloadCatalogAndChanges();
+        setMessage(
+          `${product.name || product.code} product has no changes to publish.`,
+        );
+        return;
+      }
       const created = await createPricingChangeRequest(token, {
         request_type: "product_update",
         target_type: "billing_product",

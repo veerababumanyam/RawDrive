@@ -333,6 +333,25 @@ describe("AdminPlansPage", () => {
     expect(mockGetAdminPricingCatalog).toHaveBeenCalledTimes(2);
   });
 
+  it("does not create a pricing change when a plan has no edits", async () => {
+    render(<AdminPlansPage />);
+
+    expect(await screen.findByDisplayValue("Creator")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Save & publish plan" })[2],
+    );
+
+    expect(
+      await screen.findByText("Creator plan has no changes to publish."),
+    ).toBeInTheDocument();
+    expect(mockCreatePricingChangeRequest).not.toHaveBeenCalled();
+    expect(mockSubmitPricingChangeRequest).not.toHaveBeenCalled();
+    expect(mockApprovePricingChangeRequest).not.toHaveBeenCalled();
+    expect(mockPublishPricingChangeRequest).not.toHaveBeenCalled();
+    expect(mockGetAdminPricingCatalog).toHaveBeenCalledTimes(2);
+  });
+
   it("submits billing product edits with structured metadata", async () => {
     render(<AdminPlansPage />);
 

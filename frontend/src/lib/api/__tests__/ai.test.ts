@@ -649,7 +649,7 @@ describe("uploadAssetFaceIndexImage (server-assisted encrypted face index)", () 
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 502,
-      text: () => Promise.resolve("failed to index faces"),
+      text: () => Promise.resolve('{"error":"failed to index faces"}'),
     });
     await expect(
       uploadAssetFaceIndexImage(
@@ -657,6 +657,23 @@ describe("uploadAssetFaceIndexImage (server-assisted encrypted face index)", () 
         new Blob(["webp"], { type: "image/webp" }),
       ),
     ).rejects.toThrow(/failed to index|502/);
+  });
+
+  it("normalizes JSON error responses before surfacing them", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 502,
+      text: () => Promise.resolve('{"error":"failed to index faces"}'),
+    });
+
+    await expect(
+      uploadAssetFaceIndexImage(
+        "asset-1",
+        new Blob(["webp"], { type: "image/webp" }),
+      ),
+    ).rejects.toThrow(
+      "Face index image upload failed: 502 failed to index faces",
+    );
   });
 
   it("maps face index service unavailability to a typed error", async () => {

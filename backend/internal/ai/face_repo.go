@@ -45,7 +45,7 @@ func (r *FaceRepo) StoreFaces(ctx context.Context, faces []*FaceCluster) error {
 			 created_at, updated_at)
 			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
 			fc.ID, fc.WorkspaceID, fc.AssetID, fc.GalleryID, fc.FaceIndex,
-			bboxJSON, pgvector.NewVector(fc.Embedding),
+			string(bboxJSON), pgvector.NewVector(fc.Embedding),
 			fc.ClusterLabel, fc.ClusterName, fc.Confidence, fc.Source,
 			fc.CreatedAt, fc.UpdatedAt,
 		)
@@ -558,7 +558,7 @@ func (r *FaceRepo) GetFaceIndexStatus(ctx context.Context, workspaceID, galleryI
 	status := &FaceIndexStatus{GalleryID: galleryID}
 	if err := r.pool.QueryRow(ctx, `
 		WITH gallery_photos AS (
-			SELECT a.id, a.status, a.thumbnail_urls
+			SELECT DISTINCT a.id, a.status, a.thumbnail_urls, a.storage_key
 			FROM gallery_assets ga
 			JOIN assets a ON a.id = ga.asset_id AND a.deleted_at IS NULL
 			WHERE ga.gallery_id = $1
@@ -566,9 +566,12 @@ func (r *FaceRepo) GetFaceIndexStatus(ctx context.Context, workspaceID, galleryI
 			  AND lower(a.content_type) LIKE 'image/%'
 		)
 		SELECT
-		  COUNT(*)::int AS uploaded_photos,
-		  COUNT(*) FILTER (
-		    WHERE status = 'ready' AND thumbnail_urls IS NOT NULL AND thumbnail_urls <> '{}'::jsonb
+		  COUNT(DISTINCT gp.id)::int AS uploaded_photos,
+		  COUNT(DISTINCT gp.id) FILTER (
+		    WHERE status = 'ready' AND (
+		      (thumbnail_urls IS NOT NULL AND thumbnail_urls <> '{}'::jsonb)
+		      OR COALESCE(storage_key, '') <> ''
+		    )
 		  )::int AS indexable_photos,
 		  COUNT(fc.id)::int AS indexed_faces,
 		  COUNT(DISTINCT fc.asset_id)::int AS indexed_photos

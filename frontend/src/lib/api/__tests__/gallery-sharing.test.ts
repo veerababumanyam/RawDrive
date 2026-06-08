@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createGalleryShareLink,
+  deleteGallery,
   listGalleryMediaKeys,
   listGalleryShareLinks,
   revokeGalleryShareLink,
@@ -78,6 +79,20 @@ describe("gallery share API", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/api/v1/galleries/gallery-1/share/share-1"),
       expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("deletes galleries with keepalive so browser close does not cancel cleanup", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 204 });
+
+    await deleteGallery("token", "gallery-1");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/v1/galleries/gallery-1"),
+      expect.objectContaining({
+        method: "DELETE",
+        keepalive: true,
+      }),
     );
   });
 

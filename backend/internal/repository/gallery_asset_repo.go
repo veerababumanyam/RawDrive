@@ -228,6 +228,20 @@ const sqlGalleryAssetDeletableIDsForGallery = `SELECT DISTINCT ga.asset_id
 		       AND other_g.deleted_at IS NULL
 		   )`
 
+const sqlGalleryAssetOrphanedIDsForWorkspace = `SELECT DISTINCT ga.asset_id
+		 FROM gallery_assets ga
+		 JOIN assets a ON a.id = ga.asset_id
+		 WHERE a.workspace_id = $1
+		   AND a.deleted_at IS NULL
+		   AND NOT EXISTS (
+		     SELECT 1
+		     FROM gallery_assets live_ga
+		     JOIN galleries live_g ON live_g.id = live_ga.gallery_id
+		     WHERE live_ga.asset_id = ga.asset_id
+		       AND live_g.workspace_id = $1
+		       AND live_g.deleted_at IS NULL
+		   )`
+
 // ListByGallery returns all active assets in a gallery ordered by sort_order.
 func (r *GalleryAssetRepo) ListByGallery(ctx context.Context, galleryID uuid.UUID) ([]GalleryAsset, error) {
 	rows, err := r.pool.Query(ctx, sqlGalleryAssetListByGallery, galleryID)
@@ -262,6 +276,29 @@ func (r *GalleryAssetRepo) ListDeletableAssetIDsForGallery(ctx context.Context, 
 		var id uuid.UUID
 		if err := rows.Scan(&id); err != nil {
 			return nil, fmt.Errorf("gallery asset deletable ids scan: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// ListOrphanedAssetIDsForWorkspace returns active workspace assets that were
+// linked to at least one gallery but no longer belong to any live gallery.
+// Running this after gallery deletion closes the "delete all galleries" race
+// where concurrent deletes could each see the other gallery as live before both
+// are soft-deleted, and it also repairs older orphaned gallery photos.
+func (r *GalleryAssetRepo) ListOrphanedAssetIDsForWorkspace(ctx context.Context, workspaceID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := r.pool.Query(ctx, sqlGalleryAssetOrphanedIDsForWorkspace, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("gallery asset orphaned ids: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("gallery asset orphaned ids scan: %w", err)
 		}
 		ids = append(ids, id)
 	}

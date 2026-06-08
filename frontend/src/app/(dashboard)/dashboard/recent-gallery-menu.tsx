@@ -145,14 +145,16 @@ export function RecentGalleryMenu({
           {confirmingDelete ? (
             <div
               role="alertdialog"
+              aria-busy={deleting}
               aria-label={`Confirm deleting ${gallery.title}`}
-              className="glass-confirm-bar mt-1"
+              className="glass-confirm-bar mt-1 flex-wrap"
             >
               <span className="glass-confirm-bar__label">Delete?</span>
               <GlassButton
                 type="button"
                 size="sm"
                 variant="quiet"
+                disabled={deleting}
                 onClick={(event) => {
                   stop(event);
                   setConfirmingDelete(false);
@@ -170,6 +172,21 @@ export function RecentGalleryMenu({
               >
                 {deleting ? "Deleting…" : "Confirm"}
               </GlassButton>
+              {deleting && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="basis-full space-y-1 px-1 pb-1 text-xs font-medium text-text-secondary"
+                >
+                  <span>Deleting gallery…</span>
+                  <span
+                    aria-hidden="true"
+                    className="block h-1.5 overflow-hidden rounded-full bg-surface-container-high"
+                  >
+                    <span className="block h-full w-2/3 animate-pulse rounded-full bg-feedback-error" />
+                  </span>
+                </div>
+              )}
             </div>
           ) : (
             <button

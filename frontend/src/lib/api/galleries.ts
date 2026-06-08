@@ -858,7 +858,10 @@ export async function updateGalleryDesign(
 }
 
 export async function deleteGallery(_token: string, id: string): Promise<void> {
-  const res = await authFetch(`/api/v1/galleries/${id}`, { method: "DELETE" });
+  const res = await authFetch(`/api/v1/galleries/${id}`, {
+    method: "DELETE",
+    keepalive: true,
+  });
   if (!res.ok) throw new Error(`Failed to delete gallery: ${res.status}`);
 }
 

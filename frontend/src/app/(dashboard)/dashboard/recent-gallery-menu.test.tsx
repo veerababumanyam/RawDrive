@@ -131,6 +131,26 @@ describe("RecentGalleryMenu", () => {
     await waitFor(() => expect(onDeleted).toHaveBeenCalledWith("g-1"));
   });
 
+  it("shows a delete status bar while the request is pending", async () => {
+    deleteGallery.mockReturnValueOnce(new Promise(() => {}));
+    render(
+      <RecentGalleryMenu
+        gallery={makeGallery()}
+        token="tok-123"
+        onDeleted={vi.fn()}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /actions for smith wedding/i }),
+    );
+    fireEvent.click(screen.getByText("Delete"));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent(/deleting gallery/i);
+    expect(screen.getByRole("button", { name: /deleting/i })).toBeDisabled();
+  });
+
   it("navigates to the gallery on Open", () => {
     render(
       <RecentGalleryMenu

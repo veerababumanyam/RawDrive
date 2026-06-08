@@ -421,6 +421,7 @@ function GalleryCardActions({
   copied,
   sharing,
   confirmingDelete,
+  deleting,
   onToggleShare,
   onCopyShare,
   onEmailShare,
@@ -436,6 +437,7 @@ function GalleryCardActions({
   copied: boolean;
   sharing: boolean;
   confirmingDelete: boolean;
+  deleting: boolean;
   onToggleShare: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onCopyShare: () => void;
   onEmailShare: () => void;
@@ -467,8 +469,9 @@ function GalleryCardActions({
       {confirmingDelete ? (
         <div
           role="alertdialog"
+          aria-busy={deleting}
           aria-label="Confirm gallery deletion"
-          className="glass-confirm-bar"
+          className="glass-confirm-bar flex-wrap"
         >
           <span className="glass-confirm-bar__label">Delete?</span>
           <GlassButton
@@ -476,6 +479,7 @@ function GalleryCardActions({
             onClick={onCancelDelete}
             variant="quiet"
             size="sm"
+            disabled={deleting}
           >
             Cancel
           </GlassButton>
@@ -485,9 +489,25 @@ function GalleryCardActions({
             onClick={onConfirmDelete}
             variant="danger"
             size="sm"
+            disabled={deleting}
           >
-            Confirm
+            {deleting ? "Deleting…" : "Confirm"}
           </GlassButton>
+          {deleting && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="basis-full space-y-1 px-1 pb-1 text-xs font-medium text-text-secondary"
+            >
+              <span>Deleting gallery…</span>
+              <span
+                aria-hidden="true"
+                className="block h-1.5 overflow-hidden rounded-full bg-surface-container-high"
+              >
+                <span className="block h-full w-2/3 animate-pulse rounded-full bg-feedback-error" />
+              </span>
+            </div>
+          )}
         </div>
       ) : (
         <GlassIconButton
@@ -496,6 +516,7 @@ function GalleryCardActions({
           variant="danger"
           label={`Delete ${gallery.title}`}
           onClick={onArmDelete}
+          disabled={deleting}
         >
           <Trash />
         </GlassIconButton>
@@ -545,6 +566,9 @@ export default function GalleriesPage() {
   // means arming Delete on a different card auto-disarms the previous one,
   // so the inline confirm bar never appears on two cards simultaneously.
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingGalleryId, setDeletingGalleryId] = useState<string | null>(
+    null,
+  );
   // ID of the gallery whose share link was just copied — cleared after 1.5s.
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [shareMenuGalleryId, setShareMenuGalleryId] = useState<string | null>(
@@ -783,6 +807,8 @@ export default function GalleriesPage() {
       setConfirmDeleteId(null);
       return;
     }
+    if (deletingGalleryId) return;
+    setDeletingGalleryId(galleryId);
     try {
       await deleteGallery(token, galleryId);
       setConfirmDeleteId(null);
@@ -790,6 +816,8 @@ export default function GalleriesPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete gallery");
       setConfirmDeleteId(null);
+    } finally {
+      setDeletingGalleryId(null);
     }
   };
 
@@ -1187,7 +1215,7 @@ export default function GalleriesPage() {
                 <option value="proofing">
                   Proofing — client selects favorites
                 </option>
-                <option value="delivery">Delivery — final hand-off</option>
+                <option value="delivery">Delivery — final deleviary</option>
               </select>
             </div>
             <div className="rounded-xl border border-border-default bg-surface-container-low p-4">
@@ -1372,9 +1400,11 @@ export default function GalleriesPage() {
                         copied={copiedId === g.id}
                         sharing={sharingGalleryId === g.id}
                         confirmingDelete={confirmDeleteId === g.id}
+                        deleting={deletingGalleryId === g.id}
                         onToggleShare={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
+                          if (deletingGalleryId === g.id) return;
                           setConfirmDeleteId(null);
                           setShareMenuGalleryId((current) =>
                             current === g.id ? null : g.id,
@@ -1387,6 +1417,7 @@ export default function GalleriesPage() {
                         onCancelDelete={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
+                          if (deletingGalleryId === g.id) return;
                           setConfirmDeleteId(null);
                         }}
                         onConfirmDelete={(event) => {
@@ -1455,9 +1486,11 @@ export default function GalleriesPage() {
                       copied={copiedId === g.id}
                       sharing={sharingGalleryId === g.id}
                       confirmingDelete={confirmDeleteId === g.id}
+                      deleting={deletingGalleryId === g.id}
                       onToggleShare={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
+                        if (deletingGalleryId === g.id) return;
                         setConfirmDeleteId(null);
                         setShareMenuGalleryId((current) =>
                           current === g.id ? null : g.id,
@@ -1470,6 +1503,7 @@ export default function GalleriesPage() {
                       onCancelDelete={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
+                        if (deletingGalleryId === g.id) return;
                         setConfirmDeleteId(null);
                       }}
                       onConfirmDelete={(event) => {

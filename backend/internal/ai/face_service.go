@@ -357,7 +357,9 @@ func (s *FaceService) FilterByClusterInGallery(ctx context.Context, workspaceID,
 //     an existing cluster in the workspace above the similarity floor
 //   - Found=true                       → ClusterLabel/Name identify the
 //     matched person; AssetIDs are the photos in this gallery that
-//     contain that cluster
+//     contain that cluster plus same-gallery faces that independently
+//     clear the retrieval floor. This keeps Photo Search useful
+//     when auto-clustering splits one person across several labels.
 type FaceSearchResult struct {
 	Found         bool
 	ClusterLabel  *uuid.UUID
@@ -373,7 +375,7 @@ type FaceSearchResult struct {
 // SearchByFace runs face-svc detection on an ad-hoc image (the camera
 // capture from the dashboard "Photo Search" view), picks the
 // highest-confidence face, finds the nearest existing cluster in the
-// workspace via pgvector cosine, then returns the cluster's photos
+// workspace via pgvector cosine, then returns the matching photos
 // scoped to the supplied gallery.
 //
 // Why two-stage (workspace match → gallery scope): clustering identity
@@ -560,6 +562,15 @@ func (s *FaceService) SearchByFace(ctx context.Context, workspaceID, galleryID u
 	if err != nil {
 		return nil, fmt.Errorf("face service: list cluster assets in gallery: %w", err)
 	}
+	galleryMatchLimit := retrievalLimit
+	if galleryMatchLimit < 200 {
+		galleryMatchLimit = 200
+	}
+	galleryMatches, err := s.faceRepo.FindSimilarFacesInGalleryScored(ctx, best.Embedding, galleryID, retrievalThreshold, galleryMatchLimit)
+	if err != nil {
+		return nil, fmt.Errorf("face service: find gallery matches: %w", err)
+	}
+	assetIDs = mergeFaceSearchAssetIDs(assetIDs, galleryMatches)
 	if len(assetIDs) == 0 {
 		return baseNoMatch, nil
 	}
@@ -575,6 +586,30 @@ func (s *FaceService) SearchByFace(ctx context.Context, workspaceID, galleryID u
 		IndexedFaces:  indexStatus.IndexedFaces,
 		IndexedPeople: indexStatus.IndexedPeople,
 	}, nil
+}
+
+func mergeFaceSearchAssetIDs(clusterAssetIDs []uuid.UUID, galleryMatches []FaceMatch) []uuid.UUID {
+	seen := make(map[uuid.UUID]bool, len(clusterAssetIDs)+len(galleryMatches))
+	ids := make([]uuid.UUID, 0, len(clusterAssetIDs)+len(galleryMatches))
+	for _, id := range clusterAssetIDs {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
+	for _, match := range galleryMatches {
+		if match.Face == nil {
+			continue
+		}
+		id := match.Face.AssetID
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 // GetClusters returns cluster summaries for a workspace/gallery.

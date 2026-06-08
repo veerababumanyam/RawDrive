@@ -63,6 +63,24 @@ export function isPhotoSearchUnavailableError(
   return err instanceof PhotoSearchUnavailableError;
 }
 
+function extractApiErrorMessage(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  try {
+    const body = JSON.parse(trimmed) as { error?: unknown; message?: unknown };
+    if (typeof body.error === "string") return body.error;
+    if (typeof body.message === "string") return body.message;
+  } catch {
+    // Plain-text errors are common from http.Error and proxy responses.
+  }
+  return trimmed;
+}
+
+function apiErrorMessage(prefix: string, status: number, text: string): string {
+  const detail = extractApiErrorMessage(text);
+  return detail ? `${prefix}: ${status} ${detail}` : `${prefix}: ${status}`;
+}
+
 // SampleBoundingBox mirrors the backend ai.BoundingBox shape (pixels of
 // the original image — sourced from face_clusters.bounding_box JSONB).
 // PR-3 people tab uses this to crop the cluster cover thumbnail to just
@@ -670,7 +688,9 @@ export async function uploadAssetFaceIndexImage(
         "Face recognition is turned off for this workspace.",
       );
     }
-    throw new Error(text || `Face index image upload failed: ${res.status}`);
+    throw new Error(
+      apiErrorMessage("Face index image upload failed", res.status, text),
+    );
   }
   return res.json();
 }

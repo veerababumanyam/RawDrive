@@ -59,8 +59,9 @@ elsewhere, absent.
 
 | # | Layer | Finding | Severity |
 |---|-------|---------|----------|
+| **B-L1** | **Legal/All** | **InsightFace `buffalo_l` pretrained weights are licensed NON-COMMERCIAL research only — and the live `face-svc` sidecar already ships them in production. Blocks commercial use server-side AND any browser path. Undocumented in this audit and the e2ee-face-search spec. See §8.1.** | **High (legal)** |
 | B-P1 | DB/Backend | "Opt-in" biometric gate flipped to **default-TRUE + backfilled** (mig 112/111); comments/AGENTS.md still say opt-in → DPDP/GDPR Art 9 exposure, no consent capture | **High** |
-| B-E1 | All | E2EE: server can't index ciphertext; `client_face_index` OFF by default + ONNX path unwired → **Find-Me non-functional on E2EE galleries** in default posture | **High (product)** |
+| B-E1 | All | E2EE: server can't index ciphertext; `client_face_index` OFF by default + ONNX path unwired → **Find-Me non-functional on E2EE galleries** in default posture. **⚠️ CORRECTED in §8.2 — this is wrong for the LIVE path: `/face-index-image` is NOT flag-gated and indexes by sending the server a decrypted PLAINTEXT face frame (defeats E2EE); it only no-ops when face-svc is unreachable.** | **High (product) — reframed by §8.2** |
 | FE-6 | Frontend | `/ai/faces` `FaceClusterDetail` renders **E2EE ciphertext thumbnails** (no decrypt hook) → permanently broken on encrypted galleries | **High** |
 | FE-1 | Frontend | In-browser face-index sends 2400px first; 413-retry misses the prod **502**; upload path has no retry → silent no-index (the known 413/502 hazard) | **High** |
 | B-C1 | Backend | `ClusterFaces` read-then-`uuid.New()` is **not concurrency-safe** → same person splits into duplicate clusters under parallel worker+client ingest | **Medium** |
@@ -431,7 +432,132 @@ server" pairing (B-P1 + B-P2) arose.
 
 ---
 
-## 8. Evidence Index
+## 8. Extended Research — Verified Corrections & Missed Blockers
+
+> Added 2026-06-07. After the owner asked "are we really missing why it's not working,"
+> three parallel sub-audits re-read the **current** backend + frontend (file:line
+> verified, not trusting the prior audit's numbers) plus one external feasibility/
+> licensing pass. The result **corrects two central claims** in §1/§3 and adds **one
+> showstopper** that neither this audit nor `docs/features/e2ee-face-search/README.md`
+> captured. **Documentation only — no code changed.**
+
+### 8.1 SHOWSTOPPER (B-L1, outranks everything): `buffalo_l` weights are non-commercial — and the LIVE server already ships them
+- InsightFace **code** is MIT, but the **`buffalo_l` pretrained weights** (`det_10g` +
+  `w600k_r50`) are licensed *"for non-commercial research purposes only"* (InsightFace
+  GitHub README). Commercial use needs a separate paid license
+  (`recognition-oss-pack@insightface.ai`).
+- **This is not a future browser problem — it is a live exposure today.** The existing
+  `services/face-svc` sidecar auto-downloads and runs `buffalo_l` server-side in
+  production right now (it backs every guest selfie `photo-search`/`face-match` and the
+  `/face-index-image` path). A commercial photography SaaS is running
+  research-only weights in prod. A browser path (serving the weights from a public URL)
+  is *redistribution* — a more overt violation, not a new one.
+- **Neither this audit's roadmap (B-E1: "host the model, verify parity, flip the flag")
+  nor the e2ee-face-search spec mentions licensing at all.** It outranks the
+  model-hosting and parity blockers the team did document.
+- **Options:** (1) **buy the InsightFace commercial license** — keeps `buffalo_l`,
+  preserves the existing `vector(512)` index, no re-index; cleanest. (2) **AuraFace**
+  (commercial-friendly ArcFace r100, 512-d) — but a different embedding space → **full
+  re-index** of `face_clusters` (schema survives; data regenerated like mig 149's
+  truncate) and lower accuracy. (3) **MobileFaceNet ONNX (~5 MB)** — browser-friendly,
+  lower accuracy, verify the specific weights' license, **full re-index**. Embedding
+  spaces are **not interchangeable**, so any model swap is an index-wide regen event.
+
+### 8.2 CORRECTION to B-E1: E2EE Find-Me is **not** "off by default" — the live path indexes by sending the server a **plaintext face frame**
+The audit's headline (and the prior memory notes) said *`client_face_index` is OFF →
+Find-Me non-functional / honest-empty on E2EE galleries.* That **conflates two different
+ingest endpoints**, only one of which is live:
+
+- **`POST /assets/{id}/face-embeddings` — `StoreEmbeddings`** — the *truly E2EE-safe*
+  path (client posts 512-d vectors, never an image). **IS** flag-gated:
+  `client_face_index` default OFF → **404** (`face_embeddings_handler.go:152-155`). And
+  its frontend client `uploadAssetFaceEmbeddings` (`lib/api/ai.ts`) has **no production
+  caller** (only its own unit test). → **dead code on both ends.**
+- **`POST /assets/{id}/face-index-image` — `StoreIndexImage`** — the **LIVE** path that
+  `use-upload.ts:640-651` calls on every encrypted upload (and the "Reindex/Sync Now"
+  button via `galleries/[id]/page.tsx` + `FaceIdentityReviewPanel`). **Verified: it does
+  NOT check the `client_face_index` flag** (`face_embeddings_handler.go:265-337`). Its
+  only gates are: asset is an image, `imageIndexer != nil` (else 503), workspace
+  `face_recognition_enabled` (**default TRUE**), gallery `face_detection_enabled`
+  (**default TRUE**), body ≤ 10 MB, and face-svc reachable.
+
+**What actually happens on an E2EE upload:** the browser already decodes the photo to
+plaintext pixels in a `<canvas>` to build the encrypted WebP derivatives
+(`webp-derivatives.ts`), captures the plaintext `display_webp` frame as `faceIndexImage`,
+and **POSTs that plaintext frame** to `/face-index-image`; the server runs `buffalo_l`
+and stores embeddings. So **when face-svc is reachable, E2EE galleries DO get indexed —
+by decrypting a face frame and handing the server plaintext biometric pixels. That
+defeats E2EE for the face frame.**
+
+So **"why it's not working" by default is not the feature flag.** The real failure modes:
+1. **face-svc not configured/reachable** (no `FACE_SVC_URL`) → `StoreIndexImage` returns
+   503, which `use-upload.ts:652-658` **silently swallows** (`console.warn`) → uploads
+   succeed, index stays empty, no user signal. *(Deployment-dependent — the most likely
+   real cause of "empty Find-Me" in a given environment.)*
+2. **The 413/502 frame-too-large hazard** (FE-1 / the "Sync Now" 413/502/CORS report):
+   the frame is the 2400px `display_webp`; >10 MB trips `MaxBytesReader` → nginx
+   502/CORS-strip → aborts with no downscale.
+3. **The server-detection worker path** (`DetectAndStore`) *is* genuinely dead on E2EE
+   (reads ciphertext from B2) — but it is only triggered by the manual `scan-faces`
+   button, **never on upload**, so it isn't the everyday path.
+
+**Net inversion of the audit's story:** on E2EE the problem is **not** "empty/honest." It
+is "the only *working* ingest path **defeats E2EE** (plaintext face frame → server) and
+is also the 413/502 hazard, while the genuinely-E2EE-safe path is **dead code**
+(flag-off + no client model)." That reframing changes B-E1 from a *product-completeness*
+gap into a *privacy-contract* finding.
+
+### 8.3 My earlier derivative hypothesis was REFUTED (recorded so it isn't re-chased)
+The §7 working hypothesis — *"the server can't make WebP derivatives on E2EE galleries,
+so the browser path has nothing valid to fetch/decrypt"* — is **false**. The **client**
+generates the encrypted derivatives **and** the plaintext face-index frame in-browser at
+upload (`webp-derivatives.ts` `createEncryptedWebPDerivativeSet`; the server parks the
+encrypted asset at `waiting_derivatives` and never runs `cwebp`). **Plaintext pixels are
+already in hand in a canvas at upload time** — which is exactly the cheap hook point for
+genuine in-browser embedding. The *only* true blocker to client-side embedding is the
+**missing model/runtime**: there is **zero ML in the frontend** (no `onnxruntime-web`,
+`buffalo_l`, or any model in `package.json`, `node_modules`, or `public/`). The inert
+`uploadAssetFaceEmbeddings` is the pre-built ingest waiting for that model.
+
+### 8.4 Browser feasibility is fine; **parity** is the real engineering cost (informs slice 2b)
+- **Sizes:** `det_10g` 16 MB + `w600k_r50` 166 MB fp32 ≈ **182 MB** (the team's ~190 MB
+  is accurate); fp16 recognition ≈ **83 MB**. **int8 perturbs ArcFace geometry → breaks
+  parity**; both pipelines must share precision.
+- **Runtime:** `onnxruntime-web` is production-grade (~8–25 ms/face). **WebGPU is only
+  ~70% of browsers** (Chrome/Edge 113+, Safari 26, FF 141+) → **keep the WASM fallback;
+  do not hard-require WebGPU.**
+- **The real work** is reimplementing in JS: SCRFD detection + NMS, the 5-landmark
+  **affine warp to 112×112**, **BGR** channel order, **`(px − 127.5) / 128`**
+  normalization, and final **L2-normalize**. A preprocessing mismatch (warp / BGR /
+  normalization / detector threshold / precision) is the #1 parity killer.
+- **Parity gate (must block flag-on):** `cosine(browser_emb, face-svc_emb) ≥ ~0.98` on
+  every `tests/photos/` JPEG. The e2ee-face-search spec already mandates this harness.
+
+### 8.5 Re-ordered blocker stack for the E2EE feature (supersedes §6 item 8's framing)
+1. **Licensing (B-L1)** — resolve **first**; it also covers the live server. Buy the
+   `buffalo_l` commercial license, **or** switch model (AuraFace / MobileFaceNet → full
+   re-index).
+2. **Privacy-posture decision** — is sending a decrypted **plaintext face frame** to the
+   server (today's live `StoreIndexImage` behavior) acceptable for an E2EE product, or
+   must indexing be **client-embed-only** (`StoreEmbeddings` + in-browser model)? This is
+   a product/compliance decision, not a bug — but it is the crux. If client-embed-only is
+   required, the plaintext `/face-index-image` path must be **retired or guarded**.
+3. **Flag inconsistency** — `StoreEmbeddings` is flag-gated, `StoreIndexImage` is not.
+   Pick one contract for both ingest endpoints.
+4. **Model hosting** (commercially-licensed) → 5. **parity harness** → 6. **posture (a)
+   server-side-match vs (b) encrypted-embeddings client-side-match** from §7.4.
+7. **Deployment hygiene** — ensure `FACE_SVC_URL` is set and **stop silently swallowing
+   the 503**; surface an honest "indexing unavailable" state instead of an empty gallery.
+
+### 8.6 Source pointers (external)
+InsightFace GitHub (license statement) · InsightFace commercial face-recognition
+licensing · `immich-app/buffalo_l` HF repo (file sizes) · AuraFace (commercial-friendly
+ArcFace) · web.dev "WebGPU in major browsers" · caniuse/webgpu · ONNX Runtime Web docs ·
+InsightFace ONNX-conversion/preprocessing-parity guide.
+
+---
+
+## 9. Evidence Index
 
 | Layer | Path |
 |------|------|

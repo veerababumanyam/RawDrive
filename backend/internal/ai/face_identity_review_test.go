@@ -2,12 +2,18 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/rawdrive/backend/internal/face"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,12 +42,6 @@ func TestFaceRepo_FaceIndexStatusAndContactLink(t *testing.T) {
 
 	workspaceID, galleryID := seedFaceIdentityWorkspace(t, ctx, pool)
 	assetID := seedFaceIdentityAsset(t, ctx, pool, workspaceID, galleryID, "sync-now.jpg")
-	_, err := pool.Exec(ctx, `
-		UPDATE assets
-		SET thumbnail_urls = '{"display_webp":"thumbs/sync-now.webp"}'::jsonb
-		WHERE id = $1
-	`, assetID)
-	require.NoError(t, err)
 
 	status, err := repo.GetFaceIndexStatus(ctx, workspaceID, galleryID)
 	require.NoError(t, err)
@@ -53,9 +53,12 @@ func TestFaceRepo_FaceIndexStatusAndContactLink(t *testing.T) {
 
 	clusterLabel := uuid.New()
 	seedFaceIdentityFace(t, ctx, repo, workspaceID, assetID, &galleryID, clusterLabel, "Guest", 0)
+	seedFaceIdentityFace(t, ctx, repo, workspaceID, assetID, &galleryID, clusterLabel, "Guest", 1)
 	status, err = repo.GetFaceIndexStatus(ctx, workspaceID, galleryID)
 	require.NoError(t, err)
-	require.Equal(t, 1, status.IndexedFaces)
+	require.Equal(t, 1, status.UploadedPhotos)
+	require.Equal(t, 1, status.IndexablePhotos)
+	require.Equal(t, 2, status.IndexedFaces)
 	require.Equal(t, 1, status.IndexedPeople)
 	require.Equal(t, 1, status.IndexedPhotos)
 	require.Equal(t, "ready", status.Status)
@@ -162,6 +165,38 @@ func TestFaceService_MergeClusters_ValidatesAndPersistsAliases(t *testing.T) {
 	require.True(t, errors.Is(err, ErrSameCluster), "source aliases should resolve before merge")
 }
 
+func TestFaceService_SearchByFace_ReturnsGalleryMatchesAcrossSplitClusters(t *testing.T) {
+	pool := getAITestPool(t)
+	ctx := context.Background()
+	repo := NewFaceRepo(pool)
+	service := NewFaceService(repo, nil, nil).
+		WithFaceClient(faceClientReturningEmbedding(t, unitFaceEmbedding(1)))
+
+	workspaceID, galleryID := seedFaceIdentityWorkspace(t, ctx, pool)
+	winnerLabel := uuid.New()
+	splitLabel := uuid.New()
+	noiseLabel := uuid.New()
+	winnerA := seedFaceIdentityAsset(t, ctx, pool, workspaceID, galleryID, "person-a.jpg")
+	winnerB := seedFaceIdentityAsset(t, ctx, pool, workspaceID, galleryID, "person-b.jpg")
+	winnerC := seedFaceIdentityAsset(t, ctx, pool, workspaceID, galleryID, "person-c.jpg")
+	splitAsset := seedFaceIdentityAsset(t, ctx, pool, workspaceID, galleryID, "same-person-split.jpg")
+	noiseAsset := seedFaceIdentityAsset(t, ctx, pool, workspaceID, galleryID, "different-person.jpg")
+	seedFaceIdentityFaceWithEmbedding(t, ctx, repo, workspaceID, winnerA, &galleryID, winnerLabel, "Found You", 0, unitFaceEmbedding(0.55))
+	seedFaceIdentityFaceWithEmbedding(t, ctx, repo, workspaceID, winnerB, &galleryID, winnerLabel, "Found You", 0, unitFaceEmbedding(0.54))
+	seedFaceIdentityFaceWithEmbedding(t, ctx, repo, workspaceID, winnerC, &galleryID, winnerLabel, "Found You", 0, unitFaceEmbedding(0.53))
+	seedFaceIdentityFaceWithEmbedding(t, ctx, repo, workspaceID, splitAsset, &galleryID, splitLabel, "", 0, unitFaceEmbedding(0.35))
+	seedFaceIdentityFaceWithEmbedding(t, ctx, repo, workspaceID, noiseAsset, &galleryID, noiseLabel, "", 0, unitFaceEmbedding(0.25))
+
+	result, err := service.SearchByFace(ctx, workspaceID, galleryID, []byte("search image"))
+
+	require.NoError(t, err)
+	require.True(t, result.Found)
+	require.NotNil(t, result.ClusterLabel)
+	require.Equal(t, winnerLabel, *result.ClusterLabel)
+	require.ElementsMatch(t, []uuid.UUID{winnerA, winnerB, winnerC, splitAsset}, result.AssetIDs)
+	require.NotContains(t, result.AssetIDs, noiseAsset)
+}
+
 func seedFaceIdentityWorkspace(t *testing.T, ctx context.Context, pool *pgxpool.Pool) (uuid.UUID, uuid.UUID) {
 	t.Helper()
 	workspaceID := uuid.New()
@@ -209,6 +244,11 @@ func seedFaceIdentityContact(t *testing.T, ctx context.Context, pool *pgxpool.Po
 
 func seedFaceIdentityFace(t *testing.T, ctx context.Context, repo *FaceRepo, workspaceID, assetID uuid.UUID, galleryID *uuid.UUID, clusterLabel uuid.UUID, clusterName string, faceIndex int) {
 	t.Helper()
+	seedFaceIdentityFaceWithEmbedding(t, ctx, repo, workspaceID, assetID, galleryID, clusterLabel, clusterName, faceIndex, faceIdentityEmbedding(float32(faceIndex+1)))
+}
+
+func seedFaceIdentityFaceWithEmbedding(t *testing.T, ctx context.Context, repo *FaceRepo, workspaceID, assetID uuid.UUID, galleryID *uuid.UUID, clusterLabel uuid.UUID, clusterName string, faceIndex int, embedding []float32) {
+	t.Helper()
 	label := clusterLabel
 	err := repo.StoreFaces(ctx, []*FaceCluster{{
 		WorkspaceID:  workspaceID,
@@ -216,7 +256,7 @@ func seedFaceIdentityFace(t *testing.T, ctx context.Context, repo *FaceRepo, wor
 		GalleryID:    galleryID,
 		FaceIndex:    faceIndex,
 		BoundingBox:  BoundingBox{X: 0.1, Y: 0.2, W: 0.3, H: 0.4},
-		Embedding:    faceIdentityEmbedding(float32(faceIndex + 1)),
+		Embedding:    embedding,
 		ClusterLabel: &label,
 		ClusterName:  clusterName,
 		Confidence:   0.95,
@@ -230,4 +270,39 @@ func faceIdentityEmbedding(seed float32) []float32 {
 	embedding[0] = seed
 	embedding[1] = 1
 	return embedding
+}
+
+func unitFaceEmbedding(similarity float64) []float32 {
+	embedding := make([]float32, 512)
+	embedding[0] = float32(similarity)
+	if similarity < 1 {
+		embedding[1] = float32(math.Sqrt(1 - similarity*similarity))
+	}
+	return embedding
+}
+
+func faceClientReturningEmbedding(t *testing.T, embedding []float32) *face.Client {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/detect", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(face.DetectResponse{
+			Faces: []face.Face{{
+				Bbox:      face.Bbox{X: 1, Y: 1, W: 20, H: 20},
+				Embedding: embedding,
+				DetScore:  0.99,
+			}},
+			ImageWidth:  100,
+			ImageHeight: 100,
+			Model:       "test",
+		}))
+	}))
+	t.Cleanup(server.Close)
+	client, err := face.NewClient(face.Config{
+		BaseURL:    server.URL,
+		Timeout:    time.Second,
+		MaxRetries: -1,
+	})
+	require.NoError(t, err)
+	return client
 }

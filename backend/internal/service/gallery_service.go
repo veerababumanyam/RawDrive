@@ -590,15 +590,6 @@ func (s *GalleryService) SoftDelete(ctx context.Context, id uuid.UUID) error {
 // sync with the gallery surface: deleting the last gallery should not leave
 // orphaned originals consuming quota.
 func (s *GalleryService) SoftDeleteForWorkspace(ctx context.Context, id, workspaceID uuid.UUID) error {
-	var deletableAssetIDs []uuid.UUID
-	if s.galleryAssetRepo != nil && s.assetDeleteSvc != nil {
-		ids, err := s.galleryAssetRepo.ListDeletableAssetIDsForGallery(ctx, id)
-		if err != nil {
-			return fmt.Errorf("gallery service delete: list deletable assets: %w", err)
-		}
-		deletableAssetIDs = ids
-	}
-
 	// Invalidate cached public metadata BEFORE the soft-delete (GetByID returns
 	// nil for a deleted gallery), so the public surface stops serving it promptly.
 	s.invalidatePublicGalleryByID(ctx, id)
@@ -607,8 +598,15 @@ func (s *GalleryService) SoftDeleteForWorkspace(ctx context.Context, id, workspa
 		return err
 	}
 
-	if len(deletableAssetIDs) > 0 && s.assetDeleteSvc != nil {
-		if _, err := s.assetDeleteSvc.SoftDeleteManyForWorkspace(ctx, deletableAssetIDs, workspaceID); err != nil {
+	if s.galleryAssetRepo != nil && s.assetDeleteSvc != nil {
+		orphanedAssetIDs, err := s.galleryAssetRepo.ListOrphanedAssetIDsForWorkspace(ctx, workspaceID)
+		if err != nil {
+			return fmt.Errorf("gallery service delete: list orphaned assets: %w", err)
+		}
+		if len(orphanedAssetIDs) == 0 {
+			return nil
+		}
+		if _, err := s.assetDeleteSvc.SoftDeleteManyForWorkspace(ctx, orphanedAssetIDs, workspaceID); err != nil {
 			return fmt.Errorf("gallery service delete: delete gallery assets: %w", err)
 		}
 	}

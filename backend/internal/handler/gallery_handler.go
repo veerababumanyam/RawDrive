@@ -871,9 +871,14 @@ func (h *GalleryHandler) SoftDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, workspaceID, ok := h.requireGalleryInWorkspace(w, r, id); !ok {
 		return
-	} else if err := h.gallerySvc.SoftDeleteForWorkspace(r.Context(), id, workspaceID); err != nil {
-		http.Error(w, `{"error":"delete failed"}`, http.StatusInternalServerError)
-		return
+	} else {
+		// Finish destructive gallery/asset cleanup even if the browser tab closes
+		// after DELETE is accepted. Authorization still uses r.Context() above.
+		deleteCtx := context.WithoutCancel(r.Context())
+		if err := h.gallerySvc.SoftDeleteForWorkspace(deleteCtx, id, workspaceID); err != nil {
+			http.Error(w, `{"error":"delete failed"}`, http.StatusInternalServerError)
+			return
+		}
 	}
 
 	w.WriteHeader(http.StatusNoContent)

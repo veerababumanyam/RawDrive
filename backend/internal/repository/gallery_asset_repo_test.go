@@ -150,3 +150,23 @@ func TestGalleryAssetDeletableIDsSQL_PreservesSharedLiveAssets(t *testing.T) {
 		}
 	}
 }
+
+func TestGalleryAssetOrphanedIDsSQL_CleansWorkspaceGalleryOrphans(t *testing.T) {
+	sql := sqlGalleryAssetOrphanedIDsForWorkspace
+
+	for _, frag := range []string{
+		"SELECT DISTINCT ga.asset_id",
+		"JOIN assets a ON a.id = ga.asset_id",
+		"a.workspace_id = $1",
+		"a.deleted_at IS NULL",
+		"NOT EXISTS",
+		"JOIN galleries live_g ON live_g.id = live_ga.gallery_id",
+		"live_ga.asset_id = ga.asset_id",
+		"live_g.workspace_id = $1",
+		"live_g.deleted_at IS NULL",
+	} {
+		if !strings.Contains(sql, frag) {
+			t.Fatalf("post-delete gallery orphan SQL missing %q; got:\n%s", frag, sql)
+		}
+	}
+}

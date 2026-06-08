@@ -473,22 +473,27 @@ export default function PhotoSearchPage({
       <ResizableWorkspaceSplit
         className="gallery-photo-search-workbench"
         storageKey="rawdrive:gallery-workspace:photo-search:split:v1"
-        label="Resize People Review and photo-search results"
+        label="Resize FaceID sync and photo search panels"
         secondarySide="start"
-        defaultSecondaryPercent={31}
-        minSecondaryPercent={24}
-        maxSecondaryPercent={42}
-        minSecondaryPx={320}
-        maxSecondaryPx={460}
+        defaultSecondaryPercent={25}
+        minSecondaryPercent={18}
+        maxSecondaryPercent={36}
+        minSecondaryPx={220}
+        maxSecondaryPx={380}
       >
         <aside
-          className="gallery-photo-search-review"
-          aria-label="People review and FaceID sync"
+          className="gallery-photo-search-rail space-y-4"
+          aria-label="FaceID sync"
         >
-          <FaceIdentityReviewPanel galleryId={id} token={token} />
+          <FaceIdentityReviewPanel
+            galleryId={id}
+            token={token}
+            autoSync
+            mode="sync-status"
+          />
         </aside>
 
-        <div className="gallery-photo-search-main">
+        <div className="gallery-photo-search-main space-y-4">
           {/* Camera + capture area. The preview shape is a vertical 4:3 so
           it works well for a single face — wider 16:9 makes the face
           smaller on the page than necessary. */}
@@ -622,8 +627,8 @@ export default function PhotoSearchPage({
                 We saw {searchResult?.faces_detected ?? 1}{" "}
                 {(searchResult?.faces_detected ?? 1) === 1 ? "face" : "faces"}{" "}
                 in the capture, but this gallery does not have indexed people
-                yet. Use Sync now in People Review, name or link the detected
-                people, then search again.
+                yet. FaceID sync starts automatically for ready gallery photos;
+                wait for sync to finish, then search again.
               </p>
               <div className="flex justify-center">
                 <button
