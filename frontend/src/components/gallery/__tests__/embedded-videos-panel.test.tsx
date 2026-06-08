@@ -147,4 +147,38 @@ describe("EmbeddedVideosPanel Instagram embeds", () => {
       "yt-1",
     ]);
   });
+
+  it("replaces a failed provider iframe with retry and open-link actions", () => {
+    const { container } = render(
+      <EmbeddedVideosPanel
+        galleryId="gallery-1"
+        initialVideos={[dashboardVideos[0]]}
+        readOnly
+      />,
+    );
+
+    const iframe = container.querySelector("iframe");
+    expect(iframe).toBeInstanceOf(HTMLIFrameElement);
+    fireEvent.error(iframe as HTMLIFrameElement);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Video player unavailable",
+    );
+    expect(
+      screen.getByRole("button", { name: "Retry player" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("link", { name: /Open on YouTube/ }).at(0),
+    ).toHaveAttribute(
+      "href",
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry player" }));
+
+    expect(container.querySelector("iframe")).toHaveAttribute(
+      "src",
+      "https://www.youtube.com/embed/dQw4w9WgXcQ?rel=0",
+    );
+  });
 });

@@ -22,7 +22,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
-import { Expand, Compress } from "@/components/icons";
+import { Compress, Expand, Pause, Play, RefreshCw } from "@/components/icons";
 
 interface Props {
   src: string;
@@ -34,6 +34,21 @@ interface Props {
 }
 
 const SPEEDS = [0.5, 1, 1.5, 2] as const;
+
+function playbackErrorMessage(error: MediaError | null): string {
+  switch (error?.code) {
+    case 1:
+      return "Video playback was interrupted. Retry when you are ready.";
+    case 2:
+      return "Video could not be loaded. Check the connection and retry.";
+    case 3:
+      return "This video format or codec is not supported by this browser.";
+    case 4:
+      return "This video source is unavailable or cannot be played here.";
+    default:
+      return "Video could not be played. Retry or open the original file.";
+  }
+}
 
 export function VideoPlayer({
   src,
@@ -53,21 +68,42 @@ export function VideoPlayer({
   const [trimIn, setTrimIn] = useState(0);
   const [trimOut, setTrimOut] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [lastSrc, setLastSrc] = useState(src);
+
+  if (lastSrc !== src) {
+    setLastSrc(src);
+    setPlaying(false);
+    setDuration(0);
+    setCurrent(0);
+    setTrimIn(0);
+    setTrimOut(0);
+    setPlaybackError(null);
+  }
 
   // Sync video element state into React on metadata load so duration is known
   // before the first render of the timeline.
   const onLoadedMetadata = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
-    setDuration(v.duration);
-    setTrimOut(v.duration);
+    const nextDuration =
+      Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 0;
+    setDuration(nextDuration);
+    setTrimOut(nextDuration);
+    setPlaybackError(null);
   }, []);
 
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
     if (v.paused) {
-      void v.play();
+      setPlaybackError(null);
+      void v.play().catch(() => {
+        setPlaying(false);
+        setPlaybackError(
+          "Browser blocked playback. Retry or open the original file.",
+        );
+      });
     } else {
       v.pause();
     }
@@ -83,6 +119,25 @@ export function VideoPlayer({
       v.currentTime = trimIn;
     }
   }, [showTrim, trimIn, trimOut]);
+
+  const onPlaybackError = useCallback(() => {
+    const v = videoRef.current;
+    setPlaying(false);
+    setPlaybackError(playbackErrorMessage(v?.error ?? null));
+  }, []);
+
+  const retryPlayback = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    setPlaybackError(null);
+    v.load();
+    void v.play().catch(() => {
+      setPlaying(false);
+      setPlaybackError(
+        "Browser blocked playback. Retry or open the original file.",
+      );
+    });
+  }, []);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -155,13 +210,44 @@ export function VideoPlayer({
         src={src}
         poster={poster}
         preload="metadata"
-        className="max-h-full max-w-full object-contain"
+        className={`max-h-full max-w-full object-contain transition-opacity ${
+          playbackError ? "opacity-35" : ""
+        }`}
         onLoadedMetadata={onLoadedMetadata}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
+        onError={onPlaybackError}
         onTimeUpdate={onTimeUpdate}
         onClick={togglePlay}
       />
+
+      {playbackError && (
+        <div
+          role="alert"
+          className="absolute inset-x-4 top-1/2 z-10 mx-auto flex max-w-xl -translate-y-1/2 flex-col items-center gap-3 rounded-2xl border border-text-media/15 bg-surface-scrim-strong/85 p-5 text-center text-text-media shadow-elevation-2 glass-blur-full"
+        >
+          <p className="text-sm font-semibold">Video player error</p>
+          <p className="text-sm text-text-media/75">{playbackError}</p>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={retryPlayback}
+              className="inline-flex items-center gap-2 rounded-xl border border-text-media/15 bg-surface-overlay/10 px-3 py-2 text-xs font-medium text-text-media hover:bg-surface-overlay/18"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Retry playback
+            </button>
+            <a
+              href={src}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-xl border border-text-media/15 bg-surface-overlay/10 px-3 py-2 text-xs font-medium text-text-media hover:bg-surface-overlay/18"
+            >
+              Open original
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* Control bar — rendered outside the video so fullscreen wraps the container. */}
       <div className="flex items-center gap-3 rounded-2xl bg-surface-overlay/10 glass-blur-full border border-text-media/[0.12] px-4 py-2 text-text-media">
@@ -169,9 +255,21 @@ export function VideoPlayer({
           type="button"
           onClick={togglePlay}
           className="h-9 w-9 shrink-0 rounded-full bg-surface-overlay/10 hover:bg-surface-overlay/20 flex items-center justify-center text-sm font-medium"
-          aria-label={playing ? "Pause (Space)" : "Play (Space)"}
+          aria-label={
+            playbackError
+              ? "Retry playback"
+              : playing
+                ? "Pause (Space)"
+                : "Play (Space)"
+          }
         >
-          {playing ? "❚❚" : "▶"}
+          {playbackError ? (
+            <RefreshCw className="h-4 w-4" />
+          ) : playing ? (
+            <Pause className="h-4 w-4" />
+          ) : (
+            <Play className="h-4 w-4" />
+          )}
         </button>
 
         {/* Timeline */}
@@ -184,6 +282,7 @@ export function VideoPlayer({
           onChange={(e) => seek(parseFloat(e.target.value))}
           className="flex-1 accent-text-media"
           aria-label="Seek"
+          disabled={duration <= 0 || !!playbackError}
         />
         <span className="w-20 text-right tabular-nums text-xs text-text-media/70">
           {fmt(current)} / {fmt(duration)}

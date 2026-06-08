@@ -27,6 +27,7 @@ import {
   ChevronDown,
   ChevronUp,
   InstagramMark,
+  RefreshCw,
   Trash,
   Video,
   YouTubeMark,
@@ -169,6 +170,9 @@ export function EmbeddedVideosPanel({
   const [titleInput, setTitleInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [failedEmbeds, setFailedEmbeds] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   // Live parse so the user sees provider feedback as they type. Empty
   // input is treated as "not yet" rather than "invalid".
@@ -197,6 +201,24 @@ export function EmbeddedVideosPanel({
       cancelled = true;
     };
   }, [videos]);
+
+  const markEmbedFailed = useCallback((id: string) => {
+    setFailedEmbeds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  }, []);
+
+  const clearEmbedFailure = useCallback((id: string) => {
+    setFailedEmbeds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }, []);
 
   const persist = useCallback(
     async (next: EmbeddedVideo[]) => {
@@ -422,11 +444,13 @@ export function EmbeddedVideosPanel({
         )
       ) : (
         <ul className="embedded-videos-grid grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {videos.map((v, index) => (
-            <li
-              key={v.id}
-              className="overflow-hidden rounded-xl border border-border-default bg-surface-raised"
-            >
+          {videos.map((v, index) => {
+            const embedFailed = failedEmbeds.has(v.id);
+            return (
+              <li
+                key={v.id}
+                className="overflow-hidden rounded-xl border border-border-default bg-surface-raised"
+              >
               {v.provider === "instagram" ? (
                 <div className="w-full bg-surface-scrim-strong p-3">
                   <blockquote
@@ -449,30 +473,68 @@ export function EmbeddedVideosPanel({
                 </div>
               ) : (
                 <div className="relative aspect-video w-full bg-surface-scrim-strong">
-                  {/* Loading shimmer behind the iframe — visible until the
-                      provider paints its player, then covered by it. */}
-                  <div
-                    aria-hidden="true"
-                    className="absolute inset-0 animate-pulse bg-surface-sunken"
-                  />
-                  <iframe
-                    src={embedUrlFor(v)}
-                    title={
-                      v.title || `Embedded ${v.provider} video ${v.video_id}`
-                    }
-                    loading="lazy"
-                    // YouTube/Vimeo require these specific allow tokens to
-                    // play. Without `encrypted-media` Chromium throws on
-                    // first play for DRM-detected content; without
-                    // `picture-in-picture` the YouTube PiP control is grey.
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowFullScreen
-                    // referrerPolicy=strict-origin-when-cross-origin keeps
-                    // YouTube's "Watch on YouTube" link working while not
-                    // leaking the gallery URL path to provider analytics.
-                    referrerPolicy="strict-origin-when-cross-origin"
-                    className="absolute inset-0 h-full w-full"
-                  />
+                  {embedFailed ? (
+                    <div
+                      role="alert"
+                      className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-4 text-center"
+                    >
+                      <p className="text-sm font-semibold text-text-primary">
+                        Video player unavailable
+                      </p>
+                      <p className="max-w-xs text-xs text-text-secondary">
+                        The provider blocked or failed this embedded player.
+                      </p>
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => clearEmbedFailure(v.id)}
+                          className="inline-flex items-center gap-1 rounded-xl border border-border-default bg-surface-raised px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface-sunken"
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                          Retry player
+                        </button>
+                        <a
+                          href={watchUrlFor(v)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 rounded-xl border border-border-default bg-surface-raised px-3 py-2 text-xs font-medium text-accent-primary hover:bg-surface-sunken"
+                        >
+                          Open on {providerLabel(v.provider)}
+                          <ArrowRight className="h-3 w-3" />
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Loading shimmer behind the iframe — visible until the
+                          provider paints its player, then covered by it. */}
+                      <div
+                        aria-hidden="true"
+                        className="absolute inset-0 animate-pulse bg-surface-sunken"
+                      />
+                      <iframe
+                        src={embedUrlFor(v)}
+                        title={
+                          v.title ||
+                          `Embedded ${v.provider} video ${v.video_id}`
+                        }
+                        loading="lazy"
+                        // YouTube/Vimeo require these specific allow tokens to
+                        // play. Without `encrypted-media` Chromium throws on
+                        // first play for DRM-detected content; without
+                        // `picture-in-picture` the YouTube PiP control is grey.
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                        // referrerPolicy=strict-origin-when-cross-origin keeps
+                        // YouTube's "Watch on YouTube" link working while not
+                        // leaking the gallery URL path to provider analytics.
+                        referrerPolicy="strict-origin-when-cross-origin"
+                        onErrorCapture={() => markEmbedFailed(v.id)}
+                        onLoad={() => clearEmbedFailure(v.id)}
+                        className="absolute inset-0 h-full w-full"
+                      />
+                    </>
+                  )}
                 </div>
               )}
               <div className="flex items-center justify-between gap-3 px-4 py-3">
@@ -573,7 +635,8 @@ export function EmbeddedVideosPanel({
                 )}
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </section>
