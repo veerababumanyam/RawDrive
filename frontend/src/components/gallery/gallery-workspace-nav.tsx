@@ -33,14 +33,9 @@ const sections: Section[] = [
   // chrome. The /galleries/[id]/ai page itself is still mounted (deep
   // links from gallery-ai-panel.tsx and bookmarks continue to work),
   // it just no longer appears in the top-level navigation strip.
-  // People tab removed 2026-05-18 — the dedicated person-first view
-  // ("Unnamed person N photos" tiles) didn't earn its real-estate
-  // alongside the cluster-vote Photo Search. Photo Search subsumes
-  // the use case (point camera → see the person's photos), so we
-  // surface only that here. Public-side guest galleries keep both
-  // People and Photo Search because guests can't aim a camera at the
-  // gallery owner's identified-people list directly.
-  { label: "Photo Search", path: "/photo-search" },
+  // FaceID combines the hidden People Review tools (rename, merge,
+  // split, CRM linking, sync) with the camera-driven Photo Search.
+  { label: "FaceID", path: "/photo-search" },
   { label: "Settings", path: "/settings" },
 ];
 

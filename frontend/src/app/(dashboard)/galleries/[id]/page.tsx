@@ -3416,12 +3416,12 @@ export default function GalleryDetailPage({
                 rendered as a row of "Unknown" pills because most
                 clusters haven't been named, which read as broken UX.
                 The same identity surface is available cleaner via
-                the People tab (per-person tile + click-through to
-                photos) and the Photo Search webcam flow. Both
-                handle the un-named-cluster case better. The
-                FaceFilter component file is retained — nothing
-                else imports it but it's trivially re-wirable if a
-                future iteration wants the chip strip back. */}
+                the FaceID workspace, which combines People Review
+                controls and the Photo Search webcam flow. It handles
+                the un-named-cluster case better. The FaceFilter
+                component file is retained — nothing else imports it
+                but it's trivially re-wirable if a future iteration
+                wants the chip strip back. */}
 
             {/* Drop zone — always visible, acts as upload target */}
             <div

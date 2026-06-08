@@ -40,10 +40,8 @@ describe("GalleryWorkspaceNav", () => {
       "Cover & Design",
       // AI tab removed from workspace nav 2026-05-19 — page still
       // accessible via deep links from gallery-ai-panel.tsx.
-      // Webcam-driven "find me in this gallery" search. The standalone
-      // People tab was removed 2026-05-18 in favor of Photo Search,
-      // which subsumes the use case for the dashboard surface.
-      "Photo Search",
+      // FaceID combines the People Review tools and camera search.
+      "FaceID",
       "Settings",
     ]) {
       expect(
@@ -66,9 +64,13 @@ describe("GalleryWorkspaceNav", () => {
     ).toHaveAttribute("href", "/galleries/gallery-1/cover");
     expect(within(nav).queryByRole("link", { name: "AI" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "People" })).toBeNull();
+    expect(within(nav).getByRole("link", { name: "FaceID" })).toHaveAttribute(
+      "href",
+      "/galleries/gallery-1/photo-search",
+    );
     expect(
-      within(nav).getByRole("link", { name: "Photo Search" }),
-    ).toHaveAttribute("href", "/galleries/gallery-1/photo-search");
+      within(nav).queryByRole("link", { name: "Photo Search" }),
+    ).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Delivery" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Sales" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Gallery" })).toBeNull();

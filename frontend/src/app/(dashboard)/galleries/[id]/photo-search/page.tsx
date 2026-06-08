@@ -28,8 +28,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 // useRouter import removed 2026-05-18 — the only consumer was the
 // "Open in People view" button (deep-link to the now-deleted People
-// page). Photo Search renders the matched cluster's photos inline so
-// no client-side navigation is needed from this page.
+// page). The People Review controls now live beside Photo Search on
+// this page so FaceID management and search stay in one discoverable
+// workspace.
 import { use } from "react";
 import { Camera, RefreshCw, Search } from "lucide-react";
 import { GalleryPageShell } from "@/components/gallery/gallery-page-shell";
@@ -465,31 +466,31 @@ export default function PhotoSearchPage({
     <GalleryPageShell galleryId={id} width="full">
       <GalleryPageHeader
         backHref={`/galleries/${id}`}
-        eyebrow="Photo Search"
-        title="Find a person in this gallery"
-        subtitle="Point your camera at someone's face and tap Capture. We'll match it against the people already detected in this gallery and show every photo they appear in."
+        eyebrow="FaceID"
+        title="Review people and search photos"
+        subtitle="Sync gallery photos, manage detected people, link clients, and use the camera to find every photo a person appears in."
       />
 
       <ResizableWorkspaceSplit
         className="gallery-photo-search-workbench"
         storageKey="rawdrive:gallery-workspace:photo-search:split:v1"
-        label="Resize FaceID sync and photo search panels"
+        label="Resize FaceID review and photo search panels"
         secondarySide="start"
-        defaultSecondaryPercent={25}
-        minSecondaryPercent={18}
-        maxSecondaryPercent={36}
-        minSecondaryPx={220}
-        maxSecondaryPx={380}
+        defaultSecondaryPercent={42}
+        minSecondaryPercent={26}
+        maxSecondaryPercent={58}
+        minSecondaryPx={360}
+        maxSecondaryPx={840}
       >
         <aside
           className="gallery-photo-search-rail space-y-4"
-          aria-label="FaceID sync"
+          aria-label="FaceID review"
         >
           <FaceIdentityReviewPanel
             galleryId={id}
             token={token}
             autoSync
-            mode="sync-status"
+            mode="review"
           />
         </aside>
 

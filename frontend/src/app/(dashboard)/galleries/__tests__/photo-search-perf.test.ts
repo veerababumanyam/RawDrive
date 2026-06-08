@@ -74,14 +74,13 @@ describe("gallery photo-search — batch hydration (PERF-23)", () => {
     expect(source).toContain("<FaceIdentityReviewPanel");
   });
 
-  it("keeps People Review hidden on the Photo Search page while auto-syncing gallery photos", () => {
+  it("shows People Review on the Photo Search page while auto-syncing gallery photos", () => {
     const source = read(photoSearchPath);
     expect(source).toContain("autoSync");
-    expect(source).toContain('mode="sync-status"');
+    expect(source).toContain('mode="review"');
     expect(source).toContain("ResizableWorkspaceSplit");
     expect(source).toContain("gallery-photo-search-rail");
-    expect(source).not.toContain('mode="review"');
-    expect(source).not.toContain("gallery-photo-search-review");
+    expect(source).not.toContain('mode="sync-status"');
   });
 
   it("uses a portrait camera focus reticle for face capture", () => {
