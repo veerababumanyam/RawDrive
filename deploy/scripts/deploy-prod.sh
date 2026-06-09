@@ -311,6 +311,45 @@ prepare_images() {
   done
 }
 
+publish_frontend_static_assets() {
+  local ip="$1"
+  local label="$2"
+  log "Publishing retained Next.js static assets on $label..."
+  $SSH "root@$ip" 'set -euo pipefail
+    store=/opt/rawdrive/app/frontend-static
+    next_store=/opt/rawdrive/app/frontend-static.new
+    mkdir -p "$store"
+
+    # Bootstrap the retained store with the currently running frontend assets so
+    # switching nginx to the host-side store cannot break users still loading the
+    # old app shell during the rolling deploy.
+    if docker ps --format "{{.Names}}" | grep -qx deploy-frontend-1; then
+      docker cp deploy-frontend-1:/app/.next/static/. "$store"/ >/dev/null 2>&1 || true
+    fi
+
+    rm -rf "$next_store"
+    mkdir -p "$next_store"
+    cid="$(docker create rawdrive-frontend:local)"
+    cleanup() {
+      docker rm -f "$cid" >/dev/null 2>&1 || true
+      rm -rf "$next_store"
+    }
+    trap cleanup EXIT
+    docker cp "$cid":/app/.next/static/. "$next_store"/
+    cp -a "$next_store"/. "$store"/
+    chmod -R a+rX "$store"
+  '
+}
+
+reconcile_nginx_static_store() {
+  local ip="$1"
+  local label="$2"
+  log "Reconciling nginx static-asset store on $label..."
+  $SSH "root@$ip" \
+    "cd $DEPLOY_DIR && docker compose -f $COMPOSE_FILE up -d --force-recreate --no-deps nginx" \
+    > /dev/null
+}
+
 # wait_ready polls /health/ready (DB + cache reachable AND migrations at head).
 # Returns 0 when ready, 1 otherwise. Informative: callers decide fail vs warn.
 wait_ready() {
@@ -550,11 +589,20 @@ else
   log "Skipping code push (--skip-push)"
 fi
 
-# --- Pre-migration backup (pending-aware) ---
-# Prepare Node 1's images first so we can ask the NEW migrate binary whether this
-# deploy has pending migrations; if so, take a recoverable snapshot BEFORE Node
-# 1's `up -d` applies them. Code-only deploys skip the backup (fast path).
+# --- Prepare images + static assets on BOTH nodes before either node serves
+# new HTML. This prevents Cloudflare from seeing the new app shell on one node
+# and a missing Next.js CSS/JS chunk on the still-rolling peer node.
 prepare_images "$APP1_IP" "Node 1"
+prepare_images "$APP2_IP" "Node 2"
+publish_frontend_static_assets "$APP1_IP" "Node 1"
+publish_frontend_static_assets "$APP2_IP" "Node 2"
+reconcile_nginx_static_store "$APP1_IP" "Node 1"
+reconcile_nginx_static_store "$APP2_IP" "Node 2"
+
+# --- Pre-migration backup (pending-aware) ---
+# Node 1's images are prepared now, so we can ask the NEW migrate binary whether
+# this deploy has pending migrations; if so, take a recoverable snapshot BEFORE
+# Node 1's `up -d` applies them. Code-only deploys skip the backup (fast path).
 maybe_pre_migration_backup "$APP1_IP"
 
 # --- Rolling deploy: Node 1 first (images already prepared above) ---
@@ -565,8 +613,8 @@ log "Verifying Node 1 frontend..."
 $SSH "root@$APP1_IP" "curl -fsS http://127.0.0.1:3000/ > /dev/null" \
   || { log "WARNING: Node 1 frontend not responding, proceeding anyway"; }
 
-# --- Rolling deploy: Node 2 ---
-deploy_node "$APP2_IP" "Node 2"
+# --- Rolling deploy: Node 2 (images/static store already prepared above) ---
+deploy_node "$APP2_IP" "Node 2" skip_prepare
 
 # --- Final verification ---
 log "=== Final Verification ==="

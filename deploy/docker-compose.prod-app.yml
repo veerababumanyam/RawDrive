@@ -382,6 +382,7 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/templates/rawdrive.conf.template:/etc/nginx/templates/rawdrive.conf.template:ro
+      - ../frontend-static:/srv/rawdrive-next-static/_next/static:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - /var/www/certbot:/var/www/certbot:ro
       - nginx_cache:/var/cache/nginx

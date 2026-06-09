@@ -9,6 +9,7 @@
 [data-theme="liquid-glass"] {
   /* Surface — cool blue-opal cast derived from the RawDrive aperture logo */
   --surface-base: #f6f9fd;
+  --deploy-static-generation: 20260609;
   --surface-elevated: #ffffff;
   --surface-sunken: #edf2f9;
   --surface-overlay: rgba(255, 255, 255, 0.78);

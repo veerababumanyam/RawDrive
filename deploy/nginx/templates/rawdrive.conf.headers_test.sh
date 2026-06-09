@@ -42,35 +42,33 @@ if [ ! -f "${TEMPLATE}" ]; then
   exit 2
 fi
 
-# Missing build chunks must never be cached by Cloudflare as text/plain 404s;
-# the app shell may reference a fresh chunk while the peer node is still
-# rolling, so the static location has to intercept misses and mark them no-store.
-if ! grep -Eq 'error_page[[:space:]]+404[[:space:]]+=[[:space:]]+@next_static_not_found;' "${TEMPLATE}"; then
-  echo "FAIL: /_next/static/ must route 404s to @next_static_not_found" >&2
+# Missing build chunks must never be cached by Cloudflare as text/plain 404s.
+# The app shell may reference a fresh chunk while the peer node is still rolling,
+# so nginx serves retained static files from a host-side store that is populated
+# on both nodes before either frontend starts serving the new HTML.
+if ! awk '
+  /^[[:space:]]*location[[:space:]]+\/_next\/static\/[[:space:]]*\{/ {
+    in_loc = 1; depth = 0; has_root = 0; has_try = 0; has_public_cc = 0;
+  }
+  in_loc {
+    n = gsub(/\{/, "{"); depth += n;
+    m = gsub(/\}/, "}"); depth -= m;
+    if ($0 ~ /root[[:space:]]+\/srv\/rawdrive-next-static;/) has_root = 1;
+    if ($0 ~ /try_files[[:space:]]+\$uri[[:space:]]+@next_static_not_found;/) has_try = 1;
+    if ($0 ~ /add_header[[:space:]]+Cache-Control[[:space:]]+"public, max-age=31536000, immutable"[[:space:]]+always/) has_public_cc = 1;
+    if (depth <= 0) {
+      found++;
+      in_loc = 0;
+      if (!has_root || !has_try || !has_public_cc) fail = 1;
+    }
+  }
+  END {
+    if (found != 1 || fail) exit 1;
+  }
+' "${TEMPLATE}"; then
+  echo "FAIL: /_next/static/ must serve retained static files and route misses to @next_static_not_found" >&2
   exit 1
 fi
-
-for header in Cache-Control CDN-Cache-Control Cloudflare-CDN-Cache-Control; do
-  if ! awk -v header="${header}" '
-    /^[[:space:]]*location[[:space:]]+\/_next\/static\/[[:space:]]*\{/ {
-      in_loc = 1; depth = 0; found = 0;
-    }
-    in_loc {
-      n = gsub(/\{/, "{"); depth += n;
-      m = gsub(/\}/, "}"); depth -= m;
-      if ($0 ~ "proxy_hide_header[[:space:]]+" header ";") found = 1;
-      if (depth <= 0) {
-        exit(found ? 0 : 1);
-      }
-    }
-    END {
-      if (!in_loc && !found) exit 1;
-    }
-  ' "${TEMPLATE}"; then
-    echo "FAIL: /_next/static/ must hide upstream ${header} before adding edge cache headers" >&2
-    exit 1
-  fi
-done
 
 if ! awk '
   /^[[:space:]]*location[[:space:]]+@next_static_not_found[[:space:]]*\{/ {

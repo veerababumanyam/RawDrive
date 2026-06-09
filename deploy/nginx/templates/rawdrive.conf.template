@@ -79,30 +79,17 @@ server {
         return 301 https://rawdrive.in$request_uri;
     }
 
-    # Next.js static assets — long cache + edge cache (immutable content-hashed)
+    # Next.js static assets — served directly from a retained host-side store.
+    #
+    # During a rolling deploy, Cloudflare may fetch HTML from the already-updated
+    # app node and then fetch the referenced CSS/JS from the peer node that has
+    # not switched frontend containers yet. Keep old and new .next/static files
+    # outside the frontend container and mount that store into nginx on both
+    # nodes before either node starts serving new HTML.
     location /_next/static/ {
-        proxy_pass http://frontend_upstream;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_hide_header Cache-Control;
-        proxy_hide_header CDN-Cache-Control;
-        proxy_hide_header Cloudflare-CDN-Cache-Control;
+        root /srv/rawdrive-next-static;
+        try_files $uri @next_static_not_found;
         add_header Cache-Control "public, max-age=31536000, immutable" always;
-        # Edge-cache immutable build assets so cold/cross-client hits don't
-        # re-proxy to Next.js. proxy_cache_lock collapses a thundering herd on a
-        # cache miss into one upstream fetch; use_stale serves the last good copy
-        # if the frontend is mid-deploy. (keys_zone defined in nginx.conf)
-        proxy_cache next_static;
-        proxy_cache_valid 200 7d;
-        proxy_cache_lock on;
-        proxy_cache_use_stale error timeout updating http_502 http_503 http_504;
-        add_header X-Cache-Status $upstream_cache_status always;
-        proxy_next_upstream error timeout http_502 http_503 http_504;
-        proxy_intercept_errors on;
-        error_page 404 = @next_static_not_found;
     }
 
     location @next_static_not_found {
