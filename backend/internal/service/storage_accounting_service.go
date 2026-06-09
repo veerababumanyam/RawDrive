@@ -470,9 +470,14 @@ func (s *StorageAccounting) ReconcileAll(ctx context.Context) (int64, error) {
 
 // GalleryStorageBreakdown shows storage used per gallery.
 type GalleryStorageBreakdown struct {
-	GalleryID   uuid.UUID `json:"gallery_id"`
-	GalleryName string    `json:"gallery_name"`
-	UsedBytes   int64     `json:"used_bytes"`
+	GalleryID                    uuid.UUID `json:"gallery_id"`
+	GalleryName                  string    `json:"gallery_name"`
+	UsedBytes                    int64     `json:"used_bytes"`
+	AccessRole                   string    `json:"access_role,omitempty"`
+	OwnerWorkspaceID             uuid.UUID `json:"owner_workspace_id,omitempty"`
+	OwnerWorkspaceName           string    `json:"owner_workspace_name,omitempty"`
+	StorageBilledToWorkspaceID   uuid.UUID `json:"storage_billed_to_workspace_id,omitempty"`
+	StorageBilledToWorkspaceName string    `json:"storage_billed_to_workspace_name,omitempty"`
 }
 
 // StorageTypeBreakdown shows storage used per asset type.
@@ -528,12 +533,44 @@ func (s *StorageAccounting) GetAnalytics(ctx context.Context, workspaceID uuid.U
 
 func (s *StorageAccounting) getTopGalleries(ctx context.Context, workspaceID uuid.UUID, limit int) ([]GalleryStorageBreakdown, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT g.id, g.title, COALESCE(SUM(a.size_bytes), 0) as total_bytes
-		 FROM galleries g
-		 LEFT JOIN gallery_assets ga ON ga.gallery_id = g.id
-		 LEFT JOIN assets a ON a.id = ga.asset_id AND a.deleted_at IS NULL
-		 WHERE g.workspace_id = $1 AND g.deleted_at IS NULL
-		 GROUP BY g.id, g.title
+		`WITH visible_galleries AS (
+			SELECT DISTINCT ON (g.id)
+			       g.id,
+			       g.title,
+			       g.workspace_id AS owner_workspace_id,
+			       COALESCE(owner_ws.name, '') AS owner_workspace_name,
+			       COALESCE(gws.storage_billed_to_workspace_id, g.workspace_id) AS billed_workspace_id,
+			       COALESCE(billed_ws.name, owner_ws.name, '') AS billed_workspace_name,
+			       CASE WHEN g.workspace_id = $1 THEN 'owner' ELSE 'shared' END AS access_role
+			  FROM galleries g
+			  LEFT JOIN LATERAL (
+			    SELECT s.*
+			      FROM gallery_workspace_shares s
+			     WHERE s.gallery_id = g.id
+			       AND s.revoked_at IS NULL
+			     ORDER BY
+			          CASE
+			            WHEN s.storage_billed_to_workspace_id = $1 THEN 0
+			            WHEN s.shared_workspace_id = $1 THEN 1
+			            ELSE 2
+			          END,
+			          s.created_at DESC
+			     LIMIT 1
+			  ) gws ON TRUE
+			  LEFT JOIN workspaces owner_ws ON owner_ws.id = g.workspace_id
+			  LEFT JOIN workspaces billed_ws ON billed_ws.id = COALESCE(gws.storage_billed_to_workspace_id, g.workspace_id)
+			 WHERE g.deleted_at IS NULL
+			   AND (g.workspace_id = $1 OR gws.shared_workspace_id = $1 OR gws.storage_billed_to_workspace_id = $1)
+			 ORDER BY g.id, CASE WHEN COALESCE(gws.storage_billed_to_workspace_id, g.workspace_id) = $1 THEN 0 ELSE 1 END
+		 )
+		 SELECT vg.id, vg.title, COALESCE(SUM(a.size_bytes), 0) as total_bytes,
+		        vg.access_role, vg.owner_workspace_id, vg.owner_workspace_name,
+		        vg.billed_workspace_id, vg.billed_workspace_name
+		   FROM visible_galleries vg
+		   LEFT JOIN gallery_assets ga ON ga.gallery_id = vg.id
+		   LEFT JOIN assets a ON a.id = ga.asset_id AND a.deleted_at IS NULL
+		  GROUP BY vg.id, vg.title, vg.access_role, vg.owner_workspace_id,
+		           vg.owner_workspace_name, vg.billed_workspace_id, vg.billed_workspace_name
 		 ORDER BY total_bytes DESC
 		 LIMIT $2`,
 		workspaceID, limit,
@@ -546,7 +583,16 @@ func (s *StorageAccounting) getTopGalleries(ctx context.Context, workspaceID uui
 	var result []GalleryStorageBreakdown
 	for rows.Next() {
 		var gb GalleryStorageBreakdown
-		if err := rows.Scan(&gb.GalleryID, &gb.GalleryName, &gb.UsedBytes); err != nil {
+		if err := rows.Scan(
+			&gb.GalleryID,
+			&gb.GalleryName,
+			&gb.UsedBytes,
+			&gb.AccessRole,
+			&gb.OwnerWorkspaceID,
+			&gb.OwnerWorkspaceName,
+			&gb.StorageBilledToWorkspaceID,
+			&gb.StorageBilledToWorkspaceName,
+		); err != nil {
 			return nil, err
 		}
 		result = append(result, gb)

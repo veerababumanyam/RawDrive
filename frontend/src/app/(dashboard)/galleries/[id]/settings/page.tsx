@@ -13,12 +13,16 @@ import {
 } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
 import {
+  createGalleryAccountShare,
   getGallery,
+  listGalleryAccountShares,
   listGalleryAssets,
+  revokeGalleryAccountShare,
   updateGallerySettings,
   uploadMusicTrack,
   selectGalleryMusic,
   type Gallery,
+  type GalleryAccountShare,
 } from "@/lib/api/galleries";
 import type { Asset } from "@/lib/api/assets";
 import { MusicLibraryManager } from "@/components/gallery/music-library-manager";
@@ -111,6 +115,16 @@ function formatExpiryDate(iso: string): string {
     month: "long",
     day: "numeric",
   });
+}
+
+function formatBytes(bytes: number): string {
+  if (!bytes) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.min(
+    units.length - 1,
+    Math.floor(Math.log(bytes) / Math.log(1024)),
+  );
+  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
 function expiryDaysLeft(iso: string): number | null {
@@ -459,6 +473,17 @@ export default function GallerySettingsPage({
   );
   const [watermarkPanelLayer, setWatermarkPanelLayer] =
     useState<WatermarkLayerKind>("logo");
+  const [accountShares, setAccountShares] = useState<GalleryAccountShare[]>(
+    [],
+  );
+  const [shareEmail, setShareEmail] = useState("");
+  const [shareBilling, setShareBilling] = useState<"owner" | "shared">(
+    "shared",
+  );
+  const [shareMigrateUsage, setShareMigrateUsage] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareSaving, setShareSaving] = useState(false);
+  const [shareError, setShareError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -512,6 +537,29 @@ export default function GallerySettingsPage({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const token = getStoredAccessToken();
+    if (!token || !gallery || gallery.access_role === "shared") return;
+    let cancelled = false;
+    void Promise.resolve()
+      .then(() => {
+        if (!cancelled) setShareLoading(true);
+        return listGalleryAccountShares(token, id);
+      })
+      .then((shares) => {
+        if (!cancelled) setAccountShares(shares);
+      })
+      .catch(() => {
+        if (!cancelled) setAccountShares([]);
+      })
+      .finally(() => {
+        if (!cancelled) setShareLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [gallery, id]);
 
   useEffect(() => {
     if (!watermarkPreviewOpen || !gallery) return;
@@ -887,6 +935,56 @@ export default function GallerySettingsPage({
     }
   };
 
+  const handleShareAccount = async () => {
+    const token = getStoredAccessToken();
+    if (!token || !gallery) return;
+    setShareSaving(true);
+    setShareError("");
+    setSaveMsg("");
+    try {
+      const share = await createGalleryAccountShare(token, id, {
+        email: shareEmail,
+        storage_billed_to: shareBilling,
+        migrate_storage_usage: shareMigrateUsage,
+      });
+      setAccountShares((current) => [
+        share,
+        ...current.filter((item) => item.id !== share.id),
+      ]);
+      setShareEmail("");
+      setShareMigrateUsage(false);
+      setSaveMsg("Shared account saved");
+      setTimeout(() => setSaveMsg(""), 2000);
+    } catch (err) {
+      setShareError(
+        err instanceof Error ? err.message : "Failed to share gallery",
+      );
+    } finally {
+      setShareSaving(false);
+    }
+  };
+
+  const handleRevokeAccountShare = async (shareId: string) => {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    setShareSaving(true);
+    setShareError("");
+    try {
+      await revokeGalleryAccountShare(token, id, shareId);
+      setAccountShares((current) =>
+        current.filter((share) => share.id !== shareId),
+      );
+      setSaveMsg("Shared account removed");
+      setTimeout(() => setSaveMsg(""), 2000);
+    } catch (err) {
+      setShareError(
+        err instanceof Error ? err.message : "Failed to remove shared account",
+      );
+    } finally {
+      setShareSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <GalleryPageShell galleryId={id} width="full">
@@ -954,6 +1052,7 @@ export default function GallerySettingsPage({
   const settingsSections = [
     { id: "gallery-settings-downloads", label: "Downloads" },
     { id: "gallery-settings-access", label: "Access" },
+    { id: "gallery-settings-sharing", label: "Sharing" },
     { id: "gallery-settings-faceid", label: "AI & FaceID" },
     { id: "gallery-settings-proofing", label: "Proofing" },
     { id: "gallery-settings-watermark", label: "Watermark" },
@@ -1154,6 +1253,136 @@ export default function GallerySettingsPage({
                 className="touch-min w-full rounded-xl border border-border-default bg-surface-sunken px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent-primary sm:w-60"
               />
             </div>
+          </section>
+
+          {/* Shared accounts */}
+          <section
+            id="gallery-settings-sharing"
+            className="surface-panel space-y-4 p-5"
+          >
+            <h2 className="text-lg font-semibold text-text-primary">
+              Shared accounts
+            </h2>
+            <p className="text-sm text-text-secondary">
+              Give another RawDrive account access to this gallery and choose
+              which workspace carries its storage.
+            </p>
+            {gallery.access_role === "shared" ? (
+              <InlineAlert variant="info">
+                This gallery is shared from{" "}
+                {gallery.owner_workspace_name || "another workspace"}.
+              </InlineAlert>
+            ) : (
+              <>
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(180px,0.8fr)]">
+                  <label className="space-y-1">
+                    <span className="text-sm font-medium text-text-primary">
+                      Account email
+                    </span>
+                    <input
+                      type="email"
+                      value={shareEmail}
+                      onChange={(e) => setShareEmail(e.target.value)}
+                      placeholder="name@example.com"
+                      className="input-base w-full"
+                      disabled={shareSaving}
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-sm font-medium text-text-primary">
+                      Storage billed to
+                    </span>
+                    <select
+                      value={shareBilling}
+                      onChange={(e) => {
+                        const next = e.target.value as "owner" | "shared";
+                        setShareBilling(next);
+                        if (next === "owner") setShareMigrateUsage(false);
+                      }}
+                      className="input-base w-full"
+                      disabled={shareSaving}
+                    >
+                      <option value="owner">Owner account</option>
+                      <option value="shared">Shared account</option>
+                    </select>
+                  </label>
+                </div>
+                <label className="flex items-center gap-3 rounded-xl border border-border-default bg-surface-sunken px-4 py-3 text-sm text-text-primary">
+                  <input
+                    type="checkbox"
+                    checked={shareMigrateUsage}
+                    disabled={shareSaving || shareBilling !== "shared"}
+                    onChange={(e) => setShareMigrateUsage(e.target.checked)}
+                    className="h-4 w-4 accent-accent-primary"
+                  />
+                  <span>Migrate current gallery usage to shared account</span>
+                </label>
+                {shareError && (
+                  <InlineAlert variant="error">{shareError}</InlineAlert>
+                )}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => void handleShareAccount()}
+                    disabled={shareSaving || shareEmail.trim().length === 0}
+                    className="btn-primary px-4 py-2 text-sm"
+                  >
+                    {shareSaving ? "Saving..." : "Share gallery"}
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {shareLoading ? (
+                    <p className="text-sm text-text-secondary">
+                      Loading shared accounts...
+                    </p>
+                  ) : accountShares.length > 0 ? (
+                    accountShares.map((share) => {
+                      const migratedBytes =
+                        share.migrated_original_bytes +
+                        share.migrated_derivative_bytes;
+                      return (
+                        <div
+                          key={share.id}
+                          className="rounded-xl border border-border-default bg-surface-sunken px-4 py-3"
+                        >
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0 space-y-1">
+                              <p className="truncate text-sm font-semibold text-text-primary">
+                                {share.shared_user_email ||
+                                  share.shared_workspace_name}
+                              </p>
+                              <p className="text-xs text-text-secondary">
+                                {share.shared_workspace_name} · storage:{" "}
+                                {share.storage_billed_to === "shared"
+                                  ? "shared account"
+                                  : "owner account"}
+                                {migratedBytes > 0
+                                  ? ` · migrated ${formatBytes(migratedBytes)}`
+                                  : ""}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void handleRevokeAccountShare(share.id)
+                              }
+                              disabled={shareSaving}
+                              className="btn-tertiary px-3 py-2 text-sm"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-text-secondary">
+                      No shared accounts yet.
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
           </section>
 
           {/* AI & FaceID */}

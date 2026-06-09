@@ -10,18 +10,26 @@ func TestGalleryHandler_ObjectRoutesResolveWorkspaceScopedGallery(t *testing.T) 
 	source := readHandlerSource(t, "gallery_handler.go")
 
 	for _, fn := range []string{
-		"GetByID",
 		"SoftDelete",
 		"AddAsset",
 		"ReorderAssets",
 		"RemoveAsset",
-		"Timeline",
-		"ListAssets",
 		"TriggerFaceScan",
 	} {
 		body := functionBody(t, source, "func (h *GalleryHandler) "+fn)
 		if !strings.Contains(body, "requireGalleryInWorkspace") {
-			t.Fatalf("%s must resolve the gallery through requireGalleryInWorkspace before serving a gallery-scoped route", fn)
+			t.Fatalf("%s must resolve owner-only routes through requireGalleryInWorkspace", fn)
+		}
+	}
+
+	for _, fn := range []string{
+		"GetByID",
+		"Timeline",
+		"ListAssets",
+	} {
+		body := functionBody(t, source, "func (h *GalleryHandler) "+fn)
+		if !strings.Contains(body, "requireGalleryReadable") {
+			t.Fatalf("%s must allow owner or account-share reads through requireGalleryReadable", fn)
 		}
 	}
 }

@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
   listGalleryAssets: vi.fn(),
   uploadMusicTrack: vi.fn(),
   selectGalleryMusic: vi.fn(),
+  listGalleryAccountShares: vi.fn(),
+  createGalleryAccountShare: vi.fn(),
+  revokeGalleryAccountShare: vi.fn(),
   listMusicLibrary: vi.fn(),
   deleteMusicTrack: vi.fn(),
   fetchMusicTrackBlobUrl: vi.fn(),
@@ -60,6 +63,9 @@ vi.mock("@/lib/api/galleries", () => ({
   listGalleryAssets: mocks.listGalleryAssets,
   uploadMusicTrack: mocks.uploadMusicTrack,
   selectGalleryMusic: mocks.selectGalleryMusic,
+  listGalleryAccountShares: mocks.listGalleryAccountShares,
+  createGalleryAccountShare: mocks.createGalleryAccountShare,
+  revokeGalleryAccountShare: mocks.revokeGalleryAccountShare,
   listMusicLibrary: mocks.listMusicLibrary,
   deleteMusicTrack: mocks.deleteMusicTrack,
   fetchMusicTrackBlobUrl: mocks.fetchMusicTrackBlobUrl,
@@ -194,6 +200,7 @@ describe("Gallery settings — slideshow music", () => {
       },
     ]);
     mocks.listMusicLibrary.mockResolvedValue([]);
+    mocks.listGalleryAccountShares.mockResolvedValue([]);
     mocks.fetchMusicTrackBlobUrl.mockResolvedValue("blob:preview");
     mocks.deleteMusicTrack.mockResolvedValue(undefined);
     mocks.selectGalleryMusic.mockResolvedValue(gallery());

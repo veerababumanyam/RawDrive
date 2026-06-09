@@ -93,6 +93,13 @@ type Gallery struct {
 	// It prevents dashboard/list cards from fetching one asset per gallery just
 	// to render the already-joined thumbnail and encryption metadata.
 	CoverAsset *GalleryCoverAsset `json:"cover_asset,omitempty"`
+	// Account-share metadata is populated by List() and authenticated read
+	// handlers. Owner-only mutations still authorize against WorkspaceID.
+	AccessRole                   string     `json:"access_role,omitempty"`
+	OwnerWorkspaceID             *uuid.UUID `json:"owner_workspace_id,omitempty"`
+	OwnerWorkspaceName           string     `json:"owner_workspace_name,omitempty"`
+	StorageBilledToWorkspaceID   *uuid.UUID `json:"storage_billed_to_workspace_id,omitempty"`
+	StorageBilledToWorkspaceName string     `json:"storage_billed_to_workspace_name,omitempty"`
 }
 
 type GalleryCoverAsset struct {
@@ -401,10 +408,21 @@ const galleryListBaseQuery = `SELECT g.id, g.workspace_id, g.contact_id, g.prima
 		g.tethering_enabled, g.tether_directory,
 		cover_asset.thumbnail_urls,
 		cover_asset.filename, cover_asset.content_type, cover_asset.status,
-		cover_asset.is_encrypted, cover_asset.media_encryption
+		cover_asset.is_encrypted, cover_asset.media_encryption,
+		CASE WHEN g.workspace_id = $1 THEN 'owner' ELSE 'shared' END AS access_role,
+		g.workspace_id AS owner_workspace_id,
+		COALESCE(owner_ws.name, '') AS owner_workspace_name,
+		COALESCE(gws.storage_billed_to_workspace_id, g.workspace_id) AS storage_billed_to_workspace_id,
+		COALESCE(billed_ws.name, owner_ws.name, '') AS storage_billed_to_workspace_name
 		FROM galleries g
 		` + galleryEffectiveCoverJoinSQL + `
-		WHERE g.workspace_id = $1 AND g.deleted_at IS NULL`
+		LEFT JOIN gallery_workspace_shares gws
+		  ON gws.gallery_id = g.id
+		 AND gws.shared_workspace_id = $1
+		 AND gws.revoked_at IS NULL
+		LEFT JOIN workspaces owner_ws ON owner_ws.id = g.workspace_id
+		LEFT JOIN workspaces billed_ws ON billed_ws.id = COALESCE(gws.storage_billed_to_workspace_id, g.workspace_id)
+		WHERE (g.workspace_id = $1 OR gws.shared_workspace_id = $1) AND g.deleted_at IS NULL`
 
 // List retrieves galleries matching the filter. Uses a LEFT JOIN on assets
 // to include the effective cover asset and cover_thumbnails in one query — no
@@ -454,6 +472,8 @@ func (r *GalleryRepo) List(ctx context.Context, f GalleryFilter) ([]Gallery, err
 		var coverStatus *string
 		var coverIsEncrypted *bool
 		var coverMediaEncryption *map[string]interface{}
+		var ownerWorkspaceID uuid.UUID
+		var storageBilledToWorkspaceID uuid.UUID
 		if err := rows.Scan(&g.ID, &g.WorkspaceID, &g.ContactID, &g.PrimaryContactID, &g.ProjectID, &g.EventID, &g.DealID, &g.InvoiceID,
 			&g.Title, &g.Slug, &g.Description,
 			&g.CoverAssetID, &g.GalleryType, &g.Settings, &g.PasswordHash, &g.WatermarkConfig,
@@ -465,10 +485,14 @@ func (r *GalleryRepo) List(ctx context.Context, f GalleryFilter) ([]Gallery, err
 			&coverThumbs,
 			&coverFilename, &coverContentType, &coverStatus,
 			&coverIsEncrypted, &coverMediaEncryption,
+			&g.AccessRole, &ownerWorkspaceID, &g.OwnerWorkspaceName,
+			&storageBilledToWorkspaceID, &g.StorageBilledToWorkspaceName,
 		); err != nil {
 			return nil, fmt.Errorf("gallery repo list scan: %w", err)
 		}
 		g.normalizeWorkspaceLinks()
+		g.OwnerWorkspaceID = &ownerWorkspaceID
+		g.StorageBilledToWorkspaceID = &storageBilledToWorkspaceID
 		if coverThumbs != nil {
 			g.CoverThumbnails = *coverThumbs
 		}

@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -42,6 +43,7 @@ type GalleryHandler struct {
 	assetBatch    publicAssetBatchSource
 	publicBaseURL string
 	mediaKeyRepo  *repository.GalleryMediaKeyRepo
+	storageSvc    *service.StorageAccounting
 }
 
 // NewGalleryHandler creates a new GalleryHandler.
@@ -94,6 +96,13 @@ func (h *GalleryHandler) WithMediaKeyRepo(repo *repository.GalleryMediaKeyRepo) 
 	return h
 }
 
+// WithStorageAccounting injects cache invalidation for account-share storage
+// attribution changes. The share routes run through h.pool for transactions.
+func (h *GalleryHandler) WithStorageAccounting(svc *service.StorageAccounting) *GalleryHandler {
+	h.storageSvc = svc
+	return h
+}
+
 // galleryAssetWithAsset is a gallery-asset junction row with its asset record
 // embedded inline, returned when ?include_assets=true so the dashboard hydrates
 // a whole page from one response instead of looping getAsset() per asset
@@ -102,6 +111,25 @@ func (h *GalleryHandler) WithMediaKeyRepo(repo *repository.GalleryMediaKeyRepo) 
 type galleryAssetWithAsset struct {
 	repository.GalleryAsset
 	Asset *repository.Asset `json:"asset"`
+}
+
+type galleryAccountShareResponse struct {
+	ID                           uuid.UUID  `json:"id"`
+	GalleryID                    uuid.UUID  `json:"gallery_id"`
+	OwnerWorkspaceID             uuid.UUID  `json:"owner_workspace_id"`
+	OwnerWorkspaceName           string     `json:"owner_workspace_name"`
+	SharedWorkspaceID            uuid.UUID  `json:"shared_workspace_id"`
+	SharedWorkspaceName          string     `json:"shared_workspace_name"`
+	SharedUserEmail              string     `json:"shared_user_email,omitempty"`
+	StorageBilledToWorkspaceID   uuid.UUID  `json:"storage_billed_to_workspace_id"`
+	StorageBilledToWorkspaceName string     `json:"storage_billed_to_workspace_name"`
+	StorageBilledTo              string     `json:"storage_billed_to"`
+	MigrateStorageUsage          bool       `json:"migrate_storage_usage"`
+	MigratedOriginalBytes        int64      `json:"migrated_original_bytes"`
+	MigratedDerivativeBytes      int64      `json:"migrated_derivative_bytes"`
+	StorageMigratedAt            *time.Time `json:"storage_migrated_at,omitempty"`
+	CreatedAt                    time.Time  `json:"created_at"`
+	UpdatedAt                    time.Time  `json:"updated_at"`
 }
 
 // embedGalleryAssets attaches each asset to its junction row, preserving the
@@ -227,6 +255,215 @@ func (h *GalleryHandler) requireGalleryInWorkspace(w http.ResponseWriter, r *htt
 		return nil, uuid.Nil, false
 	}
 	return gallery, workspaceID, true
+}
+
+func (h *GalleryHandler) requireGalleryReadable(w http.ResponseWriter, r *http.Request, galleryID uuid.UUID) (*repository.Gallery, uuid.UUID, bool) {
+	workspaceID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
+		return nil, uuid.Nil, false
+	}
+	gallery, err := h.gallerySvc.GetByID(r.Context(), galleryID)
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return nil, uuid.Nil, false
+	}
+	if gallery == nil {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return nil, uuid.Nil, false
+	}
+	ownerWorkspaceID := gallery.WorkspaceID
+	gallery.OwnerWorkspaceID = &ownerWorkspaceID
+	gallery.StorageBilledToWorkspaceID = &ownerWorkspaceID
+	gallery.AccessRole = "owner"
+	if gallery.WorkspaceID == workspaceID {
+		if h.pool != nil {
+			_ = h.pool.QueryRow(r.Context(),
+				`SELECT COALESCE(name, '') FROM workspaces WHERE id = $1`,
+				gallery.WorkspaceID,
+			).Scan(&gallery.OwnerWorkspaceName)
+			gallery.StorageBilledToWorkspaceName = gallery.OwnerWorkspaceName
+		}
+		return gallery, workspaceID, true
+	}
+	if h.pool == nil {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return nil, uuid.Nil, false
+	}
+	var billedWorkspaceID uuid.UUID
+	var ownerName, billedName string
+	err = h.pool.QueryRow(r.Context(),
+		`SELECT COALESCE(owner_ws.name, ''),
+		        s.storage_billed_to_workspace_id,
+		        COALESCE(billed_ws.name, owner_ws.name, '')
+		   FROM gallery_workspace_shares s
+		   JOIN workspaces owner_ws ON owner_ws.id = s.owner_workspace_id
+		   LEFT JOIN workspaces billed_ws ON billed_ws.id = s.storage_billed_to_workspace_id
+		  WHERE s.gallery_id = $1
+		    AND s.shared_workspace_id = $2
+		    AND s.revoked_at IS NULL
+		  LIMIT 1`,
+		galleryID, workspaceID,
+	).Scan(&ownerName, &billedWorkspaceID, &billedName)
+	if err == pgx.ErrNoRows {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return nil, uuid.Nil, false
+	}
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return nil, uuid.Nil, false
+	}
+	gallery.AccessRole = "shared"
+	gallery.OwnerWorkspaceName = ownerName
+	gallery.StorageBilledToWorkspaceID = &billedWorkspaceID
+	gallery.StorageBilledToWorkspaceName = billedName
+	return gallery, workspaceID, true
+}
+
+func scanGalleryAccountShare(row pgx.Row) (galleryAccountShareResponse, error) {
+	var share galleryAccountShareResponse
+	err := row.Scan(
+		&share.ID,
+		&share.GalleryID,
+		&share.OwnerWorkspaceID,
+		&share.OwnerWorkspaceName,
+		&share.SharedWorkspaceID,
+		&share.SharedWorkspaceName,
+		&share.SharedUserEmail,
+		&share.StorageBilledToWorkspaceID,
+		&share.StorageBilledToWorkspaceName,
+		&share.MigrateStorageUsage,
+		&share.MigratedOriginalBytes,
+		&share.MigratedDerivativeBytes,
+		&share.StorageMigratedAt,
+		&share.CreatedAt,
+		&share.UpdatedAt,
+	)
+	if err != nil {
+		return share, err
+	}
+	share.StorageBilledTo = "owner"
+	if share.StorageBilledToWorkspaceID == share.SharedWorkspaceID {
+		share.StorageBilledTo = "shared"
+	}
+	return share, nil
+}
+
+const galleryAccountShareSelectSQL = `SELECT s.id,
+       s.gallery_id,
+       s.owner_workspace_id,
+       COALESCE(owner_ws.name, '') AS owner_workspace_name,
+       s.shared_workspace_id,
+       COALESCE(shared_ws.name, '') AS shared_workspace_name,
+       COALESCE(shared_user.email, '') AS shared_user_email,
+       s.storage_billed_to_workspace_id,
+       COALESCE(billed_ws.name, '') AS storage_billed_to_workspace_name,
+       s.migrate_storage_usage,
+       s.migrated_original_bytes,
+       s.migrated_derivative_bytes,
+       s.storage_migrated_at,
+       s.created_at,
+       s.updated_at
+  FROM gallery_workspace_shares s
+  JOIN workspaces owner_ws ON owner_ws.id = s.owner_workspace_id
+  JOIN workspaces shared_ws ON shared_ws.id = s.shared_workspace_id
+  LEFT JOIN users shared_user ON shared_user.id = shared_ws.owner_id
+  JOIN workspaces billed_ws ON billed_ws.id = s.storage_billed_to_workspace_id`
+
+func normalizeStorageBilledTo(value string) (string, error) {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return "owner", nil
+	}
+	if value != "owner" && value != "shared" {
+		return "", fmt.Errorf("storage_billed_to must be owner or shared")
+	}
+	return value, nil
+}
+
+func (h *GalleryHandler) galleryStorageFootprint(ctx context.Context, tx pgx.Tx, galleryID uuid.UUID) (int64, int64, error) {
+	var originalBytes, derivativeBytes int64
+	err := tx.QueryRow(ctx,
+		`WITH gallery_asset_ids AS (
+		    SELECT DISTINCT ga.asset_id
+		      FROM gallery_assets ga
+		      JOIN assets a ON a.id = ga.asset_id
+		     WHERE ga.gallery_id = $1
+		       AND a.deleted_at IS NULL
+		  ),
+		  originals AS (
+		    SELECT COALESCE(SUM(a.size_bytes), 0)::bigint AS bytes
+		      FROM assets a
+		      JOIN gallery_asset_ids gai ON gai.asset_id = a.id
+		  ),
+		  derivatives AS (
+		    SELECT COALESCE(SUM(ad.size_bytes), 0)::bigint AS bytes
+		      FROM asset_derivatives ad
+		      JOIN gallery_asset_ids gai ON gai.asset_id = ad.asset_id
+		  )
+		  SELECT originals.bytes, derivatives.bytes
+		    FROM originals, derivatives`,
+		galleryID,
+	).Scan(&originalBytes, &derivativeBytes)
+	if err != nil {
+		return 0, 0, err
+	}
+	return originalBytes, derivativeBytes, nil
+}
+
+func (h *GalleryHandler) moveWorkspaceStorageUsage(ctx context.Context, tx pgx.Tx, fromWorkspaceID, toWorkspaceID uuid.UUID, originalBytes, derivativeBytes int64) error {
+	if (originalBytes <= 0 && derivativeBytes <= 0) || fromWorkspaceID == toWorkspaceID {
+		return nil
+	}
+	for _, workspaceID := range []uuid.UUID{fromWorkspaceID, toWorkspaceID} {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO workspace_storage (workspace_id, used_bytes, derivative_bytes, quota_bytes)
+			 SELECT $1, 0, 0, 0
+			  WHERE EXISTS (SELECT 1 FROM workspaces WHERE id = $1)
+			 ON CONFLICT (workspace_id) DO NOTHING`,
+			workspaceID,
+		); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE workspace_storage
+		    SET used_bytes = GREATEST(0, used_bytes - $2),
+		        derivative_bytes = GREATEST(0, derivative_bytes - $3),
+		        updated_at = NOW()
+		  WHERE workspace_id = $1`,
+		fromWorkspaceID, originalBytes, derivativeBytes,
+	); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE workspace_storage
+		    SET used_bytes = used_bytes + $2,
+		        derivative_bytes = derivative_bytes + $3,
+		        updated_at = NOW()
+		  WHERE workspace_id = $1`,
+		toWorkspaceID, originalBytes, derivativeBytes,
+	); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (h *GalleryHandler) invalidateStorageAnalytics(workspaceIDs ...uuid.UUID) {
+	if h.storageSvc == nil {
+		return
+	}
+	seen := make(map[uuid.UUID]struct{}, len(workspaceIDs))
+	for _, workspaceID := range workspaceIDs {
+		if workspaceID == uuid.Nil {
+			continue
+		}
+		if _, ok := seen[workspaceID]; ok {
+			continue
+		}
+		seen[workspaceID] = struct{}{}
+		h.storageSvc.InvalidateAnalytics(workspaceID)
+	}
 }
 
 // Create handles POST /api/v1/galleries
@@ -368,12 +605,321 @@ func (h *GalleryHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gallery, _, ok := h.requireGalleryInWorkspace(w, r, id)
+	gallery, _, ok := h.requireGalleryReadable(w, r, id)
 	if !ok {
 		return
 	}
 
 	respondJSON(w, http.StatusOK, gallery)
+}
+
+// ListAccountShares handles GET /api/v1/galleries/{id}/account-shares.
+func (h *GalleryHandler) ListAccountShares(w http.ResponseWriter, r *http.Request) {
+	if h.pool == nil {
+		http.Error(w, `{"error":"account sharing unavailable"}`, http.StatusServiceUnavailable)
+		return
+	}
+	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+	_, workspaceID, ok := h.requireGalleryInWorkspace(w, r, galleryID)
+	if !ok {
+		return
+	}
+
+	rows, err := h.pool.Query(r.Context(),
+		galleryAccountShareSelectSQL+`
+		 WHERE s.gallery_id = $1
+		   AND s.owner_workspace_id = $2
+		   AND s.revoked_at IS NULL
+		 ORDER BY s.created_at DESC`,
+		galleryID, workspaceID,
+	)
+	if err != nil {
+		http.Error(w, `{"error":"share list failed"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	shares := make([]galleryAccountShareResponse, 0)
+	for rows.Next() {
+		share, err := scanGalleryAccountShare(rows)
+		if err != nil {
+			http.Error(w, `{"error":"share list failed"}`, http.StatusInternalServerError)
+			return
+		}
+		shares = append(shares, share)
+	}
+	if err := rows.Err(); err != nil {
+		http.Error(w, `{"error":"share list failed"}`, http.StatusInternalServerError)
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]any{"shares": shares})
+}
+
+// CreateAccountShare handles POST /api/v1/galleries/{id}/account-shares.
+func (h *GalleryHandler) CreateAccountShare(w http.ResponseWriter, r *http.Request) {
+	if h.pool == nil {
+		http.Error(w, `{"error":"account sharing unavailable"}`, http.StatusServiceUnavailable)
+		return
+	}
+	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+	gallery, workspaceID, ok := h.requireGalleryInWorkspace(w, r, galleryID)
+	if !ok {
+		return
+	}
+
+	var input struct {
+		Email               string `json:"email"`
+		StorageBilledTo     string `json:"storage_billed_to"`
+		MigrateStorageUsage bool   `json:"migrate_storage_usage"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		return
+	}
+	email := strings.ToLower(strings.TrimSpace(input.Email))
+	if email == "" || !strings.Contains(email, "@") {
+		http.Error(w, `{"error":"valid email required"}`, http.StatusBadRequest)
+		return
+	}
+	storageBilledTo, err := normalizeStorageBilledTo(input.StorageBilledTo)
+	if err != nil {
+		http.Error(w, `{"error":"invalid storage_billed_to"}`, http.StatusBadRequest)
+		return
+	}
+	actorID, _ := getUserID(r)
+
+	var targetWorkspaceID uuid.UUID
+	var targetWorkspaceName string
+	err = h.pool.QueryRow(r.Context(),
+		`SELECT w.id, COALESCE(w.name, '')
+		   FROM users u
+		   JOIN workspace_members wm ON wm.user_id = u.id
+		   JOIN workspaces w ON w.id = wm.workspace_id
+		  WHERE lower(u.email) = lower($1)
+		  ORDER BY CASE WHEN w.owner_id = u.id THEN 0 ELSE 1 END, wm.joined_at ASC
+		  LIMIT 1`,
+		email,
+	).Scan(&targetWorkspaceID, &targetWorkspaceName)
+	if err == pgx.ErrNoRows {
+		http.Error(w, `{"error":"target account not found"}`, http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, `{"error":"target lookup failed"}`, http.StatusInternalServerError)
+		return
+	}
+	if targetWorkspaceID == workspaceID {
+		http.Error(w, `{"error":"cannot share gallery with owning account"}`, http.StatusBadRequest)
+		return
+	}
+
+	storageBilledToWorkspaceID := workspaceID
+	if storageBilledTo == "shared" {
+		storageBilledToWorkspaceID = targetWorkspaceID
+	}
+
+	tx, err := h.pool.Begin(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"share failed"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(r.Context()) //nolint:errcheck
+
+	var existingMigratedOriginal, existingMigratedDerivative int64
+	var existingStorageBilledTo uuid.UUID
+	err = tx.QueryRow(r.Context(),
+		`SELECT storage_billed_to_workspace_id, migrated_original_bytes, migrated_derivative_bytes
+		   FROM gallery_workspace_shares
+		  WHERE gallery_id = $1
+		    AND shared_workspace_id = $2
+		    AND revoked_at IS NULL
+		  FOR UPDATE`,
+		galleryID, targetWorkspaceID,
+	).Scan(&existingStorageBilledTo, &existingMigratedOriginal, &existingMigratedDerivative)
+	if err != nil && err != pgx.ErrNoRows {
+		http.Error(w, `{"error":"share failed"}`, http.StatusInternalServerError)
+		return
+	}
+
+	share, err := scanGalleryAccountShare(tx.QueryRow(r.Context(),
+		`WITH upserted AS (
+		   INSERT INTO gallery_workspace_shares (
+		     gallery_id, owner_workspace_id, shared_workspace_id,
+		     storage_billed_to_workspace_id, migrate_storage_usage, shared_by_user_id
+		   )
+		   VALUES ($1, $2, $3, $4, $5, NULLIF($6::uuid, '00000000-0000-0000-0000-000000000000'::uuid))
+		   ON CONFLICT (gallery_id, shared_workspace_id) WHERE revoked_at IS NULL
+		   DO UPDATE SET
+		     storage_billed_to_workspace_id = EXCLUDED.storage_billed_to_workspace_id,
+		     migrate_storage_usage = gallery_workspace_shares.migrate_storage_usage OR EXCLUDED.migrate_storage_usage,
+		     shared_by_user_id = EXCLUDED.shared_by_user_id,
+		     updated_at = NOW()
+		   RETURNING id
+		 )
+		 `+galleryAccountShareSelectSQL+`
+		 JOIN upserted u ON u.id = s.id`,
+		galleryID,
+		workspaceID,
+		targetWorkspaceID,
+		storageBilledToWorkspaceID,
+		input.MigrateStorageUsage,
+		actorID,
+	))
+	if err != nil {
+		http.Error(w, `{"error":"share failed"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if storageBilledTo == "shared" && input.MigrateStorageUsage && existingMigratedOriginal == 0 && existingMigratedDerivative == 0 {
+		originalBytes, derivativeBytes, err := h.galleryStorageFootprint(r.Context(), tx, galleryID)
+		if err != nil {
+			http.Error(w, `{"error":"storage migration failed"}`, http.StatusInternalServerError)
+			return
+		}
+		if err := h.moveWorkspaceStorageUsage(r.Context(), tx, workspaceID, targetWorkspaceID, originalBytes, derivativeBytes); err != nil {
+			http.Error(w, `{"error":"storage migration failed"}`, http.StatusInternalServerError)
+			return
+		}
+		share, err = scanGalleryAccountShare(tx.QueryRow(r.Context(),
+			`WITH updated AS (
+			   UPDATE gallery_workspace_shares
+			      SET migrate_storage_usage = TRUE,
+			          migrated_original_bytes = $2,
+			          migrated_derivative_bytes = $3,
+			          storage_migrated_at = NOW(),
+			          updated_at = NOW()
+			    WHERE id = $1
+			    RETURNING id
+			 )
+			 `+galleryAccountShareSelectSQL+`
+			 JOIN updated u ON u.id = s.id`,
+			share.ID,
+			originalBytes,
+			derivativeBytes,
+		))
+		if err != nil {
+			http.Error(w, `{"error":"storage migration failed"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if storageBilledTo == "owner" && (existingMigratedOriginal > 0 || existingMigratedDerivative > 0) {
+		if err := h.moveWorkspaceStorageUsage(r.Context(), tx, targetWorkspaceID, workspaceID, existingMigratedOriginal, existingMigratedDerivative); err != nil {
+			http.Error(w, `{"error":"storage migration failed"}`, http.StatusInternalServerError)
+			return
+		}
+		share, err = scanGalleryAccountShare(tx.QueryRow(r.Context(),
+			`WITH updated AS (
+			   UPDATE gallery_workspace_shares
+			      SET migrate_storage_usage = FALSE,
+			          migrated_original_bytes = 0,
+			          migrated_derivative_bytes = 0,
+			          storage_migrated_at = NULL,
+			          updated_at = NOW()
+			    WHERE id = $1
+			    RETURNING id
+			 )
+			 `+galleryAccountShareSelectSQL+`
+			 JOIN updated u ON u.id = s.id`,
+			share.ID,
+		))
+		if err != nil {
+			http.Error(w, `{"error":"storage migration failed"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		http.Error(w, `{"error":"share failed"}`, http.StatusInternalServerError)
+		return
+	}
+	h.invalidateStorageAnalytics(gallery.WorkspaceID, targetWorkspaceID, existingStorageBilledTo, storageBilledToWorkspaceID)
+	share.SharedUserEmail = email
+	if share.SharedWorkspaceName == "" {
+		share.SharedWorkspaceName = targetWorkspaceName
+	}
+	respondJSON(w, http.StatusOK, share)
+}
+
+// RevokeAccountShare handles DELETE /api/v1/galleries/{id}/account-shares/{shareId}.
+func (h *GalleryHandler) RevokeAccountShare(w http.ResponseWriter, r *http.Request) {
+	if h.pool == nil {
+		http.Error(w, `{"error":"account sharing unavailable"}`, http.StatusServiceUnavailable)
+		return
+	}
+	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
+		return
+	}
+	_, workspaceID, ok := h.requireGalleryInWorkspace(w, r, galleryID)
+	if !ok {
+		return
+	}
+	shareID, err := uuid.Parse(chi.URLParam(r, "shareId"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid share id"}`, http.StatusBadRequest)
+		return
+	}
+
+	tx, err := h.pool.Begin(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"revoke failed"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(r.Context()) //nolint:errcheck
+
+	var sharedWorkspaceID uuid.UUID
+	var migratedOriginal, migratedDerivative int64
+	err = tx.QueryRow(r.Context(),
+		`SELECT shared_workspace_id, migrated_original_bytes, migrated_derivative_bytes
+		   FROM gallery_workspace_shares
+		  WHERE id = $1
+		    AND gallery_id = $2
+		    AND owner_workspace_id = $3
+		    AND revoked_at IS NULL
+		  FOR UPDATE`,
+		shareID, galleryID, workspaceID,
+	).Scan(&sharedWorkspaceID, &migratedOriginal, &migratedDerivative)
+	if err == pgx.ErrNoRows {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, `{"error":"revoke failed"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if migratedOriginal > 0 || migratedDerivative > 0 {
+		if err := h.moveWorkspaceStorageUsage(r.Context(), tx, sharedWorkspaceID, workspaceID, migratedOriginal, migratedDerivative); err != nil {
+			http.Error(w, `{"error":"storage migration failed"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+	if _, err := tx.Exec(r.Context(),
+		`UPDATE gallery_workspace_shares
+		    SET revoked_at = NOW(),
+		        updated_at = NOW()
+		  WHERE id = $1`,
+		shareID,
+	); err != nil {
+		http.Error(w, `{"error":"revoke failed"}`, http.StatusInternalServerError)
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		http.Error(w, `{"error":"revoke failed"}`, http.StatusInternalServerError)
+		return
+	}
+	h.invalidateStorageAnalytics(workspaceID, sharedWorkspaceID)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // ListMediaKeys handles GET /api/v1/galleries/{id}/media-keys.
@@ -1043,7 +1589,7 @@ func (h *GalleryHandler) Timeline(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
 		return
 	}
-	if _, _, ok := h.requireGalleryInWorkspace(w, r, galleryID); !ok {
+	if _, _, ok := h.requireGalleryReadable(w, r, galleryID); !ok {
 		return
 	}
 
@@ -1063,7 +1609,7 @@ func (h *GalleryHandler) ListAssets(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
 		return
 	}
-	if _, _, ok := h.requireGalleryInWorkspace(w, r, galleryID); !ok {
+	if _, _, ok := h.requireGalleryReadable(w, r, galleryID); !ok {
 		return
 	}
 

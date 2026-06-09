@@ -28,6 +28,9 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 	if deps.Pool != nil {
 		galleryHandler.WithPool(deps.Pool)
 	}
+	if deps.StorageAccountingSvc != nil {
+		galleryHandler.WithStorageAccounting(deps.StorageAccountingSvc)
+	}
 	galleryHandler.WithMediaKeyRepo(deps.GalleryMediaKeyRepo)
 	galleryHandler.WithClientPreviewDeps(deps.AlbumService, deps.BannerService, deps.ProductService, deps.PublicBaseURL)
 	// M21: wire face scan deps when available
@@ -126,6 +129,9 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 		r.Get("/{id}/media-keys", galleryHandler.ListMediaKeys)
 		r.Put("/{id}/media-keys", galleryHandler.UpsertMediaKey)
 		r.Get("/{id}/client-preview", galleryHandler.ClientPreview)
+		r.Get("/{id}/account-shares", galleryHandler.ListAccountShares)
+		r.Post("/{id}/account-shares", galleryHandler.CreateAccountShare)
+		r.Delete("/{id}/account-shares/{shareId}", galleryHandler.RevokeAccountShare)
 		r.Put("/{id}", galleryHandler.Update)
 		r.Delete("/{id}", galleryHandler.SoftDelete)
 		r.Get("/{id}/workspace-summary", galleryHandler.WorkspaceSummary)

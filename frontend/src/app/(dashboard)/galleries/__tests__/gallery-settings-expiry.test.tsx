@@ -12,6 +12,9 @@ import GallerySettingsPage from "../[id]/settings/page";
 const mocks = vi.hoisted(() => ({
   getGallery: vi.fn(),
   updateGallerySettings: vi.fn(),
+  listGalleryAccountShares: vi.fn(),
+  createGalleryAccountShare: vi.fn(),
+  revokeGalleryAccountShare: vi.fn(),
 }));
 
 vi.mock("next/link", () => ({
@@ -48,6 +51,9 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/api/galleries", () => ({
   getGallery: mocks.getGallery,
   updateGallerySettings: mocks.updateGallerySettings,
+  listGalleryAccountShares: mocks.listGalleryAccountShares,
+  createGalleryAccountShare: mocks.createGalleryAccountShare,
+  revokeGalleryAccountShare: mocks.revokeGalleryAccountShare,
 }));
 
 function gallery(overrides: Record<string, unknown> = {}) {
@@ -90,6 +96,7 @@ describe("Gallery settings — access window / expiry", () => {
       async (_token, _id, payload) =>
         gallery(payload as Record<string, unknown>),
     );
+    mocks.listGalleryAccountShares.mockResolvedValue([]);
   });
 
   it("renders an Access window section", async () => {
@@ -99,6 +106,53 @@ describe("Gallery settings — access window / expiry", () => {
         screen.getByRole("heading", { name: "Access window" }),
       ).toBeInTheDocument();
     });
+  });
+
+  it("renders shared account controls and submits storage billing options", async () => {
+    mocks.createGalleryAccountShare.mockResolvedValue({
+      id: "share-1",
+      gallery_id: "gallery-1",
+      owner_workspace_id: "workspace-1",
+      owner_workspace_name: "Owner",
+      shared_workspace_id: "workspace-2",
+      shared_workspace_name: "Client",
+      shared_user_email: "client@example.com",
+      storage_billed_to_workspace_id: "workspace-2",
+      storage_billed_to_workspace_name: "Client",
+      storage_billed_to: "shared",
+      migrate_storage_usage: true,
+      migrated_original_bytes: 0,
+      migrated_derivative_bytes: 0,
+      created_at: "2026-06-09T00:00:00Z",
+      updated_at: "2026-06-09T00:00:00Z",
+    });
+
+    await renderPage();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Shared accounts" }),
+      ).toBeInTheDocument(),
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("name@example.com"), {
+      target: { value: "client@example.com" },
+    });
+    fireEvent.click(
+      screen.getByLabelText("Migrate current gallery usage to shared account"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Share gallery" }));
+
+    await waitFor(() =>
+      expect(mocks.createGalleryAccountShare).toHaveBeenCalledWith(
+        "token-1",
+        "gallery-1",
+        {
+          email: "client@example.com",
+          storage_billed_to: "shared",
+          migrate_storage_usage: true,
+        },
+      ),
+    );
   });
 
   it("sets a 30-day access window from now", async () => {

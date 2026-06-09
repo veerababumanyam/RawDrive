@@ -429,10 +429,15 @@ export async function generateMetadata({ params, searchParams }: Props) {
   // different workspace, even when the body correctly 404s.
   const query = searchParams ? await searchParams : {};
   const ws = typeof query.ws === "string" && query.ws ? query.ws : undefined;
+  const shareToken =
+    typeof query.share === "string" && query.share ? query.share : undefined;
   try {
     const [gallery, branding] = await Promise.all([
-      getPublicGallery(slug, ws),
-      getPublicGalleryBranding(slug, ws).catch(() => null),
+      // Share-link previews need the same cover payload the visitor will see.
+      // Without forwarding ?share=, private/invite links metadata-fetch only the
+      // anonymous locked shell, so WhatsApp/iMessage crawlers miss the cover.
+      getPublicGallery(slug, ws, undefined, shareToken),
+      getPublicGalleryBranding(slug, ws, shareToken).catch(() => null),
     ]);
     const brandName = branding?.can_customize
       ? branding.brand_name

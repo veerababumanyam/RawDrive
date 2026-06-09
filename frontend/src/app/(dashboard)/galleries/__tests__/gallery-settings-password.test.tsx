@@ -12,6 +12,9 @@ import GallerySettingsPage from "../[id]/settings/page";
 const mocks = vi.hoisted(() => ({
   getGallery: vi.fn(),
   updateGallerySettings: vi.fn(),
+  listGalleryAccountShares: vi.fn(),
+  createGalleryAccountShare: vi.fn(),
+  revokeGalleryAccountShare: vi.fn(),
 }));
 
 vi.mock("next/link", () => ({
@@ -48,6 +51,9 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/api/galleries", () => ({
   getGallery: mocks.getGallery,
   updateGallerySettings: mocks.updateGallerySettings,
+  listGalleryAccountShares: mocks.listGalleryAccountShares,
+  createGalleryAccountShare: mocks.createGalleryAccountShare,
+  revokeGalleryAccountShare: mocks.revokeGalleryAccountShare,
 }));
 
 function gallery(overrides: Record<string, unknown> = {}) {
@@ -88,6 +94,7 @@ describe("Gallery settings password protection", () => {
       async (_token, _id, payload) =>
         gallery({ has_password: Boolean(payload.password) }),
     );
+    mocks.listGalleryAccountShares.mockResolvedValue([]);
   });
 
   it("shows the protected state after setting a password", async () => {

@@ -110,6 +110,11 @@ export interface Gallery {
   access_mode?: "public" | "unlisted" | "private" | "invite-only" | string;
   access_gated?: boolean;
   has_password?: boolean;
+  access_role?: "owner" | "shared" | string;
+  owner_workspace_id?: string;
+  owner_workspace_name?: string;
+  storage_billed_to_workspace_id?: string;
+  storage_billed_to_workspace_name?: string;
 }
 
 /**
@@ -555,6 +560,72 @@ export interface GalleryShareLink {
   access_count: number;
   created_at: string;
   revoked_at?: string | null;
+}
+
+export interface GalleryAccountShare {
+  id: string;
+  gallery_id: string;
+  owner_workspace_id: string;
+  owner_workspace_name: string;
+  shared_workspace_id: string;
+  shared_workspace_name: string;
+  shared_user_email?: string;
+  storage_billed_to_workspace_id: string;
+  storage_billed_to_workspace_name: string;
+  storage_billed_to: "owner" | "shared";
+  migrate_storage_usage: boolean;
+  migrated_original_bytes: number;
+  migrated_derivative_bytes: number;
+  storage_migrated_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateGalleryAccountShareInput {
+  email: string;
+  storage_billed_to?: "owner" | "shared";
+  migrate_storage_usage?: boolean;
+}
+
+export async function listGalleryAccountShares(
+  _token: string,
+  galleryId: string,
+): Promise<GalleryAccountShare[]> {
+  const res = await authFetch(`/api/v1/galleries/${galleryId}/account-shares`);
+  if (!res.ok)
+    throw new Error(`Failed to list account shares: ${res.status}`);
+  const body = await res.json();
+  if (Array.isArray(body)) return body;
+  if (body && Array.isArray(body.shares)) return body.shares;
+  return [];
+}
+
+export async function createGalleryAccountShare(
+  _token: string,
+  galleryId: string,
+  data: CreateGalleryAccountShareInput,
+): Promise<GalleryAccountShare> {
+  const res = await authFetch(`/api/v1/galleries/${galleryId}/account-shares`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok)
+    throw new Error(await galleryApiErrorMessage(res, "Failed to share gallery"));
+  return res.json();
+}
+
+export async function revokeGalleryAccountShare(
+  _token: string,
+  galleryId: string,
+  shareId: string,
+): Promise<void> {
+  const res = await authFetch(
+    `/api/v1/galleries/${galleryId}/account-shares/${shareId}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok)
+    throw new Error(await galleryApiErrorMessage(res, "Failed to remove share"));
 }
 
 export interface CreateGalleryShareLinkInput {
