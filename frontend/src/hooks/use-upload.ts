@@ -582,6 +582,26 @@ export function useUpload(
             onTermsRequiredRef.current?.();
             return;
           }
+          // Event gallery upload gates are intentional 403 responses: the
+          // gallery is either view-only after its upload window, or the event
+          // gallery storage allotment is full. Keep the row visible as blocked
+          // with the backend's customer-readable message instead of surfacing a
+          // raw "Create session failed: 403" error.
+          if (
+            createRes.status === 403 &&
+            (errorBody.error === "gallery_upload_window_closed" ||
+              errorBody.error === "gallery_event_storage_quota_exceeded")
+          ) {
+            updateItem(item.id, {
+              status: "blocked",
+              error:
+                errorBody.message ??
+                (errorBody.error === "gallery_upload_window_closed"
+                  ? "This gallery is view-only. Upgrade to continue uploading."
+                  : "This gallery has reached its configured storage quota. Upgrade to continue uploading."),
+            });
+            return;
+          }
           // 2026-05-20: surface plan-storage-quota rejection as a "blocked"
           // item rather than a raw 403 string, so the dropzone shows a real
           // sentence (the backend already returns a customer-readable message)

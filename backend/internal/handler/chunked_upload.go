@@ -893,9 +893,12 @@ func (h *ChunkedUploadHandler) UploadChunk(w http.ResponseWriter, r *http.Reques
 		// Mark the fresh hasher as unreliable by setting it to nil. Finalize
 		// reads nil hasher = cold path re-read from R2.
 		fresh.hasher = nil
-		// The next part number needs to account for parts that were already
-		// uploaded before restart. Count them from r2_part_etags.
-		fresh.nextPart = int32(countExistingParts(row.R2PartETags)) + 1
+		// The next part number needs to account for parts that were durably
+		// committed before restart. Count only the persisted part prefix covered
+		// by upload_offset: a prior request may have recorded an R2 part but
+		// failed before advancing the DB offset, and a retry must overwrite that
+		// same part number instead of skipping ahead.
+		fresh.nextPart = int32(countCommittedParts(row.R2PartETags, row.UploadOffset)) + 1
 		h.streamStates.Store(uploadID, fresh)
 		stateI = fresh
 	}
@@ -1127,18 +1130,22 @@ func (h *ChunkedUploadHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 
 // completedPartsFromETags maps persisted part etags to the storage.CompletedPart
 // slice, sorted by PartNumber ascending. S3/R2 CompleteMultipartUpload REQUIRES
-// parts in ascending part-number order; row.R2PartETags is persisted in the order
-// chunks were uploaded, which is NOT ascending when chunks upload concurrently —
-// passing that order straight through is what caused intermittent S3
-// "InvalidPartOrder: The list of parts was not in ascending order" finalize
-// failures. Sorting here makes finalize order-independent.
+// parts in strictly ascending part-number order; row.R2PartETags is persisted in
+// the order chunks were uploaded, which is NOT ascending when chunks upload
+// concurrently. A successful retry can also append the same part number more
+// than once; R2 keeps the last uploaded part, so we keep the latest persisted
+// entry before sorting.
 func completedPartsFromETags(parts []repository.UploadPartETag) []storage.CompletedPart {
-	completed := make([]storage.CompletedPart, 0, len(parts))
+	latestByPartNumber := make(map[int]storage.CompletedPart, len(parts))
 	for _, p := range parts {
-		completed = append(completed, storage.CompletedPart{
+		latestByPartNumber[p.PartNumber] = storage.CompletedPart{
 			PartNumber: int32(p.PartNumber),
 			ETag:       p.ETag,
-		})
+		}
+	}
+	completed := make([]storage.CompletedPart, 0, len(latestByPartNumber))
+	for _, part := range latestByPartNumber {
+		completed = append(completed, part)
 	}
 	sort.Slice(completed, func(i, j int) bool {
 		return completed[i].PartNumber < completed[j].PartNumber
@@ -1754,15 +1761,42 @@ func deriveKeyAndUploadID(row *repository.UploadSession) (string, string) {
 	return storageKey, mpID
 }
 
-func countExistingParts(partsJSON []byte) int {
-	if len(partsJSON) == 0 {
+func countCommittedParts(partsJSON []byte, uploadOffset int64) int {
+	if len(partsJSON) == 0 || uploadOffset <= 0 {
 		return 0
 	}
 	var parts []repository.UploadPartETag
 	if err := json.Unmarshal(partsJSON, &parts); err != nil {
 		return 0
 	}
-	return len(parts)
+	latestByPartNumber := make(map[int]repository.UploadPartETag, len(parts))
+	for _, part := range parts {
+		if part.PartNumber <= 0 || part.Size <= 0 {
+			continue
+		}
+		latestByPartNumber[part.PartNumber] = part
+	}
+	ordered := make([]repository.UploadPartETag, 0, len(latestByPartNumber))
+	for _, part := range latestByPartNumber {
+		ordered = append(ordered, part)
+	}
+	sort.Slice(ordered, func(i, j int) bool {
+		return ordered[i].PartNumber < ordered[j].PartNumber
+	})
+
+	var covered int64
+	nextPartNumber := 1
+	for i, part := range ordered {
+		if part.PartNumber != nextPartNumber || covered+part.Size > uploadOffset {
+			return i
+		}
+		covered += part.Size
+		nextPartNumber++
+		if covered == uploadOffset {
+			return i + 1
+		}
+	}
+	return len(ordered)
 }
 
 // verifyUploadChecksum parses an Upload-Checksum header and compares the

@@ -145,4 +145,18 @@ describe("useUpload", () => {
     );
     expect(source).toContain("pumpQueue.current()");
   });
+
+  it("surfaces gallery upload gate 403s as blocked rows", async () => {
+    const source = await readFile(
+      join(process.cwd(), "src/hooks/use-upload.ts"),
+      "utf8",
+    );
+
+    expect(source).toContain("gallery_upload_window_closed");
+    expect(source).toContain("gallery_event_storage_quota_exceeded");
+    expect(source).toContain("This gallery is view-only");
+    expect(source).toContain(
+      "This gallery has reached its configured storage quota",
+    );
+  });
 });

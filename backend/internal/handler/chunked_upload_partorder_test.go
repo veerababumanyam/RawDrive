@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -40,6 +41,56 @@ func TestCompletedPartsFromETags_SortsByPartNumber(t *testing.T) {
 	assert.Equal(t, "etag-10", got[3].ETag)
 }
 
+func TestCompletedPartsFromETags_DeduplicatesPartRetries(t *testing.T) {
+	parts := []repository.UploadPartETag{
+		{PartNumber: 1, ETag: "etag-1-old"},
+		{PartNumber: 2, ETag: "etag-2"},
+		{PartNumber: 1, ETag: "etag-1-new"},
+		{PartNumber: 3, ETag: "etag-3"},
+	}
+
+	got := completedPartsFromETags(parts)
+
+	require.Len(t, got, 3)
+	assert.Equal(t, int32(1), got[0].PartNumber)
+	assert.Equal(t, "etag-1-new", got[0].ETag)
+	assert.Equal(t, int32(2), got[1].PartNumber)
+	assert.Equal(t, "etag-2", got[1].ETag)
+	assert.Equal(t, int32(3), got[2].PartNumber)
+	assert.Equal(t, "etag-3", got[2].ETag)
+	for i := 1; i < len(got); i++ {
+		assert.Less(t, got[i-1].PartNumber, got[i].PartNumber,
+			"duplicate retries must be collapsed before S3/R2 CompleteMultipartUpload")
+	}
+}
+
 func TestCompletedPartsFromETags_Empty(t *testing.T) {
 	assert.Empty(t, completedPartsFromETags(nil))
+}
+
+func TestCountCommittedPartsIgnoresUncommittedRecordedPart(t *testing.T) {
+	partsJSON := marshalPartETags(t, []repository.UploadPartETag{
+		{PartNumber: 1, ETag: "etag-1", Size: 5},
+		{PartNumber: 2, ETag: "etag-2-stale", Size: 5},
+	})
+
+	assert.Equal(t, 1, countCommittedParts(partsJSON, 5))
+	assert.Equal(t, 0, countCommittedParts(partsJSON, 0))
+}
+
+func TestCountCommittedPartsDeduplicatesRetryRecords(t *testing.T) {
+	partsJSON := marshalPartETags(t, []repository.UploadPartETag{
+		{PartNumber: 1, ETag: "etag-1-old", Size: 5},
+		{PartNumber: 2, ETag: "etag-2", Size: 5},
+		{PartNumber: 1, ETag: "etag-1-new", Size: 5},
+	})
+
+	assert.Equal(t, 2, countCommittedParts(partsJSON, 10))
+}
+
+func marshalPartETags(t *testing.T, parts []repository.UploadPartETag) []byte {
+	t.Helper()
+	data, err := json.Marshal(parts)
+	require.NoError(t, err)
+	return data
 }
