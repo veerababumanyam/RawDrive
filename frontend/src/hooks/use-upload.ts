@@ -348,6 +348,17 @@ async function uploadChunkWithResume(params: {
   throw new Error("Chunk upload failed after retries");
 }
 
+async function cancelUploadSession(uploadId: string): Promise<void> {
+  try {
+    await authFetch(`/api/v1/uploads/${encodeURIComponent(uploadId)}`, {
+      method: "DELETE",
+      keepalive: true,
+    });
+  } catch (err) {
+    console.warn("Upload session cleanup failed", { uploadId, error: err });
+  }
+}
+
 export function useUpload(
   apiUrl: string,
   token: string | null,
@@ -358,6 +369,7 @@ export function useUpload(
   const [items, setItems] = useState<UploadItem[]>([]);
   const [isPaused, setIsPaused] = useState(false);
   const abortControllers = useRef<Map<string, AbortController>>(new Map());
+  const uploadSessionIds = useRef<Map<string, string>>(new Map());
   const pendingQueue = useRef<UploadItem[]>([]);
   const pausedItems = useRef<Set<string>>(new Set());
   const activeUploads = useRef(0);
@@ -395,6 +407,8 @@ export function useUpload(
     async (item: UploadItem) => {
       const controller = new AbortController();
       abortControllers.current.set(item.id, controller);
+      let uploadIdForCleanup: string | undefined;
+      let uploadSessionFinished = false;
 
       // QA #16 (historic): refresh the token fresh at request time so
       // Authorization reflects the latest cached value. authFetch now
@@ -645,6 +659,8 @@ export function useUpload(
         }
 
         const { upload_id } = await createRes.json();
+        uploadIdForCleanup = upload_id;
+        uploadSessionIds.current.set(item.id, upload_id);
         let offset = 0;
         let finalAssetId: string | undefined;
 
@@ -675,6 +691,8 @@ export function useUpload(
               asset?: { id?: string };
             };
             finalAssetId = body.asset?.id;
+            uploadSessionFinished = true;
+            uploadSessionIds.current.delete(item.id);
           }
           updateItem(item.id, {
             progress: Math.round(
@@ -739,7 +757,19 @@ export function useUpload(
         });
       } catch (err) {
         if ((err as Error).name === "AbortError") {
+          if (
+            uploadIdForCleanup &&
+            !uploadSessionFinished &&
+            uploadSessionIds.current.has(item.id)
+          ) {
+            uploadSessionIds.current.delete(item.id);
+            void cancelUploadSession(uploadIdForCleanup);
+          }
           return;
+        }
+        if (uploadIdForCleanup && !uploadSessionFinished) {
+          uploadSessionIds.current.delete(item.id);
+          await cancelUploadSession(uploadIdForCleanup);
         }
         const fileReadPermissionError = isFileReadPermissionError(err);
         updateItem(item.id, {
@@ -751,6 +781,7 @@ export function useUpload(
         });
       } finally {
         abortControllers.current.delete(item.id);
+        uploadSessionIds.current.delete(item.id);
         activeUploads.current = Math.max(0, activeUploads.current - 1);
         pumpQueue.current();
       }
@@ -814,6 +845,11 @@ export function useUpload(
     pendingQueue.current = pendingQueue.current.filter(
       (item) => item.id !== id,
     );
+    const uploadId = uploadSessionIds.current.get(id);
+    if (uploadId) {
+      uploadSessionIds.current.delete(id);
+      void cancelUploadSession(uploadId);
+    }
     const controller = abortControllers.current.get(id);
     if (controller) controller.abort();
     setItems((prev) => prev.filter((item) => item.id !== id));
@@ -917,6 +953,11 @@ export function useUpload(
   const cancelAll = useCallback(() => {
     pausedItems.current.clear();
     pendingQueue.current = [];
+    const uploadIds = Array.from(uploadSessionIds.current.values());
+    uploadSessionIds.current.clear();
+    uploadIds.forEach((uploadId) => {
+      void cancelUploadSession(uploadId);
+    });
     abortControllers.current.forEach((controller) => controller.abort());
     abortControllers.current.clear();
     setItems([]);

@@ -146,6 +146,20 @@ describe("useUpload", () => {
     expect(source).toContain("pumpQueue.current()");
   });
 
+  it("releases backend upload sessions when uploads fail or are cancelled", async () => {
+    const source = await readFile(
+      join(process.cwd(), "src/hooks/use-upload.ts"),
+      "utf8",
+    );
+
+    expect(source).toContain("cancelUploadSession");
+    expect(source).toContain('method: "DELETE"');
+    expect(source).toContain("uploadSessionIds.current.set");
+    expect(source).toContain("uploadSessionIds.current.get(id)");
+    expect(source).toContain("Array.from(uploadSessionIds.current.values())");
+    expect(source).toContain("!uploadSessionFinished");
+  });
+
   it("surfaces gallery upload gate 403s as blocked rows", async () => {
     const source = await readFile(
       join(process.cwd(), "src/hooks/use-upload.ts"),
