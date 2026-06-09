@@ -50,6 +50,28 @@ if ! grep -Eq 'error_page[[:space:]]+404[[:space:]]+=[[:space:]]+@next_static_no
   exit 1
 fi
 
+for header in Cache-Control CDN-Cache-Control Cloudflare-CDN-Cache-Control; do
+  if ! awk -v header="${header}" '
+    /^[[:space:]]*location[[:space:]]+\/_next\/static\/[[:space:]]*\{/ {
+      in_loc = 1; depth = 0; found = 0;
+    }
+    in_loc {
+      n = gsub(/\{/, "{"); depth += n;
+      m = gsub(/\}/, "}"); depth -= m;
+      if ($0 ~ "proxy_hide_header[[:space:]]+" header ";") found = 1;
+      if (depth <= 0) {
+        exit(found ? 0 : 1);
+      }
+    }
+    END {
+      if (!in_loc && !found) exit 1;
+    }
+  ' "${TEMPLATE}"; then
+    echo "FAIL: /_next/static/ must hide upstream ${header} before adding edge cache headers" >&2
+    exit 1
+  fi
+done
+
 if ! awk '
   /^[[:space:]]*location[[:space:]]+@next_static_not_found[[:space:]]*\{/ {
     in_loc = 1; depth = 0; has_cc = 0; has_cdn = 0; has_cf = 0;
