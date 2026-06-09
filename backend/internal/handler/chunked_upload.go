@@ -571,12 +571,12 @@ func (h *ChunkedUploadHandler) CreateSession(w http.ResponseWriter, r *http.Requ
 			case errors.Is(err, service.ErrGalleryUploadWindowClosed):
 				respondJSON(w, http.StatusForbidden, map[string]interface{}{
 					"error":   "gallery_upload_window_closed",
-					"message": "This Pay Per Event gallery is view-only. Extend or upgrade to continue uploading.",
+					"message": "This gallery is view-only. Upgrade to continue uploading.",
 				})
 			case errors.Is(err, service.ErrGalleryEventQuotaExceeded):
 				respondJSON(w, http.StatusForbidden, map[string]interface{}{
 					"error":   "gallery_event_storage_quota_exceeded",
-					"message": "This Pay Per Event gallery has reached its configured storage quota. Extend or upgrade to continue uploading.",
+					"message": "This gallery has reached its configured storage quota. Upgrade to continue uploading.",
 				})
 			default:
 				respondJSON(w, http.StatusInternalServerError, map[string]interface{}{

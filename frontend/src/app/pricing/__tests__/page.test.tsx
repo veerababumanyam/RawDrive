@@ -14,11 +14,17 @@ const mockPlanCatalog = vi.hoisted(() => ({
         annualPricePaise: 0,
         monthlyPrice: 0,
         annualPrice: 0,
-        quotaBytes: 5 * 2 ** 30,
-        storage: "5GB",
+        quotaBytes: 1 * 2 ** 30,
+        storage: "1GB",
         galleries: 1,
         clients: 0,
-        features: ["5GB storage"],
+        features: [
+          "1GB storage",
+          "1 event",
+          "AI face search (limited)",
+          "Watermarked galleries",
+          "No selling",
+        ],
         popular: false,
         rank: 0,
         paid: false,
@@ -201,20 +207,31 @@ describe("Pricing Page", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the updated event and subscription tiers", () => {
+  it("renders Starter and paid subscription tiers without retired public offers", () => {
     render(<PricingContent />);
-    expect(screen.getAllByText(/Starter/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Pay Per Event/i).length).toBeGreaterThan(0);
     expect(
       screen.getByRole("heading", {
         level: 2,
         name: /Monthly subscriptions/i,
       }),
     ).toBeInTheDocument();
+    expect(screen.getAllByText("Starter").length).toBeGreaterThan(0);
+    expect(screen.getByText("1GB storage")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Create free account" }),
+    ).toHaveAttribute("href", "/register?plan=free");
     expect(screen.getAllByText("Creator").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Pro Photographer").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Studio").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Elite Studio").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Pay Per Event/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Event upload")).not.toBeInTheDocument();
+    expect(screen.queryByText("Wedding upload")).not.toBeInTheDocument();
+    expect(screen.queryByText("Extend +30 days")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Download + archive forever"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Boost 50")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Talk to sales" })).toHaveAttribute(
       "href",
       "/register?plan=elite_studio&interval=monthly",
@@ -229,26 +246,6 @@ describe("Pricing Page", () => {
   it("shows the catalog-featured plan as the best value plan", () => {
     render(<PricingContent />);
     expect(screen.getByText("Best Value")).toBeInTheDocument();
-  });
-
-  it("renders event validity details without add-on packs", () => {
-    render(<PricingContent />);
-
-    expect(screen.getByText("Event upload")).toBeInTheDocument();
-    expect(screen.getByText("Wedding upload")).toBeInTheDocument();
-    expect(screen.getAllByText("30-day active phase").length).toBeGreaterThan(
-      1,
-    );
-    expect(
-      screen.getAllByText("Clean sweep after 30 days unless upgraded").length,
-    ).toBeGreaterThan(0);
-    expect(
-      screen.queryByText("Add-ons and extension packs"),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("Download + archive forever"),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByText("7 days upload window")).not.toBeInTheDocument();
   });
 
   it("toggles between monthly and annual billing", () => {
@@ -277,14 +274,14 @@ describe("Pricing Page", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("renders FAQ section with 8 items", () => {
+  it("renders FAQ section", () => {
     render(<PricingContent />);
     expect(screen.getByText("Frequently Asked Questions")).toBeInTheDocument();
-    expect(screen.getByText("Is Starter a trial?")).toBeInTheDocument();
+    expect(screen.getByText("Can I switch plans later?")).toBeInTheDocument();
     expect(screen.getByText("Is my data stored in India?")).toBeInTheDocument();
   });
 
-  it("renders Pay Per Event FAQ copy from product catalog data", () => {
+  it("ignores stale retired product catalog data", () => {
     mockPlanCatalog.current.eventPacks = [
       {
         code: "event_upload_standard",
@@ -374,25 +371,34 @@ describe("Pricing Page", () => {
         effective_from: new Date("2026-06-07T00:00:00Z").toISOString(),
       },
     ];
+    mockPlanCatalog.current.storageBoosters = [
+      {
+        code: "storage_boost_50",
+        product_type: "storage_booster",
+        version_id: "storage-version-1",
+        version: 1,
+        name: "Boost 50",
+        description: "Add 50GB recurring storage.",
+        currency: "INR",
+        price_paise: 30000,
+        billing_interval: "monthly",
+        metadata: { quota_bytes: 50 * 2 ** 30 },
+        rank: 60,
+        active: true,
+        effective_from: new Date("2026-06-07T00:00:00Z").toISOString(),
+      },
+    ];
 
     render(<PricingContent />);
 
+    expect(screen.queryByText("Event upload")).not.toBeInTheDocument();
+    expect(screen.queryByText("Wedding upload")).not.toBeInTheDocument();
+    expect(screen.queryByText("Extend +30 days")).not.toBeInTheDocument();
+    expect(screen.queryByText("Extend +90 days")).not.toBeInTheDocument();
     expect(
-      screen.getByText(
-        /Rs\. 299 events include 30 active days, Rs\. 699 wedding uploads include 30 active days, each product carries its own approved storage quota/i,
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("12GB managed storage included"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("64GB managed storage included"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /extend 30 days for Rs\. 79, extend 90 days for Rs\. 149, or download plus archive forever for Rs\. 249/i,
-      ),
-    ).toBeInTheDocument();
+      screen.queryByText("Download + archive forever"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Boost 50")).not.toBeInTheDocument();
   });
 
   it("reveals FAQ answers without a fixed-height clip", () => {

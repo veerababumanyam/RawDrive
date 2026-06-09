@@ -61,6 +61,9 @@ func (s *PricingCatalogService) PublicCatalog(ctx context.Context) (PricingCatal
 		Plans:       plans,
 	}
 	for _, product := range products {
+		if isCatalogHiddenBillingProduct(product) {
+			continue
+		}
 		switch product.ProductType {
 		case "event_upload":
 			catalog.EventPacks = append(catalog.EventPacks, product)
@@ -91,9 +94,18 @@ func (s *PricingCatalogService) AdminCatalog(ctx context.Context) (PricingCatalo
 func buildPricingCatalog(plans []PlanCatalogEntry, products []BillingProductCatalog) PricingCatalog {
 	catalog := PricingCatalog{
 		GeneratedAt: time.Now().UTC(),
-		Plans:       plans,
+		Plans:       make([]PlanCatalogEntry, 0, len(plans)),
+	}
+	for _, plan := range plans {
+		if isCatalogHiddenPlanTier(plan.Tier) {
+			continue
+		}
+		catalog.Plans = append(catalog.Plans, clonePlanCatalogEntry(plan))
 	}
 	for _, product := range products {
+		if isCatalogHiddenBillingProduct(product) {
+			continue
+		}
 		switch product.ProductType {
 		case "event_upload":
 			catalog.EventPacks = append(catalog.EventPacks, product)
@@ -137,6 +149,9 @@ func (s *PricingCatalogService) currentApprovedPlans(ctx context.Context) ([]Pla
 		plan, err := scanPlanCatalogEntry(rows)
 		if err != nil {
 			return nil, err
+		}
+		if isCatalogHiddenPlanTier(plan.Tier) {
+			continue
 		}
 		plans = append(plans, plan)
 	}
@@ -190,6 +205,9 @@ func (s *PricingCatalogService) currentApprovedProducts(ctx context.Context) ([]
 		if product.ProductType == "event_upload" && validateBillingProductCatalog(product) != nil {
 			continue
 		}
+		if isCatalogHiddenBillingProduct(product) {
+			continue
+		}
 		products = append(products, product)
 	}
 	if err := rows.Err(); err != nil {
@@ -234,12 +252,24 @@ func (s *PricingCatalogService) currentManageableProducts(ctx context.Context) (
 		if err != nil {
 			return nil, err
 		}
+		if isCatalogHiddenBillingProduct(product) {
+			continue
+		}
 		products = append(products, product)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	return products, nil
+}
+
+func isCatalogHiddenBillingProduct(product BillingProductCatalog) bool {
+	switch product.ProductType {
+	case "event_upload", "gallery_extension", "storage_booster":
+		return true
+	default:
+		return false
+	}
 }
 
 func scanBillingProductCatalog(row pgx.Row) (BillingProductCatalog, error) {

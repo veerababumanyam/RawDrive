@@ -173,7 +173,10 @@ export async function fetchPublicPlans(): Promise<PlanCatalogPlan[]> {
   }
   const body = (await response.json()) as PlansResponse;
   const plans = Array.isArray(body.plans) ? body.plans : [];
-  return plans.map(normalizeApiPlan).sort((a, b) => a.rank - b.rank);
+  return plans
+    .map(normalizeApiPlan)
+    .filter((plan) => plan.id !== "pay_per_event")
+    .sort((a, b) => a.rank - b.rank);
 }
 
 export async function fetchPricingCatalog(): Promise<PricingCatalogData> {
@@ -186,22 +189,19 @@ export async function fetchPricingCatalog(): Promise<PricingCatalogData> {
   const body = (await response.json()) as PricingCatalogResponse;
   const plans = Array.isArray(body.plans) ? body.plans : [];
   return {
-    plans: plans.map(normalizeApiPlan).sort((a, b) => a.rank - b.rank),
-    eventPacks: sortProducts(body.event_packs),
-    galleryExtensions: sortProducts(body.gallery_extensions),
-    storageBoosters: sortProducts(body.storage_boosters),
+    plans: plans
+      .map(normalizeApiPlan)
+      .filter((plan) => plan.id !== "pay_per_event")
+      .sort((a, b) => a.rank - b.rank),
+    eventPacks: [],
+    galleryExtensions: [],
+    storageBoosters: [],
   };
 }
 
-function sortProducts(
-  products: PricingCatalogProduct[] | undefined,
-): PricingCatalogProduct[] {
-  return Array.isArray(products)
-    ? products.filter((product) => product.active).sort((a, b) => a.rank - b.rank)
-    : [];
-}
-
-export function paidSelfServePlans(plans: PlanCatalogPlan[]): PlanCatalogPlan[] {
+export function paidSelfServePlans(
+  plans: PlanCatalogPlan[],
+): PlanCatalogPlan[] {
   return plans.filter(
     (plan) => plan.id !== "free" && plan.paid && plan.active && plan.selfServe,
   );

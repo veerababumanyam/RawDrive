@@ -154,7 +154,7 @@ func TestPricingChangePlanDirectPublishCastsNilEffectiveFrom(t *testing.T) {
 
 	pool := getServiceTestPool(t)
 	svc := NewPricingChangeRequestService(pool)
-	tier := fmt.Sprintf("codex_sqltype_%d", time.Now().UnixNano())
+	tier := fmt.Sprintf("codex_%06d", time.Now().UnixNano()%1_000_000)
 
 	cleanup := func() {
 		_, _ = pool.Exec(context.Background(), `

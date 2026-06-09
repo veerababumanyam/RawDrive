@@ -26,6 +26,7 @@ type Handler struct {
 	searchSvc    *SearchService
 	duplicateSvc *DuplicateService
 	cullingSvc   *CullingService
+	cullingGate  CullingFeatureGate
 	configRepo   *ConfigRepo
 	spendRepo    *SpendRepo
 	jobRepo      *JobRepo
@@ -36,6 +37,13 @@ type Handler struct {
 // → smart album endpoint. Returns the handler for fluent chaining.
 func (h *Handler) WithAlbumCreator(ac AlbumCreator) *Handler {
 	h.albumCreator = ac
+	return h
+}
+
+// WithCullingFeatureGate keeps Smart Culling behind the rollout flag until the
+// worker and review/apply UI are complete enough to expose.
+func (h *Handler) WithCullingFeatureGate(gate CullingFeatureGate) *Handler {
+	h.cullingGate = gate
 	return h
 }
 
@@ -891,21 +899,41 @@ func (h *Handler) GetJob(w http.ResponseWriter, r *http.Request) {
 // TriggerCulling handles POST /api/v1/ai/cull.
 func (h *Handler) TriggerCulling(w http.ResponseWriter, r *http.Request) {
 	wsID := getWorkspaceID(r)
+	if wsID == uuid.Nil {
+		respondError(w, http.StatusBadRequest, "workspace_id required")
+		return
+	}
 
 	var body struct {
 		GalleryID  uuid.UUID `json:"gallery_id"`
-		TopPercent int       `json:"top_percent"`
+		TopPercent *int      `json:"top_percent"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.GalleryID == uuid.Nil {
 		respondError(w, http.StatusBadRequest, "gallery_id required")
 		return
 	}
-	if body.TopPercent <= 0 || body.TopPercent > 100 {
-		body.TopPercent = 20
+	topPercent := 20
+	if body.TopPercent != nil {
+		topPercent = *body.TopPercent
+		if topPercent <= 0 || topPercent > 100 {
+			respondError(w, http.StatusBadRequest, "top_percent must be between 1 and 100")
+			return
+		}
+	}
+	if !h.cullingEnabled(w, r, wsID) {
+		return
 	}
 
-	job, err := h.cullingSvc.AnalyzeGallery(r.Context(), wsID, body.GalleryID, body.TopPercent)
+	job, err := h.cullingSvc.AnalyzeGallery(r.Context(), wsID, body.GalleryID, topPercent)
 	if err != nil {
+		if errors.Is(err, ErrGalleryNotFound) {
+			respondError(w, http.StatusNotFound, "gallery not found")
+			return
+		}
+		if errors.Is(err, ErrCapReached) {
+			respondError(w, http.StatusPaymentRequired, err.Error())
+			return
+		}
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -915,19 +943,40 @@ func (h *Handler) TriggerCulling(w http.ResponseWriter, r *http.Request) {
 
 // GetCullingSuggestions handles GET /api/v1/ai/cull/{jobId}.
 func (h *Handler) GetCullingSuggestions(w http.ResponseWriter, r *http.Request) {
+	wsID := getWorkspaceID(r)
+	if wsID == uuid.Nil {
+		respondError(w, http.StatusBadRequest, "workspace_id required")
+		return
+	}
 	jobID, err := uuid.Parse(chi.URLParam(r, "jobId"))
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "invalid job id")
 		return
 	}
+	if !h.cullingEnabled(w, r, wsID) {
+		return
+	}
 
-	suggestions, err := h.cullingSvc.GetSuggestions(r.Context(), jobID)
+	suggestions, err := h.cullingSvc.GetSuggestions(r.Context(), wsID, jobID)
 	if err != nil {
 		respondError(w, http.StatusNotFound, err.Error())
 		return
 	}
 
 	respondJSON(w, http.StatusOK, map[string]any{"suggestions": suggestions, "total": len(suggestions)})
+}
+
+func (h *Handler) cullingEnabled(w http.ResponseWriter, r *http.Request, workspaceID uuid.UUID) bool {
+	if h.cullingGate == nil {
+		respondError(w, http.StatusNotFound, "smart culling is not enabled")
+		return false
+	}
+	enabled, _ := h.cullingGate.IsEnabled(r.Context(), workspaceID)
+	if !enabled {
+		respondError(w, http.StatusNotFound, "smart culling is not enabled")
+		return false
+	}
+	return true
 }
 
 // ---- FR-012: Aesthetic Scoring ----

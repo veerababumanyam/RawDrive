@@ -2613,10 +2613,15 @@ func main() {
 		searchSvc := ai.NewSearchService(dbPool, aiConfigRepo, aiSpendRepo, geminiClient, storageProvider)
 		duplicateSvc := ai.NewDuplicateService(dbPool, aiConfigRepo, aiSpendRepo, geminiClient, aiJobRepo, storageProvider)
 		cullingSvc := ai.NewCullingService(dbPool, aiConfigRepo, aiSpendRepo, geminiClient, aiJobRepo, storageProvider)
+		cullingFlag := featureflag.NewCullingFlag(
+			platformSettingsRepo,
+			strings.EqualFold(os.Getenv("FEATURE_AI_CULLING"), "true"),
+		)
 
 		// AI handler (all endpoints in one handler)
 		aiHandler := ai.NewHandler(faceSvc, searchSvc, duplicateSvc, cullingSvc, aiConfigRepo, aiSpendRepo, aiJobRepo).
-			WithAlbumCreator(albumSvc)
+			WithAlbumCreator(albumSvc).
+			WithCullingFeatureGate(cullingFlag)
 
 		// M3 routes (FR-012, FR-013, FR-020)
 		watermarkSvc := service.NewWatermarkService()
@@ -2626,17 +2631,19 @@ func main() {
 		faceWorker := ai.NewFaceWorker(aiJobRepo, faceSvc, assetRepo, storageProvider).WithGalleryRepo(galleryRepo)
 		searchWorker := ai.NewSearchWorker(dbPool, searchSvc, aiConfigRepo)
 		duplicateWorker := ai.NewDuplicateWorker(aiJobRepo, duplicateSvc)
+		cullingWorker := ai.NewCullingWorker(aiJobRepo, cullingSvc).WithFeatureGate(cullingFlag)
 		burstSvc := ai.NewBurstService(dbPool)
 		aestheticWorker := ai.NewAestheticWorker(dbPool, aiJobRepo, aiConfigRepo, aiSpendRepo, geminiClient, storageProvider)
 		burstWorker := ai.NewBurstWorker(aiJobRepo, burstSvc)
 		workerRegistry.Register("face-detection", faceWorker)
 		workerRegistry.Register("ai-tagging", searchWorker)
 		workerRegistry.Register("duplicate-scan", duplicateWorker)
+		workerRegistry.Register("culling", cullingWorker)
 		workerRegistry.Register("aesthetic-scoring", aestheticWorker)
 		workerRegistry.Register("burst-grouping", burstWorker)
 		_ = burstSvc
 
-		log.Println("M3: AI routes + 5 workers registered")
+		log.Println("M3: AI routes + 6 workers registered")
 
 		// M12: Wire AI design suggestions (now that gemini + aiConfigRepo are available).
 		// Route is registered here (not in routes_m2.go) because DesignAISvc depends on

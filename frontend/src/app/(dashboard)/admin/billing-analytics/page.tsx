@@ -89,6 +89,16 @@ type PlanRow = AdminBillingPlanAnalytics & Record<string, unknown>;
 type ProductRevenueRow = AdminBillingProductRevenue & Record<string, unknown>;
 type RecentOrderRow = AdminBillingRecentOrder & Record<string, unknown>;
 
+const RETIRED_ORDER_TYPES = new Set([
+  "event_upload",
+  "gallery_extension",
+  "storage_booster",
+]);
+
+function isRetiredOrderType(orderType: string): boolean {
+  return RETIRED_ORDER_TYPES.has(orderType);
+}
+
 const planColumns: ColumnDef<PlanRow>[] = [
   {
     key: "plan_name",
@@ -336,11 +346,17 @@ export default function AdminBillingAnalyticsPage() {
     [dashboard],
   );
   const productRows = useMemo<ProductRevenueRow[]>(
-    () => (dashboard?.revenue_by_product ?? []) as ProductRevenueRow[],
+    () =>
+      ((dashboard?.revenue_by_product ?? []) as ProductRevenueRow[]).filter(
+        (row) => !isRetiredOrderType(row.order_type),
+      ),
     [dashboard],
   );
   const recentOrderRows = useMemo<RecentOrderRow[]>(
-    () => (dashboard?.recent_orders ?? []) as RecentOrderRow[],
+    () =>
+      ((dashboard?.recent_orders ?? []) as RecentOrderRow[]).filter(
+        (row) => !isRetiredOrderType(row.order_type),
+      ),
     [dashboard],
   );
   const maxProductRevenue = useMemo(
@@ -423,18 +439,14 @@ export default function AdminBillingAnalyticsPage() {
         <MetricCard
           label="Active Subscribers"
           value={formatNum(summary?.active_subscribers)}
-          detail={`${formatNum(summary?.active_storage_boosters)} active boosters`}
+          detail="Paid workspaces on active plans"
           icon={CreditCard}
           tone="success"
         />
         <MetricCard
-          label="Catalog Revenue"
-          value={formatINR(
-            (summary?.storage_booster_revenue_paise ?? 0) +
-              (summary?.expiry_extension_revenue_paise ?? 0) +
-              (summary?.event_upload_revenue_paise ?? 0),
-          )}
-          detail={`${formatINR(summary?.subscription_revenue_paise)} subscription payments`}
+          label="Subscription Revenue"
+          value={formatINR(summary?.subscription_revenue_paise)}
+          detail="Paid plan checkout and renewals"
           icon={Coins}
         />
         <MetricCard
@@ -496,7 +508,7 @@ export default function AdminBillingAnalyticsPage() {
                 Product Revenue
               </h3>
               <p className="mt-1 text-xs text-text-tertiary">
-                Storage boosters, gallery extensions, and event packs.
+                Historical paid product orders.
               </p>
             </div>
             <PieChart className="h-6 w-6 text-accent" />

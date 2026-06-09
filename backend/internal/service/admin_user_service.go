@@ -58,28 +58,49 @@ type CreateInput struct {
 	InitialPassword *string
 	SendInvite      bool
 	ActorID         uuid.UUID
-	// PlanTier is an optional admin-granted plan comp. When set to one
-	// of the canonical tier slugs (free / creator / pro_photographer /
-	// studio / elite_studio) the value is persisted to
-	// users.pending_plan_tier (migration 113) and applied at the
-	// user's workspace-creation time. Only meaningful for the
-	// photographer role — other roles do not own a workspace. The
-	// service rejects unknown tier values with ErrInvalidPlanTier
-	// rather than silently falling back so a typo from the admin
-	// dialog surfaces as a 400 instead of an unexpected "free" grant.
+	// PlanTier is an optional admin-granted plan comp. When set to a
+	// valid built-in or catalog-backed custom tier slug, the value is
+	// persisted to users.pending_plan_tier and applied at the user's
+	// workspace-creation time. Only meaningful for the photographer
+	// role — other roles do not own a workspace. The service rejects
+	// unknown tier values with ErrInvalidPlanTier rather than silently
+	// falling back so a typo from the admin dialog surfaces as a 400.
 	PlanTier *string
 }
 
-// validAdminGrantTiers mirrors the chk_users_pending_plan_tier CHECK
-// constraint (migration 113) and the workspaces.plan_tier CHECK
-// (migration 070). Kept here so the service layer can validate before
-// the repo INSERT — saves a round-trip and gives a clear sentinel error.
+// validAdminGrantTiers is the static fallback set used before the dynamic
+// catalog is wired. Runtime validation also accepts active custom plan slugs
+// from subscription_plans.
 var validAdminGrantTiers = map[string]struct{}{
 	"free":             {},
 	"creator":          {},
 	"pro_photographer": {},
 	"studio":           {},
 	"elite_studio":     {},
+}
+
+func (s *AdminUserService) validateAdminGrantTier(ctx context.Context, tier string) (string, error) {
+	normalized := NormalizePlanTierSlug(tier)
+	if normalized == "" || normalized == "pay_per_event" || !IsValidPlanTierSlug(normalized) {
+		return "", ErrInvalidPlanTier
+	}
+	if isReservedLegacyPlanTierAlias(tier) {
+		return "", ErrInvalidPlanTier
+	}
+	if _, ok := validAdminGrantTiers[normalized]; ok {
+		return normalized, nil
+	}
+	if s.planCatalog == nil {
+		return "", ErrInvalidPlanTier
+	}
+	plan, ok, err := s.planCatalog.Get(ctx, normalized)
+	if err != nil {
+		return "", fmt.Errorf("checking plan tier: %w", err)
+	}
+	if !ok || !plan.Active {
+		return "", ErrInvalidPlanTier
+	}
+	return normalized, nil
 }
 
 // ErrInvalidPlanTier — returned by Create when an unknown plan tier slug
@@ -414,13 +435,14 @@ func (s *AdminUserService) Create(ctx context.Context, input CreateInput) (*repo
 	if input.PlanTier != nil {
 		tier := strings.TrimSpace(strings.ToLower(*input.PlanTier))
 		if tier != "" {
-			if _, ok := validAdminGrantTiers[tier]; !ok {
-				return nil, ErrInvalidPlanTier
+			normalized, err := s.validateAdminGrantTier(ctx, tier)
+			if err != nil {
+				return nil, err
 			}
 			if role != "photographer" {
 				return nil, ErrInvalidPlanTier
 			}
-			pendingPlanTier = &tier
+			pendingPlanTier = &normalized
 		}
 	}
 	var passwordHash *string
@@ -494,16 +516,17 @@ func (s *AdminUserService) Create(ctx context.Context, input CreateInput) (*repo
 // Only accepts canonical tier slugs. Syncs workspace_storage quota to the
 // new tier's default. Restricted to super_admin at the handler layer.
 func (s *AdminUserService) ChangeTier(ctx context.Context, id uuid.UUID, newTier string, actorID uuid.UUID) error {
-	if _, ok := validAdminGrantTiers[newTier]; !ok {
-		return ErrInvalidPlanTier
+	normalizedTier, err := s.validateAdminGrantTier(ctx, newTier)
+	if err != nil {
+		return err
 	}
-	quotaBytes := PlanDefaultQuotaBytes(newTier)
+	quotaBytes := PlanDefaultQuotaBytes(normalizedTier)
 	if s.planCatalog != nil {
-		if resolvedQuota, err := s.planCatalog.QuotaBytes(ctx, newTier); err == nil {
+		if resolvedQuota, err := s.planCatalog.QuotaBytes(ctx, normalizedTier); err == nil {
 			quotaBytes = resolvedQuota
 		}
 	}
-	if err := s.userRepo.UpdateTier(ctx, id, newTier, quotaBytes, actorID); err != nil {
+	if err := s.userRepo.UpdateTier(ctx, id, normalizedTier, quotaBytes, actorID); err != nil {
 		return fmt.Errorf("updating tier: %w", err)
 	}
 	s.auditLog.RecordAction(ctx, repository.AuditLogCreate{

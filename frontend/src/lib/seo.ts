@@ -78,9 +78,9 @@ export const PUBLIC_PAGES = [
     path: "/pricing",
     title: "Pricing for Indian Photography Studios",
     description:
-      "Compare RawDrive plans for photographers in India: Starter, Pay Per Event, Creator, Pro Photographer, Studio, and Elite Studio.",
+      "Compare RawDrive plans for photographers in India: Starter, Creator, Pro Photographer, Studio, and Elite Studio.",
     summary:
-      "RawDrive pricing includes a free Starter plan, governed Pay Per Event delivery with storage quota and 30-day cleanup, and paid studio plans for storage, AI face search, branding, client delivery, and selling.",
+      "RawDrive pricing includes a free Starter plan with 1GB storage and paid studio plans for storage, AI face search, branding, client delivery, and selling.",
     image: {
       url: "/marketing/rawdrive-home-product-os.webp",
       width: 1600,
@@ -672,13 +672,6 @@ export function buildSiteJsonLd() {
               "@type": "Offer",
               name: "Starter",
               price: "0",
-              priceCurrency: "INR",
-              url: absoluteUrl("/pricing"),
-            },
-            {
-              "@type": "Offer",
-              name: "Pay Per Event",
-              price: "199",
               priceCurrency: "INR",
               url: absoluteUrl("/pricing"),
             },

@@ -90,7 +90,7 @@ describe("Landing Page", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the five requested tier plans on the home page", () => {
+  it("renders Starter and paid tier plans on the home page", () => {
     render(<LandingPage />);
 
     const heading = screen.getByRole("heading", {
@@ -101,6 +101,7 @@ describe("Landing Page", () => {
     const plans = within(section as HTMLElement);
 
     expect(plans.getByText("Starter")).toBeInTheDocument();
+    expect(plans.getAllByText("Free").length).toBeGreaterThan(0);
     expect(plans.getByText("Creator")).toBeInTheDocument();
     expect(plans.getByText("Pro Photographer")).toBeInTheDocument();
     expect(plans.getByText("Studio")).toBeInTheDocument();

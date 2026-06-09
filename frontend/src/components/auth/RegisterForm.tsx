@@ -55,7 +55,7 @@ async function readRegisterError(response: Response): Promise<string> {
 // in a narrow form column — 3 short, benefit-led lines work better here.
 const planHighlights: Record<string, readonly string[]> = {
   free: [
-    "5GB storage, 1 event",
+    "1GB storage, 1 event",
     "Limited AI face search",
     "Watermarked galleries",
   ],

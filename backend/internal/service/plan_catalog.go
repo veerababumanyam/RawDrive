@@ -4,11 +4,29 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var planTierSlugPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,19}$`)
+
+// IsValidPlanTierSlug mirrors the database CHECK constraint for plan-tier
+// slugs. Keep it strict because workspaces.plan_tier is VARCHAR(20).
+func IsValidPlanTierSlug(tier string) bool {
+	return planTierSlugPattern.MatchString(strings.ToLower(strings.TrimSpace(tier)))
+}
+
+func isReservedLegacyPlanTierAlias(tier string) bool {
+	switch strings.ToLower(strings.TrimSpace(tier)) {
+	case "standard", "starter", "pro", "professional", "business", "enterprise":
+		return true
+	default:
+		return false
+	}
+}
 
 // PlanCatalogEntry is the backend source of truth for subscription pricing,
 // storage quota, and display metadata. Prices are paise (INR x 100); quota is
@@ -48,14 +66,14 @@ var planCatalog = []PlanCatalogEntry{
 	{
 		Tier:              "free",
 		Name:              "Starter",
-		Description:       "Hook beginners with a free starter gallery, then grow them into paid plans.",
+		Description:       "Hook beginners with a free starter gallery. Goal: get users to upgrade later.",
 		Currency:          "INR",
 		MonthlyPricePaise: 0,
 		AnnualPricePaise:  0,
-		QuotaBytes:        5 * (1 << 30),
+		QuotaBytes:        1 * (1 << 30),
 		GalleryLimit:      1,
 		ClientLimit:       0,
-		Features:          []string{"5GB storage", "1 event", "AI face search (limited)", "Watermarked galleries", "No selling"},
+		Features:          []string{"1GB storage", "1 event", "AI face search (limited)", "Watermarked galleries", "No selling"},
 		Rank:              0,
 		Paid:              false,
 		Active:            true,
@@ -144,11 +162,14 @@ var planCatalog = []PlanCatalogEntry{
 	},
 }
 
-// PlanCatalog returns a stable copy of the plan catalog in display order.
+// PlanCatalog returns a stable copy of the visible plan catalog in display order.
 func PlanCatalog() []PlanCatalogEntry {
-	out := make([]PlanCatalogEntry, len(planCatalog))
-	for i, p := range planCatalog {
-		out[i] = clonePlanCatalogEntry(p)
+	out := make([]PlanCatalogEntry, 0, len(planCatalog))
+	for _, p := range planCatalog {
+		if isCatalogHiddenPlanTier(p.Tier) {
+			continue
+		}
+		out = append(out, clonePlanCatalogEntry(p))
 	}
 	return out
 }
@@ -267,6 +288,12 @@ func (s *PlanCatalogService) List(ctx context.Context, includeInactive bool) ([]
 		p, err := scanPlanCatalogEntry(rows)
 		if err != nil {
 			return nil, err
+		}
+		if isCatalogHiddenPlanTier(p.Tier) {
+			continue
+		}
+		if !includeInactive && !p.Active {
+			continue
 		}
 		plans = append(plans, p)
 	}
@@ -416,17 +443,25 @@ func clonePlanCatalogEntry(p PlanCatalogEntry) PlanCatalogEntry {
 }
 
 func filterStaticPlanCatalog(includeInactive bool) []PlanCatalogEntry {
-	catalog := PlanCatalog()
-	if includeInactive {
-		return catalog
-	}
-	out := make([]PlanCatalogEntry, 0, len(catalog))
-	for _, p := range catalog {
-		if p.Active {
-			out = append(out, p)
+	out := make([]PlanCatalogEntry, 0, len(planCatalog))
+	for _, p := range planCatalog {
+		if isCatalogHiddenPlanTier(p.Tier) {
+			continue
+		}
+		if includeInactive || p.Active {
+			out = append(out, clonePlanCatalogEntry(p))
 		}
 	}
 	return out
+}
+
+func isCatalogHiddenPlanTier(tier string) bool {
+	switch NormalizePlanTierSlug(tier) {
+	case "pay_per_event":
+		return true
+	default:
+		return false
+	}
 }
 
 // NormalizePlanTierSlug maps historical plan slugs onto the current catalog

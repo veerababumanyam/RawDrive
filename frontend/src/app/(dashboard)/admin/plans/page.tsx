@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Plus, X } from "lucide-react";
 import {
   approvePricingChangeRequest,
   createPricingChangeRequest,
@@ -21,7 +22,6 @@ const TB = 2 ** 40;
 
 const planBadges: Record<string, string> = {
   free: "STARTER",
-  pay_per_event: "EVENT",
   pro_photographer: "MOST POPULAR",
   studio: "BEST VALUE",
 };
@@ -39,15 +39,110 @@ type EditableProduct = AdminBillingProduct & {
   upload_window_days: string;
   retention_days: string;
   upload_credits: string;
-  extension_days: string;
   quota_gb: string;
-  archive_forever: boolean;
 };
 
 type CatalogState = {
   plans: AdminPlan[];
   products: AdminBillingProduct[];
 };
+
+function createDraftPlan(rank: number): EditablePlan {
+  return {
+    tier: "",
+    name: "",
+    description: "",
+    currency: "INR",
+    monthly_price_paise: 0,
+    annual_price_paise: 0,
+    quota_bytes: 0,
+    gallery_limit: -1,
+    client_limit: -1,
+    features: [],
+    popular: false,
+    rank,
+    paid: true,
+    active: true,
+    self_serve: true,
+    trial_days: 0,
+    monthly_price_rupees: "",
+    annual_price_rupees: "",
+    quota_gb: "",
+    features_text: "",
+  };
+}
+
+function normalizePlanTierInput(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_+/g, "_");
+}
+
+function validateNewPlan(
+  plan: EditablePlan,
+  existingPlans: EditablePlan[],
+): string {
+  const tier = normalizePlanTierInput(plan.tier);
+  if (!tier) return "Plan ID is required.";
+  if (!/^[a-z][a-z0-9_]*$/.test(tier)) {
+    return "Plan ID must start with a letter and use lowercase letters, numbers, or underscores.";
+  }
+  if (tier.length > 20) {
+    return "Plan ID must be 20 characters or fewer.";
+  }
+  if (
+    [
+      "free",
+      "pay_per_event",
+      "standard",
+      "starter",
+      "pro",
+      "professional",
+      "business",
+      "enterprise",
+    ].includes(tier)
+  ) {
+    return "Reserved plan IDs cannot be reused.";
+  }
+  if (existingPlans.some((item) => item.tier === tier)) {
+    return "A plan with this ID already exists.";
+  }
+  if (!plan.name.trim()) return "Plan name is required.";
+  if (!plan.description.trim()) return "Description is required.";
+  const monthlyPrice = Number(plan.monthly_price_rupees);
+  if (!Number.isFinite(monthlyPrice) || monthlyPrice <= 0) {
+    return "Monthly price must be greater than zero.";
+  }
+  const annualPrice = Number(plan.annual_price_rupees);
+  if (!Number.isFinite(annualPrice) || annualPrice <= 0) {
+    return "Annual price must be greater than zero.";
+  }
+  const quotaGB = Number(plan.quota_gb);
+  if (!Number.isFinite(quotaGB) || quotaGB <= 0) {
+    return "Storage GB must be greater than zero.";
+  }
+  if (!Number.isFinite(Number(plan.gallery_limit))) {
+    return "Galleries is required. Use -1 for unlimited.";
+  }
+  if (!Number.isFinite(Number(plan.client_limit))) {
+    return "Clients is required. Use -1 for unlimited.";
+  }
+  if (!Number.isFinite(Number(plan.rank))) return "Display order is required.";
+  if (!Number.isFinite(Number(plan.trial_days)))
+    return "Trial days is required.";
+  if (
+    plan.features_text
+      .split("\n")
+      .map((feature) => feature.trim())
+      .filter(Boolean).length === 0
+  ) {
+    return "At least one feature is required.";
+  }
+  return "";
+}
 
 function toEditablePlan(plan: AdminPlan): EditablePlan {
   return {
@@ -78,9 +173,7 @@ function toEditableProduct(product: AdminBillingProduct): EditableProduct {
     upload_window_days: productMetadataNumber(product, "upload_window_days"),
     retention_days: productMetadataNumber(product, "retention_days"),
     upload_credits: productMetadataNumber(product, "upload_credits"),
-    extension_days: productMetadataNumber(product, "extension_days"),
     quota_gb: quotaBytes > 0 ? String(Math.round(quotaBytes / GB)) : "",
-    archive_forever: product.metadata?.archive_forever === true,
   };
 }
 
@@ -93,7 +186,15 @@ function flattenProducts(catalog: {
     ...catalog.event_packs,
     ...catalog.gallery_extensions,
     ...catalog.storage_boosters,
-  ].sort((a, b) => a.rank - b.rank || a.code.localeCompare(b.code));
+  ]
+    .filter((product) => !isRetiredBillingProduct(product))
+    .sort((a, b) => a.rank - b.rank || a.code.localeCompare(b.code));
+}
+
+function isRetiredBillingProduct(product: AdminBillingProduct): boolean {
+  return ["event_upload", "gallery_extension", "storage_booster"].includes(
+    product.product_type,
+  );
 }
 
 function setOptionalNumber(
@@ -111,7 +212,6 @@ function setOptionalNumber(
 
 function toPlanUpdateInput(plan: EditablePlan): Omit<AdminPlan, "tier"> {
   const isStarter = plan.tier === "free";
-  const isPayPerEvent = plan.tier === "pay_per_event";
   const monthlyRupees = Number(plan.monthly_price_rupees);
   const annualRupees = Number(plan.annual_price_rupees);
   const quotaGB = Number(plan.quota_gb);
@@ -136,7 +236,7 @@ function toPlanUpdateInput(plan: EditablePlan): Omit<AdminPlan, "tier"> {
     rank: Number(plan.rank),
     paid: isStarter ? false : plan.paid,
     active: plan.active,
-    self_serve: isPayPerEvent ? false : plan.self_serve,
+    self_serve: plan.self_serve,
     trial_days: Number(plan.trial_days),
   };
 }
@@ -147,7 +247,6 @@ function toProductUpdateInput(product: EditableProduct): AdminBillingProduct {
   setOptionalNumber(metadata, "upload_window_days", product.upload_window_days);
   setOptionalNumber(metadata, "retention_days", product.retention_days);
   setOptionalNumber(metadata, "upload_credits", product.upload_credits);
-  setOptionalNumber(metadata, "extension_days", product.extension_days);
   if (product.quota_gb.trim() === "") {
     delete metadata.quota_bytes;
   } else {
@@ -156,11 +255,8 @@ function toProductUpdateInput(product: EditableProduct): AdminBillingProduct {
       ? Math.max(0, Math.round(quotaGB * GB))
       : 0;
   }
-  if (product.archive_forever) {
-    metadata.archive_forever = true;
-  } else {
-    delete metadata.archive_forever;
-  }
+  delete metadata.archive_forever;
+  delete metadata.extension_days;
   return {
     code: product.code,
     product_type: product.product_type,
@@ -186,8 +282,6 @@ function productTypeLabel(productType: string): string {
   switch (productType) {
     case "event_upload":
       return "Event pack";
-    case "gallery_extension":
-      return "Gallery extension";
     case "storage_booster":
       return "Storage booster";
     default:
@@ -236,7 +330,9 @@ function currentPlanPayload(plan: AdminPlan): Record<string, unknown> {
   return { tier: plan.tier, ...toPlanUpdateInput(toEditablePlan(plan)) };
 }
 
-function currentProductPayload(product: AdminBillingProduct): AdminBillingProduct {
+function currentProductPayload(
+  product: AdminBillingProduct,
+): AdminBillingProduct {
   return toProductUpdateInput(toEditableProduct(product));
 }
 
@@ -260,7 +356,7 @@ function eventProductValidationError(product: EditableProduct): string {
   }
   const retentionDays = Number(product.retention_days);
   if (retentionDays !== 30) {
-    return "Pay Per Event retention must be exactly 30 days.";
+    return "Product retention must be exactly 30 days.";
   }
   return "";
 }
@@ -298,6 +394,7 @@ function NumberField({
 
 export default function AdminPlansPage() {
   const [plans, setPlans] = useState<EditablePlan[]>([]);
+  const [newPlan, setNewPlan] = useState<EditablePlan | null>(null);
   const [products, setProducts] = useState<EditableProduct[]>([]);
   const [original, setOriginal] = useState<CatalogState>({
     plans: [],
@@ -320,8 +417,11 @@ export default function AdminPlansPage() {
       .then((catalog) => {
         if (!active) return;
         const catalogProducts = flattenProducts(catalog);
-        setOriginal({ plans: catalog.plans, products: catalogProducts });
-        setPlans(catalog.plans.map(toEditablePlan));
+        const catalogPlans = catalog.plans.filter(
+          (plan) => plan.tier !== "pay_per_event",
+        );
+        setOriginal({ plans: catalogPlans, products: catalogProducts });
+        setPlans(catalogPlans.map(toEditablePlan));
         setProducts(catalogProducts.map(toEditableProduct));
         setError(null);
       })
@@ -348,17 +448,16 @@ export default function AdminPlansPage() {
     () => plans.filter((plan) => plan.active).length,
     [plans],
   );
-  const activeProductCount = useMemo(
-    () => products.filter((product) => product.active).length,
-    [products],
-  );
-
   function patchPlan(tier: string, patch: Partial<EditablePlan>) {
     setPlans((current) =>
       current.map((plan) =>
         plan.tier === tier ? { ...plan, ...patch } : plan,
       ),
     );
+  }
+
+  function patchNewPlan(patch: Partial<EditablePlan>) {
+    setNewPlan((current) => (current ? { ...current, ...patch } : current));
   }
 
   function patchProduct(code: string, patch: Partial<EditableProduct>) {
@@ -405,11 +504,7 @@ export default function AdminPlansPage() {
           quota_bytes: afterState.quota_bytes,
           rank: afterState.rank,
           invariant_guard:
-            plan.tier === "free"
-              ? "starter_must_remain_free"
-              : plan.tier === "pay_per_event"
-                ? "pay_per_event_not_subscription_upgrade"
-                : null,
+            plan.tier === "free" ? "starter_must_remain_free" : null,
         },
         email_preview: {
           notice_required: plan.paid,
@@ -436,6 +531,60 @@ export default function AdminPlansPage() {
       setError(
         err instanceof Error ? err.message : "Failed to submit plan change",
       );
+    } finally {
+      setSavingKey(null);
+    }
+  }
+
+  async function handleCreatePlan(event: FormEvent, plan: EditablePlan) {
+    event.preventDefault();
+    setMessage(null);
+    setError(null);
+    const tier = normalizePlanTierInput(plan.tier);
+    const validationError = validateNewPlan({ ...plan, tier }, plans);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setSavingKey("plan:create");
+    try {
+      const token = getStoredAccessToken() || "";
+      const afterState = { tier, ...toPlanUpdateInput({ ...plan, tier }) };
+      const created = await createPricingChangeRequest(token, {
+        request_type: "plan_create",
+        target_type: "subscription_plan",
+        target_key: tier,
+        before_state: { tier },
+        after_state: afterState,
+        impact_summary: {
+          next_monthly_price_paise: afterState.monthly_price_paise,
+          quota_bytes: afterState.quota_bytes,
+          rank: afterState.rank,
+          new_plan: true,
+        },
+        email_preview: {
+          notice_required: false,
+          delivery_channel: "none",
+        },
+      });
+      const submitted = await submitPricingChangeRequest(token, created.id);
+      if (canManage) {
+        const approved = await approvePricingChangeRequest(
+          token,
+          submitted.id,
+          "Super admin direct publish",
+        );
+        await publishPricingChangeRequest(token, approved.id);
+        await reloadCatalogAndChanges();
+        setNewPlan(null);
+        setMessage(`${plan.name || tier} plan created and published.`);
+      } else {
+        setChanges((current) => [submitted, ...current]);
+        setNewPlan(null);
+        setMessage(`${plan.name || tier} plan submitted for approval.`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create plan");
     } finally {
       setSavingKey(null);
     }
@@ -523,8 +672,11 @@ export default function AdminPlansPage() {
       listPricingChangeRequests(token),
     ]);
     const catalogProducts = flattenProducts(nextCatalog);
-    setOriginal({ plans: nextCatalog.plans, products: catalogProducts });
-    setPlans(nextCatalog.plans.map(toEditablePlan));
+    const catalogPlans = nextCatalog.plans.filter(
+      (plan) => plan.tier !== "pay_per_event",
+    );
+    setOriginal({ plans: catalogPlans, products: catalogProducts });
+    setPlans(catalogPlans.map(toEditablePlan));
     setProducts(catalogProducts.map(toEditableProduct));
     setChanges(nextChanges);
   }
@@ -607,20 +759,15 @@ export default function AdminPlansPage() {
             Pricing Catalog
           </h1>
           <p className="mt-2 max-w-3xl text-sm text-text-secondary">
-            Manage Starter, Pay Per Event, paid subscriptions, event packs,
-            gallery extensions, and storage boosters. Every edit is submitted
-            through approval before public pricing, signup, onboarding,
-            checkout, and payment snapshots can read it.
+            Manage paid subscription plans. Every edit is submitted through
+            approval before public pricing, signup, onboarding, checkout, and
+            payment snapshots can read it.
           </p>
         </div>
         <div className="grid gap-2 rounded-xl border border-border-subtle bg-surface-container-low px-4 py-3 text-sm text-text-secondary sm:min-w-44">
           <span>
             <strong className="text-text-primary">{activePlanCount}</strong>{" "}
             active plans
-          </span>
-          <span>
-            <strong className="text-text-primary">{activeProductCount}</strong>{" "}
-            active products
           </span>
         </div>
       </header>
@@ -649,16 +796,247 @@ export default function AdminPlansPage() {
       ) : (
         <>
           <section className="space-y-4">
-            <div>
-              <h2 className="text-xl font-bold text-text-primary">
-                Subscription And Access Plans
-              </h2>
-              <p className="text-sm text-text-secondary">
-                Starter is always free. Pay Per Event remains a catalog access
-                option and cannot become a subscription upgrade target.
-              </p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-text-primary">
+                  Subscription Plans
+                </h2>
+                <p className="text-sm text-text-secondary">
+                  Starter remains free; paid plans are subscription upgrade
+                  targets.
+                </p>
+              </div>
+              {!newPlan && (
+                <button
+                  type="button"
+                  disabled={!canManage}
+                  onClick={() => {
+                    const nextRank =
+                      Math.max(
+                        0,
+                        ...plans.map((plan) => Number(plan.rank) || 0),
+                      ) + 1;
+                    setNewPlan(createDraftPlan(nextRank));
+                  }}
+                  className="touch-min inline-flex items-center justify-center gap-2 rounded-full bg-accent px-5 py-2 text-sm font-semibold text-text-inverse transition-opacity hover:opacity-90 disabled:opacity-60"
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  New plan
+                </button>
+              )}
             </div>
             <div className="grid gap-5">
+              {newPlan && (
+                <form
+                  onSubmit={(event) => handleCreatePlan(event, newPlan)}
+                  className="rounded-2xl border border-accent/50 bg-accent-subtle/30 p-5"
+                >
+                  <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <h3 className="text-xl font-bold text-text-primary">
+                          New plan
+                        </h3>
+                        <span className="rounded-full bg-accent-subtle px-3 py-1 text-xs font-semibold text-accent">
+                          Draft
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm text-text-secondary">
+                        Fill every required field. The plan is published only
+                        after the pricing approval flow completes.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setNewPlan(null)}
+                        className="touch-min inline-flex items-center justify-center gap-2 rounded-full border border-border-subtle px-4 py-2 text-sm font-semibold text-text-primary"
+                      >
+                        <X className="h-4 w-4" aria-hidden="true" />
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={savingKey === "plan:create" || !canManage}
+                        className="touch-min rounded-full bg-accent px-5 py-2 text-sm font-semibold text-text-inverse transition-opacity hover:opacity-90 disabled:opacity-60"
+                      >
+                        {savingKey === "plan:create"
+                          ? "Publishing..."
+                          : "Save & publish new plan"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <label className="space-y-1">
+                      <span className="text-xs font-semibold text-text-tertiary">
+                        Plan ID
+                      </span>
+                      <input
+                        required
+                        maxLength={20}
+                        value={newPlan.tier}
+                        placeholder="e.g. premium_studio"
+                        onChange={(event) =>
+                          patchNewPlan({
+                            tier: normalizePlanTierInput(event.target.value),
+                          })
+                        }
+                        className="touch-min w-full rounded-xl border border-border-subtle bg-surface px-3 text-sm text-text-primary"
+                      />
+                    </label>
+                    <label className="space-y-1">
+                      <span className="text-xs font-semibold text-text-tertiary">
+                        Name
+                      </span>
+                      <input
+                        required
+                        value={newPlan.name}
+                        placeholder="e.g. Premium Studio"
+                        onChange={(event) =>
+                          patchNewPlan({ name: event.target.value })
+                        }
+                        className="touch-min w-full rounded-xl border border-border-subtle bg-surface px-3 text-sm text-text-primary"
+                      />
+                    </label>
+                    <NumberField
+                      label="Monthly Rs."
+                      value={newPlan.monthly_price_rupees}
+                      required
+                      onChange={(value) =>
+                        patchNewPlan({ monthly_price_rupees: value })
+                      }
+                    />
+                    <NumberField
+                      label="Annual Rs."
+                      value={newPlan.annual_price_rupees}
+                      required
+                      onChange={(value) =>
+                        patchNewPlan({ annual_price_rupees: value })
+                      }
+                    />
+                  </div>
+
+                  <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <NumberField
+                      label="Storage GB"
+                      value={newPlan.quota_gb}
+                      required
+                      onChange={(value) => patchNewPlan({ quota_gb: value })}
+                    />
+                    <NumberField
+                      label="Galleries"
+                      value={newPlan.gallery_limit}
+                      min="-1"
+                      required
+                      onChange={(value) =>
+                        patchNewPlan({ gallery_limit: Number(value) })
+                      }
+                    />
+                    <NumberField
+                      label="Clients"
+                      value={newPlan.client_limit}
+                      min="-1"
+                      required
+                      onChange={(value) =>
+                        patchNewPlan({ client_limit: Number(value) })
+                      }
+                    />
+                    <NumberField
+                      label="Display order"
+                      value={newPlan.rank}
+                      required
+                      onChange={(value) =>
+                        patchNewPlan({ rank: Number(value) })
+                      }
+                    />
+                  </div>
+
+                  <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <NumberField
+                      label="Trial days"
+                      value={newPlan.trial_days}
+                      required
+                      onChange={(value) =>
+                        patchNewPlan({ trial_days: Number(value) })
+                      }
+                    />
+                  </div>
+
+                  <label className="mt-4 block space-y-1">
+                    <span className="text-xs font-semibold text-text-tertiary">
+                      Description
+                    </span>
+                    <input
+                      required
+                      value={newPlan.description}
+                      onChange={(event) =>
+                        patchNewPlan({ description: event.target.value })
+                      }
+                      className="touch-min w-full rounded-xl border border-border-subtle bg-surface px-3 text-sm text-text-primary"
+                    />
+                  </label>
+
+                  <label className="mt-4 block space-y-1">
+                    <span className="text-xs font-semibold text-text-tertiary">
+                      Features
+                    </span>
+                    <textarea
+                      required
+                      value={newPlan.features_text}
+                      onChange={(event) =>
+                        patchNewPlan({ features_text: event.target.value })
+                      }
+                      rows={5}
+                      placeholder={"One feature per line"}
+                      className="w-full rounded-xl border border-border-subtle bg-surface px-3 py-3 text-sm text-text-primary"
+                    />
+                  </label>
+
+                  <div className="mt-4 flex flex-wrap gap-4">
+                    <label className="flex touch-min items-center gap-2 text-sm text-text-secondary">
+                      <input
+                        type="checkbox"
+                        checked={newPlan.active}
+                        onChange={(event) =>
+                          patchNewPlan({ active: event.target.checked })
+                        }
+                      />
+                      Show publicly
+                    </label>
+                    <label className="flex touch-min items-center gap-2 text-sm text-text-secondary">
+                      <input
+                        type="checkbox"
+                        checked={newPlan.self_serve}
+                        onChange={(event) =>
+                          patchNewPlan({ self_serve: event.target.checked })
+                        }
+                      />
+                      Self-serve signup
+                    </label>
+                    <label className="flex touch-min items-center gap-2 text-sm text-text-secondary">
+                      <input
+                        type="checkbox"
+                        checked={newPlan.paid}
+                        onChange={(event) =>
+                          patchNewPlan({ paid: event.target.checked })
+                        }
+                      />
+                      Paid tier
+                    </label>
+                    <label className="flex touch-min items-center gap-2 text-sm text-text-secondary">
+                      <input
+                        type="checkbox"
+                        checked={newPlan.popular}
+                        onChange={(event) =>
+                          patchNewPlan({ popular: event.target.checked })
+                        }
+                      />
+                      Popular badge
+                    </label>
+                  </div>
+                </form>
+              )}
               {plans.length === 0 && (
                 <div className="rounded-xl border border-border-subtle bg-surface-container-low p-8 text-center text-sm text-text-secondary">
                   No manageable plans are available.
@@ -668,7 +1046,6 @@ export default function AdminPlansPage() {
                 const saving = savingKey === `plan:${plan.tier}`;
                 const badge = planBadge(plan);
                 const isStarter = plan.tier === "free";
-                const isPayPerEvent = plan.tier === "pay_per_event";
                 return (
                   <form
                     key={plan.tier}
@@ -845,7 +1222,6 @@ export default function AdminPlansPage() {
                         <input
                           type="checkbox"
                           checked={plan.self_serve}
-                          disabled={isPayPerEvent}
                           onChange={(event) =>
                             patchPlan(plan.tier, {
                               self_serve: event.target.checked,
@@ -884,246 +1260,234 @@ export default function AdminPlansPage() {
             </div>
           </section>
 
-          <section className="space-y-4">
-            <div>
-              <h2 className="text-xl font-bold text-text-primary">
-                Billing Products
-              </h2>
-              <p className="text-sm text-text-secondary">
-                Product codes and types are immutable. Price, lifecycle
-                metadata, active state, and rank are governed through approval.
-              </p>
-            </div>
-            <div className="grid gap-5">
-              {products.length === 0 && (
-                <div className="rounded-xl border border-border-subtle bg-surface-container-low p-8 text-center text-sm text-text-secondary">
-                  No billing products are available.
-                </div>
-              )}
-              {products.map((product) => {
-                const saving = savingKey === `product:${product.code}`;
-                const quota = productQuotaSummary(product);
-                const validationError = eventProductValidationError(product);
-                return (
-                  <form
-                    key={product.code}
-                    onSubmit={(event) => handleSaveProduct(event, product)}
-                    className="rounded-2xl border border-border-subtle bg-surface-container-low p-5"
-                  >
-                    <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-3">
-                          <h3 className="text-xl font-bold text-text-primary">
-                            {product.name || product.code}
-                          </h3>
-                          <span className="rounded-full bg-surface-container-high px-3 py-1 text-xs font-semibold text-text-tertiary">
-                            {product.code}
-                          </span>
-                          <span className="rounded-full bg-accent-subtle px-3 py-1 text-xs font-semibold text-accent">
-                            {productTypeLabel(product.product_type)}
-                          </span>
-                          {!product.active && (
-                            <span className="rounded-full bg-feedback-warning/10 px-3 py-1 text-xs font-semibold text-feedback-warning">
-                              Hidden
+          {products.length > 0 && (
+            <section className="space-y-4">
+              <div>
+                <h2 className="text-xl font-bold text-text-primary">
+                  Billing Products
+                </h2>
+                <p className="text-sm text-text-secondary">
+                  Product codes and types are immutable. Price, lifecycle
+                  metadata, active state, and rank are governed through
+                  approval.
+                </p>
+              </div>
+              <div className="grid gap-5">
+                {products.length === 0 && (
+                  <div className="rounded-xl border border-border-subtle bg-surface-container-low p-8 text-center text-sm text-text-secondary">
+                    No billing products are available.
+                  </div>
+                )}
+                {products.map((product) => {
+                  const saving = savingKey === `product:${product.code}`;
+                  const quota = productQuotaSummary(product);
+                  const validationError = eventProductValidationError(product);
+                  return (
+                    <form
+                      key={product.code}
+                      onSubmit={(event) => handleSaveProduct(event, product)}
+                      className="rounded-2xl border border-border-subtle bg-surface-container-low p-5"
+                    >
+                      <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <h3 className="text-xl font-bold text-text-primary">
+                              {product.name || product.code}
+                            </h3>
+                            <span className="rounded-full bg-surface-container-high px-3 py-1 text-xs font-semibold text-text-tertiary">
+                              {product.code}
                             </span>
+                            <span className="rounded-full bg-accent-subtle px-3 py-1 text-xs font-semibold text-accent">
+                              {productTypeLabel(product.product_type)}
+                            </span>
+                            {!product.active && (
+                              <span className="rounded-full bg-feedback-warning/10 px-3 py-1 text-xs font-semibold text-feedback-warning">
+                                Hidden
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-2 text-sm text-text-secondary">
+                            Rs.{" "}
+                            {Number(product.price_rupees || 0).toLocaleString(
+                              "en-IN",
+                            )}{" "}
+                            {billingIntervalLabel(product)}
+                            {quota ? ` · ${quota}` : ""}
+                          </p>
+                          {product.product_type === "event_upload" && (
+                            <p className="mt-2 text-xs font-semibold text-feedback-warning">
+                              Storage quota is required for active public event
+                              products.
+                            </p>
                           )}
                         </div>
-                        <p className="mt-2 text-sm text-text-secondary">
-                          Rs.{" "}
-                          {Number(product.price_rupees || 0).toLocaleString(
-                            "en-IN",
-                          )}{" "}
-                          {billingIntervalLabel(product)}
-                          {quota ? ` · ${quota}` : ""}
-                        </p>
-                        {product.product_type === "event_upload" && (
-                          <p className="mt-2 text-xs font-semibold text-feedback-warning">
-                            Storage quota is required for active public Pay Per
-                            Event products.
-                          </p>
-                        )}
-                      </div>
-                      <button
-                        type="submit"
-                        disabled={saving || !canManage}
-                        className="touch-min rounded-full bg-accent px-5 py-2 text-sm font-semibold text-text-inverse transition-opacity hover:opacity-90 disabled:opacity-60"
-                      >
-                        {saving ? "Publishing..." : "Save & publish product"}
-                      </button>
-                    </div>
-
-                    <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                      <label className="space-y-1">
-                        <span className="text-xs font-semibold text-text-tertiary">
-                          Name
-                        </span>
-                        <input
-                          value={product.name}
-                          onChange={(event) =>
-                            patchProduct(product.code, {
-                              name: event.target.value,
-                            })
-                          }
-                          className="touch-min w-full rounded-xl border border-border-subtle bg-surface px-3 text-sm text-text-primary"
-                        />
-                      </label>
-                      <label className="space-y-1">
-                        <span className="text-xs font-semibold text-text-tertiary">
-                          Product type
-                        </span>
-                        <input
-                          value={product.product_type}
-                          readOnly
-                          className="touch-min w-full rounded-xl border border-border-subtle bg-surface-container-high px-3 text-sm text-text-secondary"
-                        />
-                      </label>
-                      <NumberField
-                        label="Price Rs."
-                        value={product.price_rupees}
-                        onChange={(value) =>
-                          patchProduct(product.code, { price_rupees: value })
-                        }
-                      />
-                      <NumberField
-                        label="Display order"
-                        value={product.rank}
-                        onChange={(value) =>
-                          patchProduct(product.code, { rank: Number(value) })
-                        }
-                      />
-                    </div>
-
-                    <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                      <NumberField
-                        label="Active days"
-                        value={product.active_days}
-                        required={product.product_type === "event_upload"}
-                        onChange={(value) =>
-                          patchProduct(product.code, { active_days: value })
-                        }
-                      />
-                      <NumberField
-                        label="Upload window days"
-                        value={product.upload_window_days}
-                        required={product.product_type === "event_upload"}
-                        onChange={(value) =>
-                          patchProduct(product.code, {
-                            upload_window_days: value,
-                          })
-                        }
-                      />
-                      <NumberField
-                        label={
-                          product.product_type === "event_upload"
-                            ? "Retention days (30 required)"
-                            : "Retention days"
-                        }
-                        value={product.retention_days}
-                        required={product.product_type === "event_upload"}
-                        onChange={(value) =>
-                          patchProduct(product.code, { retention_days: value })
-                        }
-                      />
-                      <NumberField
-                        label="Upload credits"
-                        value={product.upload_credits}
-                        onChange={(value) =>
-                          patchProduct(product.code, { upload_credits: value })
-                        }
-                      />
-                    </div>
-
-                    <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                      <NumberField
-                        label="Extension days"
-                        value={product.extension_days}
-                        onChange={(value) =>
-                          patchProduct(product.code, { extension_days: value })
-                        }
-                      />
-                      <NumberField
-                        label={
-                          product.product_type === "event_upload"
-                            ? "Event storage quota GB"
-                            : "Quota GB"
-                        }
-                        value={product.quota_gb}
-                        required={product.product_type === "event_upload"}
-                        onChange={(value) =>
-                          patchProduct(product.code, { quota_gb: value })
-                        }
-                      />
-                      <label className="space-y-1 md:col-span-2">
-                        <span className="text-xs font-semibold text-text-tertiary">
-                          Billing interval
-                        </span>
-                        <select
-                          value={product.billing_interval}
-                          onChange={(event) =>
-                            patchProduct(product.code, {
-                              billing_interval: event.target.value,
-                            })
-                          }
-                          className="touch-min w-full rounded-xl border border-border-subtle bg-surface px-3 text-sm text-text-primary"
+                        <button
+                          type="submit"
+                          disabled={saving || !canManage}
+                          className="touch-min rounded-full bg-accent px-5 py-2 text-sm font-semibold text-text-inverse transition-opacity hover:opacity-90 disabled:opacity-60"
                         >
-                          <option value="one_time">One time</option>
-                          <option value="monthly">Monthly</option>
-                          <option value="annual">Annual</option>
-                        </select>
-                      </label>
-                    </div>
+                          {saving ? "Publishing..." : "Save & publish product"}
+                        </button>
+                      </div>
 
-                    <label className="mt-4 block space-y-1">
-                      <span className="text-xs font-semibold text-text-tertiary">
-                        Description
-                      </span>
-                      <input
-                        value={product.description}
-                        onChange={(event) =>
-                          patchProduct(product.code, {
-                            description: event.target.value,
-                          })
-                        }
-                        className="touch-min w-full rounded-xl border border-border-subtle bg-surface px-3 text-sm text-text-primary"
-                      />
-                    </label>
+                      <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        <label className="space-y-1">
+                          <span className="text-xs font-semibold text-text-tertiary">
+                            Name
+                          </span>
+                          <input
+                            value={product.name}
+                            onChange={(event) =>
+                              patchProduct(product.code, {
+                                name: event.target.value,
+                              })
+                            }
+                            className="touch-min w-full rounded-xl border border-border-subtle bg-surface px-3 text-sm text-text-primary"
+                          />
+                        </label>
+                        <label className="space-y-1">
+                          <span className="text-xs font-semibold text-text-tertiary">
+                            Product type
+                          </span>
+                          <input
+                            value={product.product_type}
+                            readOnly
+                            className="touch-min w-full rounded-xl border border-border-subtle bg-surface-container-high px-3 text-sm text-text-secondary"
+                          />
+                        </label>
+                        <NumberField
+                          label="Price Rs."
+                          value={product.price_rupees}
+                          onChange={(value) =>
+                            patchProduct(product.code, { price_rupees: value })
+                          }
+                        />
+                        <NumberField
+                          label="Display order"
+                          value={product.rank}
+                          onChange={(value) =>
+                            patchProduct(product.code, { rank: Number(value) })
+                          }
+                        />
+                      </div>
 
-                    <div className="mt-4 flex flex-wrap gap-4">
-                      <label className="flex touch-min items-center gap-2 text-sm text-text-secondary">
-                        <input
-                          type="checkbox"
-                          checked={product.active}
-                          onChange={(event) =>
+                      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        <NumberField
+                          label="Active days"
+                          value={product.active_days}
+                          required={product.product_type === "event_upload"}
+                          onChange={(value) =>
+                            patchProduct(product.code, { active_days: value })
+                          }
+                        />
+                        <NumberField
+                          label="Upload window days"
+                          value={product.upload_window_days}
+                          required={product.product_type === "event_upload"}
+                          onChange={(value) =>
                             patchProduct(product.code, {
-                              active: event.target.checked,
+                              upload_window_days: value,
                             })
                           }
                         />
-                        Active and public
-                      </label>
-                      <label className="flex touch-min items-center gap-2 text-sm text-text-secondary">
-                        <input
-                          type="checkbox"
-                          checked={product.archive_forever}
-                          onChange={(event) =>
+                        <NumberField
+                          label={
+                            product.product_type === "event_upload"
+                              ? "Retention days (30 required)"
+                              : "Retention days"
+                          }
+                          value={product.retention_days}
+                          required={product.product_type === "event_upload"}
+                          onChange={(value) =>
                             patchProduct(product.code, {
-                              archive_forever: event.target.checked,
+                              retention_days: value,
                             })
                           }
                         />
-                        Archive forever
+                        <NumberField
+                          label="Upload credits"
+                          value={product.upload_credits}
+                          onChange={(value) =>
+                            patchProduct(product.code, {
+                              upload_credits: value,
+                            })
+                          }
+                        />
+                      </div>
+
+                      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        <NumberField
+                          label={
+                            product.product_type === "event_upload"
+                              ? "Event storage quota GB"
+                              : "Quota GB"
+                          }
+                          value={product.quota_gb}
+                          required={product.product_type === "event_upload"}
+                          onChange={(value) =>
+                            patchProduct(product.code, { quota_gb: value })
+                          }
+                        />
+                        <label className="space-y-1 md:col-span-2">
+                          <span className="text-xs font-semibold text-text-tertiary">
+                            Billing interval
+                          </span>
+                          <select
+                            value={product.billing_interval}
+                            onChange={(event) =>
+                              patchProduct(product.code, {
+                                billing_interval: event.target.value,
+                              })
+                            }
+                            className="touch-min w-full rounded-xl border border-border-subtle bg-surface px-3 text-sm text-text-primary"
+                          >
+                            <option value="one_time">One time</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="annual">Annual</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <label className="mt-4 block space-y-1">
+                        <span className="text-xs font-semibold text-text-tertiary">
+                          Description
+                        </span>
+                        <input
+                          value={product.description}
+                          onChange={(event) =>
+                            patchProduct(product.code, {
+                              description: event.target.value,
+                            })
+                          }
+                          className="touch-min w-full rounded-xl border border-border-subtle bg-surface px-3 text-sm text-text-primary"
+                        />
                       </label>
-                    </div>
-                    {validationError && (
-                      <p className="mt-3 text-sm font-semibold text-feedback-warning">
-                        {validationError}
-                      </p>
-                    )}
-                  </form>
-                );
-              })}
-            </div>
-          </section>
+
+                      <div className="mt-4 flex flex-wrap gap-4">
+                        <label className="flex touch-min items-center gap-2 text-sm text-text-secondary">
+                          <input
+                            type="checkbox"
+                            checked={product.active}
+                            onChange={(event) =>
+                              patchProduct(product.code, {
+                                active: event.target.checked,
+                              })
+                            }
+                          />
+                          Active and public
+                        </label>
+                      </div>
+                      {validationError && (
+                        <p className="mt-3 text-sm font-semibold text-feedback-warning">
+                          {validationError}
+                        </p>
+                      )}
+                    </form>
+                  );
+                })}
+              </div>
+            </section>
+          )}
         </>
       )}
 

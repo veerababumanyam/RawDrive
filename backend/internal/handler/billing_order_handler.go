@@ -487,8 +487,6 @@ func billingOrderTypeForProduct(productType string) (string, bool) {
 	switch productType {
 	case "event_upload":
 		return "event_upload", true
-	case "gallery_extension":
-		return "gallery_extension", true
 	case "storage_booster":
 		return "storage_booster", true
 	default:

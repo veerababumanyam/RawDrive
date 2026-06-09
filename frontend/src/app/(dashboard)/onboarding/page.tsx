@@ -63,7 +63,7 @@ const FALLBACK_ONBOARDING_PLANS = fallbackPlanCatalog.filter((p) =>
 // Short highlight lines shown on each plan card (3 max).
 const PLAN_HIGHLIGHTS: Record<string, string[]> = {
   free: [
-    "5GB storage · 1 event",
+    "1GB storage · 1 event",
     "Limited AI face search",
     "Watermarked galleries",
   ],

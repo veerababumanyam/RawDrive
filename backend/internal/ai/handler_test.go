@@ -20,6 +20,12 @@ func withWorkspaceCtx(r *http.Request, wsID uuid.UUID) *http.Request {
 	return r.WithContext(ctx)
 }
 
+type fakeCullingGate bool
+
+func (g fakeCullingGate) IsEnabled(context.Context, uuid.UUID) (bool, string) {
+	return bool(g), "test"
+}
+
 // TestHandler_FaceDetect_EmptyAssets verifies 400 on empty asset list.
 func TestHandler_FaceDetect_EmptyAssets(t *testing.T) {
 	h := &Handler{}
@@ -331,6 +337,48 @@ func TestHandler_TriggerCulling_NoGallery(t *testing.T) {
 	h.TriggerCulling(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandler_TriggerCulling_InvalidTopPercent(t *testing.T) {
+	h := &Handler{cullingGate: fakeCullingGate(true)}
+	body := `{"gallery_id":"` + uuid.New().String() + `","top_percent":0}`
+	req := httptest.NewRequest("POST", "/api/v1/ai/cull", bytes.NewBufferString(body))
+	req = withWorkspaceCtx(req, uuid.New())
+	w := httptest.NewRecorder()
+
+	h.TriggerCulling(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandler_TriggerCulling_DisabledByFlag(t *testing.T) {
+	h := &Handler{cullingGate: fakeCullingGate(false)}
+	body := `{"gallery_id":"` + uuid.New().String() + `","top_percent":20}`
+	req := httptest.NewRequest("POST", "/api/v1/ai/cull", bytes.NewBufferString(body))
+	req = withWorkspaceCtx(req, uuid.New())
+	w := httptest.NewRecorder()
+
+	h.TriggerCulling(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetCullingSuggestions_DisabledByFlag(t *testing.T) {
+	h := &Handler{cullingGate: fakeCullingGate(false)}
+	jobID := uuid.New()
+	r := chi.NewRouter()
+	r.Get("/api/v1/ai/cull/{jobId}", h.GetCullingSuggestions)
+
+	req := httptest.NewRequest("GET", "/api/v1/ai/cull/"+jobID.String(), nil)
+	req = withWorkspaceCtx(req, uuid.New())
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Code)
 	}
 }
 

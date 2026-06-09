@@ -24,7 +24,7 @@ func TestAIWorkers_ClaimPending_NoDoubleClaimAndTypeIsolated(t *testing.T) {
 
 	const perType = 16
 	wsID, byType := seedMultiTypeAIJobs(t, ctx, pool, perType,
-		"aesthetic_scoring", "burst_grouping", "duplicate_scan")
+		"aesthetic_scoring", "burst_grouping", "duplicate_scan", "culling")
 	_ = wsID
 
 	for jobType, wantIDs := range byType {

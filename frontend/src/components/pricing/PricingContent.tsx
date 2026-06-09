@@ -4,35 +4,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { Check, ChevronDown, Tag } from "lucide-react";
 import { usePlanCatalog } from "@/hooks/use-plan-catalog";
-import {
-  formatQuotaBytes,
-  type PlanCatalogPlan,
-  type PricingCatalogProduct,
-} from "@/lib/plans";
+import { type PlanCatalogPlan } from "@/lib/plans";
 
 function formatPrice(price: number): string {
   if (price === -1) return "Custom";
   if (price === 0) return "Rs. 0";
   return `Rs. ${price.toLocaleString("en-IN")}`;
-}
-
-function formatProductPrice(product: PricingCatalogProduct): string {
-  return formatPrice(Math.round(product.price_paise / 100));
-}
-
-function productNumber(
-  product: PricingCatalogProduct,
-  key: string,
-  fallback: number,
-): number {
-  const value = product.metadata?.[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function productStorageLabel(product: PricingCatalogProduct): string {
-  const value = product.metadata?.quota_bytes;
-  const bytes = typeof value === "number" && Number.isFinite(value) ? value : 0;
-  return bytes > 0 ? formatQuotaBytes(bytes) : "Admin-configured storage";
 }
 
 function monthlyEquivalent(plan: PlanCatalogPlan): number {
@@ -46,6 +23,7 @@ function annualNote(plan: PlanCatalogPlan): string {
 }
 
 const subscriptionSummaries: Record<string, string> = {
+  free: "Hook beginners with a free starter gallery. Goal: get users to upgrade later.",
   creator: "Side & weekend photographers getting started.",
   pro_photographer: "The main money plan for working pros.",
   studio: "Studios with a team and a brand to protect.",
@@ -53,6 +31,7 @@ const subscriptionSummaries: Record<string, string> = {
 };
 
 function subscriptionPlanLabel(plan: PlanCatalogPlan): string {
+  if (plan.id === "free") return "Free forever";
   if (!plan.selfServe) return "Sales assisted";
   if (plan.galleries === -1) return "Unlimited events";
   if (plan.galleries > 0) return `${plan.galleries} events / month`;
@@ -64,144 +43,26 @@ function featuredPlanLabel(plan: PlanCatalogPlan): string {
   return "";
 }
 
-function productByCode(
-  products: PricingCatalogProduct[],
-  code: string,
-): PricingCatalogProduct | undefined {
-  return products.find((product) => product.code === code);
-}
-
-function productByMetadataNumber(
-  products: PricingCatalogProduct[],
-  key: string,
-  value: number,
-): PricingCatalogProduct | undefined {
-  return products.find((product) => productNumber(product, key, -1) === value);
-}
-
 export function PricingContent() {
   const [isAnnual, setIsAnnual] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [coupon, setCoupon] = useState("");
-  const { plans, eventPacks, galleryExtensions } = usePlanCatalog();
+  const { plans } = usePlanCatalog();
   const activePlans = plans
-    .filter((plan) => plan.active)
+    .filter((plan) => plan.active && plan.id !== "pay_per_event")
     .sort((a, b) => a.rank - b.rank);
-  const payPerEventPlan = activePlans.find(
-    (plan) => plan.id === "pay_per_event",
-  );
-  const starterPlan = activePlans.find((plan) => plan.id === "free");
   const subscriptionPlans = activePlans.filter(
-    (plan) => plan.paid && plan.id !== "pay_per_event" && plan.id !== "free",
+    (plan) => plan.id === "free" || plan.paid,
   );
 
-  const fallbackEventOptions = [
-    {
-      price: "Rs. 199",
-      unit: "/ event upload",
-      title: "Event upload",
-      activePhase: "30-day active phase",
-      summary:
-        "Best for occasional shoots and beginners who do not want a subscription.",
-      points: [
-        "Admin-configured storage quota",
-        "Upload for 30 days",
-        "View-only after 30 days",
-        "No new uploads after expiry",
-        "Clean sweep after 30 days unless upgraded",
-      ],
-    },
-    {
-      price: "Rs. 499",
-      unit: "/ wedding upload",
-      title: "Wedding upload",
-      activePhase: "30-day active phase",
-      summary:
-        "Built for multi-day weddings, larger delivery sets, and longer client selection cycles.",
-      points: [
-        "Admin-configured storage quota",
-        "Upload window set by approved catalog",
-        "View-only after active phase",
-        "No new uploads after expiry",
-        "Clean sweep after 30 days unless upgraded",
-      ],
-    },
-  ];
-
-  const eventOptions =
-    eventPacks.length > 0
-      ? eventPacks.map((product) => {
-          const activeDays = productNumber(product, "active_days", 30);
-          const retentionDays = productNumber(product, "retention_days", 30);
-          const uploadWindowDays = productNumber(
-            product,
-            "upload_window_days",
-            activeDays,
-          );
-          return {
-            price: formatProductPrice(product),
-            unit:
-              product.code === "event_upload_wedding"
-                ? "/ wedding upload"
-                : "/ event upload",
-            title: product.name,
-            activePhase: `${activeDays}-day active phase`,
-            summary: product.description,
-            points: [
-              `${productStorageLabel(product)} managed storage included`,
-              `Upload for ${uploadWindowDays} days`,
-              `View-only after ${activeDays} days`,
-              "No new uploads after expiry",
-              `Clean sweep at day ${retentionDays} unless upgraded or extended`,
-            ],
-          };
-        })
-      : fallbackEventOptions;
-  const standardEvent = productByCode(eventPacks, "event_upload_standard");
-  const weddingEvent = productByCode(eventPacks, "event_upload_wedding");
-  const extension30 =
-    productByMetadataNumber(galleryExtensions, "extension_days", 30) ??
-    productByCode(galleryExtensions, "gallery_extend_30");
-  const extension90 =
-    productByMetadataNumber(galleryExtensions, "extension_days", 90) ??
-    productByCode(galleryExtensions, "gallery_extend_90");
-  const archiveForever = productByCode(
-    galleryExtensions,
-    "gallery_archive_forever",
-  );
-  const standardPrice = standardEvent
-    ? formatProductPrice(standardEvent)
-    : "Rs. 199";
-  const weddingPrice = weddingEvent
-    ? formatProductPrice(weddingEvent)
-    : "Rs. 499";
-  const standardActiveDays = standardEvent
-    ? productNumber(standardEvent, "active_days", 30)
-    : 30;
-  const weddingActiveDays = weddingEvent
-    ? productNumber(weddingEvent, "active_days", 30)
-    : 30;
-  const extension30Price = extension30
-    ? formatProductPrice(extension30)
-    : "Rs. 49";
-  const extension90Price = extension90
-    ? formatProductPrice(extension90)
-    : "Rs. 99";
-  const archiveForeverPrice = archiveForever
-    ? formatProductPrice(archiveForever)
-    : "Rs. 199";
   const faqItems = [
     {
-      q: "Is Starter a trial?",
-      a: "No. Starter is free forever with 5GB storage, 1 event, limited AI face search, watermarked galleries, and no photo selling.",
-    },
-    {
-      q: "How does Pay Per Event work?",
-      a: `Pay Per Event gives occasional photographers a one-off upload cycle: ${standardPrice} events include ${standardActiveDays} active days, ${weddingPrice} wedding uploads include ${weddingActiveDays} active days, each product carries its own approved storage quota, and galleries are cleaned after 30 days unless upgraded or extended.`,
+      q: "What is included in Starter?",
+      a: "Starter is free with 1GB storage, 1 event, limited AI face search, watermarked galleries, and no selling.",
     },
     {
       q: "Can I switch plans later?",
-      a: "Yes. You can move from Starter or Pay Per Event to a monthly plan when your event volume grows.",
+      a: "Yes. You can move from Starter to a monthly plan when your event volume grows.",
     },
     {
       q: "What payment methods do you accept?",
@@ -210,14 +71,6 @@ export function PricingContent() {
     {
       q: "Is GST included in the pricing?",
       a: "Prices are shown in INR and are exclusive of GST. The checkout shows the final payable amount before confirmation.",
-    },
-    {
-      q: "What is the wedding bundle?",
-      a: `The wedding upload is ${weddingPrice} for multi-day events and larger galleries, with a ${weddingActiveDays}-day active phase before the gallery becomes view-only.`,
-    },
-    {
-      q: "Can I extend a Pay Per Event gallery?",
-      a: `Yes. After expiry you can extend 30 days for ${extension30Price}, extend 90 days for ${extension90Price}, or download plus archive forever for ${archiveForeverPrice}.`,
     },
     {
       q: "Is my data stored in India?",
@@ -237,16 +90,16 @@ export function PricingContent() {
               Pricing built for real photographer workflows.
             </h1>
             <p className="max-w-2xl text-lg leading-8 text-text-secondary">
-              Upload, share, let clients select, and move on. Pay per event, or
-              choose a monthly plan when you scale.
+              Upload, share, let clients select, and move on with monthly plans
+              built for recurring photography delivery.
             </p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
             {[
               {
-                title: "Event-first delivery",
-                body: "Pay Per Event is built for occasional shoots and one-off delivery cycles without a recurring subscription.",
+                title: "Creator workflows",
+                body: "Creator helps photographers manage active galleries, AI face search, client selection, and branded delivery in one subscription.",
               },
               {
                 title: "Working photographers",
@@ -269,87 +122,6 @@ export function PricingContent() {
           </div>
         </div>
       </section>
-
-      {payPerEventPlan && (
-        <section className="px-4 pb-10 lg:px-8">
-          <div className="mx-auto max-w-7xl space-y-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div className="space-y-3">
-                <span className="inline-flex rounded-full border border-border bg-surface-sunken px-3 py-1 text-xs font-bold uppercase text-accent">
-                  No subscription
-                </span>
-                <div className="space-y-2">
-                  <h2 className="font-headline text-2xl font-bold text-text-primary">
-                    {payPerEventPlan.name}
-                  </h2>
-                  <p className="max-w-2xl text-sm leading-7 text-text-secondary">
-                    The way many photographers actually work. Pay once for an
-                    event, keep the active upload phase clear, then extend only
-                    when the client needs more time.
-                  </p>
-                </div>
-              </div>
-              <Link
-                href="/register?plan=free"
-                className="inline-flex items-center justify-center rounded-lg bg-accent px-5 py-3 text-sm font-semibold text-text-inverse transition-colors hover:bg-accent-hover"
-                style={{
-                  minHeight: "var(--touch-target-min)",
-                  transitionDuration: "var(--duration-fast)",
-                }}
-              >
-                Create account
-              </Link>
-            </div>
-            <div className="grid gap-4 lg:grid-cols-2">
-              {eventOptions.map((option) => (
-                <article key={option.title} className="surface-panel p-6">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="space-y-2">
-                      <h3 className="font-headline text-xl font-bold text-text-primary">
-                        {option.title}
-                      </h3>
-                      <p className="text-sm leading-7 text-text-secondary">
-                        {option.summary}
-                      </p>
-                    </div>
-                    <div className="shrink-0 sm:text-right">
-                      <p className="text-3xl font-extrabold text-text-primary">
-                        {option.price}
-                      </p>
-                      <p className="text-sm font-medium text-text-secondary">
-                        {option.unit}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-5 inline-flex rounded-lg border border-border bg-surface-sunken px-3 py-2 text-xs font-semibold uppercase text-accent">
-                    {option.activePhase}
-                  </div>
-                  <ul className="mt-5 space-y-3">
-                    {option.points.map((point) => (
-                      <li
-                        key={point}
-                        className="flex items-start gap-2 text-sm text-text-secondary"
-                      >
-                        <Check
-                          className="mt-0.5 h-4 w-4 shrink-0 text-accent"
-                          aria-hidden="true"
-                        />
-                        {point}
-                      </li>
-                    ))}
-                  </ul>
-                </article>
-              ))}
-            </div>
-            <p className="text-sm text-text-secondary">
-              After the active phase, galleries become view-only and reject new
-              uploads. After 30 days total, RawDrive runs a clean sweep unless
-              the photographer upgrades to a paid subscription or extends the
-              gallery.
-            </p>
-          </div>
-        </section>
-      )}
 
       <section className="px-4 py-16 lg:px-8">
         <div className="mx-auto max-w-7xl space-y-6">
@@ -416,20 +188,25 @@ export function PricingContent() {
             </div>
           </div>
 
-          <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-5">
             {subscriptionPlans.map((plan) => {
               const displayedPrice = isAnnual
                 ? monthlyEquivalent(plan)
                 : plan.monthlyPrice;
-              const ctaHref = plan.selfServe
-                ? `/register?plan=${encodeURIComponent(plan.id)}&interval=${isAnnual ? "annual" : "monthly"}`
-                : "/contact";
+              const ctaHref =
+                plan.id === "free"
+                  ? "/register?plan=free"
+                  : plan.selfServe
+                    ? `/register?plan=${encodeURIComponent(plan.id)}&interval=${isAnnual ? "annual" : "monthly"}`
+                    : "/contact";
               const ctaLabel =
-                plan.id === "elite_studio"
-                  ? "Talk to sales"
-                  : plan.id === "pro_photographer"
-                    ? "Go Pro"
-                    : `Start ${plan.name}`;
+                plan.id === "free"
+                  ? "Create free account"
+                  : plan.id === "elite_studio"
+                    ? "Talk to sales"
+                    : plan.id === "pro_photographer"
+                      ? "Go Pro"
+                      : `Start ${plan.name}`;
               const badgeLabel = featuredPlanLabel(plan);
               const isFeaturedPlan = Boolean(badgeLabel);
               const summary =
@@ -470,13 +247,21 @@ export function PricingContent() {
                   </p>
                   <div className="mt-5 border-t border-border-subtle pt-5">
                     <p className="text-3xl font-bold text-text-primary">
-                      {formatPrice(displayedPrice)}
+                      {plan.id === "free"
+                        ? "Free"
+                        : formatPrice(displayedPrice)}
                     </p>
-                    <p className="text-sm font-medium text-text-secondary">
-                      / month
-                    </p>
+                    {plan.id !== "free" && (
+                      <p className="text-sm font-medium text-text-secondary">
+                        / month
+                      </p>
+                    )}
                     <p className="mt-2 min-h-5 text-xs font-semibold text-accent">
-                      {isAnnual ? annualNote(plan) : "Monthly billing"}
+                      {plan.id === "free"
+                        ? "Free forever"
+                        : isAnnual
+                          ? annualNote(plan)
+                          : "Monthly billing"}
                     </p>
                   </div>
                   <ul className="mt-6 flex-1 space-y-3">
@@ -511,30 +296,6 @@ export function PricingContent() {
             })}
           </div>
         </div>
-
-        {starterPlan && (
-          <div className="surface-panel mx-auto mt-6 flex max-w-7xl flex-col gap-4 border-dashed p-6 lg:flex-row lg:items-center lg:justify-between">
-            <div className="space-y-2">
-              <h2 className="font-headline text-xl font-bold text-text-primary">
-                {starterPlan.name} - Free forever
-              </h2>
-              <p className="max-w-2xl text-sm leading-7 text-text-secondary">
-                A beginner-friendly gallery plan: 5GB, 1 event, limited AI face
-                search, watermarked galleries, and no photo selling.
-              </p>
-            </div>
-            <Link
-              href="/register?plan=free"
-              className="inline-flex items-center justify-center rounded-lg border border-border bg-surface-elevated px-4 py-3 text-sm font-semibold text-text-primary transition-colors hover:bg-accent-subtle hover:text-accent"
-              style={{
-                minHeight: "var(--touch-target-min)",
-                transitionDuration: "var(--duration-fast)",
-              }}
-            >
-              Create free account
-            </Link>
-          </div>
-        )}
       </section>
 
       {/* Coupon Code */}

@@ -5,7 +5,7 @@ import { usePlanCatalog } from "@/hooks/use-plan-catalog";
 import type { PlanCatalogPlan } from "@/lib/plans";
 
 const planSummaries: Record<string, string> = {
-  free: "A free starter gallery for beginners.",
+  free: "Hook beginners with a free starter gallery.",
   creator: "Side & weekend photographers getting started.",
   pro_photographer: "The main money plan for working pros.",
   studio: "Studios with a team and a brand to protect.",
@@ -13,13 +13,14 @@ const planSummaries: Record<string, string> = {
 };
 
 function planBadge(plan: PlanCatalogPlan): string {
-  if (plan.popular) return "Best Value";
   if (plan.id === "free") return "Free";
+  if (plan.popular) return "Best Value";
   if (!plan.selfServe) return "Sales";
   return "";
 }
 
 function planHref(plan: PlanCatalogPlan): string {
+  if (plan.id === "free") return "/register?plan=free";
   if (!plan.selfServe) return "/contact";
   return `/register?plan=${encodeURIComponent(plan.id)}`;
 }
@@ -30,14 +31,8 @@ export function PlanStrip() {
     .filter(
       (plan) =>
         plan.id !== "pay_per_event" &&
-        plan.active &&
-        [
-          "free",
-          "creator",
-          "pro_photographer",
-          "studio",
-          "elite_studio",
-        ].includes(plan.id),
+        (plan.id === "free" || plan.paid) &&
+        plan.active,
     )
     .sort((a, b) => a.rank - b.rank);
 
@@ -54,8 +49,8 @@ export function PlanStrip() {
             Start free, scale studio-wide.
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-text-secondary">
-            Five tiers for photographers: Starter, Creator, Pro Photographer,
-            Studio, and Elite Studio.
+            Starter plus paid tiers for photographers and studios with recurring
+            delivery workflows.
           </p>
         </div>
         <Link

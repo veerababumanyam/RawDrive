@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 
 vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: vi.fn(() => "test-token"),
@@ -87,13 +93,20 @@ function productFixture(
 const starterPlan = planFixture({
   tier: "free",
   name: "Starter",
-  description: "Free starter gallery.",
+  description:
+    "Hook beginners with a free starter gallery. Goal: get users to upgrade later.",
   monthly_price_paise: 0,
   annual_price_paise: 0,
-  quota_bytes: 5 * 2 ** 30,
+  quota_bytes: 1 * 2 ** 30,
   gallery_limit: 1,
   client_limit: 0,
-  features: ["5GB storage"],
+  features: [
+    "1GB storage",
+    "1 event",
+    "AI face search (limited)",
+    "Watermarked galleries",
+    "No selling",
+  ],
   paid: false,
   rank: 0,
 });
@@ -263,29 +276,32 @@ beforeEach(() => {
 });
 
 describe("AdminPlansPage", () => {
-  it("loads plans and billing products from the admin catalog", async () => {
+  it("loads Starter and paid subscription plans from the admin catalog", async () => {
     render(<AdminPlansPage />);
 
     expect(
       await screen.findByRole("heading", { name: "Pricing Catalog" }),
     ).toBeInTheDocument();
     expect(screen.getByDisplayValue("Starter")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Pay Per Event")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Pay Per Event")).not.toBeInTheDocument();
     expect(screen.getByDisplayValue("Creator")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Pro Photographer")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Studio")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Elite Studio")).toBeInTheDocument();
-    expect(screen.getAllByDisplayValue("Event upload").length).toBeGreaterThan(
-      0,
-    );
-    expect(screen.getByDisplayValue("Wedding upload")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Extend +30 days")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Event upload")).not.toBeInTheDocument();
     expect(
-      screen.getByDisplayValue("Download + archive forever"),
-    ).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Boost 50")).toBeInTheDocument();
+      screen.queryByDisplayValue("Wedding upload"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByDisplayValue("Extend +30 days"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByDisplayValue("Download + archive forever"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Boost 50")).not.toBeInTheDocument();
+    expect(screen.queryByText("Billing Products")).not.toBeInTheDocument();
     expect(screen.getByText("active plans")).toBeInTheDocument();
-    expect(screen.getByText("active products")).toBeInTheDocument();
+    expect(screen.queryByText("active products")).not.toBeInTheDocument();
   });
 
   it("saves and publishes plan edits for a super admin", async () => {
@@ -297,7 +313,7 @@ describe("AdminPlansPage", () => {
       target: { value: "149" },
     });
     fireEvent.click(
-      screen.getAllByRole("button", { name: "Save & publish plan" })[2],
+      screen.getAllByRole("button", { name: "Save & publish plan" })[1],
     );
 
     await waitFor(() => {
@@ -339,7 +355,7 @@ describe("AdminPlansPage", () => {
     expect(await screen.findByDisplayValue("Creator")).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getAllByRole("button", { name: "Save & publish plan" })[2],
+      screen.getAllByRole("button", { name: "Save & publish plan" })[1],
     );
 
     expect(
@@ -352,74 +368,100 @@ describe("AdminPlansPage", () => {
     expect(mockGetAdminPricingCatalog).toHaveBeenCalledTimes(2);
   });
 
-  it("submits billing product edits with structured metadata", async () => {
+  it("does not expose retired billing products for editing", async () => {
     render(<AdminPlansPage />);
 
-    const eventUploadFields =
-      await screen.findAllByDisplayValue("Event upload");
-    const eventUploadNameInput =
-      eventUploadFields.find(
-        (field) => field.tagName.toLowerCase() === "input",
-      ) ?? eventUploadFields[0];
+    expect(await screen.findByDisplayValue("Creator")).toBeInTheDocument();
+    expect(screen.queryByText("Billing Products")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Save & publish product" }),
+    ).not.toBeInTheDocument();
+  });
 
-    fireEvent.change(eventUploadNameInput, {
-      target: { value: "Event Upload Plus" },
+  it("creates and publishes a new paid subscription plan", async () => {
+    render(<AdminPlansPage />);
+
+    expect(await screen.findByDisplayValue("Creator")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "New plan" }));
+
+    const saveButton = screen.getByRole("button", {
+      name: "Save & publish new plan",
     });
-    fireEvent.click(
-      screen.getAllByRole("button", { name: "Save & publish product" })[0],
-    );
+    const form = saveButton.closest("form");
+    expect(form).not.toBeNull();
+    const draft = within(form as HTMLFormElement);
+
+    fireEvent.change(draft.getByLabelText("Plan ID"), {
+      target: { value: "premium_studio" },
+    });
+    fireEvent.change(draft.getByLabelText("Name"), {
+      target: { value: "Premium Studio" },
+    });
+    fireEvent.change(draft.getByLabelText("Monthly Rs."), {
+      target: { value: "2499" },
+    });
+    fireEvent.change(draft.getByLabelText("Annual Rs."), {
+      target: { value: "24990" },
+    });
+    fireEvent.change(draft.getByLabelText("Storage GB"), {
+      target: { value: "500" },
+    });
+    fireEvent.change(draft.getByLabelText("Galleries"), {
+      target: { value: "-1" },
+    });
+    fireEvent.change(draft.getByLabelText("Clients"), {
+      target: { value: "-1" },
+    });
+    fireEvent.change(draft.getByLabelText("Display order"), {
+      target: { value: "6" },
+    });
+    fireEvent.change(draft.getByLabelText("Trial days"), {
+      target: { value: "14" },
+    });
+    fireEvent.change(draft.getByLabelText("Description"), {
+      target: { value: "Premium plan for high-volume studios." },
+    });
+    fireEvent.change(draft.getByLabelText("Features"), {
+      target: { value: "500GB storage\nPriority support" },
+    });
+    fireEvent.click(saveButton);
 
     await waitFor(() => {
       expect(mockCreatePricingChangeRequest).toHaveBeenCalledWith(
         "test-token",
         expect.objectContaining({
-          request_type: "product_update",
-          target_type: "billing_product",
-          target_key: "event_upload_standard",
+          request_type: "plan_create",
+          target_type: "subscription_plan",
+          target_key: "premium_studio",
+          before_state: { tier: "premium_studio" },
           after_state: expect.objectContaining({
-            code: "event_upload_standard",
-            product_type: "event_upload",
-            name: "Event Upload Plus",
-            metadata: expect.objectContaining({
-              active_days: 30,
-              upload_window_days: 30,
-              retention_days: 30,
-              upload_credits: 500,
-              quota_bytes: 10 * 2 ** 30,
-            }),
+            tier: "premium_studio",
+            name: "Premium Studio",
+            monthly_price_paise: 249900,
+            annual_price_paise: 2499000,
+            quota_bytes: 500 * 2 ** 30,
+            gallery_limit: -1,
+            client_limit: -1,
+            features: ["500GB storage", "Priority support"],
+            paid: true,
+            active: true,
+            self_serve: true,
+            trial_days: 14,
+            rank: 6,
           }),
         }),
       );
     });
-  });
-
-  it("requires quota metadata before submitting an active event product", async () => {
-    mockGetAdminPricingCatalog.mockResolvedValueOnce({
-      ...catalogFixture,
-      event_packs: [
-        {
-          ...eventUploadProduct,
-          metadata: {
-            active_days: 30,
-            upload_window_days: 30,
-            retention_days: 30,
-            upload_credits: 500,
-          },
-        },
-      ],
-    });
-    render(<AdminPlansPage />);
-
-    expect(
-      (await screen.findAllByDisplayValue("Event upload")).length,
-    ).toBeGreaterThan(0);
-    fireEvent.click(
-      screen.getAllByRole("button", { name: "Save & publish product" })[0],
+    expect(mockSubmitPricingChangeRequest).toHaveBeenCalledWith(
+      "test-token",
+      "change-1",
     );
-
+    expect(mockPublishPricingChangeRequest).toHaveBeenCalledWith(
+      "test-token",
+      "change-1",
+    );
     expect(
-      await screen.findByText("Active event products require a storage quota."),
+      await screen.findByText("Premium Studio plan created and published."),
     ).toBeInTheDocument();
-    expect(mockCreatePricingChangeRequest).not.toHaveBeenCalled();
   });
 });

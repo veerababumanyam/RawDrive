@@ -624,12 +624,19 @@ func planCatalogEntryFromMap(values map[string]any) (PlanCatalogEntry, error) {
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return PlanCatalogEntry{}, err
 	}
-	raw.Tier = NormalizePlanTierSlug(raw.Tier)
-	if raw.Tier == "" {
-		raw.Tier = NormalizePlanTierSlug(fmt.Sprint(values["id"]))
+	rawTier := strings.ToLower(strings.TrimSpace(raw.Tier))
+	if rawTier == "" {
+		rawTier = strings.ToLower(strings.TrimSpace(fmt.Sprint(values["id"])))
 	}
+	if isReservedLegacyPlanTierAlias(rawTier) {
+		return PlanCatalogEntry{}, errors.New("reserved legacy plan tier")
+	}
+	raw.Tier = NormalizePlanTierSlug(rawTier)
 	if raw.Tier == "" || strings.TrimSpace(raw.Name) == "" {
 		return PlanCatalogEntry{}, errors.New("plan tier and name required")
+	}
+	if !IsValidPlanTierSlug(raw.Tier) {
+		return PlanCatalogEntry{}, errors.New("invalid plan tier")
 	}
 	if raw.Currency == "" {
 		raw.Currency = "INR"
@@ -789,6 +796,9 @@ func validBillingInterval(interval string) bool {
 }
 
 func replaceProductInCatalog(catalog *PricingCatalog, product BillingProductCatalog) {
+	if isCatalogHiddenBillingProduct(product) {
+		return
+	}
 	switch product.ProductType {
 	case "event_upload":
 		catalog.EventPacks = replaceProduct(catalog.EventPacks, product)

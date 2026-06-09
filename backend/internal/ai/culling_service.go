@@ -2,11 +2,13 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sort"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/rawdrive/backend/internal/storage"
@@ -17,6 +19,7 @@ type CullingService struct {
 	pool       *pgxpool.Pool
 	configRepo *ConfigRepo
 	spendRepo  *SpendRepo
+	spendSvc   *SpendService
 	gemini     *GeminiClient
 	jobRepo    *JobRepo
 	store      storage.Provider
@@ -24,7 +27,19 @@ type CullingService struct {
 
 // NewCullingService creates a CullingService.
 func NewCullingService(pool *pgxpool.Pool, configRepo *ConfigRepo, spendRepo *SpendRepo, gemini *GeminiClient, jobRepo *JobRepo, store storage.Provider) *CullingService {
-	return &CullingService{pool: pool, configRepo: configRepo, spendRepo: spendRepo, gemini: gemini, jobRepo: jobRepo, store: store}
+	var spendSvc *SpendService
+	if spendRepo != nil && configRepo != nil {
+		spendSvc = NewSpendService(spendRepo, configRepo)
+	}
+	return &CullingService{
+		pool:       pool,
+		configRepo: configRepo,
+		spendRepo:  spendRepo,
+		spendSvc:   spendSvc,
+		gemini:     gemini,
+		jobRepo:    jobRepo,
+		store:      store,
+	}
 }
 
 // CullingSuggestion is a single photo with quality assessment and keep/review recommendation.
@@ -40,12 +55,20 @@ type CullingSuggestion struct {
 // AnalyzeGallery creates an async culling job for a gallery.
 func (s *CullingService) AnalyzeGallery(ctx context.Context, workspaceID, galleryID uuid.UUID, topPercent int) (*AIJob, error) {
 	if topPercent <= 0 || topPercent > 100 {
-		topPercent = 20
+		return nil, fmt.Errorf("culling service: top_percent must be between 1 and 100")
+	}
+	totalItems, err := s.countWorkspaceGalleryImages(ctx, workspaceID, galleryID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.enforcePreflightBudget(ctx, workspaceID, totalItems); err != nil {
+		return nil, err
 	}
 	job := &AIJob{
 		WorkspaceID: workspaceID,
 		Type:        "culling",
 		Status:      "pending",
+		TotalItems:  totalItems,
 		Result: map[string]any{
 			"gallery_id":  galleryID.String(),
 			"top_percent": topPercent,
@@ -58,8 +81,14 @@ func (s *CullingService) AnalyzeGallery(ctx context.Context, workspaceID, galler
 }
 
 // ProcessCulling runs the actual culling analysis for a gallery.
-// Called by the duplicate worker (which handles culling jobs too).
 func (s *CullingService) ProcessCulling(ctx context.Context, workspaceID, galleryID uuid.UUID, topPercent int) ([]CullingSuggestion, error) {
+	if topPercent <= 0 || topPercent > 100 {
+		return nil, fmt.Errorf("culling service: top_percent must be between 1 and 100")
+	}
+	if _, err := s.countWorkspaceGalleryImages(ctx, workspaceID, galleryID); err != nil {
+		return nil, err
+	}
+
 	apiKey, _, err := s.configRepo.GetDecryptedKey(ctx, workspaceID)
 	if err != nil {
 		return nil, err
@@ -174,9 +203,12 @@ func (s *CullingService) ProcessCulling(ctx context.Context, workspaceID, galler
 }
 
 // GetSuggestions retrieves stored culling suggestions for a completed job.
-func (s *CullingService) GetSuggestions(ctx context.Context, jobID uuid.UUID) ([]CullingSuggestion, error) {
+func (s *CullingService) GetSuggestions(ctx context.Context, workspaceID, jobID uuid.UUID) ([]CullingSuggestion, error) {
 	job, err := s.jobRepo.GetByID(ctx, jobID)
 	if err != nil || job == nil {
+		return nil, ErrJobNotFound
+	}
+	if job.WorkspaceID != workspaceID {
 		return nil, ErrJobNotFound
 	}
 	if job.Status != "done" {
@@ -201,10 +233,16 @@ func (s *CullingService) GetSuggestions(ctx context.Context, jobID uuid.UUID) ([
 	rows, err := s.pool.Query(ctx,
 		`SELECT a.id, a.filename, qs.sharpness, qs.exposure, qs.composition, qs.overall
 		 FROM gallery_assets ga
+		 JOIN galleries g ON g.id = ga.gallery_id
 		 JOIN assets a ON a.id = ga.asset_id
 		 JOIN quality_scores qs ON qs.asset_id = a.id
-		 WHERE ga.gallery_id = $1 AND a.deleted_at IS NULL
-		 ORDER BY qs.overall DESC`, galleryID)
+		 WHERE ga.gallery_id = $1
+		   AND g.workspace_id = $2
+		   AND g.deleted_at IS NULL
+		   AND a.workspace_id = $2
+		   AND qs.workspace_id = $2
+		   AND a.deleted_at IS NULL
+		 ORDER BY qs.overall DESC`, galleryID, workspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -235,4 +273,56 @@ func (s *CullingService) GetSuggestions(ctx context.Context, jobID uuid.UUID) ([
 	}
 
 	return suggestions, nil
+}
+
+func (s *CullingService) countWorkspaceGalleryImages(ctx context.Context, workspaceID, galleryID uuid.UUID) (int, error) {
+	var count int
+	err := s.pool.QueryRow(ctx,
+		`SELECT COUNT(a.id)::int
+		   FROM galleries g
+		   LEFT JOIN gallery_assets ga ON ga.gallery_id = g.id
+		   LEFT JOIN assets a ON a.id = ga.asset_id
+		    AND a.workspace_id = g.workspace_id
+		    AND a.deleted_at IS NULL
+		    AND a.content_type LIKE 'image/%'
+		  WHERE g.id = $1
+		    AND g.workspace_id = $2
+		    AND g.deleted_at IS NULL
+		  GROUP BY g.id`,
+		galleryID, workspaceID).Scan(&count)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, ErrGalleryNotFound
+	}
+	if err != nil {
+		return 0, fmt.Errorf("culling service: verify gallery: %w", err)
+	}
+	return count, nil
+}
+
+const (
+	estimatedCullingInputTokensPerImage  int64 = 1200
+	estimatedCullingOutputTokensPerImage int64 = 80
+)
+
+func (s *CullingService) enforcePreflightBudget(ctx context.Context, workspaceID uuid.UUID, imageCount int) error {
+	if s.spendSvc == nil || imageCount <= 0 {
+		return nil
+	}
+	modelID := ""
+	if s.gemini != nil {
+		modelID = s.gemini.modelID
+	}
+	estimatedPaisa := EstimateCost(
+		modelID,
+		int64(imageCount)*estimatedCullingInputTokensPerImage,
+		int64(imageCount)*estimatedCullingOutputTokensPerImage,
+	)
+	result, err := s.spendSvc.CheckAndEnforce(ctx, workspaceID, estimatedPaisa)
+	if err != nil {
+		return fmt.Errorf("culling service: spend check: %w", err)
+	}
+	if result != nil && !result.Allowed {
+		return ErrCapReached
+	}
+	return nil
 }
