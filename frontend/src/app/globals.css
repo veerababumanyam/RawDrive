@@ -78,6 +78,7 @@
   --glass-icon-button-fg: var(--text-accent);
   --glass-icon-button-fg-muted: var(--text-secondary);
   --glass-icon-button-fg-on-media: var(--text-media);
+  --static-asset-revision: 20260609;
   --glass-icon-button-disabled-opacity: 0.42;
   --glass-icon-button-press-scale: 0.94;
   --glass-icon-button-shadow: var(--shadow-glass);

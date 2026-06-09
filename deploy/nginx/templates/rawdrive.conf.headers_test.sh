@@ -42,6 +42,38 @@ if [ ! -f "${TEMPLATE}" ]; then
   exit 2
 fi
 
+# Missing build chunks must never be cached by Cloudflare as text/plain 404s;
+# the app shell may reference a fresh chunk while the peer node is still
+# rolling, so the static location has to intercept misses and mark them no-store.
+if ! grep -Eq 'error_page[[:space:]]+404[[:space:]]+=[[:space:]]+@next_static_not_found;' "${TEMPLATE}"; then
+  echo "FAIL: /_next/static/ must route 404s to @next_static_not_found" >&2
+  exit 1
+fi
+
+if ! awk '
+  /^[[:space:]]*location[[:space:]]+@next_static_not_found[[:space:]]*\{/ {
+    in_loc = 1; depth = 0; has_cc = 0; has_cdn = 0; has_cf = 0;
+  }
+  in_loc {
+    n = gsub(/\{/, "{"); depth += n;
+    m = gsub(/\}/, "}"); depth -= m;
+    if ($0 ~ /add_header[[:space:]]+Cache-Control[[:space:]]+"[^"]*no-store[^"]*"[[:space:]]+always/) has_cc = 1;
+    if ($0 ~ /add_header[[:space:]]+CDN-Cache-Control[[:space:]]+"no-store"[[:space:]]+always/) has_cdn = 1;
+    if ($0 ~ /add_header[[:space:]]+Cloudflare-CDN-Cache-Control[[:space:]]+"no-store"[[:space:]]+always/) has_cf = 1;
+    if (depth <= 0) {
+      found++;
+      in_loc = 0;
+      if (!has_cc || !has_cdn || !has_cf) fail = 1;
+    }
+  }
+  END {
+    if (found != 1 || fail) exit 1;
+  }
+' "${TEMPLATE}"; then
+  echo "FAIL: @next_static_not_found must return no-store Cache-Control, CDN-Cache-Control, and Cloudflare-CDN-Cache-Control" >&2
+  exit 1
+fi
+
 # The deprecated wildcard host must fail closed. Exact server blocks for
 # rawdrive.in, www.rawdrive.in, and api.rawdrive.in still handle their normal
 # traffic; this assertion only inspects the single-label wildcard regex block.
