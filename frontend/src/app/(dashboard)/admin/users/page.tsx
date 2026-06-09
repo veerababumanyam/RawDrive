@@ -921,14 +921,20 @@ export default function AdminUsersPage() {
 
   if (error) {
     return (
-      <div className="max-w-7xl mx-auto space-y-8 p-8">
+      <div
+        className="max-w-7xl mx-auto space-y-8 p-8"
+        data-route-cache-revision="2026-06-09-admin-users"
+      >
         <p className="text-feedback-error">{error}</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
+    <div
+      className="max-w-7xl mx-auto space-y-8"
+      data-route-cache-revision="2026-06-09-admin-users"
+    >
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
