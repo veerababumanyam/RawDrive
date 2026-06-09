@@ -22,6 +22,11 @@ func TestAuditLogEntry_Fields(t *testing.T) {
 		ID:           uuid.New(),
 		ActorID:      uuid.New(),
 		ActorType:    "admin",
+		ActorName:    "Prasad Manyam",
+		ActorEmail:   "prasad@example.test",
+		ActorAvatar:  "https://cdn.example.test/avatar.webp",
+		ActorRole:    "super_admin",
+		ActorStatus:  "active",
 		Action:       "user.suspended",
 		ResourceType: "user",
 		ResourceID:   "user-123",
@@ -32,6 +37,11 @@ func TestAuditLogEntry_Fields(t *testing.T) {
 	assert.NotEqual(t, uuid.Nil, entry.ID)
 	assert.NotEqual(t, uuid.Nil, entry.ActorID)
 	assert.Equal(t, "admin", entry.ActorType)
+	assert.Equal(t, "Prasad Manyam", entry.ActorName)
+	assert.Equal(t, "prasad@example.test", entry.ActorEmail)
+	assert.Equal(t, "https://cdn.example.test/avatar.webp", entry.ActorAvatar)
+	assert.Equal(t, "super_admin", entry.ActorRole)
+	assert.Equal(t, "active", entry.ActorStatus)
 	assert.Equal(t, "user.suspended", entry.Action)
 	assert.Equal(t, "user", entry.ResourceType)
 	assert.Equal(t, "user-123", entry.ResourceID)
@@ -88,6 +98,7 @@ func TestAuditLogFilter_AllFields(t *testing.T) {
 		DateFrom:     &from,
 		DateTo:       &to,
 		Severity:     "high",
+		Search:       "payments",
 		Cursor:       &cursor,
 		Limit:        50,
 	}
@@ -98,8 +109,17 @@ func TestAuditLogFilter_AllFields(t *testing.T) {
 	assert.Equal(t, from, *f.DateFrom)
 	assert.Equal(t, to, *f.DateTo)
 	assert.Equal(t, "high", f.Severity)
+	assert.Equal(t, "payments", f.Search)
 	assert.Equal(t, cursor, *f.Cursor)
 	assert.Equal(t, 50, f.Limit)
+}
+
+func TestAuditLogCursorWhereSQL_UsesStableSortColumns(t *testing.T) {
+	sql := auditLogCursorWhereSQL(3)
+	assert.Contains(t, sql, "a.created_at <")
+	assert.Contains(t, sql, "a.created_at =")
+	assert.Contains(t, sql, "a.id < $3")
+	assert.Contains(t, sql, "SELECT cursor_log.created_at")
 }
 
 func TestAuditLogCreate_JSON(t *testing.T) {

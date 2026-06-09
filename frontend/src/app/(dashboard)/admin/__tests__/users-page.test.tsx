@@ -9,6 +9,7 @@ import {
 
 vi.mock("@/lib/api/admin", () => ({
   listUsers: vi.fn(),
+  getUserDetail: vi.fn(),
   listAdminPlans: vi.fn(),
   suspendUser: vi.fn(),
   reactivateUser: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 import {
+  getUserDetail,
   listAdminPlans,
   listUsers,
   suspendUser,
@@ -33,6 +35,7 @@ import {
 import AdminUsersPage from "../users/page";
 
 const mockListUsers = vi.mocked(listUsers);
+const mockGetUserDetail = vi.mocked(getUserDetail);
 const mockListAdminPlans = vi.mocked(listAdminPlans);
 const mockSuspendUser = vi.mocked(suspendUser);
 const mockReactivateUser = vi.mocked(reactivateUser);
@@ -46,8 +49,18 @@ const sampleUsers = {
       platform_role: "photographer",
       status: "active" as const,
       workspace_count: 2,
+      storage_used: 0,
       state_name: "Karnataka",
       tier_name: "Pro Photographer",
+      subscription_status: "active",
+      subscription_billing_interval: "monthly",
+      total_paid_paise: 599900,
+      latest_payment_provider: "razorpay",
+      latest_payment_status: "paid",
+      latest_payment_amount_paise: 199900,
+      latest_payment_order_id: "order_alice_001",
+      latest_payment_id: "pay_alice_001",
+      search_text: "Alice Sharma razorpay order_alice_001 pay_alice_001",
       created_at: "2026-01-15T00:00:00Z",
     },
     {
@@ -57,8 +70,10 @@ const sampleUsers = {
       platform_role: "photographer",
       status: "suspended" as const,
       workspace_count: 1,
+      storage_used: 0,
       state_name: "Maharashtra",
       tier_name: "Starter",
+      total_paid_paise: 0,
       created_at: "2026-02-20T00:00:00Z",
     },
   ],
@@ -68,6 +83,31 @@ const sampleUsers = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockListUsers.mockResolvedValue(sampleUsers);
+  mockGetUserDetail.mockResolvedValue({
+    ...sampleUsers.items[0],
+    workspaces: [
+      {
+        id: "w1",
+        name: "Alice Studio",
+        type: "studio",
+        role: "owner",
+      },
+    ],
+    payment_events: [
+      {
+        id: "p1",
+        source: "billing_order",
+        provider: "razorpay",
+        status: "paid",
+        amount_paise: 199900,
+        currency: "INR",
+        provider_order_id: "order_alice_001",
+        provider_payment_id: "pay_alice_001",
+        created_at: "2026-03-01T10:00:00Z",
+      },
+    ],
+    recent_audit_logs: [],
+  });
   mockListAdminPlans.mockResolvedValue([
     {
       tier: "free",
@@ -121,14 +161,52 @@ describe("AdminUsersPage", () => {
       .getByText("Alice Sharma")
       .closest("tr") as HTMLTableRowElement;
     expect(aliceRow).not.toBeNull();
-    expect(within(aliceRow).getByText("Karnataka")).toBeTruthy();
+    expect(within(aliceRow).getAllByText("Karnataka").length).toBeGreaterThan(
+      0,
+    );
     expect(within(aliceRow).getByText("Pro Photographer")).toBeTruthy();
+  });
+
+  it("shows payment details in the user row", async () => {
+    render(<AdminUsersPage />);
+    await waitFor(() => screen.getByText("Alice Sharma"));
+    const aliceRow = screen
+      .getByText("Alice Sharma")
+      .closest("tr") as HTMLTableRowElement;
+    expect(within(aliceRow).getByText(/razorpay/)).toBeTruthy();
+    expect(within(aliceRow).getByText(/order_alice_001/)).toBeTruthy();
   });
 
   it("renders search input", async () => {
     render(<AdminUsersPage />);
     await waitFor(() => {
       expect(screen.getByPlaceholderText(/search/i)).toBeTruthy();
+    });
+  });
+
+  it("passes profile and payment search to the users API", async () => {
+    render(<AdminUsersPage />);
+    const search = await screen.findByLabelText(
+      "Search profiles, phones, plans, payments...",
+    );
+    fireEvent.change(search, { target: { value: "pay_alice_001" } });
+    await waitFor(() => {
+      expect(mockListUsers).toHaveBeenLastCalledWith(
+        "test-token",
+        expect.objectContaining({ search: "pay_alice_001" }),
+      );
+    });
+  });
+
+  it("opens a complete profile with payment events from a search result", async () => {
+    render(<AdminUsersPage />);
+    await waitFor(() => screen.getByText("Alice Sharma"));
+    fireEvent.click(screen.getByText("Alice Sharma"));
+    await waitFor(() => {
+      expect(mockGetUserDetail).toHaveBeenCalledWith("test-token", "u1");
+      expect(screen.getByText("Recent payments")).toBeTruthy();
+      expect(screen.getAllByText(/pay_alice_001/).length).toBeGreaterThan(0);
+      expect(screen.getByText("Alice Studio")).toBeTruthy();
     });
   });
 
