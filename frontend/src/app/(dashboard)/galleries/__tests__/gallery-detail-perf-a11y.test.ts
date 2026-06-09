@@ -211,9 +211,13 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("beforeunload");
     expect(source).toContain("Keep this page open until uploads finish.");
     expect(source).toContain("setUploadDialogDismissed(false)");
-    expect(source).toContain("upload.pauseAll");
-    expect(source).toContain("upload.resumeAll");
-    expect(source).toContain("upload.cancelAll");
+    expect(source).toContain("Upload locked until complete");
+    expect(source).toContain("z-[80]");
+    expect(source).not.toContain("upload.pauseAll");
+    expect(source).not.toContain("upload.resumeAll");
+    expect(source).not.toContain("upload.cancelAll");
+    expect(source).not.toContain("Cancel all");
+    expect(source).not.toContain("Pause all");
     expect(source).toContain("setShowUploadDialog(true)");
     expect(source).not.toContain("TetheredShootingPanel");
   });

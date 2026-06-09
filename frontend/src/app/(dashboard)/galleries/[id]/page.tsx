@@ -3976,7 +3976,7 @@ export default function GalleryDetailPage({
       {backgroundUploadBarVisible && (
         <div
           data-testid="background-upload-status"
-          className="fixed inset-x-0 bottom-0 z-40 border-t border-border-default bg-surface-elevated/95 px-3 py-3 shadow-elevation-1 glass-blur-medium sm:px-6"
+          className="fixed inset-x-0 bottom-0 z-[80] border-t border-border-default bg-surface-elevated/95 px-3 py-3 shadow-elevation-1 glass-blur-medium sm:px-6"
           role="status"
           aria-live="polite"
         >
@@ -4052,7 +4052,7 @@ export default function GalleryDetailPage({
       {!backgroundUploadBarVisible && galleryActionStatus && (
         <div
           data-testid="gallery-action-status"
-          className="fixed inset-x-0 bottom-0 z-40 border-t border-border-default bg-surface-elevated/95 px-3 py-3 shadow-elevation-1 glass-blur-medium sm:px-6"
+          className="fixed inset-x-0 bottom-0 z-[80] border-t border-border-default bg-surface-elevated/95 px-3 py-3 shadow-elevation-1 glass-blur-medium sm:px-6"
           role="status"
           aria-live="polite"
         >
@@ -4071,7 +4071,7 @@ export default function GalleryDetailPage({
 
       {uploadDialogOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-surface-scrim p-2 glass-blur-medium sm:p-4"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-surface-scrim p-2 glass-blur-medium sm:p-4"
           onClick={(e) => {
             if (e.currentTarget === e.target && uploadDialogCanClose)
               setShowUploadDialog(false);
@@ -4316,29 +4316,9 @@ export default function GalleryDetailPage({
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       {activeUploadCount > 0 && (
-                        <>
-                          {upload.isPaused ? (
-                            <button
-                              onClick={upload.resumeAll}
-                              className="btn-tertiary px-3 py-1.5 text-xs"
-                            >
-                              Resume all
-                            </button>
-                          ) : (
-                            <button
-                              onClick={upload.pauseAll}
-                              className="btn-tertiary px-3 py-1.5 text-xs"
-                            >
-                              Pause all
-                            </button>
-                          )}
-                          <button
-                            onClick={upload.cancelAll}
-                            className="btn-danger px-3 py-1.5 text-xs"
-                          >
-                            Cancel all
-                          </button>
-                        </>
+                        <span className="rounded-full border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent">
+                          Upload locked until complete
+                        </span>
                       )}
                       {activeUploadCount === 0 &&
                         retryableFailedUploadCount > 0 && (
@@ -4460,16 +4440,6 @@ export default function GalleryDetailPage({
                                   className="text-xs font-medium text-accent hover:underline"
                                 >
                                   Retry
-                                </button>
-                              )}
-                              {(item.status === "uploading" ||
-                                item.status === "pending") && (
-                                <button
-                                  type="button"
-                                  onClick={() => upload.pause(item.id)}
-                                  className="text-xs font-medium text-text-secondary hover:text-text-primary"
-                                >
-                                  Pause
                                 </button>
                               )}
                               {item.status === "paused" && (
