@@ -721,9 +721,13 @@ export function useUpload(
         if ((err as Error).name === "AbortError") {
           return;
         }
+        const fileReadPermissionError = isFileReadPermissionError(err);
         updateItem(item.id, {
           status: "error",
-          error: (err as Error).message,
+          requiresReselect: fileReadPermissionError,
+          error: fileReadPermissionError
+            ? fileReadPermissionRecoveryMessage(item.file.name)
+            : (err as Error).message,
         });
       } finally {
         abortControllers.current.delete(item.id);

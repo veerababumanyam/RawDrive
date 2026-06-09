@@ -185,6 +185,17 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("Visibility");
     expect(source).toContain("Select files");
     expect(source).toContain("Choose folder");
+    expect(source).toContain("photoFolderInputRef");
+    expect(source).toContain('data-testid="gallery-photo-folder-input"');
+    expect(source).toContain('webkitdirectory: ""');
+    expect(source).toContain("Keep the FileList attached while the queue drains");
+    expect(source).not.toContain('document.createElement("input")');
+    expect(source).toContain("backgroundUploadBarVisible");
+    expect(source).toContain('data-testid="background-upload-status"');
+    expect(source).toContain("setUploadDialogDismissed(false)");
+    expect(source).toContain("upload.pauseAll");
+    expect(source).toContain("upload.resumeAll");
+    expect(source).toContain("upload.cancelAll");
     expect(source).toContain("setShowUploadDialog(true)");
     expect(source).not.toContain("TetheredShootingPanel");
   });

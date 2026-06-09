@@ -76,6 +76,9 @@ import {
   Envelope,
   ChatBubble,
   ChevronLeft,
+  Pause,
+  Play,
+  UploadCloud,
 } from "@/components/icons";
 import { useUpload } from "@/hooks/use-upload";
 import { useInfiniteFetch } from "@/hooks/use-infinite-render";
@@ -611,6 +614,7 @@ export default function GalleryDetailPage({
   >(null);
   const [, setTetheredClockTick] = useState(0);
   const photoFileInputRef = useRef<HTMLInputElement | null>(null);
+  const photoFolderInputRef = useRef<HTMLInputElement | null>(null);
   const uploadDialogRef = useRef<HTMLElement | null>(null);
   const tetheredDirectoryRef = useRef<TetheredDirectoryEntry | null>(null);
   const tetheredSeenFilesRef = useRef<Map<string, TetheredSeenFile>>(new Map());
@@ -1659,6 +1663,7 @@ export default function GalleryDetailPage({
     activeUploadCount > 0 || failedUploadCount > 0 || blockedUploadCount > 0;
   const uploadDialogOpen =
     showUploadDialog || (uploadPanelOpen && !uploadDialogDismissed);
+  const backgroundUploadBarVisible = uploadPanelOpen && !uploadDialogOpen;
   const uploadDialogCanClose =
     activeUploadCount === 0 &&
     failedUploadCount === 0 &&
@@ -1690,6 +1695,10 @@ export default function GalleryDetailPage({
     }
     return "Select photos to upload";
   })();
+  const backgroundUploadStatus =
+    upload.isPaused && activeUploadCount > 0
+      ? `Paused ${activeUploadCount} ${activeUploadCount === 1 ? "upload" : "uploads"}`
+      : uploadStatusHeadline;
   const handleUploadDialogBack = () => {
     if (activeUploadCount > 0) {
       setUploadDialogDismissed(true);
@@ -2298,37 +2307,14 @@ export default function GalleryDetailPage({
     }
   }, []);
 
-  // Folder-picker variant. Sets the `webkitdirectory` attribute (also
-  // exposed as a DOM property) so the OS picker opens a folder
-  // selector instead of a file selector — the user picks ONE folder
-  // and the browser returns every file inside it, recursively. The
-  // `accept` hint still applies but is treated as advisory by the
-  // folder picker, so we additionally filter through
-  // isAcceptedStillImageFile to discard stray .DS_Store / .ini / sidecar
-  // files that ship inside a typical photo-shoot folder.
-  //
-  // Attribute is set via both the DOM property and the HTML attribute
-  // for cross-browser coverage: Chromium and WebKit read the property;
-  // Firefox reads only the attribute string. The cast suppresses
-  // TypeScript's lib.dom complaint that `webkitdirectory` is not in
-  // HTMLInputElement (it is, but with the legacy vendor prefix that
-  // lib.dom omits from the public type for spec-stability reasons).
+  // Keep the folder input mounted; transient file inputs can lose browser
+  // read permission before a large queued camera folder reaches screening.
   const handleFolderSelect = useCallback(() => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.multiple = true;
-    input.accept = FILE_PICKER_STILL_IMAGE_ACCEPT;
-    (input as HTMLInputElement & { webkitdirectory: boolean }).webkitdirectory =
-      true;
-    input.setAttribute("webkitdirectory", "");
-    input.setAttribute("directory", "");
-    input.onchange = () => {
-      if (input.files) {
-        submitFiles(Array.from(input.files).filter(isAcceptedStillImageFile));
-      }
-    };
-    input.click();
-  }, [submitFiles]);
+    if (photoFolderInputRef.current) {
+      photoFolderInputRef.current.value = "";
+      photoFolderInputRef.current.click();
+    }
+  }, []);
 
   const tetheredLastDetectedLabel = tetheredLastDetectedAt
     ? `Last detected: ${formatTetheredRelativeTime(tetheredLastDetectedAt)}`
@@ -2921,6 +2907,29 @@ export default function GalleryDetailPage({
                     type="file"
                     multiple
                     accept={FILE_PICKER_STILL_IMAGE_ACCEPT}
+                    onChange={(event) => {
+                      submitFiles(
+                        Array.from(event.currentTarget.files ?? []).filter(
+                          isAcceptedStillImageFile,
+                        ),
+                      );
+                      // Keep the FileList attached while the queue drains.
+                      // Clearing here can revoke browser-backed folder access
+                      // before delayed items reach screening; handleFolderSelect
+                      // clears the input before the next picker open instead.
+                    }}
+                  />
+                  <input
+                    ref={photoFolderInputRef}
+                    data-testid="gallery-photo-folder-input"
+                    className="sr-only"
+                    type="file"
+                    multiple
+                    accept={FILE_PICKER_STILL_IMAGE_ACCEPT}
+                    {...({ webkitdirectory: "", directory: "" } as Record<
+                      string,
+                      string
+                    >)}
                     onChange={(event) => {
                       submitFiles(
                         Array.from(event.currentTarget.files ?? []).filter(
@@ -3797,6 +3806,94 @@ export default function GalleryDetailPage({
           </div>
         </aside>
       </ResizableWorkspaceSplit>
+
+      {backgroundUploadBarVisible && (
+        <div
+          data-testid="background-upload-status"
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-border-default bg-surface-elevated/95 px-3 py-3 shadow-elevation-1 glass-blur-medium sm:px-6"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-accent">
+                <UploadCloud className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <p className="truncate text-sm font-semibold text-text-primary">
+                    {backgroundUploadStatus}
+                  </p>
+                  {bytesTotal > 0 && (
+                    <span className="text-xs font-medium text-text-secondary">
+                      {formatUploadBytes(bytesUploaded)} /{" "}
+                      {formatUploadBytes(bytesTotal)} · {overallBytePercent}%
+                    </span>
+                  )}
+                </div>
+                {bytesTotal > 0 && (
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-sunken">
+                    <div
+                      className="h-full rounded-full bg-accent transition-all duration-300"
+                      style={{ width: `${overallBytePercent}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setUploadDialogDismissed(false);
+                  setShowUploadDialog(true);
+                }}
+                className="btn-tertiary px-3 py-1.5 text-xs"
+              >
+                Details
+              </button>
+              {activeUploadCount > 0 &&
+                (upload.isPaused ? (
+                  <button
+                    type="button"
+                    onClick={upload.resumeAll}
+                    className="btn-tertiary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs"
+                  >
+                    <Play className="h-4 w-4" aria-hidden="true" />
+                    Resume
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={upload.pauseAll}
+                    className="btn-tertiary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs"
+                  >
+                    <Pause className="h-4 w-4" aria-hidden="true" />
+                    Pause
+                  </button>
+                ))}
+              {activeUploadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={upload.cancelAll}
+                  className="btn-danger px-3 py-1.5 text-xs"
+                >
+                  Cancel all
+                </button>
+              )}
+              {activeUploadCount === 0 && retryableFailedUploadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={upload.retryAll}
+                  className="btn-tertiary px-3 py-1.5 text-xs"
+                >
+                  Retry all
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {uploadDialogOpen && (
         <div

@@ -132,4 +132,17 @@ describe("useUpload", () => {
       "Re-select the files or folder",
     );
   });
+
+  it("keeps folder batches moving after one file fails", async () => {
+    const source = await readFile(
+      join(process.cwd(), "src/hooks/use-upload.ts"),
+      "utf8",
+    );
+
+    expect(source).toContain("requiresReselect: fileReadPermissionError");
+    expect(source).toContain(
+      "activeUploads.current = Math.max(0, activeUploads.current - 1)",
+    );
+    expect(source).toContain("pumpQueue.current()");
+  });
 });
