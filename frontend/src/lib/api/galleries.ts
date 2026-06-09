@@ -646,6 +646,7 @@ export interface GalleryAsset {
   asset_id: string;
   sort_order: number;
   is_hero: boolean;
+  added_at?: string;
   // Present only when the row was fetched with ?include_assets=true (PERF-23):
   // the server embeds the asset so the client skips its per-asset getAsset()
   // loop. null means the asset is unavailable (e.g. soft-deleted).

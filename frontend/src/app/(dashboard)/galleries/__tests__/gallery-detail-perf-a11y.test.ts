@@ -83,9 +83,22 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("seenAssetIds");
     expect(source).toContain("seenAssetIds.has(entry.asset_id)");
     expect(source).toContain(
-      "const uniqueEntries = dedupeGalleryAssetEntries(entries)",
+      "const uniqueEntries = dedupeGalleryAssetEntries(",
     );
+    expect(source).toContain("orderGalleryAssetEntries(entries)");
     expect(source).toContain("uniqueEntries.length");
+  });
+
+  it("keeps gallery assets in a deterministic sequence and reveals completed uploads", () => {
+    const source = readDetailPage();
+
+    expect(source).toContain("galleryAssetSequenceComparator");
+    expect(source).toContain("galleryAssetTimestamp(a.added_at)");
+    expect(source).toContain("galleryAssetFilename(a).localeCompare");
+    expect(source).toContain("return a.asset_id.localeCompare(b.asset_id)");
+    expect(source).toContain("revealCompletedUploadAssets");
+    expect(source).toContain("highestCompletedIndex + 1");
+    expect(source).toContain("setVisibleLimit((current) =>");
   });
 
   // F-046: the grid must render a bounded window of the filtered assets with
@@ -188,16 +201,61 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("photoFolderInputRef");
     expect(source).toContain('data-testid="gallery-photo-folder-input"');
     expect(source).toContain('webkitdirectory: ""');
-    expect(source).toContain("Keep the FileList attached while the queue drains");
+    expect(source).toContain(
+      "Keep the FileList attached while the queue drains",
+    );
     expect(source).not.toContain('document.createElement("input")');
     expect(source).toContain("backgroundUploadBarVisible");
     expect(source).toContain('data-testid="background-upload-status"');
+    expect(source).toContain("activeUploadLeaveWarning");
+    expect(source).toContain("beforeunload");
+    expect(source).toContain("Keep this page open until uploads finish.");
     expect(source).toContain("setUploadDialogDismissed(false)");
     expect(source).toContain("upload.pauseAll");
     expect(source).toContain("upload.resumeAll");
     expect(source).toContain("upload.cancelAll");
     expect(source).toContain("setShowUploadDialog(true)");
     expect(source).not.toContain("TetheredShootingPanel");
+  });
+
+  it("keeps the compact upload status bar non-destructive while uploads run", () => {
+    const source = readDetailPage();
+    const barStart = source.indexOf('data-testid="background-upload-status"');
+    const barEnd = source.indexOf(
+      "{!backgroundUploadBarVisible && galleryActionStatus",
+      barStart,
+    );
+    const backgroundBar = source.slice(barStart, barEnd);
+
+    expect(barStart).toBeGreaterThan(-1);
+    expect(barEnd).toBeGreaterThan(barStart);
+    expect(backgroundBar).toContain("Details");
+    expect(backgroundBar).toContain(
+      "Keep this page open until uploads finish.",
+    );
+    expect(backgroundBar).not.toContain("upload.pauseAll");
+    expect(backgroundBar).not.toContain("upload.resumeAll");
+    expect(backgroundBar).not.toContain("upload.cancelAll");
+  });
+
+  it("shows delete and update action status without interrupting active uploads", () => {
+    const source = readDetailPage();
+
+    expect(source).toContain("type GalleryActionStatus");
+    expect(source).toContain("showGalleryActionStatus");
+    expect(source).toContain('data-testid="gallery-action-inline-status"');
+    expect(source).toContain('data-testid="gallery-action-status"');
+    expect(source).toContain(
+      "Upload continues in background. Keep this page open until uploads finish.",
+    );
+    expect(source).toContain("Deleting selected photos...");
+    expect(source).toContain("Selected photos deleted.");
+    expect(source).toContain("Deleting photo...");
+    expect(source).toContain("Photo deleted.");
+    expect(source).toContain('Deleting "${album.name}" sub-gallery...');
+    expect(source).toContain("Gallery title updated.");
+    expect(source).toContain("Gallery description updated.");
+    expect(source).toContain("Gallery publish update failed.");
   });
 
   it("gates uploads on terms acceptance and replays the stashed batch after acceptance", () => {
@@ -252,7 +310,8 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("item.assetId || item.id");
     expect(source).toContain("completedUploadRefreshKeyRef");
     expect(source).toContain("[0, ...ASSET_SETTLE_REFRESH_DELAYS_MS]");
-    expect(source).toContain("refreshGalleryAssets().catch");
+    expect(source).toContain("refreshGalleryAssets()");
+    expect(source).toContain(".then(revealCompletedUploadAssets)");
     expect(source).toContain(
       "Failed to refresh gallery after upload completion",
     );

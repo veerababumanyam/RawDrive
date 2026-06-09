@@ -76,8 +76,6 @@ import {
   Envelope,
   ChatBubble,
   ChevronLeft,
-  Pause,
-  Play,
   UploadCloud,
 } from "@/components/icons";
 import { useUpload } from "@/hooks/use-upload";
@@ -156,6 +154,11 @@ type FaceIndexRunState = {
   message: string;
 };
 
+type GalleryActionStatus = {
+  message: string;
+  tone: "working" | "success" | "error";
+};
+
 type TetheredDirectoryEntry = {
   kind: "directory";
   name: string;
@@ -221,6 +224,41 @@ function assetRowsSignature(
   return entries
     .map((entry) => `${entry.asset_id}:${entry.sort_order ?? ""}`)
     .join("|");
+}
+
+function galleryAssetTimestamp(value?: string): number {
+  if (!value) return Number.POSITIVE_INFINITY;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+}
+
+function galleryAssetFilename(entry: GalleryAsset): string {
+  return entry.asset?.filename?.toLowerCase() ?? "";
+}
+
+function galleryAssetSequenceComparator(
+  a: GalleryAsset,
+  b: GalleryAsset,
+): number {
+  const sortOrderDelta = (a.sort_order ?? 0) - (b.sort_order ?? 0);
+  if (sortOrderDelta !== 0) return sortOrderDelta;
+
+  const addedAtDelta =
+    galleryAssetTimestamp(a.added_at) - galleryAssetTimestamp(b.added_at);
+  if (addedAtDelta !== 0) return addedAtDelta;
+
+  const filenameDelta = galleryAssetFilename(a).localeCompare(
+    galleryAssetFilename(b),
+    undefined,
+    { numeric: true, sensitivity: "base" },
+  );
+  if (filenameDelta !== 0) return filenameDelta;
+
+  return a.asset_id.localeCompare(b.asset_id);
+}
+
+function orderGalleryAssetEntries<T extends GalleryAsset>(entries: T[]): T[] {
+  return [...entries].sort(galleryAssetSequenceComparator);
 }
 
 function assetHasWebPDisplay(asset: Asset | null | undefined): boolean {
@@ -547,6 +585,9 @@ export default function GalleryDetailPage({
   // can disable itself + show a "Saving…" state. Prevents double-submit
   // when the user clicks during the round-trip.
   const [publishing, setPublishing] = useState(false);
+  const [galleryActionStatus, setGalleryActionStatus] =
+    useState<GalleryActionStatus | null>(null);
+  const galleryActionStatusTimerRef = useRef<number | null>(null);
   const [faceIndexRun, setFaceIndexRun] = useState<FaceIndexRunState | null>(
     null,
   );
@@ -785,6 +826,35 @@ export default function GalleryDetailPage({
     };
   }, [gallery?.id, loading, refreshGalleryAssets]);
 
+  const showGalleryActionStatus = useCallback(
+    (
+      message: string,
+      tone: GalleryActionStatus["tone"] = "working",
+      autoHideMs?: number,
+    ) => {
+      if (galleryActionStatusTimerRef.current) {
+        window.clearTimeout(galleryActionStatusTimerRef.current);
+        galleryActionStatusTimerRef.current = null;
+      }
+      setGalleryActionStatus({ message, tone });
+      if (autoHideMs) {
+        galleryActionStatusTimerRef.current = window.setTimeout(() => {
+          setGalleryActionStatus(null);
+          galleryActionStatusTimerRef.current = null;
+        }, autoHideMs);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (galleryActionStatusTimerRef.current) {
+        window.clearTimeout(galleryActionStatusTimerRef.current);
+      }
+    };
+  }, []);
+
   const refreshAlbums = useCallback(async () => {
     const t = getStoredAccessToken();
     if (!t) return;
@@ -861,11 +931,14 @@ export default function GalleryDetailPage({
 
       setSavingAlbumId(album.id);
       setError("");
+      showGalleryActionStatus(`Deleting "${album.name}" sub-gallery...`);
       try {
         await deleteGalleryAlbum(t, album.id);
         if (activeAlbum === album.id) setActiveAlbum(null);
         await refreshAlbums();
+        showGalleryActionStatus("Sub-gallery deleted.", "success", 5000);
       } catch (err) {
+        showGalleryActionStatus("Sub-gallery delete failed.", "error", 7000);
         setError(
           err instanceof Error ? err.message : "Failed to delete sub-gallery",
         );
@@ -873,7 +946,7 @@ export default function GalleryDetailPage({
         setSavingAlbumId(null);
       }
     },
-    [activeAlbum, refreshAlbums],
+    [activeAlbum, refreshAlbums, showGalleryActionStatus],
   );
 
   // Builds the canonical gallery URL:
@@ -1041,24 +1114,30 @@ export default function GalleryDetailPage({
     const t = getStoredAccessToken();
     if (!t) return;
     setPublishing(true);
+    showGalleryActionStatus(
+      gallery.is_published
+        ? "Unpublishing gallery..."
+        : "Publishing gallery...",
+    );
     try {
       const updated = await updateGallery(t, id, {
         is_published: !gallery.is_published,
       });
       setGallery(updated);
-      setShareMessage(
-        updated.is_published
-          ? "Gallery published - client links are now live."
-          : "Gallery unpublished.",
-      );
+      const message = updated.is_published
+        ? "Gallery published - client links are now live."
+        : "Gallery unpublished.";
+      setShareMessage(message);
+      showGalleryActionStatus(message, "success", 5000);
     } catch (err) {
+      showGalleryActionStatus("Gallery publish update failed.", "error", 7000);
       setError(
         err instanceof Error ? err.message : "Failed to change publish state",
       );
     } finally {
       setPublishing(false);
     }
-  }, [gallery, id, publishing]);
+  }, [gallery, id, publishing, showGalleryActionStatus]);
 
   const handleShareAsset = useCallback(
     async (e: React.MouseEvent, assetId: string) => {
@@ -1218,16 +1297,19 @@ export default function GalleryDetailPage({
     async (assetId: string) => {
       const t = getStoredAccessToken();
       if (!t) return;
+      showGalleryActionStatus("Deleting photo...");
       try {
         await deleteAsset(t, assetId);
         setAssets((prev) => prev.filter((a) => a.asset?.id !== assetId));
         setLightboxIndex(null);
         await refreshAlbums();
+        showGalleryActionStatus("Photo deleted.", "success", 5000);
       } catch (err) {
+        showGalleryActionStatus("Photo delete failed.", "error", 7000);
         setError(err instanceof Error ? err.message : "Delete failed");
       }
     },
-    [refreshAlbums],
+    [refreshAlbums, showGalleryActionStatus],
   );
 
   useEffect(() => {
@@ -1548,7 +1630,32 @@ export default function GalleryDetailPage({
         .join("|"),
     [upload.items],
   );
+  const completedUploadAssetIds = useMemo(
+    () =>
+      upload.items
+        .filter((item) => item.status === "complete" && item.assetId)
+        .map((item) => item.assetId as string),
+    [upload.items],
+  );
   const completedUploadRefreshKeyRef = useRef("");
+  const revealCompletedUploadAssets = useCallback(
+    (entries: GalleryAssetRecord[] | null) => {
+      if (!entries?.length || completedUploadAssetIds.length === 0) return;
+      const completedAssetIds = new Set(completedUploadAssetIds);
+      const highestCompletedIndex = entries.reduce(
+        (highestIndex, entry, index) =>
+          entry.asset && completedAssetIds.has(entry.asset.id)
+            ? Math.max(highestIndex, index)
+            : highestIndex,
+        -1,
+      );
+      if (highestCompletedIndex < 0) return;
+      setVisibleLimit((current) =>
+        Math.max(current, GRID_PAGE_SIZE, highestCompletedIndex + 1),
+      );
+    },
+    [completedUploadAssetIds],
+  );
 
   useEffect(() => {
     if (
@@ -1560,12 +1667,14 @@ export default function GalleryDetailPage({
 
     const timers = [0, ...ASSET_SETTLE_REFRESH_DELAYS_MS].map((delay) =>
       window.setTimeout(() => {
-        void refreshGalleryAssets().catch((err) => {
-          console.warn(
-            "Failed to refresh gallery after upload completion:",
-            err,
-          );
-        });
+        void refreshGalleryAssets()
+          .then(revealCompletedUploadAssets)
+          .catch((err) => {
+            console.warn(
+              "Failed to refresh gallery after upload completion:",
+              err,
+            );
+          });
         void refreshAlbums();
       }, delay),
     );
@@ -1573,7 +1682,12 @@ export default function GalleryDetailPage({
     return () => {
       timers.forEach((timer) => window.clearTimeout(timer));
     };
-  }, [completedUploadRefreshKey, refreshAlbums, refreshGalleryAssets]);
+  }, [
+    completedUploadRefreshKey,
+    refreshAlbums,
+    refreshGalleryAssets,
+    revealCompletedUploadAssets,
+  ]);
 
   useEffect(() => {
     tetheredAutoOpenRef.current = tetheredAutoOpen;
@@ -1699,6 +1813,18 @@ export default function GalleryDetailPage({
     upload.isPaused && activeUploadCount > 0
       ? `Paused ${activeUploadCount} ${activeUploadCount === 1 ? "upload" : "uploads"}`
       : uploadStatusHeadline;
+  const activeUploadLeaveWarning =
+    "Upload still running. Keep this tab open until RawDrive finishes uploading.";
+  const galleryActionToneClass =
+    galleryActionStatus?.tone === "error"
+      ? "text-error"
+      : galleryActionStatus?.tone === "success"
+        ? "text-success"
+        : "text-text-secondary";
+  const galleryActionWarning =
+    activeUploadCount > 0
+      ? "Upload continues in background. Keep this page open until uploads finish."
+      : "";
   const handleUploadDialogBack = () => {
     if (activeUploadCount > 0) {
       setUploadDialogDismissed(true);
@@ -1709,6 +1835,18 @@ export default function GalleryDetailPage({
     setUploadDialogDismissed(false);
     setShowUploadDialog(false);
   };
+
+  useEffect(() => {
+    if (activeUploadCount === 0) return;
+    const warnBeforeUploadLeaves = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = activeUploadLeaveWarning;
+      return activeUploadLeaveWarning;
+    };
+    window.addEventListener("beforeunload", warnBeforeUploadLeaves);
+    return () =>
+      window.removeEventListener("beforeunload", warnBeforeUploadLeaves);
+  }, [activeUploadCount, activeUploadLeaveWarning]);
 
   useEffect(() => {
     if (!uploadDialogOpen) return;
@@ -1859,8 +1997,12 @@ export default function GalleryDetailPage({
     try {
       const refreshed = await getAsset(t, assetId);
       setAssets((prev) =>
-        prev.map((entry) =>
-          entry.asset?.id === assetId ? { ...entry, asset: refreshed } : entry,
+        orderGalleryAssetEntries(
+          prev.map((entry) =>
+            entry.asset?.id === assetId
+              ? { ...entry, asset: refreshed }
+              : entry,
+          ),
         ),
       );
     } catch (err) {
@@ -2612,11 +2754,22 @@ export default function GalleryDetailPage({
                       const t = getStoredAccessToken();
                       if (t) {
                         try {
+                          showGalleryActionStatus("Updating gallery title...");
                           const updated = await updateGallery(t, id, {
                             title: draftTitle.trim(),
                           });
                           setGallery(updated);
+                          showGalleryActionStatus(
+                            "Gallery title updated.",
+                            "success",
+                            5000,
+                          );
                         } catch (err) {
+                          showGalleryActionStatus(
+                            "Gallery title update failed.",
+                            "error",
+                            7000,
+                          );
                           setError(
                             err instanceof Error
                               ? err.message
@@ -2694,11 +2847,24 @@ export default function GalleryDetailPage({
                     const t = getStoredAccessToken();
                     if (t) {
                       try {
+                        showGalleryActionStatus(
+                          "Updating gallery description...",
+                        );
                         const updated = await updateGallery(t, id, {
                           description: draftDesc.trim(),
                         });
                         setGallery(updated);
+                        showGalleryActionStatus(
+                          "Gallery description updated.",
+                          "success",
+                          5000,
+                        );
                       } catch (err) {
+                        showGalleryActionStatus(
+                          "Gallery description update failed.",
+                          "error",
+                          7000,
+                        );
                         setError(
                           err instanceof Error
                             ? err.message
@@ -3839,6 +4005,23 @@ export default function GalleryDetailPage({
                     />
                   </div>
                 )}
+                {activeUploadCount > 0 && (
+                  <p className="mt-1 text-xs text-text-tertiary">
+                    Keep this page open until uploads finish.
+                  </p>
+                )}
+                {galleryActionStatus && (
+                  <p
+                    data-testid="gallery-action-inline-status"
+                    className={cn(
+                      "mt-1 text-xs font-medium",
+                      galleryActionToneClass,
+                    )}
+                  >
+                    {galleryActionStatus.message}
+                    {galleryActionWarning ? ` ${galleryActionWarning}` : ""}
+                  </p>
+                )}
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:justify-end">
@@ -3852,35 +4035,6 @@ export default function GalleryDetailPage({
               >
                 Details
               </button>
-              {activeUploadCount > 0 &&
-                (upload.isPaused ? (
-                  <button
-                    type="button"
-                    onClick={upload.resumeAll}
-                    className="btn-tertiary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs"
-                  >
-                    <Play className="h-4 w-4" aria-hidden="true" />
-                    Resume
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={upload.pauseAll}
-                    className="btn-tertiary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs"
-                  >
-                    <Pause className="h-4 w-4" aria-hidden="true" />
-                    Pause
-                  </button>
-                ))}
-              {activeUploadCount > 0 && (
-                <button
-                  type="button"
-                  onClick={upload.cancelAll}
-                  className="btn-danger px-3 py-1.5 text-xs"
-                >
-                  Cancel all
-                </button>
-              )}
               {activeUploadCount === 0 && retryableFailedUploadCount > 0 && (
                 <button
                   type="button"
@@ -3891,6 +4045,26 @@ export default function GalleryDetailPage({
                 </button>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {!backgroundUploadBarVisible && galleryActionStatus && (
+        <div
+          data-testid="gallery-action-status"
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-border-default bg-surface-elevated/95 px-3 py-3 shadow-elevation-1 glass-blur-medium sm:px-6"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="mx-auto flex max-w-6xl flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <p className={cn("text-sm font-semibold", galleryActionToneClass)}>
+              {galleryActionStatus.message}
+            </p>
+            {galleryActionWarning && (
+              <p className="text-xs text-text-tertiary">
+                {galleryActionWarning}
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -4491,6 +4665,7 @@ export default function GalleryDetailPage({
                       const t = getStoredAccessToken();
                       if (!t) return;
                       try {
+                        showGalleryActionStatus("Deleting selected photos...");
                         await bulkAssetAction(
                           t,
                           "delete",
@@ -4499,7 +4674,17 @@ export default function GalleryDetailPage({
                         clearSelection();
                         await refreshGalleryAssets();
                         await refreshAlbums();
+                        showGalleryActionStatus(
+                          "Selected photos deleted.",
+                          "success",
+                          5000,
+                        );
                       } catch (err) {
+                        showGalleryActionStatus(
+                          "Selected photo delete failed.",
+                          "error",
+                          7000,
+                        );
                         setError(
                           err instanceof Error
                             ? err.message
@@ -4797,7 +4982,9 @@ async function hydrateGalleryAssets(
   token: string,
   entries: GalleryAsset[],
 ): Promise<GalleryAssetRecord[]> {
-  const uniqueEntries = dedupeGalleryAssetEntries(entries);
+  const uniqueEntries = dedupeGalleryAssetEntries(
+    orderGalleryAssetEntries(entries),
+  );
 
   // PERF-23: when the server already embedded assets (?include_assets=true),
   // hydrate straight from the list response and skip the per-asset getAsset()
@@ -4807,9 +4994,11 @@ async function hydrateGalleryAssets(
     uniqueEntries.length > 0 &&
     uniqueEntries.every((entry) => entry.asset !== undefined)
   ) {
-    return uniqueEntries
-      .map((entry) => ({ ...entry, asset: entry.asset ?? null }))
-      .filter((entry): entry is GalleryAssetRecord => Boolean(entry.asset));
+    return orderGalleryAssetEntries(
+      uniqueEntries
+        .map((entry) => ({ ...entry, asset: entry.asset ?? null }))
+        .filter((entry): entry is GalleryAssetRecord => Boolean(entry.asset)),
+    );
   }
 
   const results = new Array<GalleryAssetRecord>(uniqueEntries.length);
@@ -4831,8 +5020,10 @@ async function hydrateGalleryAssets(
     () => worker(),
   );
   await Promise.all(pool);
-  return results.filter((entry): entry is GalleryAssetRecord =>
-    Boolean(entry?.asset),
+  return orderGalleryAssetEntries(
+    results.filter((entry): entry is GalleryAssetRecord =>
+      Boolean(entry?.asset),
+    ),
   );
 }
 
