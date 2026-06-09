@@ -59,41 +59,26 @@ var ErrDuplicateEmail = fmt.Errorf("users.email uniqueness violation")
 // in migration 002). platform_role comes from the column added in
 // migration 035. storage_used is computed on-the-fly from the assets
 // table (uploaded_by) — there is no denormalized column. workspace_count
-// is computed from workspace_members. Payment/subscription fields are
-// summary fields for the admin users table; GetByID adds the full recent
-// payment event list.
+// is computed from workspace_members. tier_slug / tier_name are reserved
+// for a future subscriptions integration and currently always null.
 type AdminUserRow struct {
 	ID           uuid.UUID `db:"id" json:"id"`
 	FullName     string    `db:"full_name" json:"full_name"`
 	Email        string    `db:"email" json:"email"`
 	Phone        *string   `db:"phone" json:"phone,omitempty"`
-	AvatarURL    *string   `db:"avatar_url" json:"avatar_url,omitempty"`
 	PlatformRole string    `db:"platform_role" json:"platform_role"`
 	Status       string    `db:"status" json:"status"`
 	// state_id is the integer primary key from states.id — NOT a
 	// UUID. Declared as *int32 (nullable) so the scan tolerates
 	// users whose state has not been set during onboarding.
-	StateID                   *int32     `db:"state_id" json:"state_id,omitempty"`
-	StateName                 *string    `db:"state_name" json:"state_name,omitempty"`
-	TierSlug                  *string    `db:"tier_slug" json:"tier_slug,omitempty"`
-	TierName                  *string    `db:"tier_name" json:"tier_name,omitempty"`
-	StorageUsed               int64      `db:"storage_used" json:"storage_used"`
-	WorkspaceCount            int64      `db:"workspace_count" json:"workspace_count"`
-	SubscriptionStatus        *string    `db:"subscription_status" json:"subscription_status,omitempty"`
-	SubscriptionAmountPaisa   *int64     `db:"subscription_amount_paisa" json:"subscription_amount_paisa,omitempty"`
-	SubscriptionBillingPeriod *string    `db:"subscription_billing_interval" json:"subscription_billing_interval,omitempty"`
-	SubscriptionExpiresAt     *time.Time `db:"subscription_expires_at" json:"subscription_expires_at,omitempty"`
-	TotalPaidPaisa            int64      `db:"total_paid_paise" json:"total_paid_paise"`
-	LatestPaymentProvider     *string    `db:"latest_payment_provider" json:"latest_payment_provider,omitempty"`
-	LatestPaymentStatus       *string    `db:"latest_payment_status" json:"latest_payment_status,omitempty"`
-	LatestPaymentAmountPaisa  *int64     `db:"latest_payment_amount_paise" json:"latest_payment_amount_paise,omitempty"`
-	LatestPaymentAt           *time.Time `db:"latest_payment_at" json:"latest_payment_at,omitempty"`
-	LatestPaymentReference    *string    `db:"latest_payment_reference" json:"latest_payment_reference,omitempty"`
-	LatestPaymentOrderID      *string    `db:"latest_payment_order_id" json:"latest_payment_order_id,omitempty"`
-	LatestPaymentID           *string    `db:"latest_payment_id" json:"latest_payment_id,omitempty"`
-	SearchText                string     `db:"search_text" json:"search_text,omitempty"`
-	LastLoginAt               *time.Time `db:"last_login_at" json:"last_login_at,omitempty"`
-	CreatedAt                 time.Time  `db:"created_at" json:"created_at"`
+	StateID        *int32     `db:"state_id" json:"state_id,omitempty"`
+	StateName      *string    `db:"state_name" json:"state_name,omitempty"`
+	TierSlug       *string    `db:"tier_slug" json:"tier_slug,omitempty"`
+	TierName       *string    `db:"tier_name" json:"tier_name,omitempty"`
+	StorageUsed    int64      `db:"storage_used" json:"storage_used"`
+	WorkspaceCount int64      `db:"workspace_count" json:"workspace_count"`
+	LastLoginAt    *time.Time `db:"last_login_at" json:"last_login_at,omitempty"`
+	CreatedAt      time.Time  `db:"created_at" json:"created_at"`
 }
 
 // AdminUserDetail is the shape returned by GET /api/v1/admin/users/{id}.
@@ -109,31 +94,17 @@ type AdminUserDetail struct {
 	Status       string    `db:"status" json:"status"`
 	// states.id is integer, not UUID — see AdminUserRow for the
 	// same correction.
-	StateID                   *int32                  `db:"state_id" json:"state_id,omitempty"`
-	StateName                 *string                 `db:"state_name" json:"state_name,omitempty"`
-	TierSlug                  *string                 `db:"tier_slug" json:"tier_slug,omitempty"`
-	TierName                  *string                 `db:"tier_name" json:"tier_name,omitempty"`
-	StorageUsed               int64                   `db:"storage_used" json:"storage_used"`
-	WorkspaceCount            int64                   `db:"workspace_count" json:"workspace_count"`
-	SubscriptionStatus        *string                 `db:"subscription_status" json:"subscription_status,omitempty"`
-	SubscriptionAmountPaisa   *int64                  `db:"subscription_amount_paisa" json:"subscription_amount_paisa,omitempty"`
-	SubscriptionBillingPeriod *string                 `db:"subscription_billing_interval" json:"subscription_billing_interval,omitempty"`
-	SubscriptionExpiresAt     *time.Time              `db:"subscription_expires_at" json:"subscription_expires_at,omitempty"`
-	TotalPaidPaisa            int64                   `db:"total_paid_paise" json:"total_paid_paise"`
-	LatestPaymentProvider     *string                 `db:"latest_payment_provider" json:"latest_payment_provider,omitempty"`
-	LatestPaymentStatus       *string                 `db:"latest_payment_status" json:"latest_payment_status,omitempty"`
-	LatestPaymentAmountPaisa  *int64                  `db:"latest_payment_amount_paise" json:"latest_payment_amount_paise,omitempty"`
-	LatestPaymentAt           *time.Time              `db:"latest_payment_at" json:"latest_payment_at,omitempty"`
-	LatestPaymentReference    *string                 `db:"latest_payment_reference" json:"latest_payment_reference,omitempty"`
-	LatestPaymentOrderID      *string                 `db:"latest_payment_order_id" json:"latest_payment_order_id,omitempty"`
-	LatestPaymentID           *string                 `db:"latest_payment_id" json:"latest_payment_id,omitempty"`
-	SearchText                string                  `db:"search_text" json:"search_text,omitempty"`
-	LastLoginAt               *time.Time              `db:"last_login_at" json:"last_login_at,omitempty"`
-	CreatedAt                 time.Time               `db:"created_at" json:"created_at"`
-	UpdatedAt                 time.Time               `db:"updated_at" json:"updated_at"`
-	Workspaces                []AdminUserWorkspace    `json:"workspaces"`
-	PaymentEvents             []AdminUserPaymentEvent `json:"payment_events"`
-	ActivityTimeline          []AuditLogEntry         `json:"recent_audit_logs"`
+	StateID          *int32               `db:"state_id" json:"state_id,omitempty"`
+	StateName        *string              `db:"state_name" json:"state_name,omitempty"`
+	TierSlug         *string              `db:"tier_slug" json:"tier_slug,omitempty"`
+	TierName         *string              `db:"tier_name" json:"tier_name,omitempty"`
+	StorageUsed      int64                `db:"storage_used" json:"storage_used"`
+	WorkspaceCount   int64                `db:"workspace_count" json:"workspace_count"`
+	LastLoginAt      *time.Time           `db:"last_login_at" json:"last_login_at,omitempty"`
+	CreatedAt        time.Time            `db:"created_at" json:"created_at"`
+	UpdatedAt        time.Time            `db:"updated_at" json:"updated_at"`
+	Workspaces       []AdminUserWorkspace `json:"workspaces"`
+	ActivityTimeline []AuditLogEntry      `json:"recent_audit_logs"`
 }
 
 type AdminUserWorkspace struct {
@@ -141,20 +112,6 @@ type AdminUserWorkspace struct {
 	Name      string    `db:"name" json:"name"`
 	Role      string    `db:"role" json:"role"`
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
-}
-
-type AdminUserPaymentEvent struct {
-	ID                uuid.UUID  `db:"id" json:"id"`
-	Source            string     `db:"source" json:"source"`
-	Provider          string     `db:"provider" json:"provider"`
-	Status            string     `db:"status" json:"status"`
-	AmountPaisa       int64      `db:"amount_paise" json:"amount_paise"`
-	Currency          string     `db:"currency" json:"currency"`
-	Reference         *string    `db:"reference" json:"reference,omitempty"`
-	ProviderOrderID   *string    `db:"provider_order_id" json:"provider_order_id,omitempty"`
-	ProviderPaymentID *string    `db:"provider_payment_id" json:"provider_payment_id,omitempty"`
-	PaidAt            *time.Time `db:"paid_at" json:"paid_at,omitempty"`
-	CreatedAt         time.Time  `db:"created_at" json:"created_at"`
 }
 
 type PaginatedResult[T any] struct {
@@ -184,13 +141,12 @@ const adminUserSelectColumns = `
 		COALESCE(u.display_name, '') AS full_name,
 		COALESCE(u.email, '') AS email,
 		u.phone,
-		u.avatar_url,
 		u.platform_role,
 		u.status,
 		u.state_id,
 		st.name AS state_name,
-		owner_ws.tier_slug,
-		CASE owner_ws.tier_slug
+		(SELECT w.plan_tier FROM workspaces w WHERE w.owner_id = u.id LIMIT 1) AS tier_slug,
+		(SELECT CASE w.plan_tier
 		    WHEN 'creator'          THEN 'Creator'
 		    WHEN 'pro_photographer' THEN 'Pro Photographer'
 		    WHEN 'studio'           THEN 'Studio'
@@ -200,187 +156,18 @@ const adminUserSelectColumns = `
 		    WHEN 'business'         THEN 'Elite Studio'
 		    WHEN 'enterprise'       THEN 'Elite Studio'
 		    ELSE                         'Starter'
-		 END AS tier_name,
-		COALESCE(storage_stats.storage_used, 0) AS storage_used,
-		COALESCE(workspace_stats.workspace_count, 0) AS workspace_count,
-		sub.subscription_status,
-		sub.subscription_amount_paisa,
-		sub.subscription_billing_interval,
-		sub.subscription_expires_at,
-		COALESCE(pay.total_paid_paise, 0) AS total_paid_paise,
-		pay.latest_payment_provider,
-		pay.latest_payment_status,
-		pay.latest_payment_amount_paise,
-		pay.latest_payment_at,
-		pay.latest_payment_reference,
-		pay.latest_payment_order_id,
-		pay.latest_payment_id,
-		CONCAT_WS(' ',
-			u.id::text,
-			COALESCE(u.display_name, ''),
-			COALESCE(u.email, ''),
-			COALESCE(u.phone, ''),
-			COALESCE(u.platform_role, ''),
-			COALESCE(u.status, ''),
-			COALESCE(st.name, ''),
-			COALESCE(owner_ws.workspace_name, ''),
-			COALESCE(owner_ws.tier_slug, ''),
-			COALESCE(sub.subscription_status, ''),
-			COALESCE(sub.subscription_billing_interval, ''),
-			COALESCE(pay.latest_payment_provider, ''),
-			COALESCE(pay.latest_payment_status, ''),
-			COALESCE(pay.latest_payment_reference, ''),
-			COALESCE(pay.latest_payment_order_id, ''),
-			COALESCE(pay.latest_payment_id, ''),
-			COALESCE(pay.payment_search_text, '')
-		) AS search_text,
+		 END
+		 FROM workspaces w WHERE w.owner_id = u.id LIMIT 1) AS tier_name,
+		COALESCE(
+			(SELECT SUM(size_bytes) FROM assets WHERE uploaded_by = u.id AND deleted_at IS NULL),
+			0
+		) AS storage_used,
+		COALESCE(
+			(SELECT COUNT(*) FROM workspace_members WHERE user_id = u.id),
+			0
+		) AS workspace_count,
 		u.last_login_at,
 		u.created_at`
-
-const adminUserFromSQL = `
-		FROM users u
-		LEFT JOIN states st ON st.id = u.state_id
-		LEFT JOIN LATERAL (
-			SELECT w.id AS workspace_id, w.name AS workspace_name, w.plan_tier AS tier_slug
-			FROM workspaces w
-			WHERE w.owner_id = u.id
-			ORDER BY w.created_at DESC NULLS LAST, w.id ASC
-			LIMIT 1
-		) owner_ws ON TRUE
-		LEFT JOIN LATERAL (
-			SELECT COALESCE(SUM(a.size_bytes), 0)::bigint AS storage_used
-			FROM assets a
-			WHERE a.uploaded_by = u.id AND a.deleted_at IS NULL
-		) storage_stats ON TRUE
-		LEFT JOIN LATERAL (
-			SELECT COUNT(*)::bigint AS workspace_count
-			FROM workspace_members wm
-			WHERE wm.user_id = u.id
-		) workspace_stats ON TRUE
-		LEFT JOIN LATERAL (
-			SELECT
-				s.status AS subscription_status,
-				s.amount_paisa AS subscription_amount_paisa,
-				s.billing_interval AS subscription_billing_interval,
-				s.expires_at AS subscription_expires_at
-			FROM subscriptions s
-			WHERE s.user_id = u.id
-			   OR s.workspace_id IN (
-					SELECT wm.workspace_id FROM workspace_members wm WHERE wm.user_id = u.id
-					UNION
-					SELECT w_scope.id FROM workspaces w_scope WHERE w_scope.owner_id = u.id
-			   )
-			ORDER BY
-				CASE WHEN s.status IN ('active', 'trialing') THEN 0 ELSE 1 END,
-				COALESCE(s.updated_at, s.created_at) DESC,
-				s.id ASC
-			LIMIT 1
-		) sub ON TRUE
-		LEFT JOIN LATERAL (
-			SELECT
-				COALESCE(SUM(payment_events.amount_paise) FILTER (WHERE payment_events.status = 'paid'), 0)::bigint AS total_paid_paise,
-				(ARRAY_AGG(payment_events.provider ORDER BY COALESCE(payment_events.paid_at, payment_events.created_at) DESC, payment_events.created_at DESC))[1] AS latest_payment_provider,
-				(ARRAY_AGG(payment_events.status ORDER BY COALESCE(payment_events.paid_at, payment_events.created_at) DESC, payment_events.created_at DESC))[1] AS latest_payment_status,
-				(ARRAY_AGG(payment_events.amount_paise ORDER BY COALESCE(payment_events.paid_at, payment_events.created_at) DESC, payment_events.created_at DESC))[1] AS latest_payment_amount_paise,
-				(ARRAY_AGG(COALESCE(payment_events.paid_at, payment_events.created_at) ORDER BY COALESCE(payment_events.paid_at, payment_events.created_at) DESC, payment_events.created_at DESC))[1] AS latest_payment_at,
-				(ARRAY_AGG(payment_events.reference ORDER BY COALESCE(payment_events.paid_at, payment_events.created_at) DESC, payment_events.created_at DESC))[1] AS latest_payment_reference,
-				(ARRAY_AGG(payment_events.provider_order_id ORDER BY COALESCE(payment_events.paid_at, payment_events.created_at) DESC, payment_events.created_at DESC))[1] AS latest_payment_order_id,
-				(ARRAY_AGG(payment_events.provider_payment_id ORDER BY COALESCE(payment_events.paid_at, payment_events.created_at) DESC, payment_events.created_at DESC))[1] AS latest_payment_id,
-				STRING_AGG(CONCAT_WS(' ',
-					payment_events.id::text,
-					payment_events.source,
-					payment_events.provider,
-					payment_events.status,
-					payment_events.reference,
-					payment_events.provider_order_id,
-					payment_events.provider_payment_id,
-					payment_events.amount_paise::text,
-					payment_events.currency
-				), ' ') AS payment_search_text
-			FROM (
-				SELECT
-					bo.id,
-					'billing_order'::text AS source,
-					bo.provider::text AS provider,
-					bo.status::text AS status,
-					bo.amount_paise,
-					bo.currency::text AS currency,
-					bo.id::text AS reference,
-					bo.provider_order_id::text AS provider_order_id,
-					bo.provider_payment_id::text AS provider_payment_id,
-					bo.paid_at,
-					bo.created_at
-				FROM billing_orders bo
-				WHERE bo.user_id = u.id
-				   OR bo.workspace_id IN (
-						SELECT wm.workspace_id FROM workspace_members wm WHERE wm.user_id = u.id
-						UNION
-						SELECT w_scope.id FROM workspaces w_scope WHERE w_scope.owner_id = u.id
-				   )
-				UNION ALL
-				SELECT
-					suo.id,
-					'subscription_order'::text AS source,
-					suo.provider::text AS provider,
-					suo.status::text AS status,
-					suo.amount_paise,
-					'INR'::text AS currency,
-					suo.id::text AS reference,
-					COALESCE(suo.provider_order_id, suo.razorpay_order_id)::text AS provider_order_id,
-					COALESCE(suo.provider_payment_id, suo.razorpay_payment_id)::text AS provider_payment_id,
-					CASE WHEN suo.status = 'paid' THEN suo.updated_at ELSE NULL END AS paid_at,
-					suo.created_at
-				FROM subscription_upgrade_orders suo
-				WHERE suo.initiated_by = u.id
-				   OR suo.workspace_id IN (
-						SELECT wm.workspace_id FROM workspace_members wm WHERE wm.user_id = u.id
-						UNION
-						SELECT w_scope.id FROM workspaces w_scope WHERE w_scope.owner_id = u.id
-				   )
-				UNION ALL
-				SELECT
-					p.id,
-					'invoice_payment'::text AS source,
-					p.method::text AS provider,
-					'paid'::text AS status,
-					p.amount_paisa,
-					i.currency::text AS currency,
-					p.reference_number::text AS reference,
-					i.invoice_number::text AS provider_order_id,
-					p.reference_number::text AS provider_payment_id,
-					p.payment_date AS paid_at,
-					p.created_at
-				FROM payments p
-				JOIN invoices i ON i.id = p.invoice_id
-				WHERE p.workspace_id IN (
-					SELECT wm.workspace_id FROM workspace_members wm WHERE wm.user_id = u.id
-					UNION
-					SELECT w_scope.id FROM workspaces w_scope WHERE w_scope.owner_id = u.id
-				)
-			) payment_events
-		) pay ON TRUE`
-
-func adminUserSearchSQL(idx int) string {
-	return fmt.Sprintf(`(
-		COALESCE(u.display_name, '') ILIKE $%d OR
-		COALESCE(u.email, '') ILIKE $%d OR
-		COALESCE(u.phone, '') ILIKE $%d OR
-		u.id::text ILIKE $%d OR
-		COALESCE(u.platform_role, '') ILIKE $%d OR
-		COALESCE(u.status, '') ILIKE $%d OR
-		COALESCE(st.name, '') ILIKE $%d OR
-		COALESCE(owner_ws.workspace_name, '') ILIKE $%d OR
-		COALESCE(owner_ws.tier_slug, '') ILIKE $%d OR
-		COALESCE(sub.subscription_status, '') ILIKE $%d OR
-		COALESCE(sub.subscription_billing_interval, '') ILIKE $%d OR
-		COALESCE(pay.latest_payment_provider, '') ILIKE $%d OR
-		COALESCE(pay.latest_payment_status, '') ILIKE $%d OR
-		COALESCE(pay.latest_payment_reference, '') ILIKE $%d OR
-		COALESCE(pay.latest_payment_order_id, '') ILIKE $%d OR
-		COALESCE(pay.latest_payment_id, '') ILIKE $%d OR
-		COALESCE(pay.payment_search_text, '') ILIKE $%d
-	)`, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx)
-}
 
 func (r *AdminUserRepo) List(ctx context.Context, f AdminUserFilter) (*PaginatedResult[AdminUserRow], error) {
 	if f.Limit <= 0 || f.Limit > 100 {
@@ -394,8 +181,9 @@ func (r *AdminUserRepo) List(ctx context.Context, f AdminUserFilter) (*Paginated
 	)
 
 	if f.Search != "" {
-		where = append(where, adminUserSearchSQL(idx))
-		args = append(args, "%"+strings.TrimSpace(f.Search)+"%")
+		where = append(where, fmt.Sprintf(
+			"(to_tsvector('english', COALESCE(u.display_name, '') || ' ' || COALESCE(u.email, '')) @@ plainto_tsquery('english', $%d))", idx))
+		args = append(args, f.Search)
 		idx++
 	}
 	if f.Role != "" {
@@ -414,7 +202,7 @@ func (r *AdminUserRepo) List(ctx context.Context, f AdminUserFilter) (*Paginated
 		idx++
 	}
 	if f.TierSlug != "" {
-		where = append(where, fmt.Sprintf("owner_ws.tier_slug = $%d", idx))
+		where = append(where, fmt.Sprintf("(SELECT w.plan_tier FROM workspaces w WHERE w.owner_id = u.id LIMIT 1) = $%d", idx))
 		args = append(args, f.TierSlug)
 		idx++
 	}
@@ -452,8 +240,8 @@ func (r *AdminUserRepo) List(ctx context.Context, f AdminUserFilter) (*Paginated
 
 	countSQL := fmt.Sprintf(`
 		SELECT COUNT(*)
-		%s
-		%s`, adminUserFromSQL, countWhere)
+		FROM users u
+		%s`, countWhere)
 
 	var totalCount int64
 	if err := r.pool.QueryRow(ctx, countSQL, countArgs...).Scan(&totalCount); err != nil {
@@ -462,11 +250,12 @@ func (r *AdminUserRepo) List(ctx context.Context, f AdminUserFilter) (*Paginated
 
 	query := fmt.Sprintf(`
 		SELECT%s
-		%s
+		FROM users u
+		LEFT JOIN states st ON st.id = u.state_id
 		%s
 		ORDER BY %s DESC NULLS LAST, u.id ASC
 		LIMIT $%d`,
-		adminUserSelectColumns, adminUserFromSQL, whereClause, sortCol, idx)
+		adminUserSelectColumns, whereClause, sortCol, idx)
 
 	args = append(args, f.Limit+1)
 
@@ -532,9 +321,11 @@ func (r *AdminUserRepo) CreateUser(ctx context.Context, in AdminUserCreate) (*Ad
 func (r *AdminUserRepo) GetByID(ctx context.Context, id uuid.UUID) (*AdminUserDetail, error) {
 	query := fmt.Sprintf(`
 		SELECT%s,
+			u.avatar_url,
 			u.updated_at
-		%s
-		WHERE u.id = $1`, adminUserSelectColumns, adminUserFromSQL)
+		FROM users u
+		LEFT JOIN states st ON st.id = u.state_id
+		WHERE u.id = $1`, adminUserSelectColumns)
 
 	rows, err := r.pool.Query(ctx, query, id)
 	if err != nil {
@@ -564,11 +355,6 @@ func (r *AdminUserRepo) GetByID(ctx context.Context, id uuid.UUID) (*AdminUserDe
 	detail.Workspaces, err = pgx.CollectRows(wsRows, pgx.RowToStructByName[AdminUserWorkspace])
 	if err != nil {
 		return nil, fmt.Errorf("admin user workspaces scan: %w", err)
-	}
-
-	detail.PaymentEvents, err = r.GetPaymentEvents(ctx, id, 10)
-	if err != nil {
-		return nil, fmt.Errorf("admin user payment events: %w", err)
 	}
 
 	// Fetch recent activity.
@@ -662,102 +448,23 @@ func (r *AdminUserRepo) GetActivityTimeline(ctx context.Context, userID uuid.UUI
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, err := r.pool.Query(ctx, fmt.Sprintf(`
-		%s
-		WHERE a.actor_id = $1 OR a.resource_id = $1::text
-		ORDER BY a.created_at DESC
-		LIMIT $2`, auditLogSelectSQL()), userID, limit)
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, actor_id, actor_type, action,
+			   COALESCE(resource_type, '') AS resource_type,
+			   COALESCE(resource_id, '')   AS resource_id,
+			   COALESCE(metadata, '{}'::jsonb)     AS metadata,
+			   COALESCE(before_state, '{}'::jsonb) AS before_state,
+			   COALESCE(after_state, '{}'::jsonb)  AS after_state,
+			   ip_address, user_agent,
+			   workspace_id, state_id, severity, created_at
+		FROM audit_logs
+		WHERE actor_id = $1 OR resource_id = $1::text
+		ORDER BY created_at DESC
+		LIMIT $2`, userID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("admin activity timeline: %w", err)
 	}
 	return pgx.CollectRows(rows, pgx.RowToStructByName[AuditLogEntry])
-}
-
-func (r *AdminUserRepo) GetPaymentEvents(ctx context.Context, userID uuid.UUID, limit int) ([]AdminUserPaymentEvent, error) {
-	if limit <= 0 || limit > 50 {
-		limit = 10
-	}
-	rows, err := r.pool.Query(ctx, `
-		SELECT
-			events.id,
-			events.source,
-			events.provider,
-			events.status,
-			events.amount_paise,
-			events.currency,
-			events.reference,
-			events.provider_order_id,
-			events.provider_payment_id,
-			events.paid_at,
-			events.created_at
-		FROM (
-			SELECT
-				bo.id,
-				'billing_order'::text AS source,
-				bo.provider::text AS provider,
-				bo.status::text AS status,
-				bo.amount_paise,
-				bo.currency::text AS currency,
-				bo.id::text AS reference,
-				bo.provider_order_id::text AS provider_order_id,
-				bo.provider_payment_id::text AS provider_payment_id,
-				bo.paid_at,
-				bo.created_at
-			FROM billing_orders bo
-			WHERE bo.user_id = $1
-			   OR bo.workspace_id IN (
-					SELECT wm.workspace_id FROM workspace_members wm WHERE wm.user_id = $1
-					UNION
-					SELECT w_scope.id FROM workspaces w_scope WHERE w_scope.owner_id = $1
-			   )
-			UNION ALL
-			SELECT
-				suo.id,
-				'subscription_order'::text AS source,
-				suo.provider::text AS provider,
-				suo.status::text AS status,
-				suo.amount_paise,
-				'INR'::text AS currency,
-				suo.id::text AS reference,
-				COALESCE(suo.provider_order_id, suo.razorpay_order_id)::text AS provider_order_id,
-				COALESCE(suo.provider_payment_id, suo.razorpay_payment_id)::text AS provider_payment_id,
-				CASE WHEN suo.status = 'paid' THEN suo.updated_at ELSE NULL END AS paid_at,
-				suo.created_at
-			FROM subscription_upgrade_orders suo
-			WHERE suo.initiated_by = $1
-			   OR suo.workspace_id IN (
-					SELECT wm.workspace_id FROM workspace_members wm WHERE wm.user_id = $1
-					UNION
-					SELECT w_scope.id FROM workspaces w_scope WHERE w_scope.owner_id = $1
-			   )
-			UNION ALL
-			SELECT
-				p.id,
-				'invoice_payment'::text AS source,
-				p.method::text AS provider,
-				'paid'::text AS status,
-				p.amount_paisa,
-				i.currency::text AS currency,
-				p.reference_number::text AS reference,
-				i.invoice_number::text AS provider_order_id,
-				p.reference_number::text AS provider_payment_id,
-				p.payment_date AS paid_at,
-				p.created_at
-			FROM payments p
-			JOIN invoices i ON i.id = p.invoice_id
-			WHERE p.workspace_id IN (
-				SELECT wm.workspace_id FROM workspace_members wm WHERE wm.user_id = $1
-				UNION
-				SELECT w_scope.id FROM workspaces w_scope WHERE w_scope.owner_id = $1
-			)
-		) events
-		ORDER BY COALESCE(events.paid_at, events.created_at) DESC, events.created_at DESC
-		LIMIT $2`, userID, limit)
-	if err != nil {
-		return nil, fmt.Errorf("admin user payment events: %w", err)
-	}
-	defer rows.Close()
-	return pgx.CollectRows(rows, pgx.RowToStructByName[AdminUserPaymentEvent])
 }
 
 func (r *AdminUserRepo) ExportCSV(ctx context.Context, f AdminUserFilter, writer io.Writer) error {
@@ -768,8 +475,9 @@ func (r *AdminUserRepo) ExportCSV(ctx context.Context, f AdminUserFilter, writer
 	)
 
 	if f.Search != "" {
-		where = append(where, adminUserSearchSQL(idx))
-		args = append(args, "%"+strings.TrimSpace(f.Search)+"%")
+		where = append(where, fmt.Sprintf(
+			"(to_tsvector('english', COALESCE(u.display_name, '') || ' ' || COALESCE(u.email, '')) @@ plainto_tsquery('english', $%d))", idx))
+		args = append(args, f.Search)
 		idx++
 	}
 	if f.Role != "" {
@@ -807,9 +515,10 @@ func (r *AdminUserRepo) ExportCSV(ctx context.Context, f AdminUserFilter, writer
 				0
 			) AS storage_used,
 			u.created_at
+		FROM users u
+		LEFT JOIN states st ON st.id = u.state_id
 		%s
-		%s
-		ORDER BY u.created_at DESC`, adminUserFromSQL, whereClause)
+		ORDER BY u.created_at DESC`, whereClause)
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {

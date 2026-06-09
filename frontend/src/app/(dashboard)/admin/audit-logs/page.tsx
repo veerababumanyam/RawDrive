@@ -63,73 +63,6 @@ function formatTimestamp(iso: string) {
   return new Date(iso).toLocaleString(undefined, { timeZoneName: "short" });
 }
 
-function auditQueryTime(value: string) {
-  if (!value) return "";
-  if (value.includes("T") && !/[zZ]|[+-]\d{2}:\d{2}$/.test(value)) {
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
-  }
-  return value;
-}
-
-function stringFromUnknown(value: unknown): string {
-  if (value == null) return "";
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return "";
-  }
-}
-
-function actorDisplayName(entry: AuditLogEntry) {
-  return entry.actor_name || entry.actor_email || entry.actor_id;
-}
-
-function actorInitials(entry: AuditLogEntry) {
-  const label = actorDisplayName(entry).trim();
-  if (!label) return "U";
-  const parts = label.split(/\s+/).filter(Boolean);
-  if (parts.length > 1) {
-    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-  }
-  return label.slice(0, 2).toUpperCase();
-}
-
-function buildAuditSearchText(entry: AuditLogEntry) {
-  const base = [
-    entry.action,
-    entry.actor_id,
-    entry.actor_type,
-    entry.actor_name,
-    entry.actor_email,
-    entry.actor_role,
-    entry.actor_status,
-    entry.resource_type,
-    entry.resource_id,
-    entry.ip_address,
-    entry.user_agent,
-    entry.workspace_id,
-    entry.state_id,
-    stringFromUnknown(entry.metadata),
-    stringFromUnknown(entry.before),
-    stringFromUnknown(entry.after),
-  ].join(" ");
-  const lower = base.toLowerCase();
-  const paymentAliases =
-    /payment|billing|checkout|razorpay|subscription|invoice|order/.test(lower)
-      ? " payment payments billing checkout gateway razorpay subscription invoice order"
-      : "";
-  const profileAliases =
-    /profile|user|account|actor/.test(lower) || entry.actor_email
-      ? " user users profile actor account"
-      : "";
-  return `${entry.search_text || ""} ${base}${paymentAliases}${profileAliases}`;
-}
-
 function JsonBlock({ data, label }: { data: unknown; label: string }) {
   if (
     !data ||
@@ -216,12 +149,6 @@ function DetailPanel({
               value={entry.actor_email || entry.actor_id}
               mono
             />
-            <Field
-              label="Actor Name"
-              value={entry.actor_name || "—"}
-            />
-            <Field label="Actor Role" value={entry.actor_role || "—"} />
-            <Field label="Actor Status" value={entry.actor_status || "—"} />
             <Field label="Actor Type" value={entry.actor_type || "—"} />
             <Field label="Action" value={entry.action} mono />
             <Field label="Resource Type" value={entry.resource_type || "—"} />
@@ -229,11 +156,6 @@ function DetailPanel({
             <Field
               label="Workspace ID"
               value={entry.workspace_id || "—"}
-              mono
-            />
-            <Field
-              label="State ID"
-              value={entry.state_id ? String(entry.state_id) : "—"}
               mono
             />
             <Field label="IP Address" value={entry.ip_address || "—"} mono />
@@ -292,7 +214,6 @@ function Field({
 interface FilterState {
   dateFrom: string;
   dateTo: string;
-  search: string;
   actorId: string;
   ipAddress: string;
   severity: string;
@@ -301,7 +222,6 @@ interface FilterState {
 const emptyFilters: FilterState = {
   dateFrom: "",
   dateTo: "",
-  search: "",
   actorId: "",
   ipAddress: "",
   severity: "",
@@ -440,36 +360,6 @@ function FilterInput({
 
 type AuditLogRow = AuditLogEntry & Record<string, unknown>;
 
-function normalizeAuditLogRow(entry: AuditLogEntry): AuditLogRow {
-  return {
-    ...entry,
-    search_text: buildAuditSearchText(entry),
-  } as AuditLogRow;
-}
-
-function mergeUniqueAuditRows(
-  current: AuditLogRow[],
-  incoming: AuditLogRow[],
-): AuditLogRow[] {
-  const seen = new Set<string>();
-  const merged: AuditLogRow[] = [];
-
-  for (const row of [...current, ...incoming]) {
-    const id = String(row.id || "");
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    merged.push(row);
-  }
-
-  return merged;
-}
-
-function isPaymentAuditRow(row: AuditLogRow) {
-  return /payment|payments|billing|checkout|razorpay|subscription|invoice|order/.test(
-    String(row.search_text || "").toLowerCase(),
-  );
-}
-
 const columns: ColumnDef<AuditLogRow>[] = [
   {
     key: "inserted_at",
@@ -485,46 +375,17 @@ const columns: ColumnDef<AuditLogRow>[] = [
     key: "actor_email",
     label: "Actor",
     sortable: true,
-    accessor: (row) => row.actor_name || row.actor_email || row.actor_id,
-    render: (_value, row) => (
-      <div className="flex min-w-48 items-center gap-3">
-        {row.actor_avatar_url ? (
-          <img
-            src={row.actor_avatar_url as string}
-            alt=""
-            className="h-9 w-9 rounded-full border border-border-subtle object-cover"
-          />
-        ) : (
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-border-subtle bg-surface-container-high text-xs font-bold text-accent">
-            {actorInitials(row)}
-          </span>
-        )}
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-semibold text-text-primary">
-            {actorDisplayName(row)}
-          </span>
-          <span className="block truncate text-xs text-text-tertiary">
-            {row.actor_email || row.actor_role || row.actor_id}
-          </span>
-        </span>
-      </div>
+    accessor: (row) => row.actor_email || row.actor_id,
+    render: (value) => (
+      <span className="text-sm text-text-tertiary">{value as string}</span>
     ),
   },
   {
     key: "action",
     label: "Action",
     sortable: true,
-    render: (value, row) => (
-      <span className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-sm text-accent">
-          {value as string}
-        </span>
-        {isPaymentAuditRow(row) && (
-          <span className="micro-badge border border-border-subtle bg-surface-container-high text-feedback-success">
-            Payment
-          </span>
-        )}
-      </span>
+    render: (value) => (
+      <span className="font-mono text-sm text-accent">{value as string}</span>
     ),
   },
   {
@@ -621,9 +482,8 @@ export default function AdminAuditLogsPage() {
       else setLoading(true);
       const params: Record<string, string> = { limit: String(AUDIT_PAGE_SIZE) };
       if (cursor) params.cursor = cursor;
-      if (f.dateFrom) params.date_from = auditQueryTime(f.dateFrom);
-      if (f.dateTo) params.date_to = auditQueryTime(f.dateTo);
-      if (f.search.trim()) params.search = f.search.trim();
+      if (f.dateFrom) params.date_from = f.dateFrom;
+      if (f.dateTo) params.date_to = f.dateTo;
       if (f.actorId) params.actor_id = f.actorId;
       if (f.ipAddress) params.ip_address = f.ipAddress;
       if (f.severity) params.severity = f.severity;
@@ -645,9 +505,10 @@ export default function AdminAuditLogsPage() {
             throw firstErr;
           }
         }
-        const items = res.items.map(normalizeAuditLogRow);
         setLogs((prev) =>
-          append ? mergeUniqueAuditRows(prev, items) : mergeUniqueAuditRows([], items),
+          append
+            ? [...prev, ...(res.items as AuditLogRow[])]
+            : (res.items as AuditLogRow[]),
         );
         setTotal(res.total_count);
         setNextCursor(res.next_cursor);
@@ -674,31 +535,13 @@ export default function AdminAuditLogsPage() {
   }, []);
 
   // Re-fetch when filters change (debounced for text inputs)
-  const scheduleFetch = useCallback(
+  const handleFilterChange = useCallback(
     (f: FilterState) => {
+      setFilters(f);
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => fetchLogs(f), 400);
     },
     [fetchLogs],
-  );
-
-  const handleFilterChange = useCallback(
-    (f: FilterState) => {
-      setFilters(f);
-      scheduleFetch(f);
-    },
-    [scheduleFetch],
-  );
-
-  const handleSearchChange = useCallback(
-    (search: string) => {
-      setFilters((prev) => {
-        const next = { ...prev, search };
-        scheduleFetch(next);
-        return next;
-      });
-    },
-    [scheduleFetch],
   );
 
   const handleClearFilters = useCallback(() => {
@@ -825,18 +668,8 @@ export default function AdminAuditLogsPage() {
         data={logs}
         rowKey={(row) => row.id}
         searchable
-        searchKeys={[
-          "search_text",
-          "action",
-          "actor_name",
-          "actor_email",
-          "actor_role",
-          "resource_type",
-          "resource_id",
-          "ip_address",
-        ]}
-        searchPlaceholder="Search users, profiles, payments..."
-        onSearchChange={handleSearchChange}
+        searchKeys={["action", "actor_email", "resource_type"]}
+        searchPlaceholder="Search audit logs..."
         initialSort={{ key: "inserted_at", direction: "desc" }}
         compareFns={{
           inserted_at: (a, b) =>

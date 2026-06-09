@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 
 vi.mock("@/lib/api/admin", () => ({
   listAuditLogs: vi.fn(),
@@ -19,10 +19,7 @@ const sampleLogs = {
     {
       id: "log1",
       actor_id: "u1",
-      actor_name: "Prasad Manyam",
       actor_email: "admin@rawdrive.in",
-      actor_role: "super_admin",
-      actor_status: "active",
       action: "user.suspended",
       resource_type: "user",
       resource_id: "u5",
@@ -33,7 +30,6 @@ const sampleLogs = {
     {
       id: "log2",
       actor_id: "u1",
-      actor_name: "Prasad Manyam",
       actor_email: "admin@rawdrive.in",
       action: "moderation.approved",
       resource_type: "gallery",
@@ -45,7 +41,6 @@ const sampleLogs = {
     {
       id: "log3",
       actor_id: "u2",
-      actor_name: "Support Agent",
       actor_email: "support@rawdrive.in",
       action: "user.role_changed",
       resource_type: "user",
@@ -78,14 +73,6 @@ describe("AdminAuditLogsPage", () => {
       expect(screen.getAllByText("admin@rawdrive.in").length).toBeGreaterThan(
         0,
       );
-    });
-  });
-
-  it("shows actor profile names", async () => {
-    render(<AdminAuditLogsPage />);
-    await waitFor(() => {
-      expect(screen.getAllByText("Prasad Manyam").length).toBeGreaterThan(0);
-      expect(screen.getByText("Support Agent")).toBeTruthy();
     });
   });
 
@@ -147,20 +134,6 @@ describe("AdminAuditLogsPage", () => {
       expect(mockListLogs).toHaveBeenCalledWith(
         "test-token",
         expect.any(Object),
-      );
-    });
-  });
-
-  it("passes table search to the audit logs API", async () => {
-    render(<AdminAuditLogsPage />);
-    const search = await screen.findByLabelText(
-      "Search users, profiles, payments...",
-    );
-    fireEvent.change(search, { target: { value: "payments" } });
-    await waitFor(() => {
-      expect(mockListLogs).toHaveBeenLastCalledWith(
-        "test-token",
-        expect.objectContaining({ search: "payments" }),
       );
     });
   });

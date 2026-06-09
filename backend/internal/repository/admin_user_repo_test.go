@@ -108,36 +108,19 @@ func TestAdminUserRow_Fields(t *testing.T) {
 	stateName := "Karnataka"
 	tier := "pro"
 	tierName := "Pro"
-	subscriptionStatus := "active"
-	subscriptionInterval := "monthly"
-	subscriptionAmount := int64(199900)
-	paymentProvider := "razorpay"
-	paymentStatus := "paid"
-	paymentAmount := int64(199900)
-	paymentOrderID := "order_test_123"
-	paymentID := "pay_test_123"
 	row := AdminUserRow{
-		ID:                        uuid.New(),
-		FullName:                  "Alice Sharma",
-		Email:                     "alice@example.com",
-		PlatformRole:              "photographer",
-		Status:                    "active",
-		StateID:                   &stateID,
-		StateName:                 &stateName,
-		TierSlug:                  &tier,
-		TierName:                  &tierName,
-		StorageUsed:               1024000,
-		WorkspaceCount:            2,
-		SubscriptionStatus:        &subscriptionStatus,
-		SubscriptionBillingPeriod: &subscriptionInterval,
-		SubscriptionAmountPaisa:   &subscriptionAmount,
-		TotalPaidPaisa:            599900,
-		LatestPaymentProvider:     &paymentProvider,
-		LatestPaymentStatus:       &paymentStatus,
-		LatestPaymentAmountPaisa:  &paymentAmount,
-		LatestPaymentOrderID:      &paymentOrderID,
-		LatestPaymentID:           &paymentID,
-		CreatedAt:                 now,
+		ID:             uuid.New(),
+		FullName:       "Alice Sharma",
+		Email:          "alice@example.com",
+		PlatformRole:   "photographer",
+		Status:         "active",
+		StateID:        &stateID,
+		StateName:      &stateName,
+		TierSlug:       &tier,
+		TierName:       &tierName,
+		StorageUsed:    1024000,
+		WorkspaceCount: 2,
+		CreatedAt:      now,
 	}
 	assert.NotEqual(t, uuid.Nil, row.ID)
 	assert.Equal(t, "Alice Sharma", row.FullName)
@@ -150,15 +133,6 @@ func TestAdminUserRow_Fields(t *testing.T) {
 	assert.Equal(t, "pro", *row.TierSlug)
 	assert.Equal(t, "Pro", *row.TierName)
 	assert.Equal(t, int64(1024000), row.StorageUsed)
-	assert.Equal(t, "active", *row.SubscriptionStatus)
-	assert.Equal(t, "monthly", *row.SubscriptionBillingPeriod)
-	assert.Equal(t, int64(199900), *row.SubscriptionAmountPaisa)
-	assert.Equal(t, int64(599900), row.TotalPaidPaisa)
-	assert.Equal(t, "razorpay", *row.LatestPaymentProvider)
-	assert.Equal(t, "paid", *row.LatestPaymentStatus)
-	assert.Equal(t, int64(199900), *row.LatestPaymentAmountPaisa)
-	assert.Equal(t, "order_test_123", *row.LatestPaymentOrderID)
-	assert.Equal(t, "pay_test_123", *row.LatestPaymentID)
 	assert.Equal(t, now, row.CreatedAt)
 }
 
@@ -216,33 +190,6 @@ func TestAdminUserRow_JSONFieldNames(t *testing.T) {
 	expected := []string{"id", "full_name", "email", "platform_role", "status", "storage_used", "workspace_count", "created_at"}
 	for _, key := range expected {
 		assert.Contains(t, decoded, key, "expected snake_case JSON key %q on AdminUserRow", key)
-	}
-}
-
-func TestAdminUserPaymentEvent_JSONFieldNames(t *testing.T) {
-	now := time.Now()
-	reference := "order_test_123"
-	paymentID := "pay_test_123"
-	event := AdminUserPaymentEvent{
-		ID:                uuid.New(),
-		Source:            "billing_order",
-		Provider:          "razorpay",
-		Status:            "paid",
-		AmountPaisa:       199900,
-		Currency:          "INR",
-		Reference:         &reference,
-		ProviderOrderID:   &reference,
-		ProviderPaymentID: &paymentID,
-		CreatedAt:         now,
-	}
-
-	data, err := json.Marshal(event)
-	require.NoError(t, err)
-
-	var decoded map[string]interface{}
-	require.NoError(t, json.Unmarshal(data, &decoded))
-	for _, key := range []string{"id", "source", "provider", "status", "amount_paise", "currency", "provider_order_id", "provider_payment_id", "created_at"} {
-		assert.Contains(t, decoded, key)
 	}
 }
 

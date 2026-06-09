@@ -48,30 +48,6 @@ func TestParseAuditLogTime_DateOnly_BackwardCompat(t *testing.T) {
 	}
 }
 
-func TestParseAuditLogTime_DateTimeLocal(t *testing.T) {
-	tt, err := parseAuditLogTime("2026-04-01T12:34")
-	if err != nil {
-		t.Fatalf("datetime-local value must parse, got %v", err)
-	}
-	if tt == nil || tt.Year() != 2026 || tt.Month() != 4 || tt.Day() != 1 || tt.Hour() != 12 || tt.Minute() != 34 {
-		t.Fatalf("unexpected parsed datetime-local value: %v", tt)
-	}
-}
-
-func TestAuditLogFilterFromQuery_SearchAndActorTerm(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/audit-logs?search=payments&actor=prasad", nil)
-	filter, err := auditLogFilterFromQuery(req.URL.Query())
-	if err != nil {
-		t.Fatalf("filter parse must not error: %v", err)
-	}
-	if filter.Search != "payments" {
-		t.Fatalf("expected search term to round-trip, got %q", filter.Search)
-	}
-	if filter.ActorTerm != "prasad" {
-		t.Fatalf("expected actor term to round-trip, got %q", filter.ActorTerm)
-	}
-}
-
 func TestParseAuditLogTime_Garbage_Returns400(t *testing.T) {
 	tt, err := parseAuditLogTime("notadate")
 	if err == nil {

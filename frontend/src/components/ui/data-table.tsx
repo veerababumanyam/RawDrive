@@ -140,11 +140,6 @@ export function DataTable<T extends Record<string, unknown>>({
     onSearchChange?.(q);
   };
 
-  const handleClearAllFilters = () => {
-    table.clearAllFilters();
-    onSearchChange?.("");
-  };
-
   // ─── Loading ──
   if (loading) {
     return (
@@ -222,7 +217,7 @@ export function DataTable<T extends Record<string, unknown>>({
             {hasActiveFilters && (
               <button
                 type="button"
-                onClick={handleClearAllFilters}
+                onClick={table.clearAllFilters}
                 className="touch-min inline-flex items-center gap-1.5 rounded-xl px-3 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-container-high hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
               >
                 <XMark className="h-3.5 w-3.5" />
