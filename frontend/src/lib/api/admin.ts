@@ -11,6 +11,7 @@ export interface AdminUser {
   id: string;
   email: string;
   phone?: string;
+  avatar_url?: string;
   full_name: string;
   platform_role: string;
   status: UserStatus;
@@ -18,13 +19,40 @@ export interface AdminUser {
   state_name?: string;
   tier_slug?: string;
   tier_name?: string;
+  storage_used: number;
   workspace_count: number;
+  subscription_status?: string;
+  subscription_amount_paisa?: number;
+  subscription_billing_interval?: string;
+  subscription_expires_at?: string;
+  total_paid_paise?: number;
+  latest_payment_provider?: string;
+  latest_payment_status?: string;
+  latest_payment_amount_paise?: number;
+  latest_payment_at?: string;
+  latest_payment_reference?: string;
+  latest_payment_order_id?: string;
+  latest_payment_id?: string;
+  search_text?: string;
   created_at: string;
   last_login_at?: string;
 }
 
+export interface AdminUserPaymentEvent {
+  id: string;
+  source: string;
+  provider: string;
+  status: string;
+  amount_paise: number;
+  currency: string;
+  reference?: string;
+  provider_order_id?: string;
+  provider_payment_id?: string;
+  paid_at?: string;
+  created_at: string;
+}
+
 export interface AdminUserDetail extends AdminUser {
-  avatar_url?: string;
   subscription?: {
     plan_id: string;
     plan_name: string;
@@ -33,6 +61,7 @@ export interface AdminUserDetail extends AdminUser {
     expires_at?: string;
   };
   workspaces: { id: string; name: string; type: string; role: string }[];
+  payment_events?: AdminUserPaymentEvent[];
   recent_audit_logs: AuditLogEntry[];
 }
 
@@ -55,7 +84,11 @@ export interface RevenueData {
   arr_paisa: number;
   churn_rate: number;
   total_subscribers: number;
-  state_breakdown: { state_name: string; revenue_paisa: number; subscriber_count: number }[];
+  state_breakdown: {
+    state_name: string;
+    revenue_paisa: number;
+    subscriber_count: number;
+  }[];
 }
 
 export interface RevenueTimeSeries {
@@ -230,7 +263,11 @@ export interface AuditLogEntry {
   id: string;
   actor_id: string;
   actor_type?: string;
+  actor_name?: string;
   actor_email?: string;
+  actor_avatar_url?: string;
+  actor_role?: string;
+  actor_status?: string;
   action: string;
   resource_type: string;
   resource_id?: string;
@@ -240,9 +277,10 @@ export interface AuditLogEntry {
   ip_address?: string;
   user_agent?: string;
   workspace_id?: string;
-  state_id?: string;
+  state_id?: string | number;
   severity: string;
   inserted_at: string;
+  search_text?: string;
 }
 
 export interface WorkspaceOverview {
@@ -286,7 +324,11 @@ const headers = (token: string) => ({
   "Content-Type": "application/json",
 });
 
-async function get<T>(_token: string, path: string, params?: Record<string, string>): Promise<T> {
+async function get<T>(
+  _token: string,
+  path: string,
+  params?: Record<string, string>,
+): Promise<T> {
   const query = params ? `?${new URLSearchParams(params).toString()}` : "";
   const res = await authFetch(`/api/v1/admin${path}${query}`);
   if (!res.ok) throw new Error(`Admin API error: ${res.status}`);
@@ -303,7 +345,11 @@ async function put<T>(_token: string, path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-async function post<T>(_token: string, path: string, body?: unknown): Promise<T> {
+async function post<T>(
+  _token: string,
+  path: string,
+  body?: unknown,
+): Promise<T> {
   const res = await authFetch(`/api/v1/admin${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -315,15 +361,25 @@ async function post<T>(_token: string, path: string, body?: unknown): Promise<T>
 
 // ── User Management ──
 
-export async function listUsers(token: string, params?: Record<string, string>): Promise<PaginatedResponse<AdminUser>> {
+export async function listUsers(
+  token: string,
+  params?: Record<string, string>,
+): Promise<PaginatedResponse<AdminUser>> {
   return get(token, "/users", params);
 }
 
-export async function getUserDetail(token: string, id: string): Promise<AdminUserDetail> {
+export async function getUserDetail(
+  token: string,
+  id: string,
+): Promise<AdminUserDetail> {
   return get(token, `/users/${id}`);
 }
 
-export async function suspendUser(token: string, id: string, reason: string): Promise<void> {
+export async function suspendUser(
+  token: string,
+  id: string,
+  reason: string,
+): Promise<void> {
   await post(token, `/users/${id}/suspend`, { reason });
 }
 
@@ -331,17 +387,28 @@ export async function reactivateUser(token: string, id: string): Promise<void> {
   await post(token, `/users/${id}/reactivate`);
 }
 
-export async function impersonateUser(token: string, id: string): Promise<{ token: string }> {
+export async function impersonateUser(
+  token: string,
+  id: string,
+): Promise<{ token: string }> {
   return post(token, `/users/${id}/impersonate`);
 }
 
-export async function changeUserRole(token: string, id: string, role: string): Promise<void> {
+export async function changeUserRole(
+  token: string,
+  id: string,
+  role: string,
+): Promise<void> {
   // Backend handler (admin_users.go ChangeRole) expects { role: string }.
   // The body was previously { platform_role } which returned 400 "role is required".
   await put(token, `/users/${id}/role`, { role });
 }
 
-export async function changeUserTier(token: string, id: string, tier: string): Promise<void> {
+export async function changeUserTier(
+  token: string,
+  id: string,
+  tier: string,
+): Promise<void> {
   await put(token, `/users/${id}/tier`, { tier });
 }
 
@@ -355,29 +422,49 @@ export async function deleteUser(token: string, id: string): Promise<void> {
 
 // ── Moderation ──
 
-export async function listModerationQueue(token: string, params?: Record<string, string>): Promise<PaginatedResponse<ModerationItem>> {
+export async function listModerationQueue(
+  token: string,
+  params?: Record<string, string>,
+): Promise<PaginatedResponse<ModerationItem>> {
   return get(token, "/moderation", params);
 }
 
-export async function approveModeration(token: string, id: string): Promise<void> {
+export async function approveModeration(
+  token: string,
+  id: string,
+): Promise<void> {
   await put(token, `/moderation/${id}/approve`, {});
 }
 
-export async function rejectModeration(token: string, id: string, reason: string): Promise<void> {
+export async function rejectModeration(
+  token: string,
+  id: string,
+  reason: string,
+): Promise<void> {
   await put(token, `/moderation/${id}/reject`, { reason });
 }
 
-export async function escalateModeration(token: string, id: string, notes: string): Promise<void> {
+export async function escalateModeration(
+  token: string,
+  id: string,
+  notes: string,
+): Promise<void> {
   await put(token, `/moderation/${id}/escalate`, { notes });
 }
 
 // ── Workspaces ──
 
-export async function listWorkspaces(token: string, params?: Record<string, string>): Promise<PaginatedResponse<WorkspaceOverview>> {
+export async function listWorkspaces(
+  token: string,
+  params?: Record<string, string>,
+): Promise<PaginatedResponse<WorkspaceOverview>> {
   return get(token, "/workspaces", params);
 }
 
-export async function getWorkspaceDetail(token: string, id: string): Promise<WorkspaceOverview> {
+export async function getWorkspaceDetail(
+  token: string,
+  id: string,
+): Promise<WorkspaceOverview> {
   return get(token, `/workspaces/${id}`);
 }
 
@@ -469,7 +556,10 @@ export async function grantUploadCredits(
   // Try to parse the structured error envelope; fall back to status text.
   let message = `HTTP ${res.status}`;
   try {
-    const payload = (await res.json()) as { error_code?: string; error?: string };
+    const payload = (await res.json()) as {
+      error_code?: string;
+      error?: string;
+    };
     if (payload.error_code === "GRANT_CAP_EXCEEDED") {
       message = "Amount exceeds the per-grant cap of 100,000 credits.";
     } else if (payload.error) {
@@ -487,15 +577,22 @@ export async function getRevenueDashboard(token: string): Promise<RevenueData> {
   return get(token, "/revenue");
 }
 
-export async function getRevenueTimeSeries(token: string, params?: Record<string, string>): Promise<RevenueTimeSeries[]> {
+export async function getRevenueTimeSeries(
+  token: string,
+  params?: Record<string, string>,
+): Promise<RevenueTimeSeries[]> {
   return get(token, "/revenue/timeseries", params);
 }
 
-export async function getRevenueStateBreakdown(token: string): Promise<RevenueData["state_breakdown"]> {
+export async function getRevenueStateBreakdown(
+  token: string,
+): Promise<RevenueData["state_breakdown"]> {
   return get(token, "/revenue/states");
 }
 
-function revenueRecordParams(params: RevenueRecordFilter): Record<string, string> {
+function revenueRecordParams(
+  params: RevenueRecordFilter,
+): Record<string, string> {
   const query: Record<string, string> = { state_id: String(params.state_id) };
   if (params.district) query.district = params.district;
   return query;
@@ -513,9 +610,12 @@ export async function downloadRevenueRecordsPDF(
   params: RevenueRecordFilter,
 ): Promise<Blob> {
   const query = new URLSearchParams(revenueRecordParams(params)).toString();
-  const res = await fetch(`${API_BASE}/api/v1/admin/revenue/records/pdf?${query}`, {
-    headers: headers(token),
-  });
+  const res = await fetch(
+    `${API_BASE}/api/v1/admin/revenue/records/pdf?${query}`,
+    {
+      headers: headers(token),
+    },
+  );
   if (!res.ok) throw new Error("PDF export failed");
   return res.blob();
 }
@@ -529,7 +629,9 @@ export async function emailRevenueRecordsToDealer(
 
 // ── Analytics ──
 
-export async function getEngagementMetrics(token: string): Promise<EngagementMetrics> {
+export async function getEngagementMetrics(
+  token: string,
+): Promise<EngagementMetrics> {
   return get(token, "/analytics/engagement");
 }
 
@@ -537,7 +639,9 @@ export async function getGrowthMetrics(token: string): Promise<GrowthMetrics> {
   return get(token, "/analytics/growth");
 }
 
-export async function getFeatureAdoption(token: string): Promise<FeatureAdoption[]> {
+export async function getFeatureAdoption(
+  token: string,
+): Promise<FeatureAdoption[]> {
   return get(token, "/analytics/features");
 }
 
@@ -552,16 +656,26 @@ export async function getBillingAnalyticsDashboard(
 
 // ── Export ──
 
-export async function exportUsers(token: string, params?: Record<string, string>): Promise<Blob> {
+export async function exportUsers(
+  token: string,
+  params?: Record<string, string>,
+): Promise<Blob> {
   const query = params ? `?${new URLSearchParams(params).toString()}` : "";
-  const res = await fetch(`${API_BASE}/api/v1/admin/export/users${query}`, { headers: headers(token) });
+  const res = await fetch(`${API_BASE}/api/v1/admin/export/users${query}`, {
+    headers: headers(token),
+  });
   if (!res.ok) throw new Error("Export failed");
   return res.blob();
 }
 
-export async function exportRevenue(token: string, params?: Record<string, string>): Promise<Blob> {
+export async function exportRevenue(
+  token: string,
+  params?: Record<string, string>,
+): Promise<Blob> {
   const query = params ? `?${new URLSearchParams(params).toString()}` : "";
-  const res = await fetch(`${API_BASE}/api/v1/admin/export/revenue${query}`, { headers: headers(token) });
+  const res = await fetch(`${API_BASE}/api/v1/admin/export/revenue${query}`, {
+    headers: headers(token),
+  });
   if (!res.ok) throw new Error("Export failed");
   return res.blob();
 }
@@ -574,7 +688,10 @@ export async function getSystemMetrics(token: string): Promise<SystemMetrics> {
 
 // ── Platform Settings ──
 
-export async function listPlatformSettings(token: string, category: string): Promise<PlatformSetting[]> {
+export async function listPlatformSettings(
+  token: string,
+  category: string,
+): Promise<PlatformSetting[]> {
   return get(token, `/settings/${encodeURIComponent(category)}`);
 }
 
@@ -584,22 +701,38 @@ export async function savePlatformSetting(
   key: string,
   body: { value: string; is_secret: boolean; description?: string },
 ): Promise<{ status: string }> {
-  return put(token, `/settings/${encodeURIComponent(category)}/${encodeURIComponent(key)}`, body);
+  return put(
+    token,
+    `/settings/${encodeURIComponent(category)}/${encodeURIComponent(key)}`,
+    body,
+  );
 }
 
 // ── Audit Logs ──
 
-export async function listAuditLogs(token: string, params?: Record<string, string>): Promise<PaginatedResponse<AuditLogEntry>> {
+export async function listAuditLogs(
+  token: string,
+  params?: Record<string, string>,
+): Promise<PaginatedResponse<AuditLogEntry>> {
   return get(token, "/audit-logs", params);
 }
 
-export async function getAuditLogDetail(token: string, id: string): Promise<AuditLogEntry> {
+export async function getAuditLogDetail(
+  token: string,
+  id: string,
+): Promise<AuditLogEntry> {
   return get(token, `/audit-logs/${id}`);
 }
 
-export async function exportAuditLogs(token: string, params?: Record<string, string>): Promise<Blob> {
+export async function exportAuditLogs(
+  token: string,
+  params?: Record<string, string>,
+): Promise<Blob> {
   const query = params ? `?${new URLSearchParams(params).toString()}` : "";
-  const res = await fetch(`${API_BASE}/api/v1/admin/audit-logs/export${query}`, { headers: headers(token) });
+  const res = await fetch(
+    `${API_BASE}/api/v1/admin/audit-logs/export${query}`,
+    { headers: headers(token) },
+  );
   if (!res.ok) throw new Error("Export failed");
   return res.blob();
 }
@@ -618,7 +751,7 @@ export interface WorkspacePolicyResponse {
 
 export async function getWorkspaceUploadPolicy(
   token: string,
-  workspaceId: string
+  workspaceId: string,
 ): Promise<WorkspacePolicyResponse> {
   return get(token, `/workspaces/${workspaceId}/upload-policy`);
 }
@@ -626,7 +759,7 @@ export async function getWorkspaceUploadPolicy(
 export async function setWorkspaceUploadPolicy(
   token: string,
   workspaceId: string,
-  mode: UploadPolicyMode
+  mode: UploadPolicyMode,
 ): Promise<WorkspacePolicyResponse> {
   const res = await fetch(
     `${API_BASE}/api/v1/admin/workspaces/${workspaceId}/upload-policy`,
@@ -634,7 +767,7 @@ export async function setWorkspaceUploadPolicy(
       method: "PUT",
       headers: headers(token),
       body: JSON.stringify({ mode }),
-    }
+    },
   );
   if (!res.ok) {
     throw new Error(`Failed to set policy: ${res.status}`);
@@ -658,7 +791,7 @@ export interface BlockedAssetRow {
 export async function listUploadModerationQueue(
   token: string,
   workspaceId: string,
-  params?: { limit?: number; offset?: number }
+  params?: { limit?: number; offset?: number },
 ): Promise<{ queue: BlockedAssetRow[] }> {
   const q: Record<string, string> = { workspace_id: workspaceId };
   if (params?.limit !== undefined) q.limit = String(params.limit);
@@ -676,7 +809,7 @@ export async function overrideUploadBlock(
   token: string,
   assetId: string,
   justification: string,
-  ttlHours = 24
+  ttlHours = 24,
 ): Promise<OverrideResponse> {
   const res = await fetch(
     `${API_BASE}/api/v1/admin/upload-moderation/${assetId}/override`,
@@ -684,7 +817,7 @@ export async function overrideUploadBlock(
       method: "POST",
       headers: headers(token),
       body: JSON.stringify({ justification, ttl_hours: ttlHours }),
-    }
+    },
   );
   if (!res.ok) throw new Error(`Override failed: ${res.status}`);
   return res.json();
@@ -705,7 +838,7 @@ export interface UploadModerationAnalytics {
 export async function getUploadModerationAnalytics(
   token: string,
   workspaceId: string,
-  since?: string
+  since?: string,
 ): Promise<UploadModerationAnalytics> {
   const q: Record<string, string> = { workspace_id: workspaceId };
   if (since) q.since = since;
@@ -790,11 +923,11 @@ export async function listAdminPlans(token: string): Promise<AdminPlan[]> {
   return Array.isArray(body.plans) ? body.plans : [];
 }
 
-export async function getAdminPricingCatalog(
-  token: string,
-): Promise<Required<Omit<AdminPricingCatalogResponse, "generated_at">> & {
-  generated_at?: string;
-}> {
+export async function getAdminPricingCatalog(token: string): Promise<
+  Required<Omit<AdminPricingCatalogResponse, "generated_at">> & {
+    generated_at?: string;
+  }
+> {
   const res = await fetch(`${API_BASE}/api/v1/admin/pricing-catalog`, {
     headers: headers(token),
   });
@@ -981,7 +1114,10 @@ export function publishPricingChangeRequest(
  * Rejects superadmin role, duplicate email, or invalid email with
  * a thrown Error whose message contains the backend `code`.
  */
-export async function createUser(token: string, input: CreateUserInput): Promise<AdminUserDetail> {
+export async function createUser(
+  token: string,
+  input: CreateUserInput,
+): Promise<AdminUserDetail> {
   const res = await fetch(`${API_BASE}/api/v1/admin/users`, {
     method: "POST",
     headers: headers(token),
@@ -1002,7 +1138,10 @@ export async function createUser(token: string, input: CreateUserInput): Promise
 /**
  * Soft-delete a dealer (204 on success, 404 missing, 409 already deleted).
  */
-export async function deleteDealer(token: string, dealerId: string): Promise<void> {
+export async function deleteDealer(
+  token: string,
+  dealerId: string,
+): Promise<void> {
   const res = await fetch(`${API_BASE}/api/v1/admin/dealers/${dealerId}`, {
     method: "DELETE",
     headers: headers(token),
@@ -1021,13 +1160,20 @@ export async function deleteDealer(token: string, dealerId: string): Promise<voi
  * Search admin dealers by business name / email / phone (q=). Preserves
  * pagination contract of GET /api/v1/admin/dealers.
  */
-export async function searchDealers(token: string, q: string, limit = 20): Promise<unknown[]> {
+export async function searchDealers(
+  token: string,
+  q: string,
+  limit = 20,
+): Promise<unknown[]> {
   const params = new URLSearchParams();
   if (q) params.set("q", q);
   if (limit) params.set("limit", String(limit));
-  const res = await fetch(`${API_BASE}/api/v1/admin/dealers?${params.toString()}`, {
-    headers: headers(token),
-  });
+  const res = await fetch(
+    `${API_BASE}/api/v1/admin/dealers?${params.toString()}`,
+    {
+      headers: headers(token),
+    },
+  );
   if (!res.ok) throw new Error(`Dealers search failed: ${res.status}`);
   return res.json();
 }

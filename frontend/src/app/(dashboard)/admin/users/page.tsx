@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
 import {
   listUsers,
+  getUserDetail,
   suspendUser,
   reactivateUser,
   deleteUser,
@@ -13,9 +14,11 @@ import {
   listAdminPlans,
   type AdminPlan,
   type AdminUser,
+  type AdminUserDetail,
+  type AdminUserPaymentEvent,
 } from "@/lib/api/admin";
 import { requestPasswordReset } from "@/lib/api/auth";
-import { Download, UserPlus } from "lucide-react";
+import { Download, UserPlus, X } from "lucide-react";
 import { DataTable, type ColumnDef } from "@/components/ui/data-table";
 // Issue #4: the M39 E5-S2 NewUserDialog ships the create flow but was
 // never wired to the admin users page — QA #4 in RawDrive_NewUniqueIssues
@@ -108,7 +111,296 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+function formatPaisa(value?: number | null) {
+  if (!value) return "Rs. 0";
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(value / 100);
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "—";
+  return new Date(value).toLocaleString(undefined, { timeZoneName: "short" });
+}
+
+function formatBytes(value?: number | null) {
+  if (!value) return "0 GB";
+  const gb = value / 2 ** 30;
+  return `${gb >= 10 ? gb.toFixed(0) : gb.toFixed(1)} GB`;
+}
+
+function userInitials(user: Pick<AdminUser, "full_name" | "email">) {
+  const label = (user.full_name || user.email || "U").trim();
+  const parts = label.split(/\s+/).filter(Boolean);
+  if (parts.length > 1) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return label.slice(0, 2).toUpperCase();
+}
+
+function buildUserSearchText(user: AdminUser) {
+  return [
+    user.search_text,
+    user.full_name,
+    user.email,
+    user.phone,
+    user.platform_role,
+    user.status,
+    user.state_name,
+    user.tier_slug,
+    user.tier_name,
+    user.subscription_status,
+    user.subscription_billing_interval,
+    user.latest_payment_provider,
+    user.latest_payment_status,
+    user.latest_payment_reference,
+    user.latest_payment_order_id,
+    user.latest_payment_id,
+    user.total_paid_paise,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 type UserRow = AdminUser & Record<string, unknown>;
+
+function normalizeUserRow(user: AdminUser): UserRow {
+  return {
+    ...user,
+    search_text: buildUserSearchText(user),
+  } as UserRow;
+}
+
+function DetailField({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value?: string | number | null;
+  mono?: boolean;
+}) {
+  return (
+    <div>
+      <p className="text-[11px] font-label uppercase tracking-[0.12em] text-text-tertiary">
+        {label}
+      </p>
+      <p
+        className={`mt-1 break-words text-sm text-on-surface ${
+          mono ? "font-mono text-xs" : "font-medium"
+        }`}
+      >
+        {value || "—"}
+      </p>
+    </div>
+  );
+}
+
+function PaymentEventList({ events }: { events?: AdminUserPaymentEvent[] }) {
+  if (!events?.length) {
+    return <p className="text-sm text-text-tertiary">No payment records.</p>;
+  }
+  return (
+    <div className="space-y-2">
+      {events.map((event) => (
+        <div
+          key={event.id}
+          className="rounded-lg border border-border-subtle bg-surface-container-low p-3"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-semibold text-on-surface">
+              {formatPaisa(event.amount_paise)}
+            </span>
+            <span className="micro-badge border border-border-subtle bg-surface-container-high text-text-secondary">
+              {event.status}
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-text-tertiary">
+            {event.provider} · {event.source} ·{" "}
+            {formatDateTime(event.paid_at || event.created_at)}
+          </p>
+          {(event.provider_order_id || event.provider_payment_id) && (
+            <p className="mt-1 break-all font-mono text-[11px] text-text-tertiary">
+              {event.provider_order_id || event.provider_payment_id}
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function UserProfileDrawer({
+  user,
+  loading,
+  error,
+  onClose,
+}: {
+  user: AdminUserDetail | UserRow | null;
+  loading: boolean;
+  error?: string | null;
+  onClose: () => void;
+}) {
+  if (!user) return null;
+  const detail = user as Partial<AdminUserDetail>;
+  const workspaces = Array.isArray(detail.workspaces) ? detail.workspaces : [];
+  const paymentEvents = Array.isArray(detail.payment_events)
+    ? detail.payment_events
+    : [];
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="admin-user-profile-title"
+      className="fixed inset-0 z-50 flex justify-end bg-surface-scrim-strong/40 glass-blur-subtle"
+    >
+      <div className="h-full w-full max-w-2xl overflow-y-auto border-l border-border-subtle bg-surface-container p-6 shadow-2xl">
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
+            {user.avatar_url ? (
+              <img
+                src={user.avatar_url}
+                alt=""
+                className="h-14 w-14 rounded-full border border-border-subtle object-cover"
+              />
+            ) : (
+              <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full border border-border-subtle bg-surface-container-high text-base font-bold text-accent">
+                {userInitials(user)}
+              </span>
+            )}
+            <div className="min-w-0">
+              <h3
+                id="admin-user-profile-title"
+                className="truncate text-2xl font-bold text-on-surface"
+              >
+                {user.full_name || user.email}
+              </h3>
+              <p className="truncate text-sm text-text-tertiary">
+                {user.email}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid h-10 w-10 place-items-center rounded-full border border-border-subtle text-text-secondary hover:bg-surface-container-high hover:text-on-surface"
+            aria-label="Close user profile"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {loading && (
+          <p className="mb-4 text-sm text-text-tertiary" aria-live="polite">
+            Loading complete profile...
+          </p>
+        )}
+        {error && (
+          <p className="mb-4 rounded-lg border border-feedback-error/30 bg-feedback-error/10 px-3 py-2 text-sm text-feedback-error">
+            {error}
+          </p>
+        )}
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <DetailField label="Role" value={user.platform_role} />
+          <DetailField label="Status" value={user.status} />
+          <DetailField label="Phone" value={user.phone} />
+          <DetailField label="State" value={user.state_name} />
+          <DetailField label="Tier" value={user.tier_name || user.tier_slug} />
+          <DetailField
+            label="Subscription"
+            value={[
+              user.subscription_status,
+              user.subscription_billing_interval,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          />
+          <DetailField
+            label="Subscription Amount"
+            value={formatPaisa(user.subscription_amount_paisa)}
+          />
+          <DetailField
+            label="Subscription Expires"
+            value={formatDateTime(user.subscription_expires_at)}
+          />
+          <DetailField
+            label="Total Paid"
+            value={formatPaisa(user.total_paid_paise)}
+          />
+          <DetailField
+            label="Latest Payment"
+            value={[
+              user.latest_payment_provider,
+              user.latest_payment_status,
+              formatPaisa(user.latest_payment_amount_paise),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          />
+          <DetailField
+            label="Latest Order"
+            value={user.latest_payment_order_id}
+            mono
+          />
+          <DetailField
+            label="Latest Payment ID"
+            value={user.latest_payment_id || user.latest_payment_reference}
+            mono
+          />
+          <DetailField
+            label="Storage Used"
+            value={formatBytes(user.storage_used)}
+          />
+          <DetailField label="Workspaces" value={user.workspace_count} />
+          <DetailField
+            label="Last Login"
+            value={formatDateTime(user.last_login_at)}
+          />
+          <DetailField
+            label="Created"
+            value={formatDateTime(user.created_at)}
+          />
+        </div>
+
+        <div className="mt-8 space-y-6">
+          <section>
+            <h4 className="mb-3 text-sm font-semibold uppercase tracking-[0.12em] text-text-secondary">
+              Recent payments
+            </h4>
+            <PaymentEventList events={paymentEvents} />
+          </section>
+
+          <section>
+            <h4 className="mb-3 text-sm font-semibold uppercase tracking-[0.12em] text-text-secondary">
+              Workspaces
+            </h4>
+            {workspaces.length > 0 ? (
+              <div className="space-y-2">
+                {workspaces.map((workspace) => (
+                  <div
+                    key={workspace.id}
+                    className="rounded-lg border border-border-subtle bg-surface-container-low p-3"
+                  >
+                    <p className="text-sm font-semibold text-on-surface">
+                      {workspace.name}
+                    </p>
+                    <p className="text-xs text-text-tertiary">
+                      {workspace.role}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-text-tertiary">No workspaces.</p>
+            )}
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -117,6 +409,13 @@ export default function AdminUsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [planOptions, setPlanOptions] = useState<AdminPlan[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedUser, setSelectedUser] = useState<
+    AdminUserDetail | UserRow | null
+  >(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   // Issue #4: modal state for admin-initiated user creation.
   const [createOpen, setCreateOpen] = useState(false);
   const [pendingRoleChange, setPendingRoleChange] = useState<{
@@ -140,11 +439,13 @@ export default function AdminUsersPage() {
     name: string;
   } | null>(null);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async (search = "") => {
     const token = getStoredAccessToken();
     try {
-      const res = await listUsers(token, {});
-      setUsers(res.items as UserRow[]);
+      const params: Record<string, string> = {};
+      if (search.trim()) params.search = search.trim();
+      const res = await listUsers(token, params);
+      setUsers(res.items.map(normalizeUserRow));
       setTotal(res.total_count);
       setError(null);
     } catch {
@@ -153,13 +454,50 @@ export default function AdminUsersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  const refreshUsers = useCallback(() => {
+    void fetchUsers(searchQuery);
+  }, [fetchUsers, searchQuery]);
 
   useEffect(() => {
     async function initialFetch() {
       await fetchUsers();
     }
     void initialFetch();
+  }, [fetchUsers]);
+
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, []);
+
+  const handleSearchChange = useCallback(
+    (query: string) => {
+      setSearchQuery(query);
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = setTimeout(() => {
+        setLoading(true);
+        void fetchUsers(query);
+      }, 350);
+    },
+    [fetchUsers],
+  );
+
+  const handleSelectUser = useCallback(async (row: UserRow) => {
+    const token = getStoredAccessToken();
+    setSelectedUser(row);
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const detail = await getUserDetail(token, row.id);
+      setSelectedUser(detail);
+    } catch {
+      setDetailError("Could not load the complete user profile.");
+    } finally {
+      setDetailLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -182,7 +520,7 @@ export default function AdminUsersPage() {
     try {
       const token = getStoredAccessToken();
       await suspendUser(token, id, "Admin action");
-      fetchUsers();
+      refreshUsers();
     } catch (err) {
       setError(
         err instanceof Error
@@ -196,7 +534,7 @@ export default function AdminUsersPage() {
     try {
       const token = getStoredAccessToken();
       await reactivateUser(token, id);
-      fetchUsers();
+      refreshUsers();
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to reactivate user",
@@ -215,7 +553,7 @@ export default function AdminUsersPage() {
     try {
       const token = getStoredAccessToken();
       await deleteUser(token, id);
-      fetchUsers();
+      refreshUsers();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete user");
     }
@@ -238,7 +576,7 @@ export default function AdminUsersPage() {
     try {
       const token = getStoredAccessToken();
       await changeUserRole(token, id, newRole);
-      fetchUsers();
+      refreshUsers();
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to change user role",
@@ -263,7 +601,7 @@ export default function AdminUsersPage() {
     try {
       const token = getStoredAccessToken();
       await changeUserTier(token, id, newTier);
-      fetchUsers();
+      refreshUsers();
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to change user tier",
@@ -317,10 +655,28 @@ export default function AdminUsersPage() {
       key: "full_name",
       label: "Name",
       sortable: true,
-      render: (value) => (
-        <span className="text-sm font-semibold text-on-surface">
-          {String(value ?? "")}
-        </span>
+      render: (_value, row) => (
+        <div className="flex min-w-56 items-center gap-3">
+          {row.avatar_url ? (
+            <img
+              src={row.avatar_url as string}
+              alt=""
+              className="h-10 w-10 rounded-full border border-border-subtle object-cover"
+            />
+          ) : (
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-border-subtle bg-surface-container-high text-xs font-bold text-accent">
+              {userInitials(row)}
+            </span>
+          )}
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold text-on-surface">
+              {String(row.full_name || row.email || "")}
+            </span>
+            <span className="block truncate text-xs text-text-tertiary">
+              {row.phone || row.state_name || "Profile"}
+            </span>
+          </span>
+        </div>
       ),
     },
     {
@@ -389,6 +745,54 @@ export default function AdminUsersPage() {
           {value ? String(value) : "\u2014"}
         </span>
       ),
+    },
+    {
+      key: "latest_payment_provider",
+      label: "Payment",
+      sortable: true,
+      accessor: (row) =>
+        row.latest_payment_at ||
+        row.latest_payment_provider ||
+        row.total_paid_paise,
+      render: (_value, row) => {
+        const hasPayment =
+          row.latest_payment_provider ||
+          row.latest_payment_status ||
+          row.latest_payment_amount_paise ||
+          row.total_paid_paise;
+        if (!hasPayment) {
+          return (
+            <span className="text-sm text-text-tertiary">No payments</span>
+          );
+        }
+        const amount =
+          (row.latest_payment_amount_paise as number | undefined) ??
+          (row.total_paid_paise as number | undefined);
+        return (
+          <div className="min-w-44">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-on-surface">
+                {formatPaisa(amount)}
+              </span>
+              {row.latest_payment_status && (
+                <span className="micro-badge border border-border-subtle bg-surface-container-high text-text-secondary">
+                  {String(row.latest_payment_status)}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 truncate text-xs text-text-tertiary">
+              {[
+                row.latest_payment_provider,
+                row.latest_payment_order_id,
+                row.latest_payment_id,
+              ]
+                .filter(Boolean)
+                .join(" · ") ||
+                `Total ${formatPaisa(row.total_paid_paise as number)}`}
+            </p>
+          </div>
+        );
+      },
     },
     {
       key: "workspace_count",
@@ -464,9 +868,9 @@ export default function AdminUsersPage() {
                   )
                 }
                 className="appearance-none bg-surface-container-lowest border border-text-media/10 rounded-lg px-2 py-1 text-xs text-primary cursor-pointer [&_option]:bg-[var(--surface-container-lowest)] [&_option]:text-[var(--on-surface)]"
-              aria-label={`Change tier for ${row.full_name}`}
-              title="Change subscription tier"
-            >
+                aria-label={`Change tier for ${row.full_name}`}
+                title="Change subscription tier"
+              >
                 {(planOptions.length > 0
                   ? planOptions
                   : [
@@ -551,8 +955,20 @@ export default function AdminUsersPage() {
         data={users}
         rowKey={(row) => row.id}
         searchable
-        searchPlaceholder="Search users by name or email..."
-        searchKeys={["full_name", "email"]}
+        searchPlaceholder="Search profiles, phones, plans, payments..."
+        searchKeys={[
+          "search_text",
+          "full_name",
+          "email",
+          "phone",
+          "state_name",
+          "tier_name",
+          "latest_payment_provider",
+          "latest_payment_order_id",
+          "latest_payment_id",
+        ]}
+        onSearchChange={handleSearchChange}
+        onRowClick={handleSelectUser}
         pageSize={20}
         loading={loading}
         emptyMessage="No users found."
@@ -583,7 +999,17 @@ export default function AdminUsersPage() {
         onClose={() => setCreateOpen(false)}
         onCreated={() => {
           setCreateOpen(false);
-          fetchUsers();
+          refreshUsers();
+        }}
+      />
+
+      <UserProfileDrawer
+        user={selectedUser}
+        loading={detailLoading}
+        error={detailError}
+        onClose={() => {
+          setSelectedUser(null);
+          setDetailError(null);
         }}
       />
 

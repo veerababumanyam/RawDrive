@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -33,19 +34,25 @@ func parseAuditLogTime(s string) (*time.Time, error) {
 	if t, err := time.Parse(time.RFC3339, s); err == nil {
 		return &t, nil
 	}
+	if t, err := time.ParseInLocation("2006-01-02T15:04", s, time.Local); err == nil {
+		return &t, nil
+	}
+	if t, err := time.ParseInLocation("2006-01-02T15:04:05", s, time.Local); err == nil {
+		return &t, nil
+	}
 	if t, err := time.Parse("2006-01-02", s); err == nil {
 		return &t, nil
 	}
-	return nil, fmt.Errorf("invalid time value %q: expected RFC3339 or YYYY-MM-DD", s)
+	return nil, fmt.Errorf("invalid time value %q: expected RFC3339, YYYY-MM-DDTHH:MM, or YYYY-MM-DD", s)
 }
 
-func (h *AdminAuditLogsHandler) List(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
+func auditLogFilterFromQuery(q url.Values) (repository.AuditLogFilter, error) {
 	filter := repository.AuditLogFilter{
 		Action:       q.Get("action"),
 		ResourceType: q.Get("resource_type"),
 		Severity:     q.Get("severity"),
 		IPAddress:    q.Get("ip_address"),
+		Search:       q.Get("search"),
 		Limit:        500,
 	}
 	if limitStr := q.Get("limit"); limitStr != "" {
@@ -75,14 +82,12 @@ func (h *AdminAuditLogsHandler) List(w http.ResponseWriter, r *http.Request) {
 	// silently dropping the filter (previous behavior hid data leaks).
 	dateFrom, err := parseAuditLogTime(q.Get("date_from"))
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
-		return
+		return filter, err
 	}
 	filter.DateFrom = dateFrom
 	dateTo, err := parseAuditLogTime(q.Get("date_to"))
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
-		return
+		return filter, err
 	}
 	if dateTo != nil {
 		// For date-only input the backward-compat path previously extended to
@@ -95,6 +100,15 @@ func (h *AdminAuditLogsHandler) List(w http.ResponseWriter, r *http.Request) {
 		} else {
 			filter.DateTo = dateTo
 		}
+	}
+	return filter, nil
+}
+
+func (h *AdminAuditLogsHandler) List(w http.ResponseWriter, r *http.Request) {
+	filter, err := auditLogFilterFromQuery(r.URL.Query())
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+		return
 	}
 	result, err := h.svc.ListLogs(r.Context(), filter)
 	if err != nil {
