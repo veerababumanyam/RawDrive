@@ -84,6 +84,16 @@ describe("service worker cache policy", () => {
     expect(source).toContain("SW precache skipped:");
   });
 
+  it("recovers from stale Next deploy chunks", () => {
+    expect(source).toContain("isMissingNextScript(request, response)");
+    expect(source).toContain("missingChunkReloadResponse()");
+    expect(source).toContain('"rawdrive:missing-chunk-reload"');
+    expect(source).toContain("sessionStorage.setItem(key, \"1\")");
+    expect(source).toContain("location.reload()");
+    expect(source).toContain("isMissingNextStyle(request, response)");
+    expect(source).toContain('"Content-Type": "text/css; charset=utf-8"');
+  });
+
   it("prefers the cached app document for /g/ offline nav, with the offline shell as cold-boot fallback", () => {
     // Precedence contract (supersedes Fix A): in handleNavigation's offline
     // `catch` block, /g/ navigations must prefer the cached Next document

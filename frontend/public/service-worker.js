@@ -14,7 +14,7 @@
 // galleries, each client's hot cache is isolated from eviction pressure caused
 // by the photographer's navigation.
 
-const VERSION = "m15-v10";
+const VERSION = "m15-v11";
 const SHELL_CACHE = `rawdrive-shell-${VERSION}`;
 const API_CACHE = `rawdrive-api-${VERSION}`;
 const GALLERY_CACHE_PREFIX = `rawdrive-gallery-${VERSION}-`;
@@ -321,6 +321,21 @@ async function handleFreshStatic(request) {
     const response = await fetch(new Request(request, { cache: "no-store" }));
     if (response.ok) {
       cache.put(request, response.clone()).catch(() => {});
+      return response;
+    }
+    const cached = await cache.match(request);
+    if (cached) return cached;
+    if (isMissingNextScript(request, response)) {
+      return missingChunkReloadResponse();
+    }
+    if (isMissingNextStyle(request, response)) {
+      return new Response("", {
+        status: 200,
+        headers: {
+          "Content-Type": "text/css; charset=utf-8",
+          "Cache-Control": "no-store",
+        },
+      });
     }
     return response;
   } catch {
@@ -328,6 +343,41 @@ async function handleFreshStatic(request) {
     if (cached) return cached;
     return new Response("", { status: 504 });
   }
+}
+
+function isMissingNextScript(request, response) {
+  if (response.status !== 404) return false;
+  const url = new URL(request.url);
+  return url.pathname.startsWith("/_next/static/") && /\.js$/i.test(url.pathname);
+}
+
+function isMissingNextStyle(request, response) {
+  if (response.status !== 404) return false;
+  const url = new URL(request.url);
+  return url.pathname.startsWith("/_next/static/") && /\.css$/i.test(url.pathname);
+}
+
+function missingChunkReloadResponse() {
+  return new Response(
+    `(() => {
+      try {
+        const key = "rawdrive:missing-chunk-reload";
+        if (!sessionStorage.getItem(key)) {
+          sessionStorage.setItem(key, "1");
+          location.reload();
+        }
+      } catch (_) {
+        location.reload();
+      }
+    })();`,
+    {
+      status: 200,
+      headers: {
+        "Content-Type": "application/javascript; charset=utf-8",
+        "Cache-Control": "no-store",
+      },
+    },
+  );
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────

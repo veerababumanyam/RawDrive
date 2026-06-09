@@ -228,6 +228,10 @@ type sessionStreamState struct {
 	storageKey  string
 	multipartID string
 	nextPart    int32 // 1-indexed — TUS expects sequential PATCH, R2 needs sequential part numbers
+	// absorbedBytes tracks how many bytes this process has folded into the
+	// rolling hash. If another backend instance advanced upload_offset, this
+	// value falls behind and the hash must be treated as unreliable.
+	absorbedBytes int64
 	// M40: carries the credit reservation from CreateSession through
 	// finalizeUpload / Cancel so Consume or Refund can settle the
 	// ledger entry without re-reading DB state. Nil when the feature
@@ -915,8 +919,18 @@ func (h *ChunkedUploadHandler) UploadChunk(w http.ResponseWriter, r *http.Reques
 	// UploadPart, so a transient B2/network failure followed by a TUS retry
 	// double-absorbed the same bytes, corrupting the rolling hash and
 	// forcing finalize into ErrScanHashMismatch (refund + delete).
+	//
+	// In production, a live process can also keep a stale streamState while a
+	// different backend instance advances this session in Postgres. Derive the
+	// part number from durable progress on every PATCH so cross-node resumes do
+	// not reuse old multipart part numbers.
+	partNumber := int32(countCommittedParts(row.R2PartETags, row.UploadOffset)) + 1
 	state.mu.Lock()
-	partNumber := state.nextPart
+	if state.hasher != nil && state.absorbedBytes != row.UploadOffset {
+		state.hasher = nil
+		state.head = nil
+		state.tail = nil
+	}
 	storageKey := state.storageKey
 	mpID := state.multipartID
 	state.mu.Unlock()
@@ -970,9 +984,10 @@ func (h *ChunkedUploadHandler) UploadChunk(w http.ResponseWriter, r *http.Reques
 	// rehydrate after restart; rehydrated sessions use the finalize
 	// cold-path re-read instead).
 	state.mu.Lock()
-	state.nextPart++
+	state.nextPart = partNumber + 1
 	if state.hasher != nil {
 		state.absorbChunk(chunk)
+		state.absorbedBytes += int64(len(chunk))
 	}
 	state.mu.Unlock()
 

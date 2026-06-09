@@ -502,6 +502,48 @@ func TestUploadChunk_MultiChunkFinalizes(t *testing.T) {
 	assert.Equal(t, expected, rig.store.completed[storedKey], "concatenated bytes must match input")
 }
 
+func TestUploadChunk_StaleCreateNodeStateUsesDurablePartNumber(t *testing.T) {
+	rig := setupStreamingRig(t)
+
+	chunk1 := append([]byte{0xFF, 0xD8}, bytes.Repeat([]byte("A"), 70)...)
+	chunk2 := append(bytes.Repeat([]byte("B"), 70), 0xFF, 0xD9)
+	total := int64(len(chunk1) + len(chunk2))
+	uploadID := rig.createSession(t, "stale-node.jpg", total)
+
+	// Simulate another backend instance accepting the first PATCH while this
+	// handler still holds the create-time streamState (nextPart=1, hash empty).
+	row, err := rig.sessions.GetByTUSUploadID(context.Background(), uploadID)
+	require.NoError(t, err)
+	require.NotNil(t, row.R2MultipartUploadID)
+	storageKey := fmt.Sprintf("%s/%s/original.jpg", rig.workspaceID.String(), uploadID)
+	etag, err := rig.store.UploadPart(context.Background(), storageKey, *row.R2MultipartUploadID, 1, bytes.NewReader(chunk1), int64(len(chunk1)))
+	require.NoError(t, err)
+	chunk1Hash := sha256.Sum256(chunk1)
+	require.NoError(t, rig.sessions.AppendPartETag(context.Background(), uploadID, repository.UploadPartETag{
+		PartNumber: 1,
+		ETag:       etag,
+		Size:       int64(len(chunk1)),
+		SHA256:     hex.EncodeToString(chunk1Hash[:]),
+	}))
+	require.NoError(t, rig.sessions.UpdateOffset(context.Background(), uploadID, int64(len(chunk1))))
+
+	rr := rig.patchChunk(t, uploadID, int64(len(chunk1)), chunk2, "")
+	require.Equal(t, http.StatusOK, rr.Code, "second PATCH failed: %s", rr.Body.String())
+
+	row, err = rig.sessions.GetByTUSUploadID(context.Background(), uploadID)
+	require.NoError(t, err)
+	require.NotNil(t, row.CompletedAt)
+	var parts []repository.UploadPartETag
+	require.NoError(t, json.Unmarshal(row.R2PartETags, &parts))
+	require.Len(t, parts, 2)
+	assert.Equal(t, 1, parts[0].PartNumber)
+	assert.Equal(t, 2, parts[1].PartNumber)
+
+	expected := append([]byte{}, chunk1...)
+	expected = append(expected, chunk2...)
+	assert.Equal(t, expected, rig.store.completed[storageKey], "cross-node resume must preserve all uploaded bytes")
+}
+
 // TestUploadChunk_PerChunkChecksumMismatch_Rejected covers the TUS
 // checksum extension. A PATCH with an Upload-Checksum header that does
 // not match the actual chunk body must be rejected with HTTP 460
