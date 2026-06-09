@@ -210,8 +210,12 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("activeUploadLeaveWarning");
     expect(source).toContain("beforeunload");
     expect(source).toContain("Keep this page open until uploads finish.");
+    expect(source).toContain("Gallery tools stay available.");
+    expect(source).toContain("uploadAutoMinimizedRef");
+    expect(source).toContain("setUploadDialogDismissed(true)");
+    expect(source).toContain("setShowUploadDialog(false)");
     expect(source).toContain("setUploadDialogDismissed(false)");
-    expect(source).toContain("Upload locked until complete");
+    expect(source).toContain("Only uploads locked until complete");
     expect(source).toContain("z-[80]");
     expect(source).not.toContain("upload.pauseAll");
     expect(source).not.toContain("upload.resumeAll");
@@ -234,9 +238,9 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(barStart).toBeGreaterThan(-1);
     expect(barEnd).toBeGreaterThan(barStart);
     expect(backgroundBar).toContain("Details");
-    expect(backgroundBar).toContain(
-      "Keep this page open until uploads finish.",
-    );
+    expect(backgroundBar).toContain("activeUploadStatusHint");
+    expect(source).toContain("Keep this page open until uploads finish.");
+    expect(source).toContain("Gallery tools stay available.");
     expect(backgroundBar).not.toContain("upload.pauseAll");
     expect(backgroundBar).not.toContain("upload.resumeAll");
     expect(backgroundBar).not.toContain("upload.cancelAll");

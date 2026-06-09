@@ -1815,6 +1815,8 @@ export default function GalleryDetailPage({
       : uploadStatusHeadline;
   const activeUploadLeaveWarning =
     "Upload still running. Keep this tab open until RawDrive finishes uploading.";
+  const activeUploadStatusHint =
+    "Keep this page open until uploads finish. Gallery tools stay available.";
   const galleryActionToneClass =
     galleryActionStatus?.tone === "error"
       ? "text-error"
@@ -1860,11 +1862,24 @@ export default function GalleryDetailPage({
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [uploadDialogOpen, uploadDialogCanClose]);
   const prevActiveUploadCountRef = useRef(0);
+  const uploadAutoMinimizedRef = useRef(false);
   const [uploadToast, setUploadToast] = useState<{
     visible: boolean;
     completed: number;
     failed: number;
   } | null>(null);
+
+  useEffect(() => {
+    if (activeUploadCount > 0) {
+      if (!uploadAutoMinimizedRef.current) {
+        uploadAutoMinimizedRef.current = true;
+        setUploadDialogDismissed(true);
+        setShowUploadDialog(false);
+      }
+      return;
+    }
+    uploadAutoMinimizedRef.current = false;
+  }, [activeUploadCount]);
 
   useEffect(() => {
     const wasActive = prevActiveUploadCountRef.current > 0;
@@ -4007,7 +4022,7 @@ export default function GalleryDetailPage({
                 )}
                 {activeUploadCount > 0 && (
                   <p className="mt-1 text-xs text-text-tertiary">
-                    Keep this page open until uploads finish.
+                    {activeUploadStatusHint}
                   </p>
                 )}
                 {galleryActionStatus && (
@@ -4317,7 +4332,7 @@ export default function GalleryDetailPage({
                     <div className="flex flex-wrap items-center gap-2">
                       {activeUploadCount > 0 && (
                         <span className="rounded-full border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent">
-                          Upload locked until complete
+                          Only uploads locked until complete
                         </span>
                       )}
                       {activeUploadCount === 0 &&
