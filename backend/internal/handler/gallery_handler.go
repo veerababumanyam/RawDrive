@@ -116,11 +116,14 @@ type galleryAssetWithAsset struct {
 type galleryAccountShareResponse struct {
 	ID                           uuid.UUID  `json:"id"`
 	GalleryID                    uuid.UUID  `json:"gallery_id"`
+	Status                       string     `json:"status"`
 	OwnerWorkspaceID             uuid.UUID  `json:"owner_workspace_id"`
 	OwnerWorkspaceName           string     `json:"owner_workspace_name"`
 	SharedWorkspaceID            uuid.UUID  `json:"shared_workspace_id"`
 	SharedWorkspaceName          string     `json:"shared_workspace_name"`
 	SharedUserEmail              string     `json:"shared_user_email,omitempty"`
+	PendingEmail                 string     `json:"pending_email,omitempty"`
+	ShareLinkToken               string     `json:"share_link_token,omitempty"`
 	StorageBilledToWorkspaceID   uuid.UUID  `json:"storage_billed_to_workspace_id"`
 	StorageBilledToWorkspaceName string     `json:"storage_billed_to_workspace_name"`
 	StorageBilledTo              string     `json:"storage_billed_to"`
@@ -342,6 +345,7 @@ func scanGalleryAccountShare(row pgx.Row) (galleryAccountShareResponse, error) {
 	if err != nil {
 		return share, err
 	}
+	share.Status = "active"
 	share.StorageBilledTo = "owner"
 	if share.StorageBilledToWorkspaceID == share.SharedWorkspaceID {
 		share.StorageBilledTo = "shared"
@@ -349,7 +353,70 @@ func scanGalleryAccountShare(row pgx.Row) (galleryAccountShareResponse, error) {
 	return share, nil
 }
 
-const galleryAccountShareSelectSQL = `SELECT s.id,
+func pendingGalleryAccountShareResponse(id, galleryID, ownerWorkspaceID uuid.UUID, token, email, storageBilledTo string, migrateStorageUsage bool, createdAt time.Time) galleryAccountShareResponse {
+	return galleryAccountShareResponse{
+		ID:                         id,
+		GalleryID:                  galleryID,
+		Status:                     "pending_invite",
+		OwnerWorkspaceID:           ownerWorkspaceID,
+		SharedUserEmail:            email,
+		PendingEmail:               email,
+		ShareLinkToken:             token,
+		StorageBilledToWorkspaceID: ownerWorkspaceID,
+		StorageBilledTo:            storageBilledTo,
+		MigrateStorageUsage:        migrateStorageUsage,
+		CreatedAt:                  createdAt,
+		UpdatedAt:                  createdAt,
+	}
+}
+
+func accountShareInvitePermissions(email, storageBilledTo string, migrateStorageUsage bool) (string, error) {
+	permissions := map[string]any{
+		"access_mode":           "email",
+		"allowed_emails":        []string{email},
+		"recipient_emails":      []string{email},
+		"account_share_invite":  true,
+		"pending_email":         email,
+		"storage_billed_to":     storageBilledTo,
+		"migrate_storage_usage": migrateStorageUsage,
+		"channel":               "account_share",
+	}
+	encoded, err := json.Marshal(permissions)
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
+}
+
+func parsePendingAccountShareInvite(galleryID, ownerWorkspaceID uuid.UUID, id uuid.UUID, token string, permissionsJSON []byte, createdAt time.Time) (galleryAccountShareResponse, bool) {
+	var permissions map[string]any
+	if err := json.Unmarshal(permissionsJSON, &permissions); err != nil {
+		return galleryAccountShareResponse{}, false
+	}
+	if value, _ := permissions["account_share_invite"].(bool); !value {
+		return galleryAccountShareResponse{}, false
+	}
+	email, _ := permissions["pending_email"].(string)
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		if values, ok := permissions["allowed_emails"].([]any); ok && len(values) > 0 {
+			email, _ = values[0].(string)
+			email = strings.ToLower(strings.TrimSpace(email))
+		}
+	}
+	if email == "" {
+		return galleryAccountShareResponse{}, false
+	}
+	storageBilledTo, _ := permissions["storage_billed_to"].(string)
+	storageBilledTo, err := normalizeStorageBilledTo(storageBilledTo)
+	if err != nil {
+		storageBilledTo = "owner"
+	}
+	migrateStorageUsage, _ := permissions["migrate_storage_usage"].(bool)
+	return pendingGalleryAccountShareResponse(id, galleryID, ownerWorkspaceID, token, email, storageBilledTo, migrateStorageUsage, createdAt), true
+}
+
+const galleryAccountShareSelectColumnsSQL = `SELECT s.id,
        s.gallery_id,
        s.owner_workspace_id,
        COALESCE(owner_ws.name, '') AS owner_workspace_name,
@@ -363,12 +430,16 @@ const galleryAccountShareSelectSQL = `SELECT s.id,
        s.migrated_derivative_bytes,
        s.storage_migrated_at,
        s.created_at,
-       s.updated_at
-  FROM gallery_workspace_shares s
+       s.updated_at`
+
+const galleryAccountShareSelectJoinsSQL = `
   JOIN workspaces owner_ws ON owner_ws.id = s.owner_workspace_id
   JOIN workspaces shared_ws ON shared_ws.id = s.shared_workspace_id
   LEFT JOIN users shared_user ON shared_user.id = shared_ws.owner_id
   JOIN workspaces billed_ws ON billed_ws.id = s.storage_billed_to_workspace_id`
+
+const galleryAccountShareSelectSQL = galleryAccountShareSelectColumnsSQL + `
+  FROM gallery_workspace_shares s` + galleryAccountShareSelectJoinsSQL
 
 func normalizeStorageBilledTo(value string) (string, error) {
 	value = strings.ToLower(strings.TrimSpace(value))
@@ -656,7 +727,95 @@ func (h *GalleryHandler) ListAccountShares(w http.ResponseWriter, r *http.Reques
 		http.Error(w, `{"error":"share list failed"}`, http.StatusInternalServerError)
 		return
 	}
+
+	pendingRows, err := h.pool.Query(r.Context(),
+		`SELECT id, token, permissions, created_at
+		   FROM share_links
+		  WHERE gallery_id = $1
+		    AND revoked_at IS NULL
+		    AND permissions->>'account_share_invite' = 'true'
+		  ORDER BY created_at DESC`,
+		galleryID,
+	)
+	if err != nil {
+		http.Error(w, `{"error":"share list failed"}`, http.StatusInternalServerError)
+		return
+	}
+	defer pendingRows.Close()
+	for pendingRows.Next() {
+		var id uuid.UUID
+		var token string
+		var permissionsJSON []byte
+		var createdAt time.Time
+		if err := pendingRows.Scan(&id, &token, &permissionsJSON, &createdAt); err != nil {
+			http.Error(w, `{"error":"share list failed"}`, http.StatusInternalServerError)
+			return
+		}
+		share, ok := parsePendingAccountShareInvite(galleryID, workspaceID, id, token, permissionsJSON, createdAt)
+		if ok {
+			shares = append(shares, share)
+		}
+	}
+	if err := pendingRows.Err(); err != nil {
+		http.Error(w, `{"error":"share list failed"}`, http.StatusInternalServerError)
+		return
+	}
 	respondJSON(w, http.StatusOK, map[string]any{"shares": shares})
+}
+
+func (h *GalleryHandler) createPendingAccountShareInvite(ctx context.Context, galleryID, ownerWorkspaceID uuid.UUID, email, storageBilledTo string, migrateStorageUsage bool) (galleryAccountShareResponse, error) {
+	permissionsJSON, err := accountShareInvitePermissions(email, storageBilledTo, migrateStorageUsage)
+	if err != nil {
+		return galleryAccountShareResponse{}, err
+	}
+	inviteID := uuid.New()
+	token := strings.ReplaceAll(uuid.NewString(), "-", "")
+
+	var id uuid.UUID
+	var savedToken string
+	var savedPermissions []byte
+	var createdAt time.Time
+	err = h.pool.QueryRow(ctx,
+		`WITH existing AS (
+		   SELECT id
+		     FROM share_links
+		    WHERE gallery_id = $1
+		      AND revoked_at IS NULL
+		      AND permissions->>'account_share_invite' = 'true'
+		      AND lower(permissions->>'pending_email') = lower($2)
+		    ORDER BY created_at DESC
+		    LIMIT 1
+		 ),
+		 updated AS (
+		   UPDATE share_links
+		      SET permissions = $3::jsonb
+		    WHERE id = (SELECT id FROM existing)
+		    RETURNING id, token, permissions, created_at
+		 ),
+		 inserted AS (
+		   INSERT INTO share_links (id, gallery_id, token, permissions, download_allowed, access_count, created_at)
+		   SELECT $4, $1, $5, $3::jsonb, FALSE, 0, NOW()
+		    WHERE NOT EXISTS (SELECT 1 FROM updated)
+		   RETURNING id, token, permissions, created_at
+		 )
+		 SELECT id, token, permissions, created_at FROM updated
+		 UNION ALL
+		 SELECT id, token, permissions, created_at FROM inserted
+		 LIMIT 1`,
+		galleryID,
+		email,
+		permissionsJSON,
+		inviteID,
+		token,
+	).Scan(&id, &savedToken, &savedPermissions, &createdAt)
+	if err != nil {
+		return galleryAccountShareResponse{}, err
+	}
+	share, ok := parsePendingAccountShareInvite(galleryID, ownerWorkspaceID, id, savedToken, savedPermissions, createdAt)
+	if !ok {
+		return galleryAccountShareResponse{}, fmt.Errorf("invalid pending account share invite")
+	}
+	return share, nil
 }
 
 // CreateAccountShare handles POST /api/v1/galleries/{id}/account-shares.
@@ -701,15 +860,27 @@ func (h *GalleryHandler) CreateAccountShare(w http.ResponseWriter, r *http.Reque
 	err = h.pool.QueryRow(r.Context(),
 		`SELECT w.id, COALESCE(w.name, '')
 		   FROM users u
-		   JOIN workspace_members wm ON wm.user_id = u.id
-		   JOIN workspaces w ON w.id = wm.workspace_id
+		   JOIN workspaces w ON w.owner_id = u.id
+		    OR EXISTS (
+		         SELECT 1
+		           FROM workspace_members wm
+		          WHERE wm.user_id = u.id
+		            AND wm.workspace_id = w.id
+		       )
 		  WHERE lower(u.email) = lower($1)
-		  ORDER BY CASE WHEN w.owner_id = u.id THEN 0 ELSE 1 END, wm.joined_at ASC
+		  ORDER BY CASE WHEN w.owner_id = u.id THEN 0 ELSE 1 END,
+		           w.created_at ASC
 		  LIMIT 1`,
 		email,
 	).Scan(&targetWorkspaceID, &targetWorkspaceName)
 	if err == pgx.ErrNoRows {
-		http.Error(w, `{"error":"target account not found"}`, http.StatusNotFound)
+		share, err := h.createPendingAccountShareInvite(r.Context(), galleryID, workspaceID, email, storageBilledTo, input.MigrateStorageUsage)
+		if err != nil {
+			log.Printf("gallery account pending invite create failed: gallery_id=%s owner_workspace_id=%s err=%v", galleryID, workspaceID, err)
+			http.Error(w, `{"error":"pending invite failed"}`, http.StatusInternalServerError)
+			return
+		}
+		respondJSON(w, http.StatusAccepted, share)
 		return
 	}
 	if err != nil {
@@ -728,6 +899,7 @@ func (h *GalleryHandler) CreateAccountShare(w http.ResponseWriter, r *http.Reque
 
 	tx, err := h.pool.Begin(r.Context())
 	if err != nil {
+		log.Printf("gallery account share begin failed: gallery_id=%s owner_workspace_id=%s target_workspace_id=%s err=%v", galleryID, workspaceID, targetWorkspaceID, err)
 		http.Error(w, `{"error":"share failed"}`, http.StatusInternalServerError)
 		return
 	}
@@ -745,6 +917,7 @@ func (h *GalleryHandler) CreateAccountShare(w http.ResponseWriter, r *http.Reque
 		galleryID, targetWorkspaceID,
 	).Scan(&existingStorageBilledTo, &existingMigratedOriginal, &existingMigratedDerivative)
 	if err != nil && err != pgx.ErrNoRows {
+		log.Printf("gallery account share existing lookup failed: gallery_id=%s owner_workspace_id=%s target_workspace_id=%s err=%v", galleryID, workspaceID, targetWorkspaceID, err)
 		http.Error(w, `{"error":"share failed"}`, http.StatusInternalServerError)
 		return
 	}
@@ -762,10 +935,10 @@ func (h *GalleryHandler) CreateAccountShare(w http.ResponseWriter, r *http.Reque
 		     migrate_storage_usage = gallery_workspace_shares.migrate_storage_usage OR EXCLUDED.migrate_storage_usage,
 		     shared_by_user_id = EXCLUDED.shared_by_user_id,
 		     updated_at = NOW()
-		   RETURNING id
+		   RETURNING *
 		 )
-		 `+galleryAccountShareSelectSQL+`
-		 JOIN upserted u ON u.id = s.id`,
+		 `+galleryAccountShareSelectColumnsSQL+`
+		 FROM upserted s`+galleryAccountShareSelectJoinsSQL,
 		galleryID,
 		workspaceID,
 		targetWorkspaceID,
@@ -774,6 +947,7 @@ func (h *GalleryHandler) CreateAccountShare(w http.ResponseWriter, r *http.Reque
 		actorID,
 	))
 	if err != nil {
+		log.Printf("gallery account share upsert failed: gallery_id=%s owner_workspace_id=%s target_workspace_id=%s err=%v", galleryID, workspaceID, targetWorkspaceID, err)
 		http.Error(w, `{"error":"share failed"}`, http.StatusInternalServerError)
 		return
 	}
@@ -797,10 +971,10 @@ func (h *GalleryHandler) CreateAccountShare(w http.ResponseWriter, r *http.Reque
 			          storage_migrated_at = NOW(),
 			          updated_at = NOW()
 			    WHERE id = $1
-			    RETURNING id
+			    RETURNING *
 			 )
-			 `+galleryAccountShareSelectSQL+`
-			 JOIN updated u ON u.id = s.id`,
+			 `+galleryAccountShareSelectColumnsSQL+`
+			 FROM updated s`+galleryAccountShareSelectJoinsSQL,
 			share.ID,
 			originalBytes,
 			derivativeBytes,
@@ -825,10 +999,10 @@ func (h *GalleryHandler) CreateAccountShare(w http.ResponseWriter, r *http.Reque
 			          storage_migrated_at = NULL,
 			          updated_at = NOW()
 			    WHERE id = $1
-			    RETURNING id
+			    RETURNING *
 			 )
-			 `+galleryAccountShareSelectSQL+`
-			 JOIN updated u ON u.id = s.id`,
+			 `+galleryAccountShareSelectColumnsSQL+`
+			 FROM updated s`+galleryAccountShareSelectJoinsSQL,
 			share.ID,
 		))
 		if err != nil {
@@ -838,6 +1012,7 @@ func (h *GalleryHandler) CreateAccountShare(w http.ResponseWriter, r *http.Reque
 	}
 
 	if err := tx.Commit(r.Context()); err != nil {
+		log.Printf("gallery account share commit failed: gallery_id=%s owner_workspace_id=%s target_workspace_id=%s err=%v", galleryID, workspaceID, targetWorkspaceID, err)
 		http.Error(w, `{"error":"share failed"}`, http.StatusInternalServerError)
 		return
 	}
@@ -890,7 +1065,29 @@ func (h *GalleryHandler) RevokeAccountShare(w http.ResponseWriter, r *http.Reque
 		shareID, galleryID, workspaceID,
 	).Scan(&sharedWorkspaceID, &migratedOriginal, &migratedDerivative)
 	if err == pgx.ErrNoRows {
-		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		tag, revokeErr := tx.Exec(r.Context(),
+			`UPDATE share_links
+			    SET revoked_at = NOW()
+			  WHERE id = $1
+			    AND gallery_id = $2
+			    AND revoked_at IS NULL
+			    AND permissions->>'account_share_invite' = 'true'`,
+			shareID,
+			galleryID,
+		)
+		if revokeErr != nil {
+			http.Error(w, `{"error":"revoke failed"}`, http.StatusInternalServerError)
+			return
+		}
+		if tag.RowsAffected() == 0 {
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			return
+		}
+		if err := tx.Commit(r.Context()); err != nil {
+			http.Error(w, `{"error":"revoke failed"}`, http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	if err != nil {

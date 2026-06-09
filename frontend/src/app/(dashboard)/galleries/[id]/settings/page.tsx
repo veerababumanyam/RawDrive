@@ -953,7 +953,11 @@ export default function GallerySettingsPage({
       ]);
       setShareEmail("");
       setShareMigrateUsage(false);
-      setSaveMsg("Shared account saved");
+      setSaveMsg(
+        share.status === "pending_invite"
+          ? "Pending gallery invite saved"
+          : "Shared account saved",
+      );
       setTimeout(() => setSaveMsg(""), 2000);
     } catch (err) {
       setShareError(
@@ -1265,7 +1269,8 @@ export default function GallerySettingsPage({
             </h2>
             <p className="text-sm text-text-secondary">
               Give another RawDrive account access to this gallery and choose
-              which workspace carries its storage.
+              which workspace carries its storage. If the email is not
+              registered yet, RawDrive saves a pending gallery invite.
             </p>
             {gallery.access_role === "shared" ? (
               <InlineAlert variant="info">
@@ -1337,9 +1342,15 @@ export default function GallerySettingsPage({
                     </p>
                   ) : accountShares.length > 0 ? (
                     accountShares.map((share) => {
+                      const isPendingInvite =
+                        share.status === "pending_invite";
                       const migratedBytes =
                         share.migrated_original_bytes +
                         share.migrated_derivative_bytes;
+                      const displayEmail =
+                        share.pending_email ||
+                        share.shared_user_email ||
+                        share.shared_workspace_name;
                       return (
                         <div
                           key={share.id}
@@ -1348,29 +1359,56 @@ export default function GallerySettingsPage({
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div className="min-w-0 space-y-1">
                               <p className="truncate text-sm font-semibold text-text-primary">
-                                {share.shared_user_email ||
-                                  share.shared_workspace_name}
+                                {displayEmail}
                               </p>
                               <p className="text-xs text-text-secondary">
-                                {share.shared_workspace_name} · storage:{" "}
-                                {share.storage_billed_to === "shared"
-                                  ? "shared account"
-                                  : "owner account"}
-                                {migratedBytes > 0
+                                {isPendingInvite
+                                  ? `Pending invite · storage: ${
+                                      share.storage_billed_to === "shared"
+                                        ? "shared account after signup"
+                                        : "owner account"
+                                    }`
+                                  : `${share.shared_workspace_name} · storage: ${
+                                      share.storage_billed_to === "shared"
+                                        ? "shared account"
+                                        : "owner account"
+                                    }`}
+                                {!isPendingInvite && migratedBytes > 0
                                   ? ` · migrated ${formatBytes(migratedBytes)}`
                                   : ""}
                               </p>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void handleRevokeAccountShare(share.id)
-                              }
-                              disabled={shareSaving}
-                              className="btn-tertiary px-3 py-2 text-sm"
-                            >
-                              Remove
-                            </button>
+                            <div className="flex flex-wrap gap-2">
+                              {isPendingInvite && share.share_link_token ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const inviteUrl = `${window.location.origin}/g/${gallery.slug}?share=${encodeURIComponent(
+                                      share.share_link_token || "",
+                                    )}`;
+                                    void navigator.clipboard
+                                      ?.writeText(inviteUrl)
+                                      .then(() => {
+                                        setSaveMsg("Invite link copied");
+                                        setTimeout(() => setSaveMsg(""), 2000);
+                                      });
+                                  }}
+                                  className="btn-tertiary px-3 py-2 text-sm"
+                                >
+                                  Copy link
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleRevokeAccountShare(share.id)
+                                }
+                                disabled={shareSaving}
+                                className="btn-tertiary px-3 py-2 text-sm"
+                              >
+                                Remove
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );

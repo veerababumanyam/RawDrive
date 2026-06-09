@@ -565,11 +565,14 @@ export interface GalleryShareLink {
 export interface GalleryAccountShare {
   id: string;
   gallery_id: string;
+  status?: "active" | "pending_invite" | string;
   owner_workspace_id: string;
   owner_workspace_name: string;
   shared_workspace_id: string;
   shared_workspace_name: string;
   shared_user_email?: string;
+  pending_email?: string;
+  share_link_token?: string;
   storage_billed_to_workspace_id: string;
   storage_billed_to_workspace_name: string;
   storage_billed_to: "owner" | "shared";

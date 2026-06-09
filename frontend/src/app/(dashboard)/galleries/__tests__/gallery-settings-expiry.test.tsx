@@ -155,6 +155,51 @@ describe("Gallery settings — access window / expiry", () => {
     );
   });
 
+  it("explains that unregistered emails become pending gallery invites", async () => {
+    await renderPage();
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/rawdrive saves a pending gallery invite/i),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it("renders pending shared-account invites", async () => {
+    mocks.listGalleryAccountShares.mockResolvedValue([
+      {
+        id: "invite-1",
+        gallery_id: "gallery-1",
+        status: "pending_invite",
+        owner_workspace_id: "workspace-1",
+        owner_workspace_name: "Owner",
+        shared_workspace_id: "00000000-0000-0000-0000-000000000000",
+        shared_workspace_name: "",
+        shared_user_email: "pending@example.com",
+        pending_email: "pending@example.com",
+        share_link_token: "token-1",
+        storage_billed_to_workspace_id: "workspace-1",
+        storage_billed_to_workspace_name: "Owner",
+        storage_billed_to: "shared",
+        migrate_storage_usage: true,
+        migrated_original_bytes: 0,
+        migrated_derivative_bytes: 0,
+        created_at: "2026-06-09T00:00:00Z",
+        updated_at: "2026-06-09T00:00:00Z",
+      },
+    ]);
+
+    await renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByText("pending@example.com")).toBeInTheDocument(),
+    );
+    expect(screen.getAllByText(/pending invite/i).length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("button", { name: "Copy link" }),
+    ).toBeInTheDocument();
+  });
+
   it("sets a 30-day access window from now", async () => {
     await renderPage();
     await waitFor(() => screen.getByRole("heading", { name: "Access window" }));
