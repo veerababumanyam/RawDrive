@@ -478,7 +478,7 @@ export default function PublicPhotoSearchPage({
                 • Your selfie is used only to find your photos in this gallery.
               </li>
               <li>• We don&apos;t store your selfie after matching.</li>
-              <li>• You can skip this and browse all photos instead.</li>
+              <li>• You can skip this and browse the gallery instead.</li>
             </ul>
             <label className="flex cursor-pointer items-start gap-3 text-left">
               <input

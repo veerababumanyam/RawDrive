@@ -75,7 +75,6 @@ import {
 import { cn } from "@/lib/utils";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
-import { GalleryShareQrCard } from "@/components/gallery/gallery-share-qr-card";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import {
   Share,
@@ -92,6 +91,7 @@ import {
   Smartphone,
 } from "@/components/icons";
 import { useDashboardUploadContext } from "@/components/upload/dashboard-upload-provider";
+import type { UploadItem } from "@/components/upload/upload-progress";
 import { useUpload } from "@/hooks/use-upload";
 import { useInfiniteFetch } from "@/hooks/use-infinite-render";
 import { TermsAcceptanceModal } from "@/components/legal/terms-acceptance-modal";
@@ -229,6 +229,7 @@ const TETHERED_MAX_POLL_MS = 5000;
 const TETHERED_POLL_STEP_MS = 500;
 const SHARE_UNAVAILABLE_MESSAGE =
   "Publish this gallery before sharing client links.";
+const HIGHLIGHTS_ALBUM_NAME = "HIGHLIGHTS";
 type ShareLinkChannel = "copy" | "email" | "whatsapp";
 const ASSET_SETTLE_REFRESH_DELAYS_MS = [1200, 4000] as const;
 const FACE_INDEX_REINDEX_CONCURRENCY = 3;
@@ -593,6 +594,21 @@ function uploadFileSignature(file: File): string {
   return `${file.name}:${file.size}:${file.lastModified}`;
 }
 
+type UploadItemWithDestination = UploadItem & {
+  uploadDestination?: { albumId?: string | null };
+};
+
+function uploadDuplicateScope(item: UploadItem): string | null {
+  return (item as UploadItemWithDestination).uploadDestination?.albumId ?? null;
+}
+
+function uploadDuplicateFileKey(file: File): string {
+  const relativePath =
+    (file as File & { webkitRelativePath?: string }).webkitRelativePath || "";
+  const normalizedPath = relativePath.trim().replace(/\\/g, "/");
+  return (normalizedPath || file.name).toLowerCase();
+}
+
 function formatTetheredRelativeTime(timestamp: number): string {
   const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
   if (seconds < 5) return "just now";
@@ -899,10 +915,8 @@ export default function GalleryDetailPage({
               console.warn("Failed to load proofing selections:", err?.message);
               return [];
             }),
-            // Favorites endpoint 404s if the table is empty for the
-            // gallery (no, actually the backend returns zeros) — but
-            // an outage shouldn't break the dashboard. Default to null
-            // so the tile renders "—" instead of crashing the page.
+            // Optional favorites data should not block the gallery page.
+            // Missing optional endpoints are normalized by the API client.
             getGalleryFavoritesSummary(token, id).catch((err) => {
               console.warn("Failed to load favorites summary:", err?.message);
               return null;
@@ -1100,7 +1114,7 @@ export default function GalleryDetailPage({
     async (album: GalleryAlbum) => {
       if (!albumIsEditable(album)) return;
       const confirmed = window.confirm(
-        `Delete "${album.name}" sub-gallery? Photos stay in All Photos.`,
+        `Delete "${album.name}" sub-gallery? Photos stay in the gallery.`,
       );
       if (!confirmed) return;
       const t = getStoredAccessToken();
@@ -1216,24 +1230,17 @@ export default function GalleryDetailPage({
     [createWorkingShareUrl],
   );
 
-  const getGalleryShareQrUrl = useCallback(
-    () => getCachedWorkingShareUrl(undefined, "copy"),
-    [getCachedWorkingShareUrl],
-  );
-
   const getAlbumShareQrUrl = useCallback(
-    (albumId?: string) => getCachedWorkingShareUrl(albumId, "copy"),
+    (albumId: string) => getCachedWorkingShareUrl(albumId, "copy"),
     [getCachedWorkingShareUrl],
   );
 
   const copyShareUrl = useCallback(
-    async (albumId?: string) => {
+    async (albumId: string) => {
       try {
         const url = await getCachedWorkingShareUrl(albumId, "copy");
         await copyTextToClipboard(url);
-        setShareMessage(
-          albumId ? "Sub-gallery link copied." : "Gallery link copied.",
-        );
+        setShareMessage("Sub-gallery link copied.");
       } catch (err) {
         setShareMessage(
           err instanceof Error ? err.message : "Failed to create share link",
@@ -1244,7 +1251,7 @@ export default function GalleryDetailPage({
   );
 
   const openShareLink = useCallback(
-    async (albumId: string | undefined, label: string) => {
+    async (albumId: string, label: string) => {
       if (!gallery) return;
       let url: string;
       try {
@@ -1268,7 +1275,7 @@ export default function GalleryDetailPage({
   );
 
   const openWhatsAppShare = useCallback(
-    async (albumId: string | undefined, label: string) => {
+    async (albumId: string, label: string) => {
       if (!gallery) return;
       let url: string;
       try {
@@ -1668,6 +1675,19 @@ export default function GalleryDetailPage({
         : null,
     [activeAlbum, albums],
   );
+  const highlightsAlbum = useMemo(
+    () =>
+      albums.find(
+        (album) =>
+          album.name.trim().toUpperCase() === HIGHLIGHTS_ALBUM_NAME,
+      ) ?? null,
+    [albums],
+  );
+  const previewHref = useMemo(() => {
+    const baseHref = `/galleries/${id}/preview`;
+    if (!highlightsAlbum) return baseHref;
+    return `${baseHref}?album=${encodeURIComponent(highlightsAlbum.id)}`;
+  }, [highlightsAlbum, id]);
   const activeLightboxAsset =
     lightboxIndex !== null ? (assets[lightboxIndex]?.asset ?? null) : null;
   const activeLightboxAssetId = activeLightboxAsset?.id;
@@ -2202,7 +2222,12 @@ export default function GalleryDetailPage({
   // Comparison is case-insensitive because filesystem behavior varies
   // (macOS HFS+ is case-insensitive by default; Windows is too) and
   // the studio almost never wants two photos that differ only in
-  // upper/lower-case.
+  // upper/lower-case. The gate compares only within the current upload folder:
+  // root uploads ignore assets that are already only in sub-galleries, while
+  // active sub-gallery uploads compare only against that sub-gallery and queued
+  // uploads targeting it. Folder uploads also keep each browser-provided
+  // relative path separate so two different subfolders can both contain
+  // IMG_0001.JPG.
   const [duplicateWarning, setDuplicateWarning] = useState<{
     visible: boolean;
     duplicatesInGallery: string[];
@@ -2224,26 +2249,44 @@ export default function GalleryDetailPage({
 
   // Filter incoming files into accepted (will upload) and rejected
   // (skipped as duplicates). Two reject buckets:
-  //   - duplicatesInGallery: filename already exists on this gallery
-  //     via the assets[] list we hydrate on mount
+  //   - duplicatesInGallery: filename already exists in the current upload
+  //     scope (active sub-gallery when selected, otherwise the gallery root)
   //   - duplicatesInBatch: filename appears more than once in this
   //     drop/picker batch, OR matches a file currently in the upload
-  //     queue (upload.items)
+  //     queue for the same upload scope (upload.items)
   // The accepted bucket excludes both. If anything was rejected, we
   // surface a slide-in warning with up to a handful of names + a
   // "+N more" tail so the toast doesn't grow unbounded.
   const dedupeIncomingFiles = useCallback(
     (incoming: File[]) => {
+      const uploadScopeAlbumId = activeAlbum ?? null;
+      const activeAlbumAssetIds = uploadScopeAlbumId
+        ? new Set(albumAssetIdsByAlbum[uploadScopeAlbumId] || [])
+        : null;
+      const subGalleryAssetIds = uploadScopeAlbumId
+        ? null
+        : new Set(Object.values(albumAssetIdsByAlbum).flat());
       const existingFilenames = new Set<string>();
       for (const entry of assets) {
+        const assetId = entry.asset?.id;
+        if (
+          activeAlbumAssetIds &&
+          (!assetId || !activeAlbumAssetIds.has(assetId))
+        ) {
+          continue;
+        }
+        if (!uploadScopeAlbumId && assetId && subGalleryAssetIds?.has(assetId)) {
+          continue;
+        }
         const fn = entry.asset?.filename;
         if (fn) existingFilenames.add(fn.toLowerCase());
       }
       const queuedFilenames = new Set<string>();
       for (const item of upload.items) {
+        if (uploadDuplicateScope(item) !== uploadScopeAlbumId) continue;
         const status = item.status;
         if (status !== "complete" && status !== "error") {
-          queuedFilenames.add(item.file.name.toLowerCase());
+          queuedFilenames.add(uploadDuplicateFileKey(item.file));
         }
       }
 
@@ -2252,19 +2295,23 @@ export default function GalleryDetailPage({
       const duplicatesInBatch: string[] = [];
       const seenInThisBatch = new Set<string>();
       for (const file of incoming) {
-        const key = file.name.toLowerCase();
-        if (existingFilenames.has(key)) {
+        const filenameKey = file.name.toLowerCase();
+        const fileKey = uploadDuplicateFileKey(file);
+        if (existingFilenames.has(filenameKey)) {
           duplicatesInGallery.push(file.name);
-        } else if (queuedFilenames.has(key) || seenInThisBatch.has(key)) {
+        } else if (
+          queuedFilenames.has(fileKey) ||
+          seenInThisBatch.has(fileKey)
+        ) {
           duplicatesInBatch.push(file.name);
         } else {
           accepted.push(file);
-          seenInThisBatch.add(key);
+          seenInThisBatch.add(fileKey);
         }
       }
       return { accepted, duplicatesInGallery, duplicatesInBatch };
     },
-    [assets, upload.items],
+    [activeAlbum, albumAssetIdsByAlbum, assets, upload.items],
   );
 
   // Assets whose thumbnails the background worker has not finished
@@ -2412,7 +2459,7 @@ export default function GalleryDetailPage({
       }
 
       // Push the just-linked assets into the active sub-album. Skipped
-      // when activeAlbum is null ("All Photos" view) — those uploads
+      // when activeAlbum is null (gallery root view) — those uploads
       // are gallery-scope-only by design. The pair-key dedup means a
       // re-fire of this effect won't double-attach.
       if (targetAlbumId && newlyAddedAssetIds.length > 0) {
@@ -3049,7 +3096,7 @@ export default function GalleryDetailPage({
                   type="button"
                   onClick={() => setActiveAlbum(null)}
                   className="text-accent-primary transition-colors hover:text-accent-hover hover:underline"
-                  aria-label={`Show all photos in ${gallery.title}`}
+                  aria-label={`Show gallery root for ${gallery.title}`}
                 >
                   {gallery.title}
                 </button>
@@ -3250,10 +3297,7 @@ export default function GalleryDetailPage({
               visible. Works for unpublished galleries too because it
               fetches via the owner-scoped API. Includes its own Share
               button for copying the public URL. */}
-          <Link
-            href={`/galleries/${gallery.id}/preview`}
-            className="btn-tertiary px-4 py-2.5 text-sm"
-          >
+          <Link href={previewHref} className="btn-tertiary px-4 py-2.5 text-sm">
             Preview
           </Link>
           {/* GAL-FR-118 / GAL-CORE-009 / PHO-GAL-009: "View as client" renders the
@@ -3268,7 +3312,7 @@ export default function GalleryDetailPage({
               their ?share=<token> link, which mints a session. Mirrors the cover page
               + share center (route-contracts.test.ts). */}
           <Link
-            href={`/galleries/${gallery.id}/preview`}
+            href={previewHref}
             target="_blank"
             rel="noopener noreferrer"
             className="btn-tertiary px-4 py-2.5 text-sm"
@@ -3280,20 +3324,6 @@ export default function GalleryDetailPage({
           </span>
         </div>
       </div>
-
-      {/* Once published, surface the public link as a scannable QR right here
-          on the workspace — non-technical photographers get it the moment they
-          flip the publish toggle, with print-quality PNG + vector SVG
-          downloads. The QR uses the same tokenized client URL as the
-          Copy/Share actions; private galleries must never encode bare
-          /g/<slug> URLs because those show the public lock screen. */}
-      {gallery.is_published && (
-        <GalleryShareQrCard
-          getShareUrl={getGalleryShareQrUrl}
-          title={gallery.title}
-          slug={gallery.slug}
-        />
-      )}
 
       <ResizableWorkspaceSplit
         className="gallery-overview-workbench"
@@ -3539,22 +3569,20 @@ export default function GalleryDetailPage({
                 </div>
               )}
 
-              {/* Mobile (<sm): collapse the chip strip into a single
-                  dropdown + Share/QR action buttons. Wrapping five chips
-                  onto separate lines wastes vertical space on phones; a
-                  native <select> uses the system picker (much better UX
-                  than custom dropdowns on mobile) and the Share/QR
-                  buttons operate on whichever option is currently
-                  selected. Hidden on sm+ where the full chip strip
-                  below has room to breathe. */}
-              <div className="flex items-center gap-2 sm:hidden">
+              {/* Mobile (<sm): collapse real sub-galleries into a single
+                  dropdown + Share/QR action buttons. The gallery root remains
+                  the default view but is not shown as a folder. */}
+              {albums.length > 0 && (
+                <div className="flex items-center gap-2 sm:hidden">
                 <select
                   value={activeAlbum ?? ""}
                   onChange={(e) => setActiveAlbum(e.target.value || null)}
                   className="min-w-0 flex-1 rounded-xl border border-border-default bg-surface-container px-3 py-2 text-sm font-semibold text-text-primary transition-colors focus:border-accent-primary focus:outline-none focus:ring-2 focus:ring-accent-primary/30"
                   aria-label="Select gallery view"
                 >
-                  <option value="">All Photos ({assets.length})</option>
+                  <option value="" disabled>
+                    Sub-galleries
+                  </option>
                   {albums.map((album) => (
                     <option key={album.id} value={album.id}>
                       {album.name} (
@@ -3563,18 +3591,12 @@ export default function GalleryDetailPage({
                   ))}
                 </select>
                 {(() => {
-                  // Derive the share metadata for whichever option the
-                  // dropdown currently has selected. activeAlbum === null
-                  // means "All Photos" — copyShareUrl/getAlbumShareQrUrl with
-                  // no argument is the gallery-wide canonical share URL.
                   const selectedAlbum = activeAlbum
                     ? albums.find((a) => a.id === activeAlbum)
                     : null;
-                  const selectedLabel = selectedAlbum
-                    ? selectedAlbum.name
-                    : "All Photos";
-                  const selectedIsShareable =
-                    !selectedAlbum || albumIsEditable(selectedAlbum);
+                  if (!selectedAlbum) return null;
+                  const selectedLabel = selectedAlbum.name;
+                  const selectedIsShareable = albumIsEditable(selectedAlbum);
                   return (
                     <>
                       {selectedIsShareable && (
@@ -3583,7 +3605,7 @@ export default function GalleryDetailPage({
                             type="button"
                             size="md"
                             variant="ghost"
-                            onClick={() => copyShareUrl(selectedAlbum?.id)}
+                            onClick={() => copyShareUrl(selectedAlbum.id)}
                             label={`Copy ${selectedLabel} share link`}
                             aria-disabled={!gallery.is_published}
                             className="shrink-0 border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
@@ -3595,7 +3617,7 @@ export default function GalleryDetailPage({
                             size="md"
                             variant="ghost"
                             onClick={() =>
-                              openShareLink(selectedAlbum?.id, selectedLabel)
+                              openShareLink(selectedAlbum.id, selectedLabel)
                             }
                             label={`Email ${selectedLabel} share link`}
                             aria-disabled={!gallery.is_published}
@@ -3609,7 +3631,7 @@ export default function GalleryDetailPage({
                             variant="ghost"
                             onClick={() =>
                               openWhatsAppShare(
-                                selectedAlbum?.id,
+                                selectedAlbum.id,
                                 selectedLabel,
                               )
                             }
@@ -3620,9 +3642,9 @@ export default function GalleryDetailPage({
                             <ChatBubble />
                           </GlassIconButton>
                           <ShareQrPopover
-                            key={`mobile-share-qr-${selectedAlbum?.id ?? "all"}`}
+                            key={`mobile-share-qr-${selectedAlbum.id}`}
                             getShareUrl={() =>
-                              getAlbumShareQrUrl(selectedAlbum?.id)
+                              getAlbumShareQrUrl(selectedAlbum.id)
                             }
                             disabled={!gallery.is_published}
                             onUnavailable={() =>
@@ -3649,9 +3671,10 @@ export default function GalleryDetailPage({
                     </>
                   );
                 })()}
-              </div>
+                </div>
+              )}
 
-              {/* Desktop (sm+): two-segment chip strip. Each chip is split
+              {/* Desktop (sm+): real sub-gallery chip strip. Each chip is split
                   into a name+count-badge "select" segment and a share
                   action segment, separated by a subtle inner divider
                   so the secondary actions read as a related-but-distinct
@@ -3659,82 +3682,8 @@ export default function GalleryDetailPage({
                   flex-wrap so chips reflow onto multiple lines on narrow
                   viewports. Long album names truncate at ~14rem to keep
                   chip widths bounded. */}
-              <div className="hidden flex-wrap items-center gap-2 sm:flex">
-                <div
-                  className={cn(
-                    "group flex shrink-0 items-stretch overflow-hidden rounded-xl border transition-all",
-                    !activeAlbum
-                      ? "border-accent-primary bg-accent-subtle shadow-sm"
-                      : "border-border-default bg-surface-container hover:border-accent-primary/60 hover:bg-surface-container-high",
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setActiveAlbum(null)}
-                    className={cn(
-                      "flex items-center gap-2 px-3 py-1.5 text-xs font-semibold transition-colors",
-                      !activeAlbum
-                        ? "text-accent-primary"
-                        : "text-text-secondary hover:text-text-primary",
-                    )}
-                  >
-                    <span>All Photos</span>
-                    <span
-                      className={cn(
-                        "rounded-full px-1.5 py-0.5 text-2xs font-semibold tabular-nums",
-                        !activeAlbum
-                          ? "bg-accent-primary/15 text-accent-primary"
-                          : "bg-surface-sunken text-text-tertiary",
-                      )}
-                    >
-                      {assets.length}
-                    </span>
-                  </button>
-                  <div className="flex items-center gap-1 border-l border-border-subtle px-1">
-                    <GlassIconButton
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => copyShareUrl()}
-                      label="Copy All Photos share link"
-                      aria-disabled={!gallery.is_published}
-                      className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
-                    >
-                      <Share />
-                    </GlassIconButton>
-                    <GlassIconButton
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => openShareLink(undefined, "All Photos")}
-                      label="Email All Photos share link"
-                      aria-disabled={!gallery.is_published}
-                      className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
-                    >
-                      <Envelope />
-                    </GlassIconButton>
-                    <GlassIconButton
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => openWhatsAppShare(undefined, "All Photos")}
-                      label="WhatsApp All Photos share link"
-                      aria-disabled={!gallery.is_published}
-                      className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
-                    >
-                      <ChatBubble />
-                    </GlassIconButton>
-                    <ShareQrPopover
-                      getShareUrl={getGalleryShareQrUrl}
-                      disabled={!gallery.is_published}
-                      onUnavailable={() =>
-                        setShareMessage(SHARE_UNAVAILABLE_MESSAGE)
-                      }
-                      label="Show QR code for All Photos share link"
-                      filename={`${gallery.slug || "gallery"}-all-photos-qr`}
-                    />
-                  </div>
-                </div>
+              {albums.length > 0 ? (
+                <div className="hidden flex-wrap items-center gap-2 sm:flex">
                 {albums.map((album) => {
                   const assetCount =
                     albumAssetIdsByAlbum[album.id]?.length ?? 0;
@@ -3904,12 +3853,12 @@ export default function GalleryDetailPage({
                     </div>
                   );
                 })}
-                {albums.length === 0 && (
-                  <span className="text-xs text-text-tertiary">
-                    Select photos, then create a sub-gallery.
-                  </span>
-                )}
-              </div>
+                </div>
+              ) : (
+                <span className="text-xs text-text-tertiary">
+                  Select photos, then create a sub-gallery.
+                </span>
+              )}
             </div>
 
             {/* "Filter by face" chip strip removed 2026-05-18 — it
@@ -4039,7 +3988,7 @@ export default function GalleryDetailPage({
                           isSelected &&
                           "ring-2 ring-accent-primary",
                       )}
-                      // Owner drag payloads stay split by intent: All Photos
+                      // Owner drag payloads stay split by intent: gallery root
                       // uses move-style reorder, while bulk/sub-gallery drags
                       // keep the existing album-membership copy payload.
                       draggable={!!entry.asset}
@@ -4983,7 +4932,7 @@ export default function GalleryDetailPage({
                         Sub-gallery
                       </dt>
                       <dd className="mt-1 font-medium text-text-primary">
-                        {activeAlbumDetails?.name ?? "All Photos"}
+                        {activeAlbumDetails?.name ?? "Gallery root"}
                       </dd>
                     </div>
                   </dl>
@@ -5006,56 +4955,6 @@ export default function GalleryDetailPage({
                       uncheckedLabel="Publish gallery"
                       busy={publishing}
                       onCheckedChange={() => void togglePublishState()}
-                    />
-                  </div>
-                  <div
-                    data-testid="visibility-share-links"
-                    className="mt-3 flex flex-wrap items-center gap-2"
-                  >
-                    <span className="text-xs font-semibold text-text-secondary">
-                      Share links
-                    </span>
-                    <GlassIconButton
-                      type="button"
-                      size="md"
-                      variant="ghost"
-                      onClick={() => copyShareUrl()}
-                      label="Copy gallery share link"
-                      aria-disabled={!gallery.is_published}
-                      className="border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
-                    >
-                      <Share />
-                    </GlassIconButton>
-                    <GlassIconButton
-                      type="button"
-                      size="md"
-                      variant="ghost"
-                      onClick={() => openShareLink(undefined, "Gallery")}
-                      label="Email gallery share link"
-                      aria-disabled={!gallery.is_published}
-                      className="border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
-                    >
-                      <Envelope />
-                    </GlassIconButton>
-                    <GlassIconButton
-                      type="button"
-                      size="md"
-                      variant="ghost"
-                      onClick={() => openWhatsAppShare(undefined, "Gallery")}
-                      label="WhatsApp gallery share link"
-                      aria-disabled={!gallery.is_published}
-                      className="border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
-                    >
-                      <ChatBubble />
-                    </GlassIconButton>
-                    <ShareQrPopover
-                      getShareUrl={getGalleryShareQrUrl}
-                      disabled={!gallery.is_published}
-                      onUnavailable={() =>
-                        setShareMessage(SHARE_UNAVAILABLE_MESSAGE)
-                      }
-                      label="Show QR code for gallery share link"
-                      filename={`${gallery.slug || "gallery"}-share-qr`}
                     />
                   </div>
                 </div>
@@ -5346,7 +5245,7 @@ export default function GalleryDetailPage({
               {duplicateWarning.duplicatesInGallery.length > 0 && (
                 <p className="text-xs text-text-secondary">
                   <span className="font-medium text-text-primary">
-                    Already in this gallery:
+                    Already in this folder:
                   </span>{" "}
                   {formatDuplicateNames(duplicateWarning.duplicatesInGallery)}
                 </p>

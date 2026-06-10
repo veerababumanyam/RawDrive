@@ -12,6 +12,10 @@ const sharedBodyPath = path.join(
   repoRoot,
   "src/components/gallery/public-gallery-body.tsx",
 );
+const publicAlbumChipsPath = path.join(
+  repoRoot,
+  "src/components/gallery/public-gallery-album-chips.tsx",
+);
 const galleriesApiPath = path.join(repoRoot, "src/lib/api/galleries.ts");
 
 const read = (p: string): string => fs.readFileSync(p, "utf8");
@@ -45,8 +49,12 @@ describe("Preview as client shared public render contract", () => {
     expect(source).toContain("publicUrl: result.public_url || \"\"");
     expect(source).toContain("mediaKeyIdsForAsset");
     expect(source).toContain("const expectedKeyIds = Array.from(");
+    expect(source).toContain("const scopedPublicUrl = albumId");
+    expect(source).toContain(
+      'setUrlSearchParamBeforeFragment(payload.publicUrl, "album", albumId)',
+    );
     expect(source).toMatch(
-      /appendStoredGalleryKeyFragment\(\s*payload\.publicUrl,\s*id,\s*expectedKeyIds,\s*\)/,
+      /appendStoredGalleryKeyFragment\(\s*scopedPublicUrl,\s*id,\s*expectedKeyIds,\s*\)/,
     );
     expect(source).toContain("createGalleryShareLink");
     expect(source).toContain("setUrlSearchParamBeforeFragment(");
@@ -67,5 +75,14 @@ describe("Preview as client shared public render contract", () => {
     expect(body).toContain("favoritesDisabledReason=");
     expect(body).toContain("publicActionsDisabledReason=");
     expect(body).toContain("baseHref={previewBaseHref}");
+  });
+
+  it("does not expose the gallery root as an All Photos folder chip", () => {
+    const chips = read(publicAlbumChipsPath);
+
+    expect(chips).not.toContain("All Photos");
+    expect(chips).not.toContain("totalAssetCount");
+    expect(chips).not.toContain("href={rootHref}");
+    expect(chips).toContain("const href = `${rootHref}?album=${encodeURIComponent(album.id)}`");
   });
 });

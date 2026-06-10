@@ -219,6 +219,7 @@ export interface GalleryBranding {
   tier_slug: string;
   can_customize: boolean;
   brand_name: string;
+  studio_name?: string;
   logo_url?: string | null;
   logo_asset_id?: string | null;
   accent_color?: string | null;

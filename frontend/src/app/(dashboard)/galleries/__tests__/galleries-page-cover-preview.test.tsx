@@ -5,6 +5,7 @@ import GalleriesPage from "../page";
 const mocks = vi.hoisted(() => ({
   authFetch: vi.fn(),
   createGallery: vi.fn(),
+  createGalleryAlbum: vi.fn(),
   createGalleryShareLink: vi.fn(),
   getAsset: vi.fn(),
   updateGallery: vi.fn(),
@@ -61,6 +62,7 @@ vi.mock("@/lib/api/workspace-profile", () => ({
 
 vi.mock("@/lib/api/galleries", () => ({
   createGallery: mocks.createGallery,
+  createGalleryAlbum: mocks.createGalleryAlbum,
   createGalleryShareLink: mocks.createGalleryShareLink,
   deleteGallery: vi.fn(),
   updateGallery: mocks.updateGallery,
@@ -139,6 +141,7 @@ describe("GalleriesPage cover previews", () => {
   beforeEach(() => {
     mocks.authFetch.mockReset();
     mocks.createGallery.mockReset();
+    mocks.createGalleryAlbum.mockReset();
     mocks.createGalleryShareLink.mockReset();
     mocks.getAsset.mockReset();
     mocks.updateGallery.mockReset();
@@ -276,6 +279,56 @@ describe("GalleriesPage cover previews", () => {
     expect(
       screen.queryByText("Failed to create gallery: create failed (500)"),
     ).not.toBeInTheDocument();
+  });
+
+  it("creates a HIGHLIGHTS folder automatically for new galleries", async () => {
+    mocks.authFetch.mockResolvedValue(
+      new Response(JSON.stringify({ galleries: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    mocks.createGallery.mockResolvedValue({
+      id: "gallery-new",
+      workspace_id: "workspace-1",
+      title: "Reception",
+      slug: "reception",
+      description: "",
+      gallery_type: "delivery",
+      is_published: false,
+      max_selections: 0,
+      status: "active",
+      settings: {},
+      created_at: "2026-06-02T00:00:00Z",
+      updated_at: "2026-06-02T00:00:00Z",
+    });
+    mocks.createGalleryAlbum.mockResolvedValue({
+      id: "album-highlights",
+      gallery_id: "gallery-new",
+      name: "HIGHLIGHTS",
+      position: 0,
+    });
+
+    render(<GalleriesPage />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Create your first gallery" }),
+    );
+    fireEvent.change(screen.getByPlaceholderText("e.g. Sharma Wedding 2026"), {
+      target: { value: "Reception" },
+    });
+    expect(screen.queryByLabelText("Folder name")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("e.g. Ceremony")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Create Gallery" }));
+
+    await waitFor(() => {
+      expect(mocks.createGalleryAlbum).toHaveBeenCalledTimes(1);
+      expect(mocks.createGalleryAlbum).toHaveBeenCalledWith(
+        "token-1",
+        "gallery-new",
+        { name: "HIGHLIGHTS" },
+      );
+    });
   });
 
   it("creates a share token before copying the gallery card public link", async () => {

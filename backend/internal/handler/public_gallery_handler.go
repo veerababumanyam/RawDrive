@@ -1362,6 +1362,7 @@ type brandingResponse struct {
 	TierSlug                string                  `json:"tier_slug"`     // free, creator, pro_photographer, studio, elite_studio
 	CanCustomize            bool                    `json:"can_customize"` // true when tier supports white-label overrides
 	BrandName               string                  `json:"brand_name"`
+	StudioName              string                  `json:"studio_name"`
 	LogoURL                 *string                 `json:"logo_url,omitempty"`
 	LogoAssetID             *string                 `json:"logo_asset_id,omitempty"`
 	AccentColor             *string                 `json:"accent_color,omitempty"`
@@ -1430,6 +1431,7 @@ func (h *PublicGalleryHandler) GetBranding(w http.ResponseWriter, r *http.Reques
 		TierSlug:                tier,
 		CanCustomize:            canCustomize,
 		BrandName:               brandName,
+		StudioName:              publicStudioName(workspaceBranding),
 		LogoURL:                 logoURL,
 		LogoAssetID:             logoAssetID,
 		AccentColor:             accentColor,
@@ -1477,6 +1479,16 @@ type publicWorkspaceBranding struct {
 	PublicBrandingEnabled   bool
 	LogoAssetID             string
 	GalleryBrandingDefaults GalleryBrandingDefaults
+}
+
+func publicStudioName(branding publicWorkspaceBranding) string {
+	if strings.TrimSpace(branding.BrandName) != "" {
+		return strings.TrimSpace(branding.BrandName)
+	}
+	if strings.TrimSpace(branding.WorkspaceName) != "" {
+		return strings.TrimSpace(branding.WorkspaceName)
+	}
+	return "RawDrive"
 }
 
 func (h *PublicGalleryHandler) lookupWorkspaceBranding(ctx context.Context, workspaceID uuid.UUID) publicWorkspaceBranding {

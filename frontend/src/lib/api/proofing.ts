@@ -26,6 +26,7 @@ export async function listProofingSelections(token: string, galleryId: string): 
   const res = await fetch(`${API_BASE}/api/v1/galleries/${galleryId}/proofing`, {
     headers: { Authorization: `Bearer ${token}` },
   });
+  if (res.status === 404) return [];
   if (!res.ok) throw new Error(`Failed to list proofing: ${res.status}`);
   const body = await res.json();
   if (Array.isArray(body)) return body;

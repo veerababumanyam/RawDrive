@@ -173,8 +173,11 @@ describe("gallery route contracts", () => {
     // The gallery-detail "View as client" action is an owner-preview surface too:
     // it must route to the authenticated preview route, never the anonymous public
     // /g/[slug] URL (which renders the locked shell for a private gallery — the
-    // access_mode default). See gallery-detail-perf-a11y.test.ts for placement.
-    expect(detailSource).toContain("href={`/galleries/${gallery.id}/preview`}");
+    // access_mode default). It flows through previewHref so HIGHLIGHTS opens by
+    // default when that folder exists. See gallery-detail-perf-a11y.test.ts for
+    // placement.
+    expect(detailSource).toContain("const previewHref = useMemo(() => {");
+    expect(detailSource).toContain("href={previewHref}");
     expect(detailSource).not.toContain(
       "href={`/g/${gallery.slug}?mode=client`}",
     );

@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { addPublicFavorite, listPublicFavoriteAssetIds, removePublicFavorite } from "../favorites";
-import { submitPublicProofing } from "../proofing";
+import {
+  addPublicFavorite,
+  getGalleryFavoritesSummary,
+  listPublicFavoriteAssetIds,
+  removePublicFavorite,
+} from "../favorites";
+import { listProofingSelections, submitPublicProofing } from "../proofing";
 
 const fetchMock = vi.fn();
 
@@ -88,5 +93,29 @@ describe("public proofing and favorites session wiring", () => {
         headers: { "X-Gallery-Session": "gs-token" },
       }),
     );
+  });
+
+  it("treats missing owner proofing data as an empty selection list", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+    } as Response);
+
+    await expect(listProofingSelections("token", "gallery-1")).resolves.toEqual([]);
+  });
+
+  it("treats missing owner favorites data as an empty summary", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+    } as Response);
+
+    await expect(getGalleryFavoritesSummary("token", "gallery-1")).resolves.toEqual({
+      gallery_id: "gallery-1",
+      total_favorites: 0,
+      unique_assets_count: 0,
+      unique_sessions: 0,
+      by_asset: [],
+    });
   });
 });

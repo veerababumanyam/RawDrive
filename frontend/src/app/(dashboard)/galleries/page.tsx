@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   createGallery,
+  createGalleryAlbum,
   createGalleryShareLink,
   deleteGallery,
   galleryPublicUrl,
@@ -54,6 +55,7 @@ import {
 } from "@/components/icons";
 
 const COVER_HYDRATE_CONCURRENCY = 6;
+const DEFAULT_GALLERY_ALBUM_NAME = "HIGHLIGHTS";
 
 function GalleryCoverPreview({
   gallery,
@@ -1010,6 +1012,11 @@ export default function GalleriesPage() {
         primary_contact_id: linkedContactId || undefined,
         project_id: linkedProjectId || undefined,
       });
+      if (created?.id) {
+        await createGalleryAlbum(token, created.id, {
+          name: DEFAULT_GALLERY_ALBUM_NAME,
+        });
+      }
       setShowCreate(false);
       setNewTitle("");
       setNewType("proofing");

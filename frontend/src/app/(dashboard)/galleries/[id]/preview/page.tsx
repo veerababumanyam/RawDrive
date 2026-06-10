@@ -36,7 +36,6 @@ interface PreviewPayload {
   gallery: Gallery;
   assets: PublicAsset[];
   albums: PublicGalleryAlbum[];
-  totalAssetCount: number;
   branding: GalleryBranding | null;
   banners: GalleryBanner[];
   products: GalleryProduct[];
@@ -90,7 +89,6 @@ export default function GalleryPreviewPage({
           gallery: result.gallery,
           assets: result.assets,
           albums: result.albums,
-          totalAssetCount: result.total_asset_count,
           branding: result.branding ?? null,
           banners: result.banners,
           products: result.products,
@@ -153,12 +151,15 @@ export default function GalleryPreviewPage({
     const expectedKeyIds = Array.from(
       new Set(assets.flatMap((asset) => mediaKeyIdsForAsset(asset))),
     );
+    const scopedPublicUrl = albumId
+      ? setUrlSearchParamBeforeFragment(payload.publicUrl, "album", albumId)
+      : payload.publicUrl;
     return appendStoredGalleryKeyFragment(
-      payload.publicUrl,
+      scopedPublicUrl,
       id,
       expectedKeyIds,
     );
-  }, [assets, id, payload]);
+  }, [albumId, assets, id, payload]);
   const getPreviewShareUrl = useCallback(async () => {
     if (previewShareUrlRef.current) return previewShareUrlRef.current;
     if (!gallery || !payload?.isPublished) {
@@ -241,7 +242,6 @@ export default function GalleryPreviewPage({
         designCoverThumbnails={designCoverThumbnails}
         designCoverProfileThumbnails={designCoverProfileThumbnails}
         albums={payload.albums}
-        totalAssetCount={payload.totalAssetCount}
         activeAlbumId={albumId}
         products={payload.products}
         banners={payload.banners}

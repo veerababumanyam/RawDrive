@@ -124,6 +124,15 @@ export async function getGalleryFavoritesSummary(
   galleryId: string,
 ): Promise<GalleryFavoritesSummary> {
   const res = await authFetch(`/api/v1/galleries/${galleryId}/favorites`);
+  if (res.status === 404) {
+    return {
+      gallery_id: galleryId,
+      total_favorites: 0,
+      unique_assets_count: 0,
+      unique_sessions: 0,
+      by_asset: [],
+    };
+  }
   if (!res.ok) {
     throw new Error(`Failed to load favorites summary: ${res.status}`);
   }

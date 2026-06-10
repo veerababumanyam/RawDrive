@@ -27,7 +27,7 @@ import {
 import { readEmbeddedVideos } from "@/lib/embedded-videos";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import { Clock, Photo } from "@/components/icons";
-import { buildPublicGalleryJsonLd, serializeJsonLd } from "@/lib/seo";
+import { buildPublicGalleryJsonLd, serializeJsonLd, SITE_URL } from "@/lib/seo";
 import { OfflineCacher } from "@/components/offline/offline-cacher";
 import { OfflineStorageLauncher } from "@/components/offline/offline-storage-launcher";
 import { PublicGalleryOfflineGate } from "@/components/gallery/public-gallery-offline-gate";
@@ -270,22 +270,6 @@ export default async function PublicGalleryPage({
     getPublicGalleryAlbums(slug, ws, effectiveSessionToken, followupShareToken),
   ]);
 
-  // For the "All Photos" chip count we need the gallery-wide asset
-  // count, not just the currently-rendered (album-filtered) set.
-  // Re-fetch only when an album filter is active; otherwise reuse the
-  // already-loaded `assets` length to avoid a second round-trip.
-  const totalAssetCount = albumId
-    ? (
-        await getPublicGalleryAssets(
-          slug,
-          undefined,
-          ws,
-          effectiveSessionToken,
-          followupShareToken,
-        ).catch(() => [])
-      ).length
-    : assets.length;
-
   // Design config saved by the Gallery Design Studio. The public viewer
   // needs this so the share link renders with the cover image, cover
   // style, typography, accent color, and grid layout the photographer
@@ -342,15 +326,16 @@ export default async function PublicGalleryPage({
     jsonLdCoverManifest["og_image"] ||
     jsonLdCoverManifest["cover_1280"] ||
     jsonLdCoverManifest["display_webp"];
+  const structuredDataStudioName =
+    branding?.studio_name?.trim() ||
+    branding?.brand_name?.trim() ||
+    (branding?.can_customize ? branding.brand_name : "RawDrive");
   const galleryJsonLd = buildPublicGalleryJsonLd({
     slug,
     title: gallery.title,
     description:
-      gallery.description ||
-      `View ${gallery.title} by ${
-        branding?.can_customize ? branding.brand_name : "RawDrive"
-      }`,
-    brandName: branding?.can_customize ? branding.brand_name : "RawDrive",
+      gallery.description || `Photo collection by ${structuredDataStudioName}`,
+    brandName: structuredDataStudioName,
     imageUrl:
       jsonLdCoverKey &&
       !jsonLdCoverKey.toLowerCase().split("?", 1)[0].endsWith(".enc")
@@ -400,7 +385,6 @@ export default async function PublicGalleryPage({
         designCoverThumbnails={designCoverThumbnails}
         designCoverProfileThumbnails={designCoverProfileThumbnails}
         albums={albums}
-        totalAssetCount={totalAssetCount}
         activeAlbumId={albumId}
         products={products}
         banners={banners}
@@ -455,9 +439,11 @@ export async function generateMetadata({ params, searchParams }: Props) {
     const brandName = branding?.can_customize
       ? branding.brand_name
       : "RawDrive";
-    const shareTitle = `${gallery.title} | ${brandName}`;
+    const studioName =
+      branding?.studio_name?.trim() || branding?.brand_name?.trim() || brandName;
+    const shareTitle = gallery.title;
     const description =
-      gallery.description || `View ${gallery.title} by ${brandName}`;
+      gallery.description || `Photo collection by ${studioName}`;
     // Rich share preview: prefer the purpose-built og_image derivative
     // (1200x630), then responsive cover variants, then the large thumb.
     // Skip encrypted covers — their bytes cannot be fetched by crawlers.
@@ -477,16 +463,17 @@ export async function generateMetadata({ params, searchParams }: Props) {
         ? getStorageBackedUrl(ogKey)
         : undefined;
     const canonicalPath = `/g/${slug}`;
+    const canonicalUrl = `${SITE_URL}${canonicalPath}`;
     return {
       title: shareTitle,
       description,
-      alternates: { canonical: canonicalPath },
+      alternates: { canonical: canonicalUrl },
       openGraph: {
         title: shareTitle,
         description,
         type: "website",
-        url: canonicalPath,
-        siteName: brandName,
+        url: canonicalUrl,
+        siteName: studioName,
         ...(ogImageUrl
           ? {
               images: [

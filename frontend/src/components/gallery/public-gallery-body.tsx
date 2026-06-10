@@ -30,7 +30,6 @@ interface PublicGalleryBodyProps {
   designCoverThumbnails?: Record<string, string> | null;
   designCoverProfileThumbnails?: CoverProfileThumbnailMap | null;
   albums?: PublicGalleryAlbum[];
-  totalAssetCount: number;
   activeAlbumId?: string;
   products?: GalleryProduct[];
   banners?: GalleryBanner[];
@@ -59,7 +58,6 @@ export function PublicGalleryBody({
   designCoverThumbnails = null,
   designCoverProfileThumbnails = null,
   albums = [],
-  totalAssetCount,
   activeAlbumId,
   products = [],
   banners = [],
@@ -110,7 +108,6 @@ export function PublicGalleryBody({
       <PublicGalleryAlbumChips
         slug={slug}
         albums={albums}
-        totalAssetCount={totalAssetCount}
         activeAlbumId={activeAlbumId}
         baseHref={previewBaseHref}
       />

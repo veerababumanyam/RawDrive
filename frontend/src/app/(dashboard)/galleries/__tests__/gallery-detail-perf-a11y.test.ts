@@ -217,6 +217,26 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("galleryShareStudioName(gallery, workspaceProfile)");
   });
 
+  it("scopes upload duplicate checks to the active folder", () => {
+    const source = readDetailPage();
+
+    expect(source).toContain("function uploadDuplicateScope(item: UploadItem)");
+    expect(source).toContain("function uploadDuplicateFileKey(file: File)");
+    expect(source).toContain("const uploadScopeAlbumId = activeAlbum ?? null");
+    expect(source).toContain("albumAssetIdsByAlbum[uploadScopeAlbumId]");
+    expect(source).toContain("const subGalleryAssetIds = uploadScopeAlbumId");
+    expect(source).toContain("Object.values(albumAssetIdsByAlbum).flat()");
+    expect(source).toContain("activeAlbumAssetIds.has(assetId)");
+    expect(source).toContain("subGalleryAssetIds?.has(assetId)");
+    expect(source).toContain(
+      "if (uploadDuplicateScope(item) !== uploadScopeAlbumId) continue;",
+    );
+    expect(source).toContain("queuedFilenames.add(uploadDuplicateFileKey(item.file))");
+    expect(source).toContain("const fileKey = uploadDuplicateFileKey(file)");
+    expect(source).toContain("Already in this folder:");
+    expect(source).not.toContain("Already in this gallery:");
+  });
+
   it("uses the shared media-key recovery fallback for locked encrypted tiles", () => {
     const source = readDetailPage();
 
@@ -570,7 +590,13 @@ describe("gallery detail page — perf & a11y contracts", () => {
 
     expect(source).toContain("View as client");
     // Owner-scoped preview route opened in a new tab, not the anonymous public URL.
-    expect(linkBlock).toContain("href={`/galleries/${gallery.id}/preview`}");
+    expect(source).toContain("const previewHref = useMemo(() => {");
+    expect(source).toContain("HIGHLIGHTS_ALBUM_NAME");
+    expect(source).toContain("encodeURIComponent(highlightsAlbum.id)");
+    expect(source.match(/href={previewHref}/g)?.length ?? 0).toBeGreaterThanOrEqual(
+      2,
+    );
+    expect(linkBlock).toContain("href={previewHref}");
     expect(linkBlock).toContain('target="_blank"');
     expect(linkBlock).not.toContain("mode=client");
     // Available before publishing — the Link must NOT be wrapped in a publish
@@ -608,22 +634,27 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("Show QR code");
     expect(source).toContain("buildShareEmailHref");
     expect(source).toContain("openShareLink");
-    expect(source).toContain('label="Copy All Photos share link"');
-    expect(source).toContain('label="Email All Photos share link"');
+    expect(source).not.toContain('label="Copy All Photos share link"');
+    expect(source).not.toContain('label="Email All Photos share link"');
+    expect(source).not.toContain('label="WhatsApp All Photos share link"');
+    expect(source).not.toContain("Show QR code for All Photos share link");
+    expect(source).not.toContain("<span>All Photos</span>");
+    expect(source).not.toContain('<option value="">All Photos');
     expect(source).toContain("const selectedIsShareable =");
     expect(source).toContain(
-      "!selectedAlbum || albumIsEditable(selectedAlbum)",
+      "const selectedIsShareable = albumIsEditable(selectedAlbum);",
     );
     expect(source).toContain("{selectedIsShareable && (");
     expect(source).toContain("{isEditableAlbum && (");
     expect(source).toContain("Smart utility");
-    expect(source).toContain('data-testid="visibility-share-links"');
-    expect(source).toContain('label="Copy gallery share link"');
-    expect(source).toContain('label="Email gallery share link"');
+    expect(source).not.toContain('data-testid="visibility-share-links"');
+    expect(source).not.toContain('label="Copy gallery share link"');
+    expect(source).not.toContain('label="Email gallery share link"');
+    expect(source).not.toContain('label="WhatsApp gallery share link"');
     expect(source).toContain("label={`Delete ${album.name}`}");
     expect(source).toContain('variant="danger"');
     expect(source).toContain("Publish gallery");
-    expect(source).toContain("Share links");
+    expect(source).not.toContain("Share links");
   });
 
   it("surfaces publish-required feedback for gallery and sub-gallery share actions", () => {

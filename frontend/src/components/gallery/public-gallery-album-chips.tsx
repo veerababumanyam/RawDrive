@@ -18,7 +18,6 @@ import type { PublicGalleryAlbum } from "@/lib/api/galleries";
 interface PublicGalleryAlbumChipsProps {
   slug: string;
   albums: PublicGalleryAlbum[];
-  totalAssetCount: number;
   activeAlbumId?: string;
   baseHref?: string;
 }
@@ -26,21 +25,18 @@ interface PublicGalleryAlbumChipsProps {
 export function PublicGalleryAlbumChips({
   slug,
   albums,
-  totalAssetCount,
   activeAlbumId,
   baseHref,
 }: PublicGalleryAlbumChipsProps) {
-  // No albums to show → no chip strip. The "All Photos" chip alone
-  // would be a no-op affordance, so we hide the strip entirely.
+  // No albums to show → no chip strip.
   if (albums.length === 0) return null;
 
-  // Order: "All Photos" first, then albums by their stored position so
-  // the photographer's intentional ordering survives the round trip.
+  // Albums render by their stored position so the photographer's intentional
+  // ordering survives the round trip. The gallery root is intentionally not
+  // rendered as a folder chip.
   const sorted = [...albums].sort((a, b) => a.position - b.position);
 
   const rootHref = baseHref || `/g/${slug}`;
-  const allPhotosHref = rootHref;
-  const isAllActive = !activeAlbumId;
 
   return (
     <div
@@ -49,20 +45,6 @@ export function PublicGalleryAlbumChips({
       aria-label="Filter gallery by album"
     >
       <div className="flex items-center gap-2 overflow-x-auto pb-2">
-        <Link
-          href={allPhotosHref}
-          aria-current={isAllActive ? "page" : undefined}
-          className={cn(
-            "inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors",
-            isAllActive
-              ? "border-accent-primary bg-accent-subtle text-accent-primary"
-              : "border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:text-text-primary",
-          )}
-        >
-          <span>All Photos</span>
-          <span className="text-text-tertiary">{totalAssetCount}</span>
-        </Link>
-
         {sorted.map((album) => {
           const href = `${rootHref}?album=${encodeURIComponent(album.id)}`;
           const isActive = album.id === activeAlbumId;

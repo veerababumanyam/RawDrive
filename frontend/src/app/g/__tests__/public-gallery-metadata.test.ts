@@ -28,9 +28,14 @@ describe("public gallery metadata", () => {
     expect(source).toContain("images: [ogImageUrl]");
   });
 
-  it("includes the studio name in crawler-visible share titles", () => {
-    expect(source).toContain("const shareTitle = `${gallery.title} | ${brandName}`");
+  it("includes the studio name in crawler-visible share previews", () => {
+    expect(source).toContain("const studioName =");
+    expect(source).toContain("branding?.studio_name?.trim()");
+    expect(source).toContain("const shareTitle = gallery.title");
+    expect(source).toContain("Photo collection by ${studioName}");
     expect(source).toContain("title: shareTitle");
-    expect(source).toContain("siteName: brandName");
+    expect(source).toContain("siteName: studioName");
+    expect(source).toContain("const canonicalUrl = `${SITE_URL}${canonicalPath}`");
+    expect(source).toContain("url: canonicalUrl");
   });
 });

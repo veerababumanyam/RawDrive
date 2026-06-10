@@ -56,6 +56,7 @@ vi.mock("@/lib/api/workspace-profile", () => ({
 }));
 vi.mock("@/lib/api/galleries", () => ({
   createGallery: vi.fn(),
+  createGalleryAlbum: vi.fn(),
   createGalleryShareLink: vi.fn(),
   deleteGallery: (...args: unknown[]) => deleteGallery(...args),
   updateGallery: vi.fn(),
