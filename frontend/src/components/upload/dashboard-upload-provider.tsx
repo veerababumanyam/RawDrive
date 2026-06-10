@@ -107,8 +107,7 @@ function useUploadSummary(items: UploadItem[]) {
           (item as UploadItemWithDestination).uploadDestination?.galleryId,
       )
       .find(Boolean);
-    const uploadPanelOpen =
-      activeCount > 0 || failedCount > 0 || blockedCount > 0;
+    const uploadPanelOpen = activeCount > 0;
     const shownCount = progressItems.length;
     const headline =
       activeCount > 0 && shownCount > activeCount

@@ -117,6 +117,7 @@ describe("DashboardUploadProvider", () => {
     expect(source).toContain("openFilePicker");
     expect(source).toContain("openFolderPicker");
     expect(source).toContain("shouldRetainPickerFiles");
+    expect(source).toContain("const uploadPanelOpen = activeCount > 0;");
     expect(source).not.toContain("uploadStatusBarHidden");
     expect(source).not.toContain("setUploadStatusBarHidden");
   });
@@ -177,7 +178,7 @@ describe("DashboardUploadProvider", () => {
     ).toHaveLength(0);
   });
 
-  it("keeps routed-away folder upload status visible until cancel or completion", () => {
+  it("keeps routed-away folder upload status visible until a terminal state", () => {
     const upload = mockUpload({
       items: [
         {
@@ -211,6 +212,99 @@ describe("DashboardUploadProvider", () => {
     expect(upload.cancelAll).not.toHaveBeenCalled();
     expect(upload.clearFinished).not.toHaveBeenCalled();
     expect(upload.items).toHaveLength(1);
+  });
+
+  it("keeps a mixed folder batch visible and reports aggregate progress", () => {
+    uploadState.useUpload.mockReturnValue(
+      mockUpload({
+        items: [
+          {
+            id: "upload-1",
+            file: new File(["a".repeat(100)], "complete.jpg", {
+              type: "image/jpeg",
+            }),
+            progress: 100,
+            status: "complete",
+            uploadDestination: { galleryId: "gallery-1" },
+          },
+          {
+            id: "upload-2",
+            file: new File(["b".repeat(100)], "uploading.jpg", {
+              type: "image/jpeg",
+            }),
+            progress: 50,
+            status: "uploading",
+            uploadDestination: { galleryId: "gallery-1" },
+          },
+          {
+            id: "upload-3",
+            file: new File(["c".repeat(100)], "pending.jpg", {
+              type: "image/jpeg",
+            }),
+            progress: 0,
+            status: "pending",
+            uploadDestination: { galleryId: "gallery-1" },
+          },
+          {
+            id: "upload-4",
+            file: new File(["d".repeat(100)], "failed.jpg", {
+              type: "image/jpeg",
+            }),
+            progress: 25,
+            status: "error",
+            uploadDestination: { galleryId: "gallery-1" },
+          },
+        ],
+      }),
+    );
+
+    render(
+      createElement(
+        DashboardUploadProvider,
+        null,
+        createElement("main", null, "Dashboard"),
+      ),
+    );
+
+    expect(screen.getByTestId("dashboard-upload-status")).toBeInTheDocument();
+    expect(screen.getByText("Uploading 2 of 4 files")).toBeInTheDocument();
+    expect(screen.getByText("175 B / 400 B · 44%")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Cancel uploads" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Retry failed" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps a single active file upload visible", () => {
+    uploadState.useUpload.mockReturnValue(
+      mockUpload({
+        items: [
+          {
+            id: "upload-1",
+            file: new File(["0123456789"], "single.jpg", {
+              type: "image/jpeg",
+            }),
+            progress: 60,
+            status: "uploading",
+            uploadDestination: { galleryId: "gallery-1" },
+          },
+        ],
+      }),
+    );
+
+    render(
+      createElement(
+        DashboardUploadProvider,
+        null,
+        createElement("main", null, "Dashboard"),
+      ),
+    );
+
+    expect(screen.getByTestId("dashboard-upload-status")).toBeInTheDocument();
+    expect(screen.getByText("Uploading 1 file")).toBeInTheDocument();
+    expect(screen.getByText("6 B / 10 B · 60%")).toBeInTheDocument();
   });
 
   it("opens a provider-owned folder picker so selected folder files survive route changes", () => {
@@ -276,6 +370,52 @@ describe("DashboardUploadProvider", () => {
         ],
       }),
     );
+
+    render(
+      createElement(
+        DashboardUploadProvider,
+        null,
+        createElement("main", null, "Dashboard"),
+      ),
+    );
+
+    expect(
+      screen.queryByTestId("dashboard-upload-status"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides the routed-away status bar when every upload has failed", () => {
+    uploadState.useUpload.mockReturnValue(
+      mockUpload({
+        items: [
+          {
+            id: "upload-1",
+            file: new File(["photo-bytes"], "photo.jpg", {
+              type: "image/jpeg",
+            }),
+            progress: 10,
+            status: "error",
+            uploadDestination: { galleryId: "gallery-1" },
+          },
+        ],
+      }),
+    );
+
+    render(
+      createElement(
+        DashboardUploadProvider,
+        null,
+        createElement("main", null, "Dashboard"),
+      ),
+    );
+
+    expect(
+      screen.queryByTestId("dashboard-upload-status"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides the routed-away status bar after cancellation clears the queue", () => {
+    uploadState.useUpload.mockReturnValue(mockUpload({ items: [] }));
 
     render(
       createElement(
