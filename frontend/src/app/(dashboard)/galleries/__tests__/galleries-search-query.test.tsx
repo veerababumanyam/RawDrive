@@ -140,6 +140,23 @@ describe("GalleriesPage search query (BUG-4)", () => {
     ).toHaveAttribute("placeholder", "Filter galleries...");
   });
 
+  it("uses client-facing gallery type labels in the create form", async () => {
+    nav.search = new URLSearchParams("create=true");
+    render(<GalleriesPage />);
+
+    await waitFor(() => expect(screen.getByText("Beach Wedding")).toBeTruthy());
+
+    expect(screen.getByRole("option", { name: "Album pics proofing" }))
+      .toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Client pics delivery" }))
+      .toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", {
+        name: "Proofing — client selects favorites",
+      }),
+    ).toBeNull();
+  });
+
   it("shows a delete status bar while gallery deletion is pending", async () => {
     nav.search = new URLSearchParams();
     deleteGallery.mockReturnValueOnce(new Promise(() => {}));

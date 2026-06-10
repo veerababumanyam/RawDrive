@@ -100,7 +100,7 @@ export function TableToolbar({
               placeholder={searchPlaceholder}
               value={searchValue}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="input-base w-full pl-10"
+              className="input-base search-input-with-icon w-full"
             />
           </div>
         )}

@@ -1213,9 +1213,9 @@ export default function GalleriesPage() {
                 className="input-base mt-1 w-full"
               >
                 <option value="proofing">
-                  Proofing — client selects favorites
+                  Album pics proofing
                 </option>
-                <option value="delivery">Delivery — final deleviary</option>
+                <option value="delivery">Client pics delivery</option>
               </select>
             </div>
             <div className="rounded-xl border border-border-default bg-surface-container-low p-4">

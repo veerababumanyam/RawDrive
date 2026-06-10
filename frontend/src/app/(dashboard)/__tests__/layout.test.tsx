@@ -166,6 +166,7 @@ describe("DashboardLayout header", () => {
       "Search galleries, clients, or files...",
     );
     expect(searchInput.className).toContain("dashboard-header__search-input");
+    expect(searchInput.className).toContain("search-input-with-icon");
 
     const form = searchInput.closest("form");
     expect(form?.className).toContain("dashboard-header__search");

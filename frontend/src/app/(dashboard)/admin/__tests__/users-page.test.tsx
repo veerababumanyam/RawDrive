@@ -184,6 +184,14 @@ describe("AdminUsersPage", () => {
     });
   });
 
+  it("keeps the admin search icon clear of the input text", async () => {
+    render(<AdminUsersPage />);
+    const search = await screen.findByLabelText(
+      "Search profiles, phones, plans, payments...",
+    );
+    expect(search.className).toContain("search-input-with-icon");
+  });
+
   it("passes profile and payment search to the users API", async () => {
     render(<AdminUsersPage />);
     const search = await screen.findByLabelText(

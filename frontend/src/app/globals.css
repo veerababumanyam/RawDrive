@@ -1180,6 +1180,10 @@ body[data-chrome="marketing"] {
     color-mix(in srgb, var(--accent-primary) 12%, transparent);
 }
 
+.search-input-with-icon {
+  padding-inline: calc(var(--space-10) + var(--space-1)) var(--space-4);
+}
+
 .textarea-field {
   display: block;
   color: var(--text-secondary);

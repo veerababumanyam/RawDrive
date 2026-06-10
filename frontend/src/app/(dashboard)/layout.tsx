@@ -579,7 +579,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               aria-label={searchPlaceholder}
               title=""
               placeholder={searchPlaceholder}
-              className="input-base dashboard-header__search-input w-full text-sm"
+              className="input-base search-input-with-icon dashboard-header__search-input w-full text-sm"
             />
           </form>
         </div>

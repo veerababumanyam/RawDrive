@@ -191,7 +191,7 @@ export function DataTable<T extends Record<string, unknown>>({
                   placeholder={searchPlaceholder}
                   value={table.searchQuery}
                   onChange={(e) => handleSearch(e.target.value)}
-                  className="input-base w-full border-none pl-10 pr-4 text-sm placeholder:text-text-tertiary/70"
+                  className="input-base search-input-with-icon w-full border-none text-sm placeholder:text-text-tertiary/70"
                 />
               </div>
             )}
