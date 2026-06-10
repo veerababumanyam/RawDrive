@@ -70,6 +70,18 @@ type QueuedUploadItem = UploadItem & {
   uploadOnTermsRequired?: UseUploadOptions["onTermsRequired"];
 };
 
+export function uploadCreateSessionErrorMessage(
+  status: number,
+  errorBody: { error?: string; message?: string } = {},
+): string {
+  if (errorBody.message) return errorBody.message;
+  if (errorBody.error) return `Upload could not start: ${errorBody.error}`;
+  if (status === 403) {
+    return "Upload could not start because access was denied. Refresh the page and try again, or sign in again if the session changed.";
+  }
+  return `Create session failed: ${status}`;
+}
+
 async function runScreener(
   file: File,
   apiUrl: string,
@@ -607,6 +619,7 @@ export function useUpload(
             updateItem(item.id, {
               status: "error",
               requiresReselect: false,
+              errorCode: "TERMS_NOT_ACCEPTED",
               error:
                 errorBody.message ??
                 "Accept the Terms of Service, then retry this upload.",
@@ -673,7 +686,9 @@ export function useUpload(
             });
             return;
           }
-          throw new Error(`Create session failed: ${createRes.status}`);
+          throw new Error(
+            uploadCreateSessionErrorMessage(createRes.status, errorBody),
+          );
         }
 
         const { upload_id } = await createRes.json();
@@ -925,6 +940,7 @@ export function useUpload(
           status: "pending",
           progress: 0,
           error: undefined,
+          errorCode: undefined,
           requiresReselect: undefined,
         });
         enqueueUploads([retryItem]);
@@ -954,6 +970,7 @@ export function useUpload(
               status: item.requiresReselect ? item.status : "pending",
               progress: item.requiresReselect ? item.progress : 0,
               error: item.requiresReselect ? item.error : undefined,
+              errorCode: item.requiresReselect ? item.errorCode : undefined,
               requiresReselect: item.requiresReselect ? true : undefined,
             }
           : item,

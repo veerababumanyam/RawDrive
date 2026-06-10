@@ -72,6 +72,20 @@ describe("useUpload", () => {
     expect(uploadRetryDelayMs(1, "3")).toBe(3000);
   });
 
+  it("turns unknown upload-create 403s into actionable UI copy", async () => {
+    const { uploadCreateSessionErrorMessage } = await import("../use-upload");
+
+    expect(uploadCreateSessionErrorMessage(403)).toContain("access was denied");
+    expect(
+      uploadCreateSessionErrorMessage(403, { error: "forbidden" }),
+    ).toBe("Upload could not start: forbidden");
+    expect(
+      uploadCreateSessionErrorMessage(403, {
+        message: "This gallery is view-only.",
+      }),
+    ).toBe("This gallery is view-only.");
+  });
+
   it("has an explicit face indexing phase for encrypted uploads", async () => {
     const source = await readFile(
       join(process.cwd(), "src/hooks/use-upload.ts"),
@@ -210,6 +224,7 @@ describe("useUpload", () => {
     expect(nextGateStart).toBeGreaterThan(termsGateStart);
     expect(termsGateSource).toContain('status: "error"');
     expect(termsGateSource).toContain("requiresReselect: false");
+    expect(termsGateSource).toContain('errorCode: "TERMS_NOT_ACCEPTED"');
     expect(termsGateSource).toContain("retry this upload");
     expect(termsGateSource).not.toContain('status: "blocked"');
   });

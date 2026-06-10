@@ -23,6 +23,7 @@ export interface UploadItem {
     | "blocked"
     | "needs_desktop";
   error?: string;
+  errorCode?: string;
   /** The browser lost access to the selected File reference. Retrying the same
    *  File will fail again, so the user must re-select the source files/folder. */
   requiresReselect?: boolean;
@@ -97,6 +98,9 @@ export function UploadProgress({
                   item.faceIndexUnavailable &&
                   " • face indexing unavailable — re-sync later"}
                 {item.status === "paused" && " • paused"}
+                {item.status === "error" &&
+                  item.error &&
+                  ` • ${item.error}`}
                 {item.status === "blocked" && item.error && ` • ${item.error}`}
                 {item.status === "needs_desktop" &&
                   ` • ${item.error ?? "requires RawDrive Desktop"}`}

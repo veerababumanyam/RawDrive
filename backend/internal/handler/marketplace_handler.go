@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/rawdrive/backend/internal/middleware"
 	"github.com/rawdrive/backend/internal/repository"
@@ -25,8 +27,9 @@ func NewMarketplaceHandler(repo *repository.FreelancerRepo) *MarketplaceHandler 
 	return &MarketplaceHandler{repo: repo}
 }
 
-// GetMyFreelancerListing handles GET /api/v1/marketplace/my-listing.
-// Returns the authenticated user's own freelancer listing (or 404 if none).
+// GetMyFreelancerListing handles GET /api/v1/freelancer-profile/mine.
+// Returns the authenticated user's own freelancer listing, or data:null when
+// they have not created one yet.
 func (h *MarketplaceHandler) GetMyFreelancerListing(w http.ResponseWriter, r *http.Request) {
 	userID, ok := getUserID(r)
 	if !ok {
@@ -40,7 +43,11 @@ func (h *MarketplaceHandler) GetMyFreelancerListing(w http.ResponseWriter, r *ht
 	}
 	listing, err := h.repo.GetByUserID(r.Context(), userID, wsID)
 	if err != nil {
-		respondJSON(w, http.StatusNotFound, map[string]interface{}{"error": "no listing found", "data": nil})
+		if errors.Is(err, pgx.ErrNoRows) {
+			respondJSON(w, http.StatusOK, map[string]interface{}{"data": nil})
+			return
+		}
+		internalError(w, "", "freelancer_listing_lookup_failed", err)
 		return
 	}
 	respondJSON(w, http.StatusOK, map[string]interface{}{"data": listing})

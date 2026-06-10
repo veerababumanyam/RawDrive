@@ -34,6 +34,7 @@ export function WebVitalsReporter(): null {
   const pathname = usePathname();
 
   useReportWebVitals((metric: ReportedMetric) => {
+    if (process.env.NODE_ENV !== "production") return;
     try {
       const route = routeTemplateFromPathname(pathname);
       const sample = buildWebVitalSample(metric.name, metric.value, route);

@@ -2604,8 +2604,17 @@ export default function GalleryDetailPage({
     pendingUploadRef.current = null;
     if (pending && pending.files.length > 0) {
       submitFiles(pending.files, pending.options);
+    } else if (
+      upload.items.some(
+        (item) =>
+          item.status === "error" &&
+          item.errorCode === "TERMS_NOT_ACCEPTED" &&
+          !item.requiresReselect,
+      )
+    ) {
+      upload.retryAll();
     }
-  }, [submitFiles]);
+  }, [submitFiles, upload]);
 
   const playTetheredDing = useCallback(() => {
     if (!tetheredSoundEnabled) return;

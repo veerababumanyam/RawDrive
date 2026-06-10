@@ -448,6 +448,8 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("termsNeedsAcceptanceRef.current = false");
     expect(source).toContain("pendingUploadRef.current = null");
     expect(source).toContain("submitFiles(pending.files, pending.options)");
+    expect(source).toContain('item.errorCode === "TERMS_NOT_ACCEPTED"');
+    expect(source).toContain("upload.retryAll()");
     expect(source).toContain("<TermsAcceptanceModal");
     expect(source).toContain("onAccepted={handleTermsAccepted}");
   });

@@ -179,7 +179,7 @@ export async function getMyListing(token: string): Promise<FreelancerListing | n
     throw new Error(body.error || `HTTP ${res.status}`);
   }
   const json = await res.json();
-  return json.data;
+  return json.data ?? null;
 }
 
 export async function getInquiryMessages(token: string, inquiryId: string): Promise<InquiryMessage[]> {
