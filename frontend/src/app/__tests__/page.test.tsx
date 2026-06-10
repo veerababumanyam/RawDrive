@@ -73,6 +73,14 @@ describe("Landing Page", () => {
     });
   });
 
+  it("renders a home-screen PWA download link", () => {
+    render(<LandingPage />);
+
+    expect(
+      screen.getByRole("link", { name: /download app/i }),
+    ).toHaveAttribute("href", "/install");
+  });
+
   it("renders the RawDrive eyebrow brand mark on the hero", () => {
     render(<LandingPage />);
     // The small uppercase "RawDrive" eyebrow above the H1 is the

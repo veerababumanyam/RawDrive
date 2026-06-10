@@ -20,6 +20,7 @@ const marketingRoutes = new Set([
   "/contact",
   "/login",
   "/register",
+  "/install",
 ]);
 
 function isMarketingRoute(pathname: string | null) {

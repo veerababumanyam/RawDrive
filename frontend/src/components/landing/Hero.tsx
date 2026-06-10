@@ -1,6 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { PwaDownloadButton } from "@/components/landing/PwaDownloadButton";
+
 /**
  * §4.1 Cinematic Hero
  *
@@ -85,6 +87,7 @@ export function Hero() {
                 →
               </span>
             </Link>
+            <PwaDownloadButton />
           </div>
         </div>
       </div>

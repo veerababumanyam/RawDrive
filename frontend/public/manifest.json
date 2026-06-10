@@ -2,7 +2,7 @@
   "name": "RawDrive",
   "short_name": "RawDrive",
   "description": "The Operating System for Professional Photography in India",
-  "start_url": "/",
+  "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#06121b",
   "theme_color": "#06121b",
