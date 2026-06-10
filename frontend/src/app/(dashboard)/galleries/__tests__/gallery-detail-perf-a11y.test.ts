@@ -363,6 +363,19 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("if (activeUploadCount > 0) {");
     expect(source).toContain("return;");
     expect(source).toContain("setShowUploadDialog(false)");
+    const acceptedUploadStart = source.indexOf("if (accepted.length > 0) {");
+    const acceptedUploadEnd = source.indexOf(
+      "upload.addFiles(accepted);",
+      acceptedUploadStart,
+    );
+    const acceptedUploadBlock = source.slice(
+      acceptedUploadStart,
+      acceptedUploadEnd,
+    );
+    expect(acceptedUploadStart).toBeGreaterThan(-1);
+    expect(acceptedUploadEnd).toBeGreaterThan(acceptedUploadStart);
+    expect(acceptedUploadBlock).toContain("setShowUploadDialog(false);");
+    expect(acceptedUploadBlock).not.toContain("setShowUploadDialog(true);");
     expect(source).not.toContain("Gallery stays usable during upload");
     expect(source).not.toContain("Only uploads locked until complete");
     expect(source).toContain("z-[80]");

@@ -2577,7 +2577,7 @@ export default function GalleryDetailPage({
             tetheredUploadSignaturesRef.current.add(uploadFileSignature(file));
           }
         }
-        setShowUploadDialog(true);
+        setShowUploadDialog(false);
         upload.addFiles(accepted);
       }
     },
