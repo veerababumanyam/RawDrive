@@ -1753,8 +1753,7 @@ export default function GalleryDetailPage({
   );
   const dashboardUploadContext = useDashboardUploadContext();
   const dashboardUpload = dashboardUploadContext?.upload;
-  const configureGalleryUpload =
-    dashboardUploadContext?.configureGalleryUpload;
+  const configureGalleryUpload = dashboardUploadContext?.configureGalleryUpload;
   const clearGalleryUpload = dashboardUploadContext?.clearGalleryUpload;
   const uploadOwnerKey = useMemo(() => `gallery:${id}`, [id]);
   // S3-G4 / S3-G5: also bind every upload session to THIS gallery (and the
@@ -1893,7 +1892,7 @@ export default function GalleryDetailPage({
   // every item had finished; that was both confusing and visually
   // dead weight. Now the panel hides when activeCount===0 and the
   // user gets a single right-side toast with the success count.
-  const activeUploadCount = upload.items.filter(
+  const activeUploadItems = upload.items.filter(
     (i) =>
       i.status === "uploading" ||
       i.status === "pending" ||
@@ -1901,7 +1900,8 @@ export default function GalleryDetailPage({
       i.status === "encrypting" ||
       i.status === "indexing_faces" ||
       i.status === "paused",
-  ).length;
+  );
+  const activeUploadCount = activeUploadItems.length;
   const completedUploadCount = upload.items.filter(
     (i) => i.status === "complete",
   ).length;
@@ -1955,9 +1955,7 @@ export default function GalleryDetailPage({
     return `${n.toFixed(n >= 100 ? 0 : 1)} ${units[u]}`;
   };
   const uploadPanelOpen =
-    activeUploadCount > 0 ||
-    failedUploadCount > 0 ||
-    blockedUploadCount > 0;
+    activeUploadCount > 0 || failedUploadCount > 0 || blockedUploadCount > 0;
   const uploadDialogOpen = showUploadDialog;
   const backgroundUploadBarVisible = uploadPanelOpen;
   const uploadDialogCanClose = true;
@@ -3275,7 +3273,10 @@ export default function GalleryDetailPage({
                           isAcceptedStillImageFile,
                         ),
                       );
-                      event.currentTarget.value = "";
+                      // Keep the directory FileList attached while the upload
+                      // queue drains. Clearing here can revoke browser-backed
+                      // read access before delayed folder files reach screening;
+                      // handleFolderSelect clears before the next picker open.
                     }}
                   />
                   <button
@@ -3644,8 +3645,9 @@ export default function GalleryDetailPage({
                           "ring-2",
                           "ring-accent-primary",
                         );
-                        const raw =
-                          e.dataTransfer.getData(ASSET_ALBUM_DRAG_TYPE);
+                        const raw = e.dataTransfer.getData(
+                          ASSET_ALBUM_DRAG_TYPE,
+                        );
                         if (!raw) return;
                         e.preventDefault();
                         try {
@@ -4555,9 +4557,23 @@ export default function GalleryDetailPage({
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
+                      {activeUploadCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            activeUploadItems.forEach((item) =>
+                              upload.cancel(item.id),
+                            );
+                          }}
+                          className="btn-tertiary px-3 py-1.5 text-xs"
+                        >
+                          Cancel active ({activeUploadCount})
+                        </button>
+                      )}
                       {activeUploadCount === 0 &&
                         retryableFailedUploadCount > 0 && (
                           <button
+                            type="button"
                             onClick={upload.retryAll}
                             className="btn-tertiary px-3 py-1.5 text-xs"
                           >
@@ -4567,6 +4583,7 @@ export default function GalleryDetailPage({
                       {activeUploadCount === 0 &&
                         (failedUploadCount > 0 || blockedUploadCount > 0) && (
                           <button
+                            type="button"
                             onClick={upload.clearFinished}
                             className="btn-tertiary px-3 py-1.5 text-xs"
                           >
@@ -4613,6 +4630,7 @@ export default function GalleryDetailPage({
                           item.status === "error" ||
                           item.status === "blocked" ||
                           item.status === "needs_desktop";
+                        const isActiveUpload = !isTerminal;
                         const statusLabel =
                           item.status === "complete"
                             ? "Done"
@@ -4684,6 +4702,16 @@ export default function GalleryDetailPage({
                                   className="text-xs font-medium text-accent hover:underline"
                                 >
                                   Resume
+                                </button>
+                              )}
+                              {isActiveUpload && (
+                                <button
+                                  type="button"
+                                  onClick={() => upload.cancel(item.id)}
+                                  className="text-xs font-medium text-text-tertiary hover:text-error"
+                                  aria-label={`Cancel ${item.file.name}`}
+                                >
+                                  Cancel
                                 </button>
                               )}
                               {isTerminal && (

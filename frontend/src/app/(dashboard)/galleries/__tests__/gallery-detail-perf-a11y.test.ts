@@ -206,7 +206,9 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("clearGalleryUpload");
     expect(source).toContain("const localUpload = useUpload");
     expect(source).toContain("const upload = dashboardUpload ?? localUpload");
-    expect(source).toContain("route changes do not break or unbind pending uploads");
+    expect(source).toContain(
+      "route changes do not break or unbind pending uploads",
+    );
     expect(source).toContain('data-testid="gallery-upload-dialog"');
     expect(source).toContain("handleUploadDialogBack");
     expect(source).toContain('data-testid="upload-dialog-back"');
@@ -251,12 +253,31 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain(
       "Keep the FileList attached while the queue drains",
     );
+    expect(source).toContain(
+      "Keep the directory FileList attached while the upload",
+    );
+    const folderInputStart = source.indexOf(
+      'data-testid="gallery-photo-folder-input"',
+    );
+    const folderInputEnd = source.indexOf("</input>", folderInputStart);
+    const folderInputSource = source.slice(
+      folderInputStart,
+      folderInputEnd === -1
+        ? source.indexOf("/>", folderInputStart)
+        : folderInputEnd,
+    );
+    expect(folderInputSource).not.toContain('value = ""');
     expect(source).not.toContain('document.createElement("input")');
     expect(source).toContain("backgroundUploadBarVisible");
-    expect(source).toContain("const backgroundUploadBarVisible = uploadPanelOpen;");
+    expect(source).toContain(
+      "const backgroundUploadBarVisible = uploadPanelOpen;",
+    );
     expect(source).toContain('data-testid="background-upload-status"');
     const panelOpenStart = source.indexOf("const uploadPanelOpen =");
-    const panelOpenEnd = source.indexOf("const uploadDialogOpen", panelOpenStart);
+    const panelOpenEnd = source.indexOf(
+      "const uploadDialogOpen",
+      panelOpenStart,
+    );
     const panelOpenSource = source.slice(panelOpenStart, panelOpenEnd);
     expect(panelOpenSource).toContain("activeUploadCount > 0");
     expect(panelOpenSource).toContain("failedUploadCount > 0");
@@ -278,9 +299,10 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).not.toContain("upload.pauseAll");
     expect(source).not.toContain("upload.resumeAll");
     expect(source).not.toContain("upload.cancelAll");
-    expect(source).not.toContain("Cancel active uploads");
-    expect(source).not.toContain("upload.cancel(item.id)");
-    expect(source).not.toContain('aria-label={`Cancel ${item.file.name}`}');
+    expect(source).toContain("activeUploadItems");
+    expect(source).toContain("Cancel active (");
+    expect(source).toContain("upload.cancel(item.id)");
+    expect(source).toContain("aria-label={`Cancel ${item.file.name}`}");
     expect(source).not.toContain("Pause all");
     expect(source).toContain("setShowUploadDialog(true)");
     expect(source).not.toContain("TetheredShootingPanel");
@@ -305,7 +327,8 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(backgroundBar).not.toContain("upload.pauseAll");
     expect(backgroundBar).not.toContain("upload.resumeAll");
     expect(backgroundBar).not.toContain("upload.cancelAll");
-    expect(backgroundBar).not.toContain("Cancel active uploads");
+    expect(backgroundBar).not.toContain("upload.cancel(item.id)");
+    expect(backgroundBar).not.toContain("Cancel active");
     expect(backgroundBar).toContain("upload.clearFinished");
     expect(backgroundBar).toContain("Dismiss");
     expect(backgroundBar).not.toContain("Cancel all");

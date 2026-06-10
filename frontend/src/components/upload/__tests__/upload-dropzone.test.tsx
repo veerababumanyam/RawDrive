@@ -1,7 +1,11 @@
+import fs from "node:fs";
+import path from "node:path";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { UploadDropzone } from "../upload-dropzone";
+
+const componentPath = path.resolve(__dirname, "../upload-dropzone.tsx");
 
 // Build a synthetic drop event whose dataTransfer carries the given files.
 // The dropzone's getFilesFromEvent reads dataTransfer.items first for the
@@ -35,6 +39,18 @@ describe("UploadDropzone", () => {
     ).toBeInTheDocument();
     const directoryInput = document.querySelector('input[webkitdirectory=""]');
     expect(directoryInput).toBeInstanceOf(HTMLInputElement);
+  });
+
+  it("keeps the folder FileList attached after selection", () => {
+    const source = fs.readFileSync(componentPath, "utf8");
+    const folderInputStart = source.indexOf("ref={folderInputRef}");
+    const folderInputEnd = source.indexOf("/>", folderInputStart);
+    const folderInputSource = source.slice(folderInputStart, folderInputEnd);
+
+    expect(folderInputStart).toBeGreaterThan(-1);
+    expect(folderInputSource).toContain("onFilesAccepted(selected)");
+    expect(folderInputSource).not.toContain('value = ""');
+    expect(source).toContain("Keep the directory FileList attached");
   });
 
   it("defaults to a wedding-scale batch limit", () => {

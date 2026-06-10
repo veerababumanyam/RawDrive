@@ -66,9 +66,11 @@ function useUploadSummary(items: UploadItem[]) {
       (item) => item.status === "complete",
     ).length;
     const failedCount = items.filter((item) => item.status === "error").length;
+    const retryableFailedCount = items.filter(
+      (item) => item.status === "error" && !item.requiresReselect,
+    ).length;
     const blockedCount = items.filter(
-      (item) =>
-        item.status === "blocked" || item.status === "needs_desktop",
+      (item) => item.status === "blocked" || item.status === "needs_desktop",
     ).length;
     const progressItems = items.filter(
       (item) =>
@@ -98,9 +100,7 @@ function useUploadSummary(items: UploadItem[]) {
       )
       .find(Boolean);
     const uploadPanelOpen =
-      activeCount > 0 ||
-      failedCount > 0 ||
-      blockedCount > 0;
+      activeCount > 0 || failedCount > 0 || blockedCount > 0;
     const shownCount = progressItems.length;
     const headline =
       activeCount > 0 && shownCount > activeCount
@@ -116,6 +116,8 @@ function useUploadSummary(items: UploadItem[]) {
     return {
       activeCount,
       completedCount,
+      failedCount,
+      retryableFailedCount,
       bytesTotal,
       bytesUploaded,
       percent,
@@ -189,6 +191,15 @@ function DashboardUploadStatusBar({
               Open gallery
             </Link>
           )}
+          {summary.retryableFailedCount > 0 && (
+            <button
+              type="button"
+              onClick={upload.retryAll}
+              className="btn-tertiary px-3 py-1.5 text-xs"
+            >
+              Retry failed
+            </button>
+          )}
           {summary.activeCount === 0 && summary.completedCount > 0 && (
             <button
               type="button"
@@ -204,11 +215,7 @@ function DashboardUploadStatusBar({
   );
 }
 
-export function DashboardUploadProvider({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export function DashboardUploadProvider({ children }: { children: ReactNode }) {
   const apiUrl = useMemo(() => getApiBaseUrl(), []);
   const token = useMemo(() => getStoredAccessToken(), []);
   const [config, setConfig] = useState<DashboardUploadConfig | null>(null);

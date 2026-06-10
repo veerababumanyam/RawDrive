@@ -171,7 +171,9 @@ export function UploadDropzone({
             if (selected.length > 0) {
               onFilesAccepted(selected);
             }
-            event.currentTarget.value = "";
+            // Keep the directory FileList attached while downstream upload
+            // code reads queued files. Clearing here can revoke browser-backed
+            // read access for large folder selections.
           }}
         />
 
