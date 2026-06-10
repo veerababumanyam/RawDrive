@@ -58,11 +58,11 @@ func writeReaderToTempFile(r io.Reader, pattern string) (path string, err error)
 	return tmp.Name(), nil
 }
 
-// rawPreviewDecoder decodes camera RAW files (cr2/cr3/nef/arw/dng/raf/orf/rw2)
-// by extracting their embedded full-resolution JPEG preview with an external
-// CLI, then decoding that JPEG with the stdlib. There is no pure-Go demosaicer
-// for these proprietary RAW formats, and the embedded preview is the camera's
-// own full-res render — exactly what we want for thumbnails/display.
+// rawPreviewDecoder decodes camera RAW files by extracting their embedded
+// full-resolution JPEG preview with an external CLI, then decoding that JPEG
+// with the stdlib. There is no pure-Go demosaicer for these proprietary RAW
+// formats, and the embedded preview is the camera's own full-res render —
+// exactly what we want for thumbnails/display.
 //
 // Extraction strategy (first that succeeds wins):
 //  1. exiftool -b -PreviewImage   (primary; broadest format coverage)

@@ -106,9 +106,8 @@ describe("DashboardUploadProvider", () => {
     expect(statusBarSource).toContain("Open gallery");
     expect(statusBarSource).toContain("Retry failed");
     expect(statusBarSource).toContain("upload.retryAll");
-    expect(statusBarSource).not.toContain("Cancel uploads");
-    expect(statusBarSource).not.toContain("upload.cancel");
-    expect(statusBarSource).not.toContain("cancelAll");
+    expect(statusBarSource).toContain("Cancel uploads");
+    expect(statusBarSource).toContain("upload.cancelAll");
     expect(statusBarSource).not.toContain("beforeunload");
     expect(statusBarSource).not.toContain("addEventListener");
     expect(source).toContain('data-testid="dashboard-upload-file-input"');

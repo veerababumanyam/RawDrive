@@ -192,7 +192,7 @@ func TestValidateForSessionCreate_StrictClientScan_Heic_Accepted(t *testing.T) {
 }
 
 func TestValidateForSessionCreate_StrictClientScan_DecodableRaw_Accepted(t *testing.T) {
-	for _, format := range []string{"cr2", "cr3", "nef", "arw", "dng", "rw2", "raf", "orf", "avif"} {
+	for _, format := range []string{"cr2", "cr3", "nef", "nrw", "arw", "sr2", "srf", "dng", "rw2", "raf", "orf", "ori", "pef", "3fr", "iiq", "avif"} {
 		t.Run(format, func(t *testing.T) {
 			v := newValidatorEnforced(&stubCatalog{})
 			m := validManifest()
@@ -207,7 +207,7 @@ func TestValidateForSessionCreate_StrictClientScan_DecodableRaw_Accepted(t *test
 
 func TestValidateForSessionCreate_StrictClientScan_NonDecodableRaw_DesktopRequired(t *testing.T) {
 	// Families the CompositeDecoder cannot handle still require a desktop agent.
-	for _, format := range []string{"crw", "nrw", "arq", "gpr", "rwl"} {
+	for _, format := range []string{"crw", "arq", "gpr", "rwl", "srw", "x3f", "raw"} {
 		t.Run(format, func(t *testing.T) {
 			v := newValidatorEnforced(&stubCatalog{})
 			m := validManifest()
@@ -290,14 +290,14 @@ func TestIsEngineAllowedForFormat_StrictClientScan_BrowserWorkerJpegAllowed(t *t
 // CRW) stay rejected. The non-image security boundary is unchanged — it lives
 // in SniffImageFormat at finalize, not in this allowlist.
 func TestIsEngineAllowedForFormat_StrictClientScan_ServerDecodableAllowed(t *testing.T) {
-	for _, f := range []string{"tiff", "heic", "heif", "avif", "cr2", "cr3", "nef", "arw", "dng", "raf", "orf", "rw2"} {
+	for _, f := range []string{"tiff", "heic", "heif", "avif", "cr2", "cr3", "nef", "nrw", "arw", "sr2", "srf", "dng", "raf", "orf", "ori", "rw2", "pef", "3fr", "iiq"} {
 		if !IsEngineAllowedForFormat(ScanEngineBrowserWorker, f, PolicyModeStrictClientScan) {
 			t.Errorf("strict_client_scan should ACCEPT server-decodable %s (FMT-1/H5)", f)
 		}
 	}
 	// These RAW families are NOT in the CompositeDecoder's dispatch set, so the
 	// relaxation must NOT accept them — they still need a desktop scanner.
-	for _, f := range []string{"arq", "gpr", "crw", "nrw", "rwl", "pef", "srw", "x3f"} {
+	for _, f := range []string{"arq", "gpr", "crw", "rwl", "srw", "x3f", "raw"} {
 		if IsEngineAllowedForFormat(ScanEngineBrowserWorker, f, PolicyModeStrictClientScan) {
 			t.Errorf("strict_client_scan must still REJECT non-server-decodable %s", f)
 		}
@@ -326,9 +326,9 @@ func TestIsServerDecodableFormat(t *testing.T) {
 	decodable := []string{
 		"jpeg", "png", "gif", "tiff", "webp",
 		"heic", "heif", "avif",
-		"cr2", "cr3", "nef", "arw", "dng", "raf", "orf", "rw2",
+		"cr2", "cr3", "nef", "nrw", "arw", "sr2", "srf", "dng", "raf", "orf", "ori", "rw2", "pef", "3fr", "iiq",
 		// alias normalization
-		"jpg", "tif",
+		"jpg", "tif", "hif",
 	}
 	for _, f := range decodable {
 		if !IsServerDecodableFormat(f) {
@@ -336,7 +336,7 @@ func TestIsServerDecodableFormat(t *testing.T) {
 		}
 	}
 	notDecodable := []string{
-		"", "crw", "nrw", "arq", "gpr", "rwl", "pef", "srw", "x3f",
+		"", "crw", "arq", "gpr", "rwl", "raw", "srw", "x3f",
 		"pdf", "zip", "svg", "html", "bmp", "unknown",
 	}
 	for _, f := range notDecodable {

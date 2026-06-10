@@ -11,7 +11,8 @@ const decodeRawMock = vi.fn();
 vi.mock("../decoders/heic", () => ({
   decodeHeic: (...args: unknown[]) => decodeHeicMock(...args),
   decodeAvif: (...args: unknown[]) => decodeAvifMock(...args),
-  supportsNativeAvifDecode: (...args: unknown[]) => supportsNativeAvifDecodeMock(...args),
+  supportsNativeAvifDecode: (...args: unknown[]) =>
+    supportsNativeAvifDecodeMock(...args),
 }));
 
 vi.mock("../decoders/raw-preview", () => ({
@@ -20,13 +21,20 @@ vi.mock("../decoders/raw-preview", () => ({
 
 import { decodeToImageSource } from "../decode-to-image-source";
 
-type FakeBitmap = { width: number; height: number; close: ReturnType<typeof vi.fn> };
+type FakeBitmap = {
+  width: number;
+  height: number;
+  close: ReturnType<typeof vi.fn>;
+};
 
 let createImageBitmapMock: ReturnType<typeof vi.fn> | null = null;
 
-function installImageBitmap(impl: (source: unknown) => Promise<FakeBitmap>): ReturnType<typeof vi.fn> {
+function installImageBitmap(
+  impl: (source: unknown) => Promise<FakeBitmap>,
+): ReturnType<typeof vi.fn> {
   createImageBitmapMock = vi.fn(impl);
-  (globalThis as unknown as { createImageBitmap: unknown }).createImageBitmap = createImageBitmapMock;
+  (globalThis as unknown as { createImageBitmap: unknown }).createImageBitmap =
+    createImageBitmapMock;
   return createImageBitmapMock;
 }
 
@@ -36,7 +44,9 @@ function bitmap(width: number, height: number): FakeBitmap {
 
 // JPEG SOI, PNG, GIF, RIFF/WEBP, TIFF(II), ISO-BMFF heic, ISO-BMFF avif, ISO-BMFF cr3 heads.
 const HEADS: Record<string, number[]> = {
-  jpeg: [0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01],
+  jpeg: [
+    0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
+  ],
   png: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0],
   gif: [0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0, 0, 0, 0, 0, 0],
   webp: [0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50],
@@ -60,7 +70,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  delete (globalThis as unknown as { createImageBitmap?: unknown }).createImageBitmap;
+  delete (globalThis as unknown as { createImageBitmap?: unknown })
+    .createImageBitmap;
   createImageBitmapMock = null;
   vi.restoreAllMocks();
 });
@@ -112,7 +123,9 @@ describe("decodeToImageSource routing", () => {
 
   it("falls back to needs-desktop when decodeHeic throws (never throws itself)", async () => {
     decodeHeicMock.mockRejectedValueOnce(new Error("libheif blew up"));
-    const result = await decodeToImageSource(fileWith("IMG_0001.heic", HEADS.heic));
+    const result = await decodeToImageSource(
+      fileWith("IMG_0001.heic", HEADS.heic),
+    );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe("needs-desktop");
   });
@@ -120,7 +133,9 @@ describe("decodeToImageSource routing", () => {
   it("routes AVIF through native decodeAvif when supported", async () => {
     supportsNativeAvifDecodeMock.mockResolvedValueOnce(true);
     decodeAvifMock.mockResolvedValueOnce(bitmap(640, 480));
-    const result = await decodeToImageSource(fileWith("hero.avif", HEADS.avif, "image/avif"));
+    const result = await decodeToImageSource(
+      fileWith("hero.avif", HEADS.avif, "image/avif"),
+    );
     expect(supportsNativeAvifDecodeMock).toHaveBeenCalledTimes(1);
     expect(decodeAvifMock).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ ok: true, width: 640, height: 480 });
@@ -146,33 +161,50 @@ describe("decodeToImageSource routing", () => {
     expect(result).toMatchObject({ ok: true, width: 5000, height: 3333 });
   });
 
-  it.each(["a.nef", "b.arw", "c.dng", "d.orf", "e.raf", "f.rw2"])(
-    "routes %s through decodeRaw",
-    async (name) => {
-      decodeRawMock.mockResolvedValueOnce(bitmap(100, 100));
-      const result = await decodeToImageSource(fileWith(name, HEADS.tiffLE));
-      expect(decodeRawMock).toHaveBeenCalledTimes(1);
-      expect(result.ok).toBe(true);
-    },
-  );
+  it.each([
+    "a.nef",
+    "a.nrw",
+    "b.arw",
+    "b.sr2",
+    "b.srf",
+    "c.dng",
+    "d.orf",
+    "d.ori",
+    "e.raf",
+    "f.rw2",
+    "g.pef",
+    "h.3fr",
+    "i.iiq",
+  ])("routes %s through decodeRaw", async (name) => {
+    decodeRawMock.mockResolvedValueOnce(bitmap(100, 100));
+    const result = await decodeToImageSource(fileWith(name, HEADS.tiffLE));
+    expect(decodeRawMock).toHaveBeenCalledTimes(1);
+    expect(result.ok).toBe(true);
+  });
 
   it("falls back to needs-desktop when decodeRaw returns null", async () => {
     decodeRawMock.mockResolvedValueOnce(null);
-    const result = await decodeToImageSource(fileWith("IMG_0001.CR2", HEADS.tiffLE));
+    const result = await decodeToImageSource(
+      fileWith("IMG_0001.CR2", HEADS.tiffLE),
+    );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe("needs-desktop");
   });
 
   it("routes CR3 (crx brand) through decodeRaw and wraps the bitmap", async () => {
     decodeRawMock.mockResolvedValueOnce(bitmap(6000, 4000));
-    const result = await decodeToImageSource(fileWith("IMG_0001.CR3", HEADS.cr3, "image/x-canon-cr3"));
+    const result = await decodeToImageSource(
+      fileWith("IMG_0001.CR3", HEADS.cr3, "image/x-canon-cr3"),
+    );
     expect(decodeRawMock).toHaveBeenCalledTimes(1);
     expect(decodeRawMock.mock.calls[0][1]).toBe("cr3"); // file + lowercased extension
     expect(result).toMatchObject({ ok: true, width: 6000, height: 4000 });
   });
 
   it("routes unknown/exotic formats to needs-desktop", async () => {
-    const result = await decodeToImageSource(fileWith("scan.x3f", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]));
+    const result = await decodeToImageSource(
+      fileWith("scan.x3f", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]),
+    );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe("needs-desktop");
   });
@@ -181,14 +213,18 @@ describe("decodeToImageSource routing", () => {
     installImageBitmap(async () => {
       throw new Error("decode error");
     });
-    const result = await decodeToImageSource(fileWith("Wedding (42).jpg", HEADS.jpeg));
+    const result = await decodeToImageSource(
+      fileWith("Wedding (42).jpg", HEADS.jpeg),
+    );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe("needs-desktop");
   });
 
   it("disambiguates HEIC vs AVIF by magic brand when extension is absent", async () => {
     decodeHeicMock.mockResolvedValueOnce(bitmap(2, 2));
-    const noExtHeic = new File([new Uint8Array(HEADS.heic)], "blob", { type: "" });
+    const noExtHeic = new File([new Uint8Array(HEADS.heic)], "blob", {
+      type: "",
+    });
     const result = await decodeToImageSource(noExtHeic);
     expect(decodeHeicMock).toHaveBeenCalledTimes(1);
     expect(result.ok).toBe(true);

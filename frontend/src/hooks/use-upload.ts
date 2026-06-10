@@ -597,17 +597,19 @@ export function useUpload(
           }
           // Terms gate (safety-net). The frontend pre-checks acceptance before
           // starting an upload, but if the status was stale/unknown the backend
-          // returns 403 TERMS_NOT_ACCEPTED. Mark the item blocked and ask the
-          // page to open the acceptance modal so the user can accept and retry.
+          // returns 403 TERMS_NOT_ACCEPTED. Keep this as a retryable error row:
+          // once the modal is accepted, the same selected File can be retried
+          // without reselecting it.
           if (
             createRes.status === 403 &&
             errorBody.error === "TERMS_NOT_ACCEPTED"
           ) {
             updateItem(item.id, {
-              status: "blocked",
+              status: "error",
+              requiresReselect: false,
               error:
                 errorBody.message ??
-                "You must accept the Terms of Service before uploading.",
+                "Accept the Terms of Service, then retry this upload.",
             });
             itemOnTermsRequired?.();
             return;

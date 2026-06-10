@@ -16,8 +16,9 @@
 // never a static top-level import. A static import would bundle the TIFF parser
 // for every client regardless of whether they ever upload a RAW.
 //
-// COVERAGE: TIFF-based RAW (CR2, NEF, ARW, DNG, ORF) extract well; RW2 is
-// best-effort (Panasonic stores its preview in a maker-note IFD that varies).
+// COVERAGE: TIFF-based RAW (CR2, NEF/NRW, ARW/SR2/SRF, DNG, ORF/ORI, PEF,
+// 3FR, IIQ) extract well; RW2 is best-effort (Panasonic stores its preview in
+// a maker-note IFD that varies).
 // RAF (Fuji) is parsed via its dedicated fixed-header layout. CR3 (Canon,
 // ISO-BMFF "crx " brand) is parsed via a dedicated box walker — see
 // `extractCr3Preview` — that pulls the full-resolution embedded JPEG out of the
@@ -143,7 +144,7 @@ type RawIfd = {
 };
 
 /**
- * TIFF-based RAW preview extractor (CR2/NEF/ARW/DNG/ORF/RW2/…). Uses utif2 to
+ * TIFF-based RAW preview extractor (CR2/NEF/NRW/ARW/SR2/SRF/DNG/ORF/ORI/RW2/PEF/3FR/IIQ/…). Uses utif2 to
  * parse the IFD tree, walks IFD0 + every SubIFD (`t330`) + the EXIF IFD +
  * Fuji IFD, collects every JPEG byte-range it can describe, verifies each
  * starts with the JPEG SOI marker, and returns the LARGEST one (the full-res
@@ -190,7 +191,11 @@ export async function extractTiffRawPreview(
 function collectJpegCandidates(ifd: RawIfd, candidates: JpegCandidate[]): void {
   const interchangeOffset = firstTagNumber(ifd, "t513");
   const interchangeLength = firstTagNumber(ifd, "t514");
-  if (interchangeOffset !== null && interchangeLength !== null && interchangeLength > 0) {
+  if (
+    interchangeOffset !== null &&
+    interchangeLength !== null &&
+    interchangeLength > 0
+  ) {
     candidates.push({ offset: interchangeOffset, length: interchangeLength });
   }
 
@@ -238,7 +243,10 @@ export function selectLargestJpegCandidate(
   return best;
 }
 
-function isUsableJpegCandidate(candidate: JpegCandidate, bytes: Uint8Array): boolean {
+function isUsableJpegCandidate(
+  candidate: JpegCandidate,
+  bytes: Uint8Array,
+): boolean {
   const { offset, length } = candidate;
   if (!Number.isInteger(offset) || !Number.isInteger(length)) return false;
   if (offset < 0 || length <= 0) return false;
@@ -414,7 +422,14 @@ function collectCr3PreviewBoxCandidates(
   candidates: JpegCandidate[],
 ): void {
   const boxes: BoxRange[] = [];
-  collectBoxesDeep(bytes, moov.payloadStart, moov.boxEnd, new Set(["PRVW", "THMB"]), boxes, 0);
+  collectBoxesDeep(
+    bytes,
+    moov.payloadStart,
+    moov.boxEnd,
+    new Set(["PRVW", "THMB"]),
+    boxes,
+    0,
+  );
   for (const box of boxes) {
     const soi = findJpegSoi(bytes, box.payloadStart, box.boxEnd);
     if (soi >= 0) {
@@ -482,13 +497,24 @@ function collectBoxesDeep(
       out.push(box);
     }
     if (ISO_BMFF_CONTAINER_TYPES.has(box.type) || box.type === "uuid") {
-      collectBoxesDeep(bytes, box.payloadStart, box.boxEnd, wanted, out, depth + 1);
+      collectBoxesDeep(
+        bytes,
+        box.payloadStart,
+        box.boxEnd,
+        wanted,
+        out,
+        depth + 1,
+      );
     }
   });
 }
 
 /** Descends a fixed child-box `path` from `box`; returns the leaf box or null. */
-function descend(bytes: Uint8Array, box: BoxRange, path: readonly string[]): BoxRange | null {
+function descend(
+  bytes: Uint8Array,
+  box: BoxRange,
+  path: readonly string[],
+): BoxRange | null {
   let current: BoxRange | null = box;
   for (const want of path) {
     if (current === null) return null;
@@ -515,12 +541,22 @@ function findJpegSoi(bytes: Uint8Array, start: number, end: number): number {
 /** Lowercased 4-char ISO-BMFF major brand at offset 8 (e.g. "crx "), or "". */
 function isoBmffMajorBrand(bytes: Uint8Array): string {
   if (bytes.length < 12) return "";
-  return String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]).toLowerCase();
+  return String.fromCharCode(
+    bytes[8],
+    bytes[9],
+    bytes[10],
+    bytes[11],
+  ).toLowerCase();
 }
 
 /** Four ASCII chars of the box type at `offset`. */
 function boxType(bytes: Uint8Array, offset: number): string {
-  return String.fromCharCode(bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]);
+  return String.fromCharCode(
+    bytes[offset],
+    bytes[offset + 1],
+    bytes[offset + 2],
+    bytes[offset + 3],
+  );
 }
 
 /** Reads a big-endian uint64 as a JS number (exact for file offsets < 2^53). */
@@ -532,7 +568,10 @@ function readUint64BE(bytes: Uint8Array, offset: number): number {
 
 /** Slices the candidate byte-range out of the buffer as an image/jpeg Blob. */
 function sliceJpegBlob(buffer: ArrayBuffer, candidate: JpegCandidate): Blob {
-  const slice = buffer.slice(candidate.offset, candidate.offset + candidate.length);
+  const slice = buffer.slice(
+    candidate.offset,
+    candidate.offset + candidate.length,
+  );
   return new Blob([slice], { type: "image/jpeg" });
 }
 
@@ -542,7 +581,11 @@ export function hasJpegSoi(bytes: Uint8Array, offset = 0): boolean {
 }
 
 /** True if `bytes[offset..]` ends exactly on the JPEG EOI marker (`FF D9`). */
-export function endsWithJpegEoi(bytes: Uint8Array, offset: number, length: number): boolean {
+export function endsWithJpegEoi(
+  bytes: Uint8Array,
+  offset: number,
+  length: number,
+): boolean {
   const end = offset + length;
   if (end > bytes.length || length < 2) return false;
   return bytes[end - 2] === JPEG_EOI_0 && bytes[end - 1] === JPEG_EOI_1;
@@ -561,15 +604,28 @@ function isRafMagic(bytes: Uint8Array): boolean {
 function isTiffMagic(bytes: Uint8Array): boolean {
   if (bytes.length < 4) return false;
   // Little-endian: "II" 0x2A 0x00 ; Big-endian: "MM" 0x00 0x2A.
-  const littleEndian = bytes[0] === 0x49 && bytes[1] === 0x49 && bytes[2] === 0x2a && bytes[3] === 0x00;
-  const bigEndian = bytes[0] === 0x4d && bytes[1] === 0x4d && bytes[2] === 0x00 && bytes[3] === 0x2a;
+  const littleEndian =
+    bytes[0] === 0x49 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x2a &&
+    bytes[3] === 0x00;
+  const bigEndian =
+    bytes[0] === 0x4d &&
+    bytes[1] === 0x4d &&
+    bytes[2] === 0x00 &&
+    bytes[3] === 0x2a;
   return littleEndian || bigEndian;
 }
 
 function isIsoBmff(bytes: Uint8Array): boolean {
   // ISO Base Media File Format (CR3, HEIC, MP4, …): bytes 4..8 are "ftyp".
   if (bytes.length < 12) return false;
-  return bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70;
+  return (
+    bytes[4] === 0x66 &&
+    bytes[5] === 0x74 &&
+    bytes[6] === 0x79 &&
+    bytes[7] === 0x70
+  );
 }
 
 function isTiffBasedRawExtension(ext: string | null): boolean {

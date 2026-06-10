@@ -36,7 +36,6 @@ describe("GalleryWorkspaceNav", () => {
     const nav = screen.getByRole("navigation", { name: "Gallery workspace" });
     for (const label of [
       "Galleries",
-      "Overview",
       "Cover & Design",
       // AI tab removed from workspace nav 2026-05-19 — page still
       // accessible via deep links from gallery-ai-panel.tsx.
@@ -50,15 +49,13 @@ describe("GalleryWorkspaceNav", () => {
     }
 
     // Galleries leads back to the list (first, top-down by scope).
-    // Overview points to the current gallery's detail page so users can
-    // jump back to the main view from any sub-page.
     expect(
       within(nav).getByRole("link", { name: "Galleries" }),
     ).toHaveAttribute("href", "/galleries");
-    expect(within(nav).getByRole("link", { name: "Overview" })).toHaveAttribute(
-      "href",
-      "/galleries/gallery-1",
-    );
+    expect(
+      within(nav).getByRole("link", { name: "Galleries" }),
+    ).toHaveAttribute("aria-current", "page");
+    expect(within(nav).queryByRole("link", { name: "Overview" })).toBeNull();
     expect(
       within(nav).getByRole("link", { name: "Cover & Design" }),
     ).toHaveAttribute("href", "/galleries/gallery-1/cover");

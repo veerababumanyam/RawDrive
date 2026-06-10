@@ -1235,13 +1235,19 @@ func rateLimitExceptPaths(limiter func(http.Handler) http.Handler, paths ...stri
 func rateLimitByRoute(
 	globalLimiter func(http.Handler) http.Handler,
 	uploadProtocolLimiter func(http.Handler) http.Handler,
+	storageMediaLimiter func(http.Handler) http.Handler,
 ) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		globalLimited := globalLimiter(next)
 		uploadProtocolLimited := uploadProtocolLimiter(next)
+		storageMediaLimited := storageMediaLimiter(next)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if oauthStartRateLimitBypass(r) {
 				next.ServeHTTP(w, r)
+				return
+			}
+			if storageMediaRateLimitBypass(r) {
+				storageMediaLimited.ServeHTTP(w, r)
 				return
 			}
 			if uploadProtocolRateLimitBypass(r) {
@@ -1256,6 +1262,10 @@ func rateLimitByRoute(
 func oauthStartRateLimitBypass(r *http.Request) bool {
 	return r.Method == http.MethodGet &&
 		(r.URL.Path == "/auth/oauth/google" || r.URL.Path == "/api/v1/auth/oauth/google")
+}
+
+func storageMediaRateLimitBypass(r *http.Request) bool {
+	return r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/storage/")
 }
 
 func uploadProtocolRateLimitBypass(r *http.Request) bool {
@@ -1464,7 +1474,18 @@ func main() {
 	}
 	uploadProtocolLimiter, _ := middleware.RateLimitWithValkey(valkeyClient, "upload_protocol", uploadProtocolRateMax, uploadProtocolRateWindow)
 	log.Printf("Upload protocol rate limit: %d requests / %s per client IP", uploadProtocolRateMax, uploadProtocolRateWindow)
-	r.Use(rateLimitByRoute(globalLimiter, uploadProtocolLimiter))
+	// Storage bytes are normal user-facing media traffic, not control-plane API
+	// traffic. Gallery grids and upload result refreshes can legitimately fetch
+	// hundreds of protected /storage thumbnails in a minute; keep those requests
+	// from burning the app-wide bucket while retaining a bounded media guard.
+	storageMediaRateMax := envIntOrDefault("STORAGE_MEDIA_RATE_LIMIT_PER_MINUTE", 12000)
+	storageMediaRateWindow := time.Duration(envIntOrDefault("STORAGE_MEDIA_RATE_LIMIT_WINDOW_SECONDS", 60)) * time.Second
+	if os.Getenv("APP_ENV") == "development" {
+		storageMediaRateMax = 100000
+	}
+	storageMediaLimiter, _ := middleware.RateLimitWithValkey(valkeyClient, "storage_media", storageMediaRateMax, storageMediaRateWindow)
+	log.Printf("Storage media rate limit: %d requests / %s per client IP", storageMediaRateMax, storageMediaRateWindow)
+	r.Use(rateLimitByRoute(globalLimiter, uploadProtocolLimiter, storageMediaLimiter))
 
 	// ──────────────────────── Database Connection (shared M1 + M2) ────────────────
 	dbURL := os.Getenv("DATABASE_URL")

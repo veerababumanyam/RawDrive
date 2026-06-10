@@ -68,21 +68,21 @@ describe("UploadDropzone", () => {
     const hint = screen.getByText(/camera RAW/i);
     expect(hint).toHaveTextContent(/HEIC\/HEIF/i);
     expect(hint).toHaveTextContent(/AVIF/i);
-    expect(hint).toHaveTextContent(/CR2/i);
-    expect(hint).toHaveTextContent(/NEF/i);
+    expect(hint).toHaveTextContent(/Canon/i);
+    expect(hint).toHaveTextContent(/Nikon/i);
+    expect(hint).toHaveTextContent(/Phase One/i);
   });
 
   it("says HEIC, AVIF, and common RAW now upload directly in the browser", () => {
     render(<UploadDropzone onFilesAccepted={vi.fn()} />);
 
-    // CD4 + CR3 moved HEIC/HEIF/AVIF + cr2/cr3/nef/arw/dng/orf/raf/rw2 into the
-    // BROWSER_DECODE set — the copy must no longer claim they need Desktop.
+    // CD4/CD5c moved HEIC/HEIF/AVIF + common preview-bearing camera RAW into
+    // the BROWSER_DECODE set — the copy must no longer claim they need Desktop.
     const hint = screen.getByText(/upload directly/i);
-    expect(hint).toHaveTextContent(/CR3/i);
-    expect(hint).toHaveTextContent(/ARW/i);
-    expect(hint).toHaveTextContent(/DNG/i);
-    expect(hint).toHaveTextContent(/ORF/i);
-    expect(hint).toHaveTextContent(/RAF/i);
+    expect(hint).toHaveTextContent(/Sony/i);
+    expect(hint).toHaveTextContent(/Fujifilm/i);
+    expect(hint).toHaveTextContent(/Pentax/i);
+    expect(hint).toHaveTextContent(/Hasselblad/i);
   });
 
   it("reserves RawDrive Desktop for TIFF and the remaining exotic RAW formats", () => {

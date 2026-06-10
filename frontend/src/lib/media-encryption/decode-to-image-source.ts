@@ -21,11 +21,21 @@
 // slice of MAGIC BYTES — `file.type` is never trusted (cameras/OSes mislabel
 // RAW and HEIC routinely, and a hostile blob could lie).
 
-import { decodeAvif, decodeHeic, supportsNativeAvifDecode } from "./decoders/heic";
+import {
+  decodeAvif,
+  decodeHeic,
+  supportsNativeAvifDecode,
+} from "./decoders/heic";
 import { decodeRaw } from "./decoders/raw-preview";
 
 export type DecodeResult =
-  | { ok: true; source: CanvasImageSource; width: number; height: number; close?: () => void }
+  | {
+      ok: true;
+      source: CanvasImageSource;
+      width: number;
+      height: number;
+      close?: () => void;
+    }
   | { ok: false; reason: "needs-desktop"; detail: string };
 
 // Camera-RAW extensions whose embedded JPEG preview the RAW decoder can slice
@@ -33,7 +43,23 @@ export type DecodeResult =
 // and the parsers in decoders/raw-preview.ts (TIFF-based families + the RAF and
 // CR3 box parsers). Exotic / proprietary RAW stays absent — those fall through
 // to the needs-desktop default.
-const BROWSER_RAW_EXTENSIONS = new Set(["cr2", "cr3", "nef", "arw", "dng", "orf", "raf", "rw2"]);
+const BROWSER_RAW_EXTENSIONS = new Set([
+  "cr2",
+  "cr3",
+  "nef",
+  "nrw",
+  "arw",
+  "sr2",
+  "srf",
+  "dng",
+  "orf",
+  "ori",
+  "raf",
+  "rw2",
+  "pef",
+  "3fr",
+  "iiq",
+]);
 
 // How many leading bytes we read to brand-sniff the container.
 const MAGIC_HEAD_BYTES = 16;
@@ -43,7 +69,9 @@ const MAGIC_HEAD_BYTES = 16;
  * returns a canvas-drawable source, or a `needs-desktop` fallback. NEVER
  * throws — see the module header for the contract.
  */
-export async function decodeToImageSource(file: File | Blob): Promise<DecodeResult> {
+export async function decodeToImageSource(
+  file: File | Blob,
+): Promise<DecodeResult> {
   try {
     const ext = extensionOf(file);
     const head = await readHead(file);
@@ -59,13 +87,17 @@ export async function decodeToImageSource(file: File | Blob): Promise<DecodeResu
       case "raw":
         return await decodeViaRaw(file, ext);
       default:
-        return needsDesktop(`Unsupported in-browser format: ${describe(ext, head)}`);
+        return needsDesktop(
+          `Unsupported in-browser format: ${describe(ext, head)}`,
+        );
     }
   } catch (err) {
     // Defense in depth: the per-family helpers already swallow their own
     // failures, but any unexpected throw (head read, detection) also collapses
     // to needs-desktop so this function can never reject.
-    return needsDesktop(`Decode failed: ${(err as Error)?.message ?? "unknown error"}`);
+    return needsDesktop(
+      `Decode failed: ${(err as Error)?.message ?? "unknown error"}`,
+    );
   }
 }
 
@@ -80,7 +112,12 @@ type Family = "native" | "heic" | "avif" | "raw" | "unsupported";
  */
 function detectFamily(ext: string | null, head: Uint8Array): Family {
   // Magic-byte container detection first — it is the most reliable signal.
-  if (isJpegMagic(head) || isPngMagic(head) || isGifMagic(head) || isWebpMagic(head)) {
+  if (
+    isJpegMagic(head) ||
+    isPngMagic(head) ||
+    isGifMagic(head) ||
+    isWebpMagic(head)
+  ) {
     return "native";
   }
 
@@ -109,7 +146,14 @@ function detectFamily(ext: string | null, head: Uint8Array): Family {
   // Extension-only fallbacks when magic bytes were inconclusive (e.g. a truncated
   // head). Only honor extensions whose decoder can actually handle the bytes.
   if (ext !== null) {
-    if (ext === "jpg" || ext === "jpeg" || ext === "jpe" || ext === "jfif" || ext === "jfi") return "native";
+    if (
+      ext === "jpg" ||
+      ext === "jpeg" ||
+      ext === "jpe" ||
+      ext === "jfif" ||
+      ext === "jfi"
+    )
+      return "native";
     if (ext === "png") return "native";
     if (ext === "gif") return "native";
     if (ext === "webp") return "native";
@@ -129,7 +173,9 @@ async function decodeNative(file: File | Blob): Promise<DecodeResult> {
     const bitmap = await createImageBitmap(file);
     return fromBitmap(bitmap);
   } catch (err) {
-    return needsDesktop(`Native image decode failed: ${(err as Error)?.message ?? "unknown error"}`);
+    return needsDesktop(
+      `Native image decode failed: ${(err as Error)?.message ?? "unknown error"}`,
+    );
   }
 }
 
@@ -138,7 +184,9 @@ async function decodeViaHeic(file: File | Blob): Promise<DecodeResult> {
     const bitmap = await decodeHeic(file);
     return fromBitmap(bitmap);
   } catch (err) {
-    return needsDesktop(`HEIC/HEIF decode failed: ${(err as Error)?.message ?? "unknown error"}`);
+    return needsDesktop(
+      `HEIC/HEIF decode failed: ${(err as Error)?.message ?? "unknown error"}`,
+    );
   }
 }
 
@@ -156,19 +204,28 @@ async function decodeViaAvif(file: File | Blob): Promise<DecodeResult> {
     const bitmap = await decodeAvif(file);
     return fromBitmap(bitmap);
   } catch (err) {
-    return needsDesktop(`AVIF decode failed: ${(err as Error)?.message ?? "unknown error"}`);
+    return needsDesktop(
+      `AVIF decode failed: ${(err as Error)?.message ?? "unknown error"}`,
+    );
   }
 }
 
-async function decodeViaRaw(file: File | Blob, ext: string | null): Promise<DecodeResult> {
+async function decodeViaRaw(
+  file: File | Blob,
+  ext: string | null,
+): Promise<DecodeResult> {
   try {
     const bitmap = await decodeRaw(file, ext ?? undefined);
     if (bitmap === null) {
-      return needsDesktop("No usable embedded preview could be extracted from this RAW file");
+      return needsDesktop(
+        "No usable embedded preview could be extracted from this RAW file",
+      );
     }
     return fromBitmap(bitmap);
   } catch (err) {
-    return needsDesktop(`RAW decode failed: ${(err as Error)?.message ?? "unknown error"}`);
+    return needsDesktop(
+      `RAW decode failed: ${(err as Error)?.message ?? "unknown error"}`,
+    );
   }
 }
 
@@ -218,8 +275,14 @@ function isGifMagic(b: Uint8Array): boolean {
 function isWebpMagic(b: Uint8Array): boolean {
   // "RIFF" .... "WEBP"
   return (
-    b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
-    b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50
+    b[0] === 0x52 &&
+    b[1] === 0x49 &&
+    b[2] === 0x46 &&
+    b[3] === 0x46 &&
+    b[8] === 0x57 &&
+    b[9] === 0x45 &&
+    b[10] === 0x42 &&
+    b[11] === 0x50
   );
 }
 
@@ -249,8 +312,14 @@ function isAvifBrand(brand: string): boolean {
 function isHeicBrand(brand: string): boolean {
   // heic/heix/heim/heis = HEVC; mif1/msf1 = generic HEIF; hevc/hevx variants.
   return (
-    brand === "heic" || brand === "heix" || brand === "heim" || brand === "heis" ||
-    brand === "mif1" || brand === "msf1" || brand === "hevc" || brand === "hevx"
+    brand === "heic" ||
+    brand === "heix" ||
+    brand === "heim" ||
+    brand === "heis" ||
+    brand === "mif1" ||
+    brand === "msf1" ||
+    brand === "hevc" ||
+    brand === "hevx"
   );
 }
 
@@ -260,11 +329,19 @@ function isCr3Brand(brand: string): boolean {
 
 function isRafMagic(b: Uint8Array): boolean {
   // "FUJIF" — enough of FUJIFILMCCD-RAW to disambiguate within a 16-byte head.
-  return b[0] === 0x46 && b[1] === 0x55 && b[2] === 0x4a && b[3] === 0x49 && b[4] === 0x46;
+  return (
+    b[0] === 0x46 &&
+    b[1] === 0x55 &&
+    b[2] === 0x4a &&
+    b[3] === 0x49 &&
+    b[4] === 0x46
+  );
 }
 
 function describe(ext: string | null, head: Uint8Array): string {
   const extPart = ext !== null ? `.${ext}` : "no extension";
-  const brand = isIsoBmff(head) ? ` (ISO-BMFF brand "${isoBmffMajorBrand(head)}")` : "";
+  const brand = isIsoBmff(head)
+    ? ` (ISO-BMFF brand "${isoBmffMajorBrand(head)}")`
+    : "";
   return `${extPart}${brand}`;
 }

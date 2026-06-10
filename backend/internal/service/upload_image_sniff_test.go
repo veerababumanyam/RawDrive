@@ -169,6 +169,7 @@ func TestNormalizeImageFormat(t *testing.T) {
 		{"PNG", "png"},
 		{"  WebP  ", "webp"},
 		{"heic", "heic"},
+		{"hif", "heif"},
 		{"", ""},
 	}
 	for _, c := range cases {

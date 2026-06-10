@@ -38,16 +38,16 @@ const DEFAULT_METADATA_BUDGET = 512 * 1024; // 512 KB
  * Detect the format of a byte buffer via magic-byte sniffing, then run
  * the matching format screener. Returns a ScanResult.
  *
- * CD5: HEIC / HEIF / AVIF and the now-browser-decodable camera RAW families
- * (CR2, CR3, NEF, ARW, DNG, ORF, RAF, RW2) return decision = "pass" with the
- * canonical detected_format, so the source-side encrypted upload's scan
- * manifest lets them finalize. Formats that still need the desktop companion
- * (exotic / proprietary RAW, ambiguous or multi-page TIFF) return
+ * CD5/CD5c: HEIC / HEIF / AVIF and the now-browser-decodable camera RAW
+ * families return decision = "pass" with the canonical detected_format, so the
+ * source-side encrypted upload's scan manifest lets them finalize. Formats
+ * that still need the desktop companion (exotic / proprietary RAW, ambiguous
+ * or multi-page TIFF) return
  * decision = "needs_desktop_scan". Anything unrecognized is blocked.
  */
 export function screen(
   bytes: Uint8Array,
-  opts: Partial<ScreenOptions> = {}
+  opts: Partial<ScreenOptions> = {},
 ): ScanResult {
   const cfg: ScreenOptions = {
     metadataBudgetBytes: opts.metadataBudgetBytes ?? DEFAULT_METADATA_BUDGET,
@@ -87,7 +87,11 @@ export function screen(
   // given (camera RAW reports a vendor `image/x-*` MIME through the file
   // picker accept-list) and — CD5b — backstops that with the filename
   // extension when the MIME is generic/absent.
-  const detected = classifyContainerFormat(bytes, cfg.declaredType, cfg.declaredName);
+  const detected = classifyContainerFormat(
+    bytes,
+    cfg.declaredType,
+    cfg.declaredName,
+  );
   if (detected) {
     if (detected.browserDecodable) {
       return {
@@ -147,22 +151,41 @@ interface ContainerFormat {
  */
 const TIFF_RAW_MIME_TO_FORMAT: Record<string, string> = {
   "image/x-nikon-nef": "nef",
+  "image/x-nikon-nrw": "nrw",
   "image/x-sony-arw": "arw",
-  "image/x-sony-sr2": "arw",
+  "image/x-sony-sr2": "sr2",
+  "image/x-sony-srf": "srf",
   "image/x-adobe-dng": "dng",
   "image/x-dng": "dng",
   "image/x-olympus-orf": "orf",
-  "image/x-olympus-ori": "orf",
+  "image/x-olympus-ori": "ori",
   "image/x-panasonic-rw2": "rw2",
-  "image/x-panasonic-raw": "rw2",
-  "image/x-leica-rwl": "rw2",
+  "image/x-pentax-pef": "pef",
+  "image/x-hasselblad-3fr": "3fr",
+  "image/x-phaseone-iiq": "iiq",
 };
 
 /**
  * Browser-decodable camera RAW tokens (CD4). CR2, RAF, and CR3 are detected by
  * their own magic/brand; the TIFF-based rest disambiguate via declaredType above.
  */
-const BROWSER_DECODABLE_RAW = new Set(["cr2", "cr3", "nef", "arw", "dng", "orf", "raf", "rw2"]);
+const BROWSER_DECODABLE_RAW = new Set([
+  "cr2",
+  "cr3",
+  "nef",
+  "nrw",
+  "arw",
+  "sr2",
+  "srf",
+  "dng",
+  "orf",
+  "ori",
+  "raf",
+  "rw2",
+  "pef",
+  "3fr",
+  "iiq",
+]);
 
 /**
  * CD5b: the TIFF-based, browser-decodable RAW extensions used by the
@@ -178,10 +201,17 @@ const BROWSER_DECODABLE_RAW = new Set(["cr2", "cr3", "nef", "arw", "dng", "orf",
  */
 const TIFF_RAW_EXTENSION_TO_FORMAT: Record<string, string> = {
   nef: "nef",
+  nrw: "nrw",
   arw: "arw",
+  sr2: "sr2",
+  srf: "srf",
   dng: "dng",
   orf: "orf",
+  ori: "ori",
   rw2: "rw2",
+  pef: "pef",
+  "3fr": "3fr",
+  iiq: "iiq",
 };
 
 /** Extract the lowercase extension from a filename, or "" when absent. */
@@ -200,7 +230,7 @@ function extensionOf(name: string): string {
 function classifyContainerFormat(
   bytes: Uint8Array,
   declaredType: string,
-  declaredName?: string
+  declaredName?: string,
 ): ContainerFormat | null {
   if (bytes.length < 4) return null;
 
@@ -216,10 +246,25 @@ function classifyContainerFormat(
   }
 
   // Fuji RAF: opens with the ASCII magic "FUJIFILMCCD-RAW".
-  if (matchAt(bytes, 0, [
-    0x46, 0x55, 0x4a, 0x49, 0x46, 0x49, 0x4c, 0x4d, // "FUJIFILM"
-    0x43, 0x43, 0x44, 0x2d, 0x52, 0x41, 0x57, // "CCD-RAW"
-  ])) {
+  if (
+    matchAt(bytes, 0, [
+      0x46,
+      0x55,
+      0x4a,
+      0x49,
+      0x46,
+      0x49,
+      0x4c,
+      0x4d, // "FUJIFILM"
+      0x43,
+      0x43,
+      0x44,
+      0x2d,
+      0x52,
+      0x41,
+      0x57, // "CCD-RAW"
+    ])
+  ) {
     return { format: "raf", browserDecodable: true };
   }
 

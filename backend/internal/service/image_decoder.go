@@ -139,7 +139,8 @@ func ClassifyDecodeError(err error) *DecodeError {
 //   - jpeg/png/gif  → stdlib image.Decode (registered via blank imports above)
 //   - tiff/webp     → golang.org/x/image pure-Go decoders
 //   - heic/heif/avif → heicDecoder, shelling out to libheif's heif-convert
-//   - RAW families (cr2/cr3/nef/arw/dng/raf/orf/rw2) → rawPreviewDecoder,
+//   - RAW families (cr2/cr3/nef/nrw/arw/sr2/srf/dng/raf/orf/ori/rw2/pef/3fr/iiq)
+//     → rawPreviewDecoder,
 //     extracting the embedded full-res JPEG preview via exiftool (primary) or
 //     dcraw (fallback) and decoding that with the stdlib.
 //
@@ -208,7 +209,7 @@ func (d *CompositeDecoder) Decode(ctx context.Context, format string, r io.Reade
 		// as terminal.
 		return d.heic.Decode(ctx, f, r)
 
-	case "cr2", "cr3", "nef", "arw", "dng", "raf", "orf", "rw2":
+	case "cr2", "cr3", "nef", "nrw", "arw", "sr2", "srf", "dng", "raf", "orf", "ori", "rw2", "pef", "3fr", "iiq":
 		// Out-of-process via exiftool/dcraw embedded-preview extraction. There
 		// is no pure-Go demosaicer for these proprietary RAW formats; the
 		// camera's embedded full-res JPEG preview is what we decode.

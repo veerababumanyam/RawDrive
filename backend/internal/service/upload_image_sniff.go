@@ -270,6 +270,8 @@ func NormalizeImageFormat(format string) string {
 		return "jpeg"
 	case "tif":
 		return "tiff"
+	case "hif":
+		return "heif"
 	}
 	return f
 }

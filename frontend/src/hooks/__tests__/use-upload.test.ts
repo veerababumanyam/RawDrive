@@ -27,7 +27,9 @@ describe("useUpload", () => {
     expect(source).toContain("uploadDestination?: UploadDestination");
     expect(source).toContain("uploadEncryption?: UploadEncryption | null");
     expect(source).toContain("uploadOnTermsRequired?");
-    expect(source).toContain("const currentDestination = destinationRef.current");
+    expect(source).toContain(
+      "const currentDestination = destinationRef.current",
+    );
     expect(source).toContain("uploadDestination: currentDestination");
     expect(source).toContain("const dest = itemDestination");
     expect(source).toContain("galleryId: itemDestination?.galleryId");
@@ -188,5 +190,27 @@ describe("useUpload", () => {
     expect(source).toContain(
       "This gallery has reached its configured storage quota",
     );
+  });
+
+  it("keeps backend terms-gate failures retryable after acceptance", async () => {
+    const source = await readFile(
+      join(process.cwd(), "src/hooks/use-upload.ts"),
+      "utf8",
+    );
+    const termsGateStart = source.indexOf(
+      'errorBody.error === "TERMS_NOT_ACCEPTED"',
+    );
+    const nextGateStart = source.indexOf(
+      "// Event gallery upload gates",
+      termsGateStart,
+    );
+    const termsGateSource = source.slice(termsGateStart, nextGateStart);
+
+    expect(termsGateStart).toBeGreaterThan(-1);
+    expect(nextGateStart).toBeGreaterThan(termsGateStart);
+    expect(termsGateSource).toContain('status: "error"');
+    expect(termsGateSource).toContain("requiresReselect: false");
+    expect(termsGateSource).toContain("retry this upload");
+    expect(termsGateSource).not.toContain('status: "blocked"');
   });
 });

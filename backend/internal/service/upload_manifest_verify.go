@@ -199,14 +199,14 @@ func VerifyHeaderTrailer(tempFilePath string, detectedFormat string) error {
 // short reads defensively, matching the original path-based behavior when
 // a file is smaller than 64 bytes.
 func VerifyHeaderTrailerBytes(head, tail []byte, detectedFormat string) error {
-	format := strings.ToLower(strings.TrimSpace(detectedFormat))
+	format := NormalizeImageFormat(detectedFormat)
 	if format == "" {
 		// No format hint — skip the check.
 		return nil
 	}
 
 	switch format {
-	case "jpeg", "jpg":
+	case "jpeg":
 		if !hasJpegSignature(head) || !hasJpegEnd(tail) {
 			return ErrScanHashMismatch
 		}
@@ -223,10 +223,41 @@ func VerifyHeaderTrailerBytes(head, tail []byte, detectedFormat string) error {
 			return ErrScanHashMismatch
 		}
 	default:
-		return ErrScanHashMismatch
+		if !isServerVerifiedContainerFormat(format, head) {
+			return ErrScanHashMismatch
+		}
 	}
 
 	return nil
+}
+
+func isServerVerifiedContainerFormat(format string, head []byte) bool {
+	if !IsServerDecodableFormat(format) {
+		return false
+	}
+	sniffed, ok := SniffImageFormat(head)
+	if !ok {
+		return false
+	}
+	sniffed = NormalizeImageFormat(sniffed)
+	if sniffed == format {
+		return true
+	}
+	if sniffed == "tiff" && isTiffBasedRawFormat(format) {
+		return true
+	}
+	if (format == "heic" || format == "heif") && (sniffed == "heic" || sniffed == "heif") {
+		return true
+	}
+	return false
+}
+
+func isTiffBasedRawFormat(format string) bool {
+	switch NormalizeImageFormat(format) {
+	case "cr2", "nef", "nrw", "arw", "sr2", "srf", "dng", "orf", "ori", "rw2", "pef", "3fr", "iiq":
+		return true
+	}
+	return false
 }
 
 // StillImageFormatFromContentType returns the canonical still-image format for
@@ -310,7 +341,7 @@ func stillImageFormatFromFilename(filename string) (string, bool) {
 		return "heif", true
 	case "avif":
 		return "avif", true
-	case "cr2", "cr3", "nef", "arw", "dng", "raf", "orf", "rw2":
+	case "cr2", "cr3", "nef", "nrw", "arw", "sr2", "srf", "dng", "raf", "orf", "ori", "rw2", "pef", "3fr", "iiq":
 		return ext, true
 	}
 	return "", false

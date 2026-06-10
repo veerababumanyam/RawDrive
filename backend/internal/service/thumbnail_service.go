@@ -159,7 +159,7 @@ func (s *ThumbnailService) decodeSource(ctx context.Context, format string, raw 
 func isOutOfProcessFormat(f string) bool {
 	switch f {
 	case "heic", "heif", "avif",
-		"cr2", "cr3", "nef", "arw", "dng", "raf", "orf", "rw2":
+		"cr2", "cr3", "nef", "nrw", "arw", "sr2", "srf", "dng", "raf", "orf", "ori", "rw2", "pef", "3fr", "iiq":
 		return true
 	default:
 		return false

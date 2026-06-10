@@ -208,6 +208,15 @@ function DashboardUploadStatusBar({
               Retry failed
             </button>
           )}
+          {summary.activeCount > 0 && (
+            <button
+              type="button"
+              onClick={upload.cancelAll}
+              className="btn-tertiary px-3 py-1.5 text-xs"
+            >
+              Cancel uploads
+            </button>
+          )}
           {summary.activeCount === 0 && summary.completedCount > 0 && (
             <button
               type="button"

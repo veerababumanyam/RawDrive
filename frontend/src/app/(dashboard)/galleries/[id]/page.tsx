@@ -484,6 +484,14 @@ function albumIsEditable(album: GalleryAlbum): boolean {
   return !album.smart_filter || Object.keys(album.smart_filter).length === 0;
 }
 
+function isHighlightsAlbum(album: Pick<GalleryAlbum, "name">): boolean {
+  return album.name.trim().toUpperCase() === HIGHLIGHTS_ALBUM_NAME;
+}
+
+function albumCanDelete(album: GalleryAlbum): boolean {
+  return albumIsEditable(album) && !isHighlightsAlbum(album);
+}
+
 // Recursively flatten a DataTransferItemList (drag-and-drop source)
 // into a flat File[]. Required when the user drops a FOLDER instead
 // of files — `dataTransfer.files` is empty for folder drops, and the
@@ -767,7 +775,18 @@ export default function GalleryDetailPage({
   const [albumAssetIdsByAlbum, setAlbumAssetIdsByAlbum] = useState<
     Record<string, string[]>
   >({});
-  const [activeAlbum, setActiveAlbum] = useState<string | null>(null);
+  const [activeAlbum, setActiveAlbum] = useState<string | null | undefined>(
+    undefined,
+  );
+  const highlightsAlbum = useMemo(
+    () =>
+      albums.find(
+        (album) => album.name.trim().toUpperCase() === HIGHLIGHTS_ALBUM_NAME,
+      ) ?? null,
+    [albums],
+  );
+  const activeAlbumId =
+    activeAlbum === undefined ? (highlightsAlbum?.id ?? null) : activeAlbum;
   const [newAlbumName, setNewAlbumName] = useState("");
   const [showAlbumCreate, setShowAlbumCreate] = useState(false);
   const [creatingAlbum, setCreatingAlbum] = useState(false);
@@ -1112,7 +1131,7 @@ export default function GalleryDetailPage({
 
   const handleDeleteAlbum = useCallback(
     async (album: GalleryAlbum) => {
-      if (!albumIsEditable(album)) return;
+      if (!albumCanDelete(album)) return;
       const confirmed = window.confirm(
         `Delete "${album.name}" sub-gallery? Photos stay in the gallery.`,
       );
@@ -1125,7 +1144,7 @@ export default function GalleryDetailPage({
       showGalleryActionStatus(`Deleting "${album.name}" sub-gallery...`);
       try {
         await deleteGalleryAlbum(t, album.id);
-        if (activeAlbum === album.id) setActiveAlbum(null);
+        if (activeAlbumId === album.id) setActiveAlbum(null);
         await refreshAlbums();
         showGalleryActionStatus("Sub-gallery deleted.", "success", 5000);
       } catch (err) {
@@ -1137,7 +1156,7 @@ export default function GalleryDetailPage({
         setSavingAlbumId(null);
       }
     },
-    [activeAlbum, refreshAlbums, showGalleryActionStatus],
+    [activeAlbumId, refreshAlbums, showGalleryActionStatus],
   );
 
   // Builds the canonical gallery URL:
@@ -1572,8 +1591,8 @@ export default function GalleryDetailPage({
   // compiler own the memoization. Behavior is identical.
   const computeVisibleAssets = () => {
     let result = assets;
-    if (activeAlbum) {
-      const albumAssetIds = new Set(albumAssetIdsByAlbum[activeAlbum] || []);
+    if (activeAlbumId) {
+      const albumAssetIds = new Set(albumAssetIdsByAlbum[activeAlbumId] || []);
       result = result.filter((a) => a.asset && albumAssetIds.has(a.asset.id));
     }
     if (faceFilterIds) {
@@ -1607,14 +1626,14 @@ export default function GalleryDetailPage({
     activeAlbum: string | null;
     faceFilterIds: Set<string> | null;
     proofingFilterAssetIds: Set<string> | null;
-  }>({ activeAlbum, faceFilterIds, proofingFilterAssetIds });
+  }>({ activeAlbum: activeAlbumId, faceFilterIds, proofingFilterAssetIds });
   if (
-    prevVisibleFilter.activeAlbum !== activeAlbum ||
+    prevVisibleFilter.activeAlbum !== activeAlbumId ||
     prevVisibleFilter.faceFilterIds !== faceFilterIds ||
     prevVisibleFilter.proofingFilterAssetIds !== proofingFilterAssetIds
   ) {
     setPrevVisibleFilter({
-      activeAlbum,
+      activeAlbum: activeAlbumId,
       faceFilterIds,
       proofingFilterAssetIds,
     });
@@ -1628,7 +1647,7 @@ export default function GalleryDetailPage({
   );
   const hasMoreAssets = visibleAssets.length > pagedAssets.length;
   const canReorderGalleryAssets =
-    !activeAlbum && !faceFilterIds && !proofingFilterAssetIds;
+    !activeAlbumId && !faceFilterIds && !proofingFilterAssetIds;
   const handleGalleryAssetReorder = useCallback(
     async (sourceAssetId: string, targetAssetId: string) => {
       if (!canReorderGalleryAssets || reorderingAssetIds) return;
@@ -1670,18 +1689,10 @@ export default function GalleryDetailPage({
   );
   const activeAlbumDetails = useMemo(
     () =>
-      activeAlbum
-        ? (albums.find((album) => album.id === activeAlbum) ?? null)
+      activeAlbumId
+        ? (albums.find((album) => album.id === activeAlbumId) ?? null)
         : null,
-    [activeAlbum, albums],
-  );
-  const highlightsAlbum = useMemo(
-    () =>
-      albums.find(
-        (album) =>
-          album.name.trim().toUpperCase() === HIGHLIGHTS_ALBUM_NAME,
-      ) ?? null,
-    [albums],
+    [activeAlbumId, albums],
   );
   const previewHref = useMemo(() => {
     const baseHref = `/galleries/${id}/preview`;
@@ -1818,7 +1829,8 @@ export default function GalleryDetailPage({
         );
         await updateGalleryDesign(token, id, payload);
         const payloadVersion =
-          typeof payload.version === "number" && Number.isFinite(payload.version)
+          typeof payload.version === "number" &&
+          Number.isFinite(payload.version)
             ? payload.version
             : 0;
         const savedDesignConfig = {
@@ -1915,7 +1927,7 @@ export default function GalleryDetailPage({
   // route changes do not break or unbind pending uploads.
   const localUpload = useUpload(apiUrl, token, {
     encryption: uploadEncryption,
-    destination: { galleryId: id, albumId: activeAlbum },
+    destination: { galleryId: id, albumId: activeAlbumId },
     onTermsRequired: openTermsModal,
   });
   const upload = dashboardUpload ?? localUpload;
@@ -1924,12 +1936,12 @@ export default function GalleryDetailPage({
     if (!configureGalleryUpload || !clearGalleryUpload) return;
     configureGalleryUpload(uploadOwnerKey, {
       encryption: uploadEncryption,
-      destination: { galleryId: id, albumId: activeAlbum },
+      destination: { galleryId: id, albumId: activeAlbumId },
       onTermsRequired: openTermsModal,
     });
     return () => clearGalleryUpload(uploadOwnerKey);
   }, [
-    activeAlbum,
+    activeAlbumId,
     clearGalleryUpload,
     configureGalleryUpload,
     id,
@@ -2259,7 +2271,7 @@ export default function GalleryDetailPage({
   // "+N more" tail so the toast doesn't grow unbounded.
   const dedupeIncomingFiles = useCallback(
     (incoming: File[]) => {
-      const uploadScopeAlbumId = activeAlbum ?? null;
+      const uploadScopeAlbumId = activeAlbumId ?? null;
       const activeAlbumAssetIds = uploadScopeAlbumId
         ? new Set(albumAssetIdsByAlbum[uploadScopeAlbumId] || [])
         : null;
@@ -2275,7 +2287,11 @@ export default function GalleryDetailPage({
         ) {
           continue;
         }
-        if (!uploadScopeAlbumId && assetId && subGalleryAssetIds?.has(assetId)) {
+        if (
+          !uploadScopeAlbumId &&
+          assetId &&
+          subGalleryAssetIds?.has(assetId)
+        ) {
           continue;
         }
         const fn = entry.asset?.filename;
@@ -2311,7 +2327,7 @@ export default function GalleryDetailPage({
       }
       return { accepted, duplicatesInGallery, duplicatesInBatch };
     },
-    [activeAlbum, albumAssetIdsByAlbum, assets, upload.items],
+    [activeAlbumId, albumAssetIdsByAlbum, assets, upload.items],
   );
 
   // Assets whose thumbnails the background worker has not finished
@@ -2403,8 +2419,8 @@ export default function GalleryDetailPage({
   // already pushed so the per-album add is also idempotent.
   const activeAlbumRef = useRef<string | null>(null);
   useEffect(() => {
-    activeAlbumRef.current = activeAlbum;
-  }, [activeAlbum]);
+    activeAlbumRef.current = activeAlbumId;
+  }, [activeAlbumId]);
   const albumLinkedAssetIdsRef = useRef<Set<string>>(new Set());
 
   // S3-G4 / S3-G5: the gallery link is now performed SERVER-SIDE at finalize
@@ -3570,107 +3586,111 @@ export default function GalleryDetailPage({
               )}
 
               {/* Mobile (<sm): collapse real sub-galleries into a single
-                  dropdown + Share/QR action buttons. The gallery root remains
-                  the default view but is not shown as a folder. */}
+                  dropdown + Share/QR action buttons. Highlights is the initial
+                  default when present; the gallery root is reachable from the
+                  folder breadcrumb. */}
               {albums.length > 0 && (
                 <div className="flex items-center gap-2 sm:hidden">
-                <select
-                  value={activeAlbum ?? ""}
-                  onChange={(e) => setActiveAlbum(e.target.value || null)}
-                  className="min-w-0 flex-1 rounded-xl border border-border-default bg-surface-container px-3 py-2 text-sm font-semibold text-text-primary transition-colors focus:border-accent-primary focus:outline-none focus:ring-2 focus:ring-accent-primary/30"
-                  aria-label="Select gallery view"
-                >
-                  <option value="" disabled>
-                    Sub-galleries
-                  </option>
-                  {albums.map((album) => (
-                    <option key={album.id} value={album.id}>
-                      {album.name} (
-                      {albumAssetIdsByAlbum[album.id]?.length ?? 0})
+                  <select
+                    value={activeAlbumId ?? ""}
+                    onChange={(e) => setActiveAlbum(e.target.value || null)}
+                    className="min-w-0 flex-1 rounded-xl border border-border-default bg-surface-container px-3 py-2 text-sm font-semibold text-text-primary transition-colors focus:border-accent-primary focus:outline-none focus:ring-2 focus:ring-accent-primary/30"
+                    aria-label="Select gallery view"
+                  >
+                    <option value="" disabled>
+                      Sub-galleries
                     </option>
-                  ))}
-                </select>
-                {(() => {
-                  const selectedAlbum = activeAlbum
-                    ? albums.find((a) => a.id === activeAlbum)
-                    : null;
-                  if (!selectedAlbum) return null;
-                  const selectedLabel = selectedAlbum.name;
-                  const selectedIsShareable = albumIsEditable(selectedAlbum);
-                  return (
-                    <>
-                      {selectedIsShareable && (
-                        <>
+                    {albums.map((album) => (
+                      <option key={album.id} value={album.id}>
+                        {album.name} (
+                        {albumAssetIdsByAlbum[album.id]?.length ?? 0})
+                      </option>
+                    ))}
+                  </select>
+                  {(() => {
+                    const selectedAlbum = activeAlbumId
+                      ? albums.find((a) => a.id === activeAlbumId)
+                      : null;
+                    if (!selectedAlbum) return null;
+                    const selectedLabel = selectedAlbum.name;
+                    const selectedIsShareable = albumIsEditable(selectedAlbum);
+                    const selectedCanDelete = albumCanDelete(selectedAlbum);
+                    return (
+                      <>
+                        {selectedIsShareable && (
+                          <>
+                            <GlassIconButton
+                              type="button"
+                              size="md"
+                              variant="ghost"
+                              onClick={() => copyShareUrl(selectedAlbum.id)}
+                              label={`Copy ${selectedLabel} share link`}
+                              aria-disabled={!gallery.is_published}
+                              className="shrink-0 border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
+                            >
+                              <Share />
+                            </GlassIconButton>
+                            <GlassIconButton
+                              type="button"
+                              size="md"
+                              variant="ghost"
+                              onClick={() =>
+                                openShareLink(selectedAlbum.id, selectedLabel)
+                              }
+                              label={`Email ${selectedLabel} share link`}
+                              aria-disabled={!gallery.is_published}
+                              className="shrink-0 border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
+                            >
+                              <Envelope />
+                            </GlassIconButton>
+                            <GlassIconButton
+                              type="button"
+                              size="md"
+                              variant="ghost"
+                              onClick={() =>
+                                openWhatsAppShare(
+                                  selectedAlbum.id,
+                                  selectedLabel,
+                                )
+                              }
+                              label={`WhatsApp ${selectedLabel} share link`}
+                              aria-disabled={!gallery.is_published}
+                              className="shrink-0 border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
+                            >
+                              <ChatBubble />
+                            </GlassIconButton>
+                            <ShareQrPopover
+                              key={`mobile-share-qr-${selectedAlbum.id}`}
+                              getShareUrl={() =>
+                                getAlbumShareQrUrl(selectedAlbum.id)
+                              }
+                              disabled={!gallery.is_published}
+                              onUnavailable={() =>
+                                setShareMessage(SHARE_UNAVAILABLE_MESSAGE)
+                              }
+                              label={`Show QR code for ${selectedLabel} share link`}
+                              filename={`${gallery.slug || "gallery"}-share-qr`}
+                            />
+                          </>
+                        )}
+                        {selectedCanDelete && (
                           <GlassIconButton
                             type="button"
                             size="md"
-                            variant="ghost"
-                            onClick={() => copyShareUrl(selectedAlbum.id)}
-                            label={`Copy ${selectedLabel} share link`}
-                            aria-disabled={!gallery.is_published}
-                            className="shrink-0 border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
-                          >
-                            <Share />
-                          </GlassIconButton>
-                          <GlassIconButton
-                            type="button"
-                            size="md"
-                            variant="ghost"
+                            variant="danger"
                             onClick={() =>
-                              openShareLink(selectedAlbum.id, selectedLabel)
+                              void handleDeleteAlbum(selectedAlbum)
                             }
-                            label={`Email ${selectedLabel} share link`}
-                            aria-disabled={!gallery.is_published}
-                            className="shrink-0 border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
+                            label={`Delete ${selectedLabel}`}
+                            disabled={savingAlbumId === selectedAlbum.id}
+                            className="shrink-0"
                           >
-                            <Envelope />
+                            <Trash />
                           </GlassIconButton>
-                          <GlassIconButton
-                            type="button"
-                            size="md"
-                            variant="ghost"
-                            onClick={() =>
-                              openWhatsAppShare(
-                                selectedAlbum.id,
-                                selectedLabel,
-                              )
-                            }
-                            label={`WhatsApp ${selectedLabel} share link`}
-                            aria-disabled={!gallery.is_published}
-                            className="shrink-0 border-border-default bg-surface-container text-text-secondary hover:border-accent-primary/60 hover:bg-surface-container-high hover:text-accent-primary"
-                          >
-                            <ChatBubble />
-                          </GlassIconButton>
-                          <ShareQrPopover
-                            key={`mobile-share-qr-${selectedAlbum.id}`}
-                            getShareUrl={() =>
-                              getAlbumShareQrUrl(selectedAlbum.id)
-                            }
-                            disabled={!gallery.is_published}
-                            onUnavailable={() =>
-                              setShareMessage(SHARE_UNAVAILABLE_MESSAGE)
-                            }
-                            label={`Show QR code for ${selectedLabel} share link`}
-                            filename={`${gallery.slug || "gallery"}-share-qr`}
-                          />
-                        </>
-                      )}
-                      {selectedAlbum && albumIsEditable(selectedAlbum) && (
-                        <GlassIconButton
-                          type="button"
-                          size="md"
-                          variant="danger"
-                          onClick={() => void handleDeleteAlbum(selectedAlbum)}
-                          label={`Delete ${selectedLabel}`}
-                          disabled={savingAlbumId === selectedAlbum.id}
-                          className="shrink-0"
-                        >
-                          <Trash />
-                        </GlassIconButton>
-                      )}
-                    </>
-                  );
-                })()}
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -3684,175 +3704,178 @@ export default function GalleryDetailPage({
                   chip widths bounded. */}
               {albums.length > 0 ? (
                 <div className="hidden flex-wrap items-center gap-2 sm:flex">
-                {albums.map((album) => {
-                  const assetCount =
-                    albumAssetIdsByAlbum[album.id]?.length ?? 0;
-                  const isEditableAlbum = albumIsEditable(album);
-                  const isSavingAlbum = savingAlbumId === album.id;
-                  // QA #18: per-album drop target. When a user drags selected
-                  // assets (or a native file list) onto an album chip, assign
-                  // those assets to the album via addAlbumAssets. This lets
-                  // photographers re-organize the gallery without leaving the
-                  // page. Native file drops are intentionally ignored here —
-                  // new uploads go through the page-level dropzone; the album
-                  // chip is only a sub-gallery-membership target.
-                  // Album chip outline was `border-border-subtle` (~15%
-                  // outline-variant) on top of the parent surface-panel —
-                  // a barely-perceptible boundary. With album names like
-                  // "Favorites", "Videos", "Raw" users couldn't see the
-                  // chip edges and the row read as floating text. Now
-                  // uses `border-border-default` for a visible boundary
-                  // and `bg-surface-container` for chip depth. When an
-                  // album is active, the chip switches to an accent
-                  // border + accent-subtle fill so the selection state
-                  // pops without depending on the inner button text
-                  // colour alone.
-                  const isActive = activeAlbum === album.id;
-                  return (
-                    <div
-                      key={album.id}
-                      // Smart utility albums stay filter-only; editable custom
-                      // albums keep share/email/delete actions.
-                      className={cn(
-                        "group flex shrink-0 items-stretch overflow-hidden rounded-xl border transition-all",
-                        isActive
-                          ? "border-accent-primary bg-accent-subtle shadow-sm"
-                          : "border-border-default bg-surface-container hover:border-accent-primary/60 hover:bg-surface-container-high",
-                      )}
-                      onDragOver={(e) => {
-                        const hasInternal = e.dataTransfer.types.includes(
-                          ASSET_ALBUM_DRAG_TYPE,
-                        );
-                        if (hasInternal) {
-                          e.preventDefault();
-                          e.currentTarget.classList.add(
+                  {albums.map((album) => {
+                    const assetCount =
+                      albumAssetIdsByAlbum[album.id]?.length ?? 0;
+                    const isEditableAlbum = albumIsEditable(album);
+                    const canDeleteAlbum = albumCanDelete(album);
+                    const isSavingAlbum = savingAlbumId === album.id;
+                    // QA #18: per-album drop target. When a user drags selected
+                    // assets (or a native file list) onto an album chip, assign
+                    // those assets to the album via addAlbumAssets. This lets
+                    // photographers re-organize the gallery without leaving the
+                    // page. Native file drops are intentionally ignored here —
+                    // new uploads go through the page-level dropzone; the album
+                    // chip is only a sub-gallery-membership target.
+                    // Album chip outline was `border-border-subtle` (~15%
+                    // outline-variant) on top of the parent surface-panel —
+                    // a barely-perceptible boundary. With album names like
+                    // "Favorites", "Videos", "Raw" users couldn't see the
+                    // chip edges and the row read as floating text. Now
+                    // uses `border-border-default` for a visible boundary
+                    // and `bg-surface-container` for chip depth. When an
+                    // album is active, the chip switches to an accent
+                    // border + accent-subtle fill so the selection state
+                    // pops without depending on the inner button text
+                    // colour alone.
+                    const isActive = activeAlbumId === album.id;
+                    return (
+                      <div
+                        key={album.id}
+                        // Smart utility albums stay filter-only; editable custom
+                        // albums keep share/email/delete actions.
+                        className={cn(
+                          "group flex shrink-0 items-stretch overflow-hidden rounded-xl border transition-all",
+                          isActive
+                            ? "border-accent-primary bg-accent-subtle shadow-sm"
+                            : "border-border-default bg-surface-container hover:border-accent-primary/60 hover:bg-surface-container-high",
+                        )}
+                        onDragOver={(e) => {
+                          const hasInternal = e.dataTransfer.types.includes(
+                            ASSET_ALBUM_DRAG_TYPE,
+                          );
+                          if (hasInternal) {
+                            e.preventDefault();
+                            e.currentTarget.classList.add(
+                              "ring-2",
+                              "ring-accent-primary",
+                            );
+                          }
+                        }}
+                        onDragLeave={(e) => {
+                          e.currentTarget.classList.remove(
                             "ring-2",
                             "ring-accent-primary",
                           );
-                        }
-                      }}
-                      onDragLeave={(e) => {
-                        e.currentTarget.classList.remove(
-                          "ring-2",
-                          "ring-accent-primary",
-                        );
-                      }}
-                      onDrop={async (e) => {
-                        e.currentTarget.classList.remove(
-                          "ring-2",
-                          "ring-accent-primary",
-                        );
-                        const raw = e.dataTransfer.getData(
-                          ASSET_ALBUM_DRAG_TYPE,
-                        );
-                        if (!raw) return;
-                        e.preventDefault();
-                        try {
-                          const ids = JSON.parse(raw) as string[];
-                          if (!Array.isArray(ids) || ids.length === 0) return;
-                          const t = getStoredAccessToken();
-                          if (!t) return;
-                          await addAlbumAssets(t, album.id, ids);
-                          await refreshAlbums();
-                        } catch (err) {
-                          setError(
-                            err instanceof Error
-                              ? err.message
-                              : "Failed to add photos to sub-gallery",
+                        }}
+                        onDrop={async (e) => {
+                          e.currentTarget.classList.remove(
+                            "ring-2",
+                            "ring-accent-primary",
                           );
-                        }
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setActiveAlbum(album.id)}
-                        className={cn(
-                          "flex max-w-[14rem] items-center gap-2 px-3 py-1.5 text-xs font-semibold transition-colors",
-                          isActive
-                            ? "text-accent-primary"
-                            : "text-text-secondary hover:text-text-primary",
-                        )}
-                        title={album.name}
+                          const raw = e.dataTransfer.getData(
+                            ASSET_ALBUM_DRAG_TYPE,
+                          );
+                          if (!raw) return;
+                          e.preventDefault();
+                          try {
+                            const ids = JSON.parse(raw) as string[];
+                            if (!Array.isArray(ids) || ids.length === 0) return;
+                            const t = getStoredAccessToken();
+                            if (!t) return;
+                            await addAlbumAssets(t, album.id, ids);
+                            await refreshAlbums();
+                          } catch (err) {
+                            setError(
+                              err instanceof Error
+                                ? err.message
+                                : "Failed to add photos to sub-gallery",
+                            );
+                          }
+                        }}
                       >
-                        <span className="truncate">{album.name}</span>
-                        <span
+                        <button
+                          type="button"
+                          onClick={() => setActiveAlbum(album.id)}
                           className={cn(
-                            "shrink-0 rounded-full px-1.5 py-0.5 text-2xs font-semibold tabular-nums",
+                            "flex max-w-[14rem] items-center gap-2 px-3 py-1.5 text-xs font-semibold transition-colors",
                             isActive
-                              ? "bg-accent-primary/15 text-accent-primary"
-                              : "bg-surface-sunken text-text-tertiary",
+                              ? "text-accent-primary"
+                              : "text-text-secondary hover:text-text-primary",
                           )}
+                          title={album.name}
                         >
-                          {assetCount}
-                        </span>
-                      </button>
-                      {isEditableAlbum && (
-                        <div className="flex items-center border-l border-border-subtle">
-                          <div className="flex items-center gap-1 px-1">
-                            <GlassIconButton
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => copyShareUrl(album.id)}
-                              label={`Copy ${album.name} share link`}
-                              aria-disabled={!gallery.is_published}
-                              className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
-                            >
-                              <Share />
-                            </GlassIconButton>
-                            <GlassIconButton
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              onClick={() =>
-                                openShareLink(album.id, album.name)
-                              }
-                              label={`Email ${album.name} share link`}
-                              aria-disabled={!gallery.is_published}
-                              className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
-                            >
-                              <Envelope />
-                            </GlassIconButton>
-                            <GlassIconButton
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              onClick={() =>
-                                openWhatsAppShare(album.id, album.name)
-                              }
-                              label={`WhatsApp ${album.name} share link`}
-                              aria-disabled={!gallery.is_published}
-                              className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
-                            >
-                              <ChatBubble />
-                            </GlassIconButton>
-                            <ShareQrPopover
-                              getShareUrl={() => getAlbumShareQrUrl(album.id)}
-                              disabled={!gallery.is_published}
-                              onUnavailable={() =>
-                                setShareMessage(SHARE_UNAVAILABLE_MESSAGE)
-                              }
-                              label={`Show QR code for ${album.name} share link`}
-                              filename={`${gallery.slug || "gallery"}-${album.name
-                                .toLowerCase()
-                                .replace(/\s+/g, "-")}-qr`}
-                            />
-                            <GlassIconButton
-                              type="button"
-                              size="sm"
-                              variant="danger"
-                              label={`Delete ${album.name}`}
-                              onClick={() => void handleDeleteAlbum(album)}
-                              disabled={isSavingAlbum}
-                            >
-                              <Trash />
-                            </GlassIconButton>
+                          <span className="truncate">{album.name}</span>
+                          <span
+                            className={cn(
+                              "shrink-0 rounded-full px-1.5 py-0.5 text-2xs font-semibold tabular-nums",
+                              isActive
+                                ? "bg-accent-primary/15 text-accent-primary"
+                                : "bg-surface-sunken text-text-tertiary",
+                            )}
+                          >
+                            {assetCount}
+                          </span>
+                        </button>
+                        {isEditableAlbum && (
+                          <div className="flex items-center border-l border-border-subtle">
+                            <div className="flex items-center gap-1 px-1">
+                              <GlassIconButton
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => copyShareUrl(album.id)}
+                                label={`Copy ${album.name} share link`}
+                                aria-disabled={!gallery.is_published}
+                                className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
+                              >
+                                <Share />
+                              </GlassIconButton>
+                              <GlassIconButton
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() =>
+                                  openShareLink(album.id, album.name)
+                                }
+                                label={`Email ${album.name} share link`}
+                                aria-disabled={!gallery.is_published}
+                                className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
+                              >
+                                <Envelope />
+                              </GlassIconButton>
+                              <GlassIconButton
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() =>
+                                  openWhatsAppShare(album.id, album.name)
+                                }
+                                label={`WhatsApp ${album.name} share link`}
+                                aria-disabled={!gallery.is_published}
+                                className="text-text-tertiary hover:bg-surface-sunken hover:text-accent-primary"
+                              >
+                                <ChatBubble />
+                              </GlassIconButton>
+                              <ShareQrPopover
+                                getShareUrl={() => getAlbumShareQrUrl(album.id)}
+                                disabled={!gallery.is_published}
+                                onUnavailable={() =>
+                                  setShareMessage(SHARE_UNAVAILABLE_MESSAGE)
+                                }
+                                label={`Show QR code for ${album.name} share link`}
+                                filename={`${gallery.slug || "gallery"}-${album.name
+                                  .toLowerCase()
+                                  .replace(/\s+/g, "-")}-qr`}
+                              />
+                              {canDeleteAlbum && (
+                                <GlassIconButton
+                                  type="button"
+                                  size="sm"
+                                  variant="danger"
+                                  label={`Delete ${album.name}`}
+                                  onClick={() => void handleDeleteAlbum(album)}
+                                  disabled={isSavingAlbum}
+                                >
+                                  <Trash />
+                                </GlassIconButton>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <span className="text-xs text-text-tertiary">
@@ -3895,8 +3918,10 @@ export default function GalleryDetailPage({
               </p>
               <p className="text-xs text-text-tertiary mt-1">
                 Browser upload supports JPEG/JFIF, PNG, WebP, GIF, HEIC/HEIF,
-                AVIF and common RAW up to {browserE2EEMaxUploadSizeLabel()}.
-                TIFF and unsupported RAW use RawDrive Desktop.
+                AVIF and common camera RAW from Canon, Nikon, Sony, Fujifilm,
+                OM/Olympus, Panasonic, Pentax, Hasselblad, and Phase One up to{" "}
+                {browserE2EEMaxUploadSizeLabel()}. TIFF and unsupported RAW use
+                RawDrive Desktop.
               </p>
             </div>
 
@@ -3972,7 +3997,8 @@ export default function GalleryDetailPage({
                     Boolean(entry.asset) &&
                     entry.asset!.id === desktopCoverAssetId;
                   const isPhoneCover =
-                    Boolean(entry.asset) && entry.asset!.id === phoneCoverAssetId;
+                    Boolean(entry.asset) &&
+                    entry.asset!.id === phoneCoverAssetId;
 
                   return (
                     <article
@@ -4173,7 +4199,11 @@ export default function GalleryDetailPage({
                                   : "!bg-surface-scrim-strong/70 hover:!bg-surface-scrim-strong/80",
                               )}
                               onClick={(e) =>
-                                void handleSetCoverAsset(e, entry.asset!, "phone")
+                                void handleSetCoverAsset(
+                                  e,
+                                  entry.asset!,
+                                  "phone",
+                                )
                               }
                             >
                               <Smartphone />
@@ -4422,13 +4452,24 @@ export default function GalleryDetailPage({
               >
                 Details
               </button>
-              {activeUploadCount === 0 && retryableFailedUploadCount > 0 && (
+              {retryableFailedUploadCount > 0 && (
                 <button
                   type="button"
                   onClick={upload.retryAll}
                   className="btn-tertiary px-3 py-1.5 text-xs"
                 >
                   Retry all
+                </button>
+              )}
+              {activeUploadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    activeUploadItems.forEach((item) => upload.cancel(item.id));
+                  }}
+                  className="btn-tertiary px-3 py-1.5 text-xs"
+                >
+                  Cancel uploads
                 </button>
               )}
               {activeUploadCount === 0 && completedUploadCount > 0 && (
@@ -4667,8 +4708,10 @@ export default function GalleryDetailPage({
                     </h3>
                     <p className="mt-2 max-w-md text-sm text-text-secondary">
                       Camera JPEG/JFIF, PNG, WebP, GIF, HEIC/HEIF, AVIF and
-                      common RAW up to {browserE2EEMaxUploadSizeLabel()} per
-                      file. TIFF and unsupported RAW use RawDrive Desktop.
+                      common camera RAW from Canon, Nikon, Sony, Fujifilm,
+                      OM/Olympus, Panasonic, Pentax, Hasselblad, and Phase One
+                      up to {browserE2EEMaxUploadSizeLabel()} per file. TIFF and
+                      unsupported RAW use RawDrive Desktop.
                     </p>
                     <div className="mt-5 flex w-full flex-col items-stretch justify-center gap-2 sm:mt-6 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
                       <button
@@ -4725,16 +4768,15 @@ export default function GalleryDetailPage({
                           Cancel active ({activeUploadCount})
                         </button>
                       )}
-                      {activeUploadCount === 0 &&
-                        retryableFailedUploadCount > 0 && (
-                          <button
-                            type="button"
-                            onClick={upload.retryAll}
-                            className="btn-tertiary px-3 py-1.5 text-xs"
-                          >
-                            Retry all ({retryableFailedUploadCount})
-                          </button>
-                        )}
+                      {retryableFailedUploadCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={upload.retryAll}
+                          className="btn-tertiary px-3 py-1.5 text-xs"
+                        >
+                          Retry all ({retryableFailedUploadCount})
+                        </button>
+                      )}
                       {activeUploadCount === 0 &&
                         (failedUploadCount > 0 || blockedUploadCount > 0) && (
                           <button

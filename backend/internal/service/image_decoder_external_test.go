@@ -155,7 +155,7 @@ func TestCompositeDecoder_RoutesExternalFormats(t *testing.T) {
 	dec := NewCompositeDecoder()
 
 	heicFamily := []string{"heic", "heif", "avif"}
-	rawFamily := []string{"cr2", "cr3", "nef", "arw", "dng", "raf", "orf", "rw2"}
+	rawFamily := []string{"cr2", "cr3", "nef", "nrw", "arw", "sr2", "srf", "dng", "raf", "orf", "ori", "rw2", "pef", "3fr", "iiq"}
 
 	check := func(format string, toolsPresent bool) {
 		img, err := dec.Decode(context.Background(), format, bytes.NewReader([]byte("ignored-bytes")))

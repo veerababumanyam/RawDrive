@@ -19,14 +19,9 @@ type Section =
 const sections: Section[] = [
   // Galleries — absolute href back to the list. Sits first 2026-05-18
   // so the dropdown reads top-down by scope: "all my galleries" → "this
-  // gallery's overview" → "this gallery's sub-pages". One tap to escape
-  // to the list regardless of which sub-page the user is on.
+  // gallery's sub-pages". One tap to escape to the list regardless of
+  // which sub-page the user is on.
   { label: "Galleries", absoluteHref: "/galleries" },
-  // Overview — empty path points to the current gallery's detail page
-  // (/galleries/{id}). Active-match for this option fires when pathname
-  // === base (handled in isActive), so the dropdown auto-selects Overview
-  // when the user is on the gallery's main page.
-  { label: "Overview", path: "" },
   { label: "Cover & Design", path: "/cover" },
   // AI tab removed from workspace nav 2026-05-19 — the per-gallery
   // "AI" dashboard surface was hidden to declutter the workspace
@@ -47,8 +42,11 @@ function resolveHref(section: Section, base: string): string {
 
 function isActive(section: Section, pathname: string, base: string): boolean {
   if ("absoluteHref" in section) {
-    // Galleries link is active only on /galleries exactly — not on any
-    // /galleries/{id}/... sub-route. Distinct prefix match.
+    // With Overview hidden, the gallery detail root uses Galleries as the
+    // selected "folder"; sub-pages still select their specific section.
+    if (section.absoluteHref === "/galleries" && pathname === base) {
+      return true;
+    }
     return pathname === section.absoluteHref;
   }
   if (section.path.startsWith("#")) return false;
@@ -101,6 +99,7 @@ export function GalleryWorkspaceNav({ galleryId }: GalleryWorkspaceNavProps) {
             <Link
               key={section.label}
               href={href}
+              aria-current={active ? "page" : undefined}
               className={cn(
                 "rounded-full px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2",
                 active

@@ -158,7 +158,7 @@ func TestImageDecoder_Stage2FormatsRouteToExternalAdapters(t *testing.T) {
 	ctx := context.Background()
 
 	heicFamily := []string{"heic", "heif", "avif"}
-	rawFamily := []string{"cr2", "cr3", "nef", "arw", "dng", "raf", "orf", "rw2"}
+	rawFamily := []string{"cr2", "cr3", "nef", "nrw", "arw", "sr2", "srf", "dng", "raf", "orf", "ori", "rw2", "pef", "3fr", "iiq"}
 
 	assertRouted := func(t *testing.T, format string, toolsPresent bool) {
 		t.Helper()

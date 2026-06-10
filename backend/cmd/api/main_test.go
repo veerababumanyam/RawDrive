@@ -168,6 +168,31 @@ func TestUploadProtocolRateLimitBypassOnlyChunkedUploadProtocol(t *testing.T) {
 	}
 }
 
+func TestStorageMediaRateLimitBypassOnlyStorageBytes(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		want   bool
+	}{
+		{"storage media get", http.MethodGet, "/storage/thumbnails/asset/thumb_md_webp.webp", true},
+		{"storage media nested get", http.MethodGet, "/storage/derivatives/asset/display_webp.webp", true},
+		{"storage post stays global limited", http.MethodPost, "/storage/thumbnails/asset/thumb_md_webp.webp", false},
+		{"storage root rejected", http.MethodGet, "/storage", false},
+		{"api storage stays global limited", http.MethodGet, "/api/v1/storage/usage", false},
+		{"gallery api stays global limited", http.MethodGet, "/api/v1/galleries/gallery-id/assets", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			if got := storageMediaRateLimitBypass(req); got != tt.want {
+				t.Fatalf("storageMediaRateLimitBypass(%s %s) = %v, want %v", tt.method, tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRateLimitByRouteUsesDedicatedUploadProtocolLimiter(t *testing.T) {
 	globalLimited := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -181,8 +206,14 @@ func TestRateLimitByRouteUsesDedicatedUploadProtocolLimiter(t *testing.T) {
 			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 		})
 	}
+	storageLimited := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("X-Test-Limiter", "storage")
+			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+		})
+	}
 
-	handler := rateLimitByRoute(globalLimited, uploadLimited)(
+	handler := rateLimitByRoute(globalLimited, uploadLimited, storageLimited)(
 		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
 		}),
@@ -192,6 +223,12 @@ func TestRateLimitByRouteUsesDedicatedUploadProtocolLimiter(t *testing.T) {
 	handler.ServeHTTP(upload, httptest.NewRequest(http.MethodPost, "/api/v1/uploads", nil))
 	if upload.Code != http.StatusTooManyRequests || upload.Header().Get("X-Test-Limiter") != "upload" {
 		t.Fatalf("upload session create must use upload limiter, got status %d limiter %q", upload.Code, upload.Header().Get("X-Test-Limiter"))
+	}
+
+	storage := httptest.NewRecorder()
+	handler.ServeHTTP(storage, httptest.NewRequest(http.MethodGet, "/storage/thumbnails/asset/thumb_md_webp.webp", nil))
+	if storage.Code != http.StatusTooManyRequests || storage.Header().Get("X-Test-Limiter") != "storage" {
+		t.Fatalf("storage byte requests must use storage limiter, got status %d limiter %q", storage.Code, storage.Header().Get("X-Test-Limiter"))
 	}
 
 	limited := httptest.NewRecorder()

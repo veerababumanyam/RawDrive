@@ -146,7 +146,7 @@ func IsServerDecodableFormat(format string) bool {
 	switch NormalizeImageFormat(format) {
 	case "jpeg", "png", "gif", "tiff", "webp",
 		"heic", "heif", "avif",
-		"cr2", "cr3", "nef", "arw", "dng", "raf", "orf", "rw2":
+		"cr2", "cr3", "nef", "nrw", "arw", "sr2", "srf", "dng", "raf", "orf", "ori", "rw2", "pef", "3fr", "iiq":
 		return true
 	}
 	return false

@@ -114,7 +114,7 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("persistGalleryAssetsByClipNumber");
     expect(source).toContain("await refreshGalleryAssets()");
     expect(source).toContain("const canReorderGalleryAssets =");
-    expect(source).toContain("!activeAlbum && !faceFilterIds");
+    expect(source).toContain("!activeAlbumId && !faceFilterIds");
     expect(source).toContain("handleGalleryAssetReorder");
     expect(source).toContain('e.dataTransfer.effectAllowed = "move"');
     expect(source).toContain('e.dataTransfer.dropEffect = "move"');
@@ -214,7 +214,9 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("gallery.owner_workspace_name?.trim()");
     expect(source).toContain("by ${studioName}: ${url}");
     expect(source).toContain("buildShareEmailHref(");
-    expect(source).toContain("galleryShareStudioName(gallery, workspaceProfile)");
+    expect(source).toContain(
+      "galleryShareStudioName(gallery, workspaceProfile)",
+    );
   });
 
   it("scopes upload duplicate checks to the active folder", () => {
@@ -222,7 +224,9 @@ describe("gallery detail page — perf & a11y contracts", () => {
 
     expect(source).toContain("function uploadDuplicateScope(item: UploadItem)");
     expect(source).toContain("function uploadDuplicateFileKey(file: File)");
-    expect(source).toContain("const uploadScopeAlbumId = activeAlbum ?? null");
+    expect(source).toContain(
+      "const uploadScopeAlbumId = activeAlbumId ?? null",
+    );
     expect(source).toContain("albumAssetIdsByAlbum[uploadScopeAlbumId]");
     expect(source).toContain("const subGalleryAssetIds = uploadScopeAlbumId");
     expect(source).toContain("Object.values(albumAssetIdsByAlbum).flat()");
@@ -231,7 +235,9 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain(
       "if (uploadDuplicateScope(item) !== uploadScopeAlbumId) continue;",
     );
-    expect(source).toContain("queuedFilenames.add(uploadDuplicateFileKey(item.file))");
+    expect(source).toContain(
+      "queuedFilenames.add(uploadDuplicateFileKey(item.file))",
+    );
     expect(source).toContain("const fileKey = uploadDuplicateFileKey(file)");
     expect(source).toContain("Already in this folder:");
     expect(source).not.toContain("Already in this gallery:");
@@ -295,8 +301,9 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("Upload photos to gallery");
     expect(source).toContain("Camera JPEG/JFIF");
     expect(source).toContain("HEIC/HEIF, AVIF");
-    expect(source).toContain("common RAW");
-    expect(source).toContain("TIFF and unsupported RAW use RawDrive Desktop");
+    expect(source).toContain("common camera RAW");
+    expect(source).toContain("TIFF and");
+    expect(source).toContain("unsupported RAW use RawDrive Desktop");
     expect(source).toContain("Details");
     expect(source).toContain("Processing");
     expect(source).toContain("Visibility");
@@ -377,6 +384,8 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(barStart).toBeGreaterThan(-1);
     expect(barEnd).toBeGreaterThan(barStart);
     expect(backgroundBar).toContain("Details");
+    expect(backgroundBar).toContain("Retry all");
+    expect(backgroundBar).toContain("upload.retryAll");
     expect(backgroundBar).toContain("activeUploadStatusHint");
     expect(source).toContain(
       "Upload continues while you use Dashboard, Messages, Settings, or this gallery.",
@@ -384,8 +393,9 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(backgroundBar).not.toContain("upload.pauseAll");
     expect(backgroundBar).not.toContain("upload.resumeAll");
     expect(backgroundBar).not.toContain("upload.cancelAll");
-    expect(backgroundBar).not.toContain("upload.cancel(item.id)");
-    expect(backgroundBar).not.toContain("Cancel active");
+    expect(backgroundBar).toContain("activeUploadItems.forEach");
+    expect(backgroundBar).toContain("upload.cancel(item.id)");
+    expect(backgroundBar).toContain("Cancel uploads");
     expect(backgroundBar).toContain("upload.clearFinished");
     expect(backgroundBar).toContain("Dismiss");
     expect(backgroundBar).not.toContain("Cancel all");
@@ -593,9 +603,9 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("const previewHref = useMemo(() => {");
     expect(source).toContain("HIGHLIGHTS_ALBUM_NAME");
     expect(source).toContain("encodeURIComponent(highlightsAlbum.id)");
-    expect(source.match(/href={previewHref}/g)?.length ?? 0).toBeGreaterThanOrEqual(
-      2,
-    );
+    expect(
+      source.match(/href={previewHref}/g)?.length ?? 0,
+    ).toBeGreaterThanOrEqual(2);
     expect(linkBlock).toContain("href={previewHref}");
     expect(linkBlock).toContain('target="_blank"');
     expect(linkBlock).not.toContain("mode=client");
@@ -604,6 +614,19 @@ describe("gallery detail page — perf & a11y contracts", () => {
     const gateWindow = source.slice(Math.max(0, linkStart - 48), linkStart);
     expect(gateWindow).not.toContain("{gallery.is_published && (");
     expect(gateWindow).not.toContain("{gallery.slug && (");
+  });
+
+  it("defaults an opened gallery to Highlights without a set-state effect", () => {
+    const source = readDetailPage();
+
+    expect(source).toContain("string | null | undefined");
+    expect(source).toContain("const activeAlbumId =");
+    expect(source).toContain(
+      "activeAlbum === undefined ? (highlightsAlbum?.id ?? null) : activeAlbum",
+    );
+    expect(source).toContain('value={activeAlbumId ?? ""}');
+    expect(source).not.toContain("defaultHighlightsAlbumAppliedRef");
+    expect(source).not.toContain("setActiveAlbum(highlightsAlbum.id)");
   });
 
   it("omits the sub-gallery management toggle while keeping delete actions reachable", () => {
@@ -615,7 +638,27 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).not.toContain("updateGalleryAlbum");
     expect(source).toContain("deleteGalleryAlbum");
     expect(source).toContain("albumIsEditable");
+    expect(source).toContain("albumCanDelete");
     expect(source).toContain("label={`Delete ${album.name}`}");
+  });
+
+  it("keeps the Highlights folder shareable but not deletable", () => {
+    const source = readDetailPage();
+
+    expect(source).toContain("function isHighlightsAlbum");
+    expect(source).toContain(
+      "album.name.trim().toUpperCase() === HIGHLIGHTS_ALBUM_NAME",
+    );
+    expect(source).toContain("function albumCanDelete");
+    expect(source).toContain(
+      "return albumIsEditable(album) && !isHighlightsAlbum(album);",
+    );
+    expect(source).toContain("if (!albumCanDelete(album)) return;");
+    expect(source).toContain("const selectedIsShareable = albumIsEditable");
+    expect(source).toContain("const selectedCanDelete = albumCanDelete");
+    expect(source).toContain("{selectedCanDelete && (");
+    expect(source).toContain("const canDeleteAlbum = albumCanDelete(album);");
+    expect(source).toContain("{canDeleteAlbum && (");
   });
 
   it("keeps sharing on canonical/editable sub-galleries while smart album chips stay filter-only", () => {
@@ -644,8 +687,13 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain(
       "const selectedIsShareable = albumIsEditable(selectedAlbum);",
     );
+    expect(source).toContain(
+      "const selectedCanDelete = albumCanDelete(selectedAlbum);",
+    );
     expect(source).toContain("{selectedIsShareable && (");
+    expect(source).toContain("{selectedCanDelete && (");
     expect(source).toContain("{isEditableAlbum && (");
+    expect(source).toContain("{canDeleteAlbum && (");
     expect(source).toContain("Smart utility");
     expect(source).not.toContain('data-testid="visibility-share-links"');
     expect(source).not.toContain('label="Copy gallery share link"');

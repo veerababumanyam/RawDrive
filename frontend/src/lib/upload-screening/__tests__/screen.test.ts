@@ -24,13 +24,39 @@ function makeMinimalJpeg(): Uint8Array {
   //   00                  entropy placeholder
   //   FFD9                EOI
   return new Uint8Array([
-    0xff, 0xd8, // SOI
-    0xff, 0xe0, 0x00, 0x10, // APP0, length 16
-    0x4a, 0x46, 0x49, 0x46, 0x00, // "JFIF\0"
-    0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
-    0xff, 0xda, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // SOS
+    0xff,
+    0xd8, // SOI
+    0xff,
+    0xe0,
+    0x00,
+    0x10, // APP0, length 16
+    0x4a,
+    0x46,
+    0x49,
+    0x46,
+    0x00, // "JFIF\0"
+    0x01,
+    0x01,
+    0x00,
+    0x00,
+    0x01,
+    0x00,
+    0x01,
+    0x00,
+    0x00,
+    0xff,
+    0xda,
+    0x00,
+    0x08,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00, // SOS
     0x00, // entropy byte
-    0xff, 0xd9, // EOI
+    0xff,
+    0xd9, // EOI
   ]);
 }
 
@@ -45,11 +71,12 @@ function makeJpegWithLargeCameraMetadata(): Uint8Array {
     segment[3] = segmentLength & 0xff;
     parts.push(segment);
   }
-  parts.push(new Uint8Array([
-    0xff, 0xda, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00,
-    0xff, 0xd9,
-  ]));
+  parts.push(
+    new Uint8Array([
+      0xff, 0xda, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff,
+      0xd9,
+    ]),
+  );
 
   const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
   let offset = 0;
@@ -63,27 +90,72 @@ function makeJpegWithLargeCameraMetadata(): Uint8Array {
 function makeMinimalPng(): Uint8Array {
   // PNG signature + IHDR (13 bytes data) + IEND
   return new Uint8Array([
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, // signature
+    0x89,
+    0x50,
+    0x4e,
+    0x47,
+    0x0d,
+    0x0a,
+    0x1a,
+    0x0a, // signature
     // IHDR chunk: length=13, type="IHDR", 13 bytes data, CRC=00000000
-    0x00, 0x00, 0x00, 0x0d,
-    0x49, 0x48, 0x44, 0x52,
-    0x00, 0x00, 0x00, 0x01, // width = 1
-    0x00, 0x00, 0x00, 0x01, // height = 1
-    0x08, 0x02, 0x00, 0x00, 0x00, // bit depth 8, color type 2, ...
-    0x00, 0x00, 0x00, 0x00, // CRC (not verified by our screener)
+    0x00,
+    0x00,
+    0x00,
+    0x0d,
+    0x49,
+    0x48,
+    0x44,
+    0x52,
+    0x00,
+    0x00,
+    0x00,
+    0x01, // width = 1
+    0x00,
+    0x00,
+    0x00,
+    0x01, // height = 1
+    0x08,
+    0x02,
+    0x00,
+    0x00,
+    0x00, // bit depth 8, color type 2, ...
+    0x00,
+    0x00,
+    0x00,
+    0x00, // CRC (not verified by our screener)
     // IEND chunk: length=0, type="IEND", CRC=ae426082
-    0x00, 0x00, 0x00, 0x00,
-    0x49, 0x45, 0x4e, 0x44,
-    0xae, 0x42, 0x60, 0x82,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x49,
+    0x45,
+    0x4e,
+    0x44,
+    0xae,
+    0x42,
+    0x60,
+    0x82,
   ]);
 }
 
 function makeMinimalGif(): Uint8Array {
   // GIF89a + 7 bytes Logical Screen Descriptor + 1 byte trailer
   return new Uint8Array([
-    0x47, 0x49, 0x46, 0x38, 0x39, 0x61, // GIF89a
-    0x01, 0x00, 0x01, 0x00, // width=1, height=1
-    0x00, 0x00, 0x00, // packed, bg, aspect
+    0x47,
+    0x49,
+    0x46,
+    0x38,
+    0x39,
+    0x61, // GIF89a
+    0x01,
+    0x00,
+    0x01,
+    0x00, // width=1, height=1
+    0x00,
+    0x00,
+    0x00, // packed, bg, aspect
     0x3b, // trailer
   ]);
 }
@@ -91,12 +163,30 @@ function makeMinimalGif(): Uint8Array {
 function makeMinimalWebp(): Uint8Array {
   // RIFF <size=16> WEBP VP8  <chunksize=4> <4 bytes body>
   return new Uint8Array([
-    0x52, 0x49, 0x46, 0x46, // "RIFF"
-    0x10, 0x00, 0x00, 0x00, // size = 16 (little-endian) — total = 24
-    0x57, 0x45, 0x42, 0x50, // "WEBP"
-    0x56, 0x50, 0x38, 0x20, // "VP8 " chunk
-    0x04, 0x00, 0x00, 0x00, // chunk size = 4
-    0x00, 0x00, 0x00, 0x00, // chunk body
+    0x52,
+    0x49,
+    0x46,
+    0x46, // "RIFF"
+    0x10,
+    0x00,
+    0x00,
+    0x00, // size = 16 (little-endian) — total = 24
+    0x57,
+    0x45,
+    0x42,
+    0x50, // "WEBP"
+    0x56,
+    0x50,
+    0x38,
+    0x20, // "VP8 " chunk
+    0x04,
+    0x00,
+    0x00,
+    0x00, // chunk size = 4
+    0x00,
+    0x00,
+    0x00,
+    0x00, // chunk body
   ]);
 }
 
@@ -109,7 +199,9 @@ describe("screen() format dispatcher", () => {
   });
 
   it("allows camera JPEGs with large metadata as a warning", () => {
-    const result = screen(makeJpegWithLargeCameraMetadata(), { declaredType: "image/jpeg" });
+    const result = screen(makeJpegWithLargeCameraMetadata(), {
+      declaredType: "image/jpeg",
+    });
     expect(result.detectedFormat).toBe("jpeg");
     expect(result.decision).toBe("pass");
     expect(result.findings).toEqual([
@@ -125,7 +217,9 @@ describe("screen() format dispatcher", () => {
     () => {
       const primary = makeMinimalJpeg();
       const dependentPreview = makeMinimalJpeg();
-      const combined = new Uint8Array(primary.length + 8 + dependentPreview.length);
+      const combined = new Uint8Array(
+        primary.length + 8 + dependentPreview.length,
+      );
       combined.set(primary, 0);
       combined.set(new Uint8Array(8), primary.length);
       combined.set(dependentPreview, primary.length + 8);
@@ -178,23 +272,33 @@ describe("screen() format dispatcher", () => {
 
     const result = screen(combined, { declaredType: "image/jpeg" });
     expect(result.decision).toBe("block");
-    expect(result.findings.some((f) => f.category === "appended_payload")).toBe(true);
-    expect(result.findings.some((f) => f.category === "archive_signature")).toBe(true);
+    expect(result.findings.some((f) => f.category === "appended_payload")).toBe(
+      true,
+    );
+    expect(
+      result.findings.some((f) => f.category === "archive_signature"),
+    ).toBe(true);
   });
 
   it("flags a JPEG with padded appended ZIP payload", () => {
     const jpeg = makeMinimalJpeg();
     const padding = new Uint8Array([0x00, 0x00, 0x00]);
     const zipHeader = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00]); // "PK\x03\x04"
-    const combined = new Uint8Array(jpeg.length + padding.length + zipHeader.length);
+    const combined = new Uint8Array(
+      jpeg.length + padding.length + zipHeader.length,
+    );
     combined.set(jpeg, 0);
     combined.set(padding, jpeg.length);
     combined.set(zipHeader, jpeg.length + padding.length);
 
     const result = screen(combined, { declaredType: "image/jpeg" });
     expect(result.decision).toBe("block");
-    expect(result.findings.some((f) => f.category === "appended_payload")).toBe(true);
-    expect(result.findings.some((f) => f.category === "archive_signature")).toBe(true);
+    expect(result.findings.some((f) => f.category === "appended_payload")).toBe(
+      true,
+    );
+    expect(
+      result.findings.some((f) => f.category === "archive_signature"),
+    ).toBe(true);
   });
 
   it("allows a JPEG with benign trailing data past EOI (camera Multi-Picture Format)", () => {
@@ -203,7 +307,9 @@ describe("screen() format dispatcher", () => {
     // bytes carry no archive signature and must NOT block the upload.
     const jpeg = makeMinimalJpeg();
     // A second SOI..EOI image-ish blob (no archive magic) appended after EOI.
-    const trailer = new Uint8Array([0xff, 0xd8, 0xff, 0xe1, 0x00, 0x08, 0x4d, 0x50, 0x46, 0x30, 0xff, 0xd9]);
+    const trailer = new Uint8Array([
+      0xff, 0xd8, 0xff, 0xe1, 0x00, 0x08, 0x4d, 0x50, 0x46, 0x30, 0xff, 0xd9,
+    ]);
     const combined = new Uint8Array(jpeg.length + trailer.length);
     combined.set(jpeg, 0);
     combined.set(trailer, jpeg.length);
@@ -212,7 +318,9 @@ describe("screen() format dispatcher", () => {
     expect(result.detectedFormat).toBe("jpeg");
     expect(result.decision).toBe("pass"); // benign trailer is allowed (low-severity warning only)
     // It is still surfaced as a low-severity warning, never a blocking finding.
-    const appended = result.findings.find((f) => f.category === "appended_payload");
+    const appended = result.findings.find(
+      (f) => f.category === "appended_payload",
+    );
     expect(appended?.severity).toBe("low");
     expect(result.findings.some((f) => f.severity === "high")).toBe(false);
   });
@@ -220,13 +328,42 @@ describe("screen() format dispatcher", () => {
   it("allows camera dependent JPEG trailers even when preview entropy resembles archive magic", () => {
     const jpeg = makeMinimalJpeg();
     const dependentPreview = new Uint8Array([
-      0xff, 0xd8,
-      0xff, 0xe0, 0x00, 0x10,
-      0x4a, 0x46, 0x49, 0x46, 0x00,
-      0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
-      0xff, 0xda, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x50, 0x4b, 0x03, 0x04, // ZIP-like bytes inside compressed JPEG entropy.
-      0xff, 0xd9,
+      0xff,
+      0xd8,
+      0xff,
+      0xe0,
+      0x00,
+      0x10,
+      0x4a,
+      0x46,
+      0x49,
+      0x46,
+      0x00,
+      0x01,
+      0x01,
+      0x00,
+      0x00,
+      0x01,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0xff,
+      0xda,
+      0x00,
+      0x08,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x50,
+      0x4b,
+      0x03,
+      0x04, // ZIP-like bytes inside compressed JPEG entropy.
+      0xff,
+      0xd9,
     ]);
     const combined = new Uint8Array(jpeg.length + dependentPreview.length);
     combined.set(jpeg, 0);
@@ -242,25 +379,64 @@ describe("screen() format dispatcher", () => {
         severity: "low",
       }),
     ]);
-    expect(result.findings.some((f) => f.category === "archive_signature")).toBe(false);
+    expect(
+      result.findings.some((f) => f.category === "archive_signature"),
+    ).toBe(false);
   });
 
   it("allows camera trailers with an MPF index before preview entropy that resembles archive magic", () => {
     const jpeg = makeMinimalJpeg();
     const mpfIndex = new Uint8Array([
-      0x4d, 0x50, 0x46, 0x00, // "MPF\0"
-      0x00, 0x00, 0x00, 0x18,
+      0x4d,
+      0x50,
+      0x46,
+      0x00, // "MPF\0"
+      0x00,
+      0x00,
+      0x00,
+      0x18,
     ]);
     const dependentPreview = new Uint8Array([
-      0xff, 0xd8,
-      0xff, 0xe0, 0x00, 0x10,
-      0x4a, 0x46, 0x49, 0x46, 0x00,
-      0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
-      0xff, 0xda, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x50, 0x4b, 0x03, 0x04, // ZIP-like bytes inside compressed JPEG entropy.
-      0xff, 0xd9,
+      0xff,
+      0xd8,
+      0xff,
+      0xe0,
+      0x00,
+      0x10,
+      0x4a,
+      0x46,
+      0x49,
+      0x46,
+      0x00,
+      0x01,
+      0x01,
+      0x00,
+      0x00,
+      0x01,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0xff,
+      0xda,
+      0x00,
+      0x08,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x50,
+      0x4b,
+      0x03,
+      0x04, // ZIP-like bytes inside compressed JPEG entropy.
+      0xff,
+      0xd9,
     ]);
-    const combined = new Uint8Array(jpeg.length + mpfIndex.length + dependentPreview.length);
+    const combined = new Uint8Array(
+      jpeg.length + mpfIndex.length + dependentPreview.length,
+    );
     combined.set(jpeg, 0);
     combined.set(mpfIndex, jpeg.length);
     combined.set(dependentPreview, jpeg.length + mpfIndex.length);
@@ -275,7 +451,9 @@ describe("screen() format dispatcher", () => {
         severity: "low",
       }),
     ]);
-    expect(result.findings.some((f) => f.category === "archive_signature")).toBe(false);
+    expect(
+      result.findings.some((f) => f.category === "archive_signature"),
+    ).toBe(false);
   });
 
   it("allows large camera vendor trailers with incidental archive-like bytes away from the payload start", () => {
@@ -298,7 +476,9 @@ describe("screen() format dispatcher", () => {
         severity: "low",
       }),
     ]);
-    expect(result.findings.some((f) => f.category === "archive_signature")).toBe(false);
+    expect(
+      result.findings.some((f) => f.category === "archive_signature"),
+    ).toBe(false);
   });
 
   it("flags a PNG with appended RAR payload", () => {
@@ -312,15 +492,16 @@ describe("screen() format dispatcher", () => {
 
     const result = screen(combined, { declaredType: "image/png" });
     expect(result.decision).toBe("block");
-    expect(result.findings.some((f) => f.category === "archive_signature")).toBe(true);
+    expect(
+      result.findings.some((f) => f.category === "archive_signature"),
+    ).toBe(true);
   });
 
   // ───────────────────────────────────────────────────────────────────────
   // CD5 — browser-decodable HEIC / HEIF / AVIF + camera RAW now `pass`.
   //
   // After CD4 unblocked the format gates, the screener must vouch for the
-  // now-browser-decodable formats (HEIC, HEIF, AVIF, CR2, CR3, NEF, ARW, DNG,
-  // ORF, RAF, RW2) with decision:"pass" so the E2EE upload's scan manifest
+  // now-browser-decodable formats with decision:"pass" so the E2EE upload's scan manifest
   // lets them finalize. Exotic RAW + ambiguous/multi-page TIFF stay
   // needs_desktop_scan; non-image stays block.
   // ───────────────────────────────────────────────────────────────────────
@@ -332,7 +513,17 @@ describe("screen() format dispatcher", () => {
   }
 
   function tiffLE(...trailing: number[]): Uint8Array {
-    return new Uint8Array([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00, ...trailing]);
+    return new Uint8Array([
+      0x49,
+      0x49,
+      0x2a,
+      0x00,
+      0x08,
+      0x00,
+      0x00,
+      0x00,
+      ...trailing,
+    ]);
   }
 
   it("passes a HEIC file (ftyp heic) as detected_format heic", () => {
@@ -357,9 +548,16 @@ describe("screen() format dispatcher", () => {
 
   it("passes a Canon CR2 file (TIFF + 'CR' brand) as detected_format cr2", () => {
     const cr2 = new Uint8Array([
-      0x49, 0x49, 0x2a, 0x00,
-      0x10, 0x00, 0x00, 0x00,
-      0x43, 0x52, // "CR"
+      0x49,
+      0x49,
+      0x2a,
+      0x00,
+      0x10,
+      0x00,
+      0x00,
+      0x00,
+      0x43,
+      0x52, // "CR"
     ]);
     const result = screen(cr2, { declaredType: "image/x-canon-cr2" });
     expect(result.decision).toBe("pass");
@@ -367,7 +565,11 @@ describe("screen() format dispatcher", () => {
   });
 
   it("passes a Fuji RAF file (FUJIFILMCCD-RAW magic) as detected_format raf", () => {
-    const raf = new Uint8Array([...[..."FUJIFILMCCD-RAW"].map((c) => c.charCodeAt(0)), 0x00, 0x00]);
+    const raf = new Uint8Array([
+      ...[..."FUJIFILMCCD-RAW"].map((c) => c.charCodeAt(0)),
+      0x00,
+      0x00,
+    ]);
     const result = screen(raf, { declaredType: "" });
     expect(result.decision).toBe("pass");
     expect(result.detectedFormat).toBe("raf");
@@ -375,10 +577,17 @@ describe("screen() format dispatcher", () => {
 
   it.each([
     ["image/x-nikon-nef", "nef"],
+    ["image/x-nikon-nrw", "nrw"],
     ["image/x-sony-arw", "arw"],
+    ["image/x-sony-sr2", "sr2"],
+    ["image/x-sony-srf", "srf"],
     ["image/x-adobe-dng", "dng"],
     ["image/x-olympus-orf", "orf"],
+    ["image/x-olympus-ori", "ori"],
     ["image/x-panasonic-rw2", "rw2"],
+    ["image/x-pentax-pef", "pef"],
+    ["image/x-hasselblad-3fr", "3fr"],
+    ["image/x-phaseone-iiq", "iiq"],
   ])(
     "passes a TIFF-magic RAW with vendor MIME %s as detected_format %s",
     (declaredType, format) => {
@@ -397,7 +606,9 @@ describe("screen() format dispatcher", () => {
   it("keeps a TIFF-magic file with an unknown declaredType as needs_desktop_scan", () => {
     // Cannot tell NEF/ARW/multi-page TIFF apart by magic alone — without a
     // RAW vendor MIME the screener conservatively routes to the desktop agent.
-    const result = screen(tiffLE(), { declaredType: "application/octet-stream" });
+    const result = screen(tiffLE(), {
+      declaredType: "application/octet-stream",
+    });
     expect(result.decision).toBe("needs_desktop_scan");
     expect(result.detectedFormat).toBe("tiff");
   });
@@ -409,7 +620,7 @@ describe("screen() format dispatcher", () => {
   // vendor `image/x-*` MIME branch above never resolves. The CD4 format gate
   // unblocks these BY EXTENSION and the decoder handles them, so thread the
   // filename through and let the extension backstop the MIME path: a NEF/ARW/
-  // DNG/ORF/RW2 TIFF header with a generic/empty MIME but a known-RAW
+  // DNG/ORF/RW2/PEF/3FR/IIQ TIFF header with a generic/empty MIME but a known-RAW
   // declaredName must `pass`. A plain .tif/.tiff (or no RAW extension) stays
   // needs_desktop_scan; exotic extensions stay desktop-only. (CR3 is ISO-BMFF,
   // detected by its `crx ` brand, not this TIFF backstop.)
@@ -418,21 +629,34 @@ describe("screen() format dispatcher", () => {
   it.each([
     ["IMG_1234.nef", "nef"],
     ["IMG_1234.NEF", "nef"],
+    ["IMG_1234.nrw", "nrw"],
     ["DSC09876.arw", "arw"],
+    ["DSC09876.sr2", "sr2"],
+    ["DSC09876.srf", "srf"],
     ["render.dng", "dng"],
     ["P1000001.orf", "orf"],
+    ["P1000001.ori", "ori"],
     ["P1010101.rw2", "rw2"],
+    ["pentax.pef", "pef"],
+    ["hasselblad.3fr", "3fr"],
+    ["phase.iiq", "iiq"],
   ])(
     "passes a TIFF-magic RAW with generic image/tiff MIME but declaredName %s as %s",
     (declaredName, format) => {
-      const result = screen(tiffLE(), { declaredType: "image/tiff", declaredName });
+      const result = screen(tiffLE(), {
+        declaredType: "image/tiff",
+        declaredName,
+      });
       expect(result.decision).toBe("pass");
       expect(result.detectedFormat).toBe(format);
     },
   );
 
   it("passes a TIFF-magic RAW with empty MIME but a known-RAW declaredName", () => {
-    const result = screen(tiffLE(), { declaredType: "", declaredName: "capture.NEF" });
+    const result = screen(tiffLE(), {
+      declaredType: "",
+      declaredName: "capture.NEF",
+    });
     expect(result.decision).toBe("pass");
     expect(result.detectedFormat).toBe("nef");
   });
@@ -440,41 +664,59 @@ describe("screen() format dispatcher", () => {
   it("prefers the vendor MIME over the extension when both resolve", () => {
     // MIME says ARW; the extension backstop only fires when the MIME path
     // fails, so the MIME-derived token wins.
-    const result = screen(tiffLE(), { declaredType: "image/x-sony-arw", declaredName: "x.nef" });
+    const result = screen(tiffLE(), {
+      declaredType: "image/x-sony-arw",
+      declaredName: "x.nef",
+    });
     expect(result.decision).toBe("pass");
     expect(result.detectedFormat).toBe("arw");
   });
 
   it("keeps a plain photo.tiff (image/tiff) as needs_desktop_scan even with a name", () => {
-    const result = screen(tiffLE(), { declaredType: "image/tiff", declaredName: "photo.tiff" });
+    const result = screen(tiffLE(), {
+      declaredType: "image/tiff",
+      declaredName: "photo.tiff",
+    });
     expect(result.decision).toBe("needs_desktop_scan");
     expect(result.detectedFormat).toBe("tiff");
   });
 
   it("keeps a plain photo.tif as needs_desktop_scan", () => {
-    const result = screen(tiffLE(), { declaredType: "image/tiff", declaredName: "photo.tif" });
+    const result = screen(tiffLE(), {
+      declaredType: "image/tiff",
+      declaredName: "photo.tif",
+    });
     expect(result.decision).toBe("needs_desktop_scan");
     expect(result.detectedFormat).toBe("tiff");
   });
 
   it("keeps a TIFF-magic file with a non-RAW extension as needs_desktop_scan", () => {
-    const result = screen(tiffLE(), { declaredType: "", declaredName: "scan.dat" });
+    const result = screen(tiffLE(), {
+      declaredType: "",
+      declaredName: "scan.dat",
+    });
     expect(result.decision).toBe("needs_desktop_scan");
     expect(result.detectedFormat).toBe("tiff");
   });
 
   it("keeps a TIFF-magic file with no extension as needs_desktop_scan", () => {
-    const result = screen(tiffLE(), { declaredType: "", declaredName: "scanwithnoext" });
+    const result = screen(tiffLE(), {
+      declaredType: "",
+      declaredName: "scanwithnoext",
+    });
     expect(result.decision).toBe("needs_desktop_scan");
     expect(result.detectedFormat).toBe("tiff");
   });
 
-  it.each(["capture.crw", "capture.x3f", "capture.pef", "capture.nrw"])(
+  it.each(["capture.crw", "capture.x3f", "capture.raw", "capture.rwl"])(
     "keeps desktop-only RAW extension %s as needs_desktop_scan via the TIFF backstop",
     (declaredName) => {
       // These extensions are NOT in the browser-decodable RAW set, so even with
       // TIFF magic + a declaredName they must stay desktop-only.
-      const result = screen(tiffLE(), { declaredType: "image/tiff", declaredName });
+      const result = screen(tiffLE(), {
+        declaredType: "image/tiff",
+        declaredName,
+      });
       expect(result.decision).toBe("needs_desktop_scan");
       expect(result.detectedFormat).toBe("tiff");
     },
@@ -482,8 +724,14 @@ describe("screen() format dispatcher", () => {
 
   it("keeps a big-endian TIFF (image/tiff) as needs_desktop_scan", () => {
     const tiffBE = new Uint8Array([
-      0x4d, 0x4d, 0x00, 0x2a, // TIFF big-endian
-      0x00, 0x00, 0x00, 0x08,
+      0x4d,
+      0x4d,
+      0x00,
+      0x2a, // TIFF big-endian
+      0x00,
+      0x00,
+      0x00,
+      0x08,
     ]);
     const result = screen(tiffBE, { declaredType: "image/tiff" });
     expect(result.decision).toBe("needs_desktop_scan");
@@ -498,7 +746,9 @@ describe("screen() format dispatcher", () => {
   });
 
   it("blocks a PDF (non-image) rather than treating it as a desktop format", () => {
-    const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37]); // "%PDF-1.7"
+    const pdf = new Uint8Array([
+      0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37,
+    ]); // "%PDF-1.7"
     const result = screen(pdf, { declaredType: "application/pdf" });
     expect(result.decision).toBe("block");
     expect(result.detectedFormat).toBe("unknown");
@@ -506,7 +756,9 @@ describe("screen() format dispatcher", () => {
   });
 
   it("blocks a ZIP (non-image) rather than treating it as a desktop format", () => {
-    const zip = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00]); // "PK\x03\x04"
+    const zip = new Uint8Array([
+      0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00,
+    ]); // "PK\x03\x04"
     const result = screen(zip, { declaredType: "application/zip" });
     expect(result.decision).toBe("block");
     expect(result.detectedFormat).toBe("unknown");

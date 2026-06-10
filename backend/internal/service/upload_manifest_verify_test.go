@@ -246,6 +246,30 @@ func TestVerifyHeaderTrailer_UnknownFormat_Rejected(t *testing.T) {
 	}
 }
 
+func TestVerifyHeaderTrailer_ServerDecodableRawContainers(t *testing.T) {
+	tiffHead := append([]byte{
+		'I', 'I', 0x2A, 0x00,
+		0x08, 0x00, 0x00, 0x00,
+	}, make([]byte, 80)...)
+	for _, format := range []string{"nef", "nrw", "arw", "sr2", "srf", "dng", "orf", "ori", "rw2", "pef", "3fr", "iiq"} {
+		t.Run(format, func(t *testing.T) {
+			path := writeTempFile(t, "camera."+format, tiffHead)
+			if err := VerifyHeaderTrailer(path, format); err != nil {
+				t.Fatalf("server-decodable TIFF-based RAW %s should pass spot-check, got %v", format, err)
+			}
+		})
+	}
+}
+
+func TestVerifyHeaderTrailer_ServerDecodableContainersRejectNonImage(t *testing.T) {
+	path := writeTempFile(t, "fake.nef", []byte("%PDF-1.7 not a camera raw"))
+
+	err := VerifyHeaderTrailer(path, "nef")
+	if !errors.Is(err, ErrScanHashMismatch) {
+		t.Fatalf("RAW manifest over non-image bytes should fail spot-check, got %v", err)
+	}
+}
+
 func TestStillImageFormatFromContentType(t *testing.T) {
 	tests := []struct {
 		contentType string

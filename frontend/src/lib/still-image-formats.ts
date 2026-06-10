@@ -27,9 +27,10 @@ export const BROWSER_DECODE_STILL_IMAGE_EXTENSIONS = [
   "png",
   "webp",
   "gif",
-  // CD4: HEIC/HEIF/AVIF + camera RAW whose embedded preview the browser
-  // decoders can extract — TIFF-based (cr2/nef/arw/dng/orf/rw2), RAF (Fuji), and
-  // CR3 (Canon, via the ISO-BMFF box parser). Exotic RAW stays desktop-only below.
+  // CD4/CD5c: HEIC/HEIF/AVIF + camera RAW whose embedded preview the browser
+  // decoders can extract — TIFF-based RAW from common camera families, RAF
+  // (Fuji), and CR3 (Canon, via the ISO-BMFF box parser). Exotic RAW and
+  // ambiguous TIFF/generic .raw stay desktop-only below.
   "heic",
   "heif",
   "hif",
@@ -37,11 +38,18 @@ export const BROWSER_DECODE_STILL_IMAGE_EXTENSIONS = [
   "cr2",
   "cr3",
   "nef",
+  "nrw",
   "arw",
+  "sr2",
+  "srf",
   "dng",
   "orf",
+  "ori",
   "raf",
   "rw2",
+  "pef",
+  "3fr",
+  "iiq",
 ] as const;
 
 export const DESKTOP_REQUIRED_STILL_IMAGE_MIME_TYPES = [
@@ -50,12 +58,11 @@ export const DESKTOP_REQUIRED_STILL_IMAGE_MIME_TYPES = [
   "image/x-tiff",
 ] as const;
 
-// CD4: cr2/cr3/nef/arw/dng/orf/raf/rw2 + heic/heif/hif/avif moved to the
-// BROWSER_DECODE sets above. Everything below stays desktop-only: exotic /
-// proprietary RAW the browser decoders cannot parse, and multi-page /
-// non-baseline TIFF.
+// CD4/CD5c: common preview-bearing camera RAW + heic/heif/hif/avif moved to
+// the BROWSER_DECODE sets above. Everything below stays desktop-only: exotic /
+// proprietary RAW the browser decoders cannot parse, ambiguous generic .raw,
+// and multi-page / non-baseline TIFF.
 export const DESKTOP_REQUIRED_STILL_IMAGE_EXTENSIONS = [
-  "3fr",
   "ari",
   "arq",
   "bay",
@@ -70,7 +77,6 @@ export const DESKTOP_REQUIRED_STILL_IMAGE_EXTENSIONS = [
   "fff",
   "gpr",
   "ia",
-  "iiq",
   "k25",
   "kc2",
   "kdc",
@@ -78,9 +84,6 @@ export const DESKTOP_REQUIRED_STILL_IMAGE_EXTENSIONS = [
   "mef",
   "mos",
   "mrw",
-  "nrw",
-  "ori",
-  "pef",
   "pxn",
   "qtk",
   "r3d",
@@ -89,8 +92,6 @@ export const DESKTOP_REQUIRED_STILL_IMAGE_EXTENSIONS = [
   "rw1",
   "rwl",
   "rwz",
-  "sr2",
-  "srf",
   "srw",
   "sti",
   "tif",
@@ -178,8 +179,12 @@ export const STILL_IMAGE_DROPZONE_ACCEPT: Record<string, string[]> = {
   ],
 };
 
-const browserDecodeExtensionSet = new Set<string>(BROWSER_DECODE_STILL_IMAGE_EXTENSIONS);
-const desktopRequiredExtensionSet = new Set<string>(DESKTOP_REQUIRED_STILL_IMAGE_EXTENSIONS);
+const browserDecodeExtensionSet = new Set<string>(
+  BROWSER_DECODE_STILL_IMAGE_EXTENSIONS,
+);
+const desktopRequiredExtensionSet = new Set<string>(
+  DESKTOP_REQUIRED_STILL_IMAGE_EXTENSIONS,
+);
 
 export function isBrowserDecodableStillImageName(name: string): boolean {
   const ext = extensionOf(name);
@@ -191,7 +196,9 @@ export function isDesktopRequiredStillImageName(name: string): boolean {
   return ext !== "" && desktopRequiredExtensionSet.has(ext);
 }
 
-export function isAcceptedStillImageFile(file: Pick<File, "name" | "type">): boolean {
+export function isAcceptedStillImageFile(
+  file: Pick<File, "name" | "type">,
+): boolean {
   return (
     file.type.startsWith("image/") ||
     isBrowserDecodableStillImageName(file.name) ||
