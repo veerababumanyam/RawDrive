@@ -1844,9 +1844,9 @@ export default function GalleryDetailPage({
       ? `Paused ${activeUploadCount} ${activeUploadCount === 1 ? "upload" : "uploads"}`
       : uploadStatusHeadline;
   const activeUploadLeaveWarning =
-    "Upload still running. Keep this tab open until RawDrive finishes uploading.";
+    "Uploads are still running. Closing or reloading this browser tab will stop them.";
   const activeUploadStatusHint =
-    "Keep this page open until uploads finish. Gallery tools stay available.";
+    "Upload continues while you use Dashboard, Messages, Settings, or this gallery. Keep this browser tab open until uploads finish.";
   const galleryActionToneClass =
     galleryActionStatus?.tone === "error"
       ? "text-error"
@@ -1855,7 +1855,7 @@ export default function GalleryDetailPage({
         : "text-text-secondary";
   const galleryActionWarning =
     activeUploadCount > 0
-      ? "Upload continues in background. Keep this page open until uploads finish."
+      ? "Upload continues in background while you use RawDrive. Keep this browser tab open until uploads finish."
       : "";
   const handleUploadDialogBack = () => {
     if (activeUploadCount > 0) {
@@ -4073,16 +4073,6 @@ export default function GalleryDetailPage({
                   Retry all
                 </button>
               )}
-              {activeUploadCount > 0 && (
-                <button
-                  type="button"
-                  onClick={upload.cancelAll}
-                  className="rounded-full border border-error/30 px-3 py-1.5 text-xs font-medium text-error transition-colors hover:bg-error/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
-                  aria-label="Cancel active uploads"
-                >
-                  Cancel
-                </button>
-              )}
               {activeUploadCount === 0 && completedUploadCount > 0 && (
                 <button
                   type="button"
@@ -4422,13 +4412,6 @@ export default function GalleryDetailPage({
                           item.status === "error" ||
                           item.status === "blocked" ||
                           item.status === "needs_desktop";
-                        const isCancelable =
-                          item.status === "pending" ||
-                          item.status === "screening" ||
-                          item.status === "encrypting" ||
-                          item.status === "indexing_faces" ||
-                          item.status === "paused" ||
-                          item.status === "uploading";
                         const statusLabel =
                           item.status === "complete"
                             ? "Done"
@@ -4500,16 +4483,6 @@ export default function GalleryDetailPage({
                                   className="text-xs font-medium text-accent hover:underline"
                                 >
                                   Resume
-                                </button>
-                              )}
-                              {isCancelable && (
-                                <button
-                                  type="button"
-                                  onClick={() => upload.cancel(item.id)}
-                                  className="text-xs font-medium text-error hover:underline"
-                                  aria-label={`Cancel ${item.file.name}`}
-                                >
-                                  Cancel
                                 </button>
                               )}
                               {isTerminal && (

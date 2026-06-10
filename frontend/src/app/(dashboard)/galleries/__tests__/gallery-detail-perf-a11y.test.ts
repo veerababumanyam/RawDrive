@@ -231,8 +231,10 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("completedUploadCount > 0");
     expect(source).toContain("activeUploadLeaveWarning");
     expect(source).toContain("beforeunload");
-    expect(source).toContain("Keep this page open until uploads finish.");
-    expect(source).toContain("Gallery tools stay available.");
+    expect(source).toContain("Closing or reloading this browser tab");
+    expect(source).toContain(
+      "Upload continues while you use Dashboard, Messages, Settings, or this gallery.",
+    );
     expect(source).not.toContain("uploadAutoMinimizedRef");
     expect(source).toContain("if (activeUploadCount > 0) {");
     expect(source).toContain("return;");
@@ -242,16 +244,16 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("z-[80]");
     expect(source).not.toContain("upload.pauseAll");
     expect(source).not.toContain("upload.resumeAll");
-    expect(source).toContain("upload.cancelAll");
-    expect(source).toContain("Cancel active uploads");
-    expect(source).toContain("upload.cancel(item.id)");
-    expect(source).toContain('aria-label={`Cancel ${item.file.name}`}');
+    expect(source).not.toContain("upload.cancelAll");
+    expect(source).not.toContain("Cancel active uploads");
+    expect(source).not.toContain("upload.cancel(item.id)");
+    expect(source).not.toContain('aria-label={`Cancel ${item.file.name}`}');
     expect(source).not.toContain("Pause all");
     expect(source).toContain("setShowUploadDialog(true)");
     expect(source).not.toContain("TetheredShootingPanel");
   });
 
-  it("keeps the compact upload status bar informative and explicitly cancelable while uploads run", () => {
+  it("keeps the compact upload status bar informative while uploads keep running", () => {
     const source = readDetailPage();
     const barStart = source.indexOf('data-testid="background-upload-status"');
     const barEnd = source.indexOf(
@@ -264,12 +266,13 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(barEnd).toBeGreaterThan(barStart);
     expect(backgroundBar).toContain("Details");
     expect(backgroundBar).toContain("activeUploadStatusHint");
-    expect(source).toContain("Keep this page open until uploads finish.");
-    expect(source).toContain("Gallery tools stay available.");
+    expect(source).toContain(
+      "Upload continues while you use Dashboard, Messages, Settings, or this gallery.",
+    );
     expect(backgroundBar).not.toContain("upload.pauseAll");
     expect(backgroundBar).not.toContain("upload.resumeAll");
-    expect(backgroundBar).toContain("upload.cancelAll");
-    expect(backgroundBar).toContain("Cancel active uploads");
+    expect(backgroundBar).not.toContain("upload.cancelAll");
+    expect(backgroundBar).not.toContain("Cancel active uploads");
     expect(backgroundBar).toContain("upload.clearFinished");
     expect(backgroundBar).toContain("Dismiss");
     expect(backgroundBar).not.toContain("Cancel all");
@@ -283,7 +286,7 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain('data-testid="gallery-action-inline-status"');
     expect(source).toContain('data-testid="gallery-action-status"');
     expect(source).toContain(
-      "Upload continues in background. Keep this page open until uploads finish.",
+      "Upload continues in background while you use RawDrive. Keep this browser tab open until uploads finish.",
     );
     expect(source).toContain("Deleting selected photos...");
     expect(source).toContain("Selected photos deleted.");

@@ -6,7 +6,9 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -172,7 +174,8 @@ function DashboardUploadStatusBar({
             )}
             {summary.activeCount > 0 && (
               <p className="mt-1 text-xs text-text-tertiary">
-                Upload continues while you use the dashboard. Keep this tab open
+                Upload continues while you use RawDrive. Open Dashboard,
+                Messages, Settings, or this gallery; keep this browser tab open
                 until uploads finish.
               </p>
             )}
@@ -211,19 +214,45 @@ export function DashboardUploadProvider({
   const token = useMemo(() => getStoredAccessToken(), []);
   const [config, setConfig] = useState<DashboardUploadConfig | null>(null);
   const upload = useUpload(apiUrl, token, config?.options);
+  const pendingClearOwnerRef = useRef<string | null>(null);
+  const hasActiveUploads = useMemo(
+    () => upload.items.some((item) => isActiveUploadStatus(item.status)),
+    [upload.items],
+  );
 
   const configureGalleryUpload = useCallback(
     (ownerKey: string, options: UseUploadOptions) => {
+      pendingClearOwnerRef.current = null;
       setConfig({ ownerKey, options });
     },
     [],
   );
 
-  const clearGalleryUpload = useCallback((ownerKey: string) => {
-    setConfig((current) =>
-      current?.ownerKey === ownerKey ? null : current,
-    );
-  }, []);
+  const clearGalleryUpload = useCallback(
+    (ownerKey: string) => {
+      setConfig((current) => {
+        if (current?.ownerKey !== ownerKey) return current;
+        if (hasActiveUploads) {
+          pendingClearOwnerRef.current = ownerKey;
+          return current;
+        }
+        pendingClearOwnerRef.current = null;
+        return null;
+      });
+    },
+    [hasActiveUploads],
+  );
+
+  useEffect(() => {
+    if (hasActiveUploads) return;
+    const ownerKey = pendingClearOwnerRef.current;
+    if (!ownerKey) return;
+    setConfig((current) => {
+      if (current?.ownerKey !== ownerKey) return current;
+      pendingClearOwnerRef.current = null;
+      return null;
+    });
+  }, [hasActiveUploads]);
 
   const value = useMemo(
     () => ({ upload, configureGalleryUpload, clearGalleryUpload }),

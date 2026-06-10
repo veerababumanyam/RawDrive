@@ -24,10 +24,24 @@ describe("DashboardUploadProvider", () => {
     expect(providerStart).toBeGreaterThan(statusBarStart);
     expect(statusBarSource).toContain('data-testid="dashboard-upload-status"');
     expect(statusBarSource).toContain(
-      "Upload continues while you use the dashboard",
+      "Upload continues while you use RawDrive",
     );
+    expect(statusBarSource).toContain("Messages");
+    expect(statusBarSource).toContain("Settings");
     expect(statusBarSource).toContain("Open gallery");
+    expect(statusBarSource).not.toContain("cancelAll");
     expect(statusBarSource).not.toContain("beforeunload");
     expect(statusBarSource).not.toContain("addEventListener");
+  });
+
+  it("keeps gallery upload configuration while routed-away uploads are active", () => {
+    const source = readProviderSource();
+
+    expect(source).toContain("pendingClearOwnerRef");
+    expect(source).toContain("hasActiveUploads");
+    expect(source).toContain("isActiveUploadStatus(item.status)");
+    expect(source).toContain("if (hasActiveUploads)");
+    expect(source).toContain("return current;");
+    expect(source).toContain("pendingClearOwnerRef.current = ownerKey");
   });
 });
