@@ -2,10 +2,13 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createElement } from "react";
 import type { ReactNode } from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DashboardUploadProvider } from "../dashboard-upload-provider";
+import {
+  DashboardUploadProvider,
+  useDashboardUploadContext,
+} from "../dashboard-upload-provider";
 
 const uploadState = vi.hoisted(() => ({
   pathname: "/dashboard",
@@ -108,6 +111,11 @@ describe("DashboardUploadProvider", () => {
     expect(statusBarSource).not.toContain("cancelAll");
     expect(statusBarSource).not.toContain("beforeunload");
     expect(statusBarSource).not.toContain("addEventListener");
+    expect(source).toContain('data-testid="dashboard-upload-file-input"');
+    expect(source).toContain('data-testid="dashboard-upload-folder-input"');
+    expect(source).toContain("openFilePicker");
+    expect(source).toContain("openFolderPicker");
+    expect(source).toContain("shouldRetainPickerFiles");
   });
 
   it("keeps gallery upload configuration while routed-away uploads are active", () => {
@@ -156,6 +164,53 @@ describe("DashboardUploadProvider", () => {
     expect(
       addEventListener.mock.calls.filter(([type]) => type === "beforeunload"),
     ).toHaveLength(0);
+  });
+
+  it("opens a provider-owned folder picker so selected folder files survive route changes", () => {
+    const click = vi
+      .spyOn(HTMLInputElement.prototype, "click")
+      .mockImplementation(() => undefined);
+    const onFilesSelected = vi.fn();
+    uploadState.useUpload.mockReturnValue(mockUpload());
+
+    function PickerHarness() {
+      const context = useDashboardUploadContext();
+      return createElement(
+        "button",
+        {
+          type: "button",
+          onClick: () =>
+            context?.openFolderPicker({
+              accept: "image/jpeg",
+              onFilesSelected,
+            }),
+        },
+        "Open folder",
+      );
+    }
+
+    render(
+      createElement(
+        DashboardUploadProvider,
+        null,
+        createElement(PickerHarness),
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open folder" }));
+
+    const folderInput = screen.getByTestId(
+      "dashboard-upload-folder-input",
+    ) as HTMLInputElement;
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(folderInput.accept).toBe("image/jpeg");
+
+    const file = new File(["photo-bytes"], "photo.jpg", {
+      type: "image/jpeg",
+    });
+    fireEvent.change(folderInput, { target: { files: [file] } });
+
+    expect(onFilesSelected).toHaveBeenCalledWith([file]);
   });
 
   it("hides the routed-away status bar when every upload is complete", () => {

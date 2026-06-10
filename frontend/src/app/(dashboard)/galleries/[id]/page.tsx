@@ -1755,6 +1755,8 @@ export default function GalleryDetailPage({
   const dashboardUpload = dashboardUploadContext?.upload;
   const configureGalleryUpload = dashboardUploadContext?.configureGalleryUpload;
   const clearGalleryUpload = dashboardUploadContext?.clearGalleryUpload;
+  const openDashboardFilePicker = dashboardUploadContext?.openFilePicker;
+  const openDashboardFolderPicker = dashboardUploadContext?.openFolderPicker;
   const uploadOwnerKey = useMemo(() => `gallery:${id}`, [id]);
   // S3-G4 / S3-G5: also bind every upload session to THIS gallery (and the
   // active sub-album, when one is selected) so the backend links the finalized
@@ -2614,20 +2616,36 @@ export default function GalleryDetailPage({
   );
 
   const handleFileSelect = useCallback(() => {
+    if (openDashboardFilePicker) {
+      openDashboardFilePicker({
+        accept: FILE_PICKER_STILL_IMAGE_ACCEPT,
+        onFilesSelected: (files) =>
+          submitFiles(files.filter(isAcceptedStillImageFile)),
+      });
+      return;
+    }
     if (photoFileInputRef.current) {
       photoFileInputRef.current.value = "";
       photoFileInputRef.current.click();
     }
-  }, []);
+  }, [openDashboardFilePicker, submitFiles]);
 
   // Keep the folder input mounted; transient file inputs can lose browser
   // read permission before a large queued camera folder reaches screening.
   const handleFolderSelect = useCallback(() => {
+    if (openDashboardFolderPicker) {
+      openDashboardFolderPicker({
+        accept: FILE_PICKER_STILL_IMAGE_ACCEPT,
+        onFilesSelected: (files) =>
+          submitFiles(files.filter(isAcceptedStillImageFile)),
+      });
+      return;
+    }
     if (photoFolderInputRef.current) {
       photoFolderInputRef.current.value = "";
       photoFolderInputRef.current.click();
     }
-  }, []);
+  }, [openDashboardFolderPicker, submitFiles]);
 
   const tetheredLastDetectedLabel = tetheredLastDetectedAt
     ? `Last detected: ${formatTetheredRelativeTime(tetheredLastDetectedAt)}`

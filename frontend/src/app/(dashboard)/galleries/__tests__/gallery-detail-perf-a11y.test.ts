@@ -204,6 +204,9 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("useDashboardUploadContext");
     expect(source).toContain("configureGalleryUpload");
     expect(source).toContain("clearGalleryUpload");
+    expect(source).toContain("openDashboardFilePicker");
+    expect(source).toContain("openDashboardFolderPicker");
+    expect(source).toContain("openDashboardFolderPicker({");
     expect(source).toContain("const localUpload = useUpload");
     expect(source).toContain("const upload = dashboardUpload ?? localUpload");
     expect(source).toContain(

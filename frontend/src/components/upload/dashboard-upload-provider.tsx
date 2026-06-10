@@ -10,6 +10,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ChangeEvent,
   type ReactNode,
 } from "react";
 import type { UploadItem } from "@/components/upload/upload-progress";
@@ -32,10 +33,17 @@ type DashboardUploadContextValue = {
   upload: ReturnType<typeof useUpload>;
   configureGalleryUpload: (ownerKey: string, options: UseUploadOptions) => void;
   clearGalleryUpload: (ownerKey: string) => void;
+  openFilePicker: (options: DashboardUploadPickerOptions) => void;
+  openFolderPicker: (options: DashboardUploadPickerOptions) => void;
 };
 
 type UploadItemWithDestination = UploadItem & {
   uploadDestination?: UploadDestination;
+};
+
+type DashboardUploadPickerOptions = {
+  accept?: string;
+  onFilesSelected: (files: File[]) => void;
 };
 
 const DashboardUploadContext =
@@ -221,8 +229,21 @@ export function DashboardUploadProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<DashboardUploadConfig | null>(null);
   const upload = useUpload(apiUrl, token, config?.options);
   const pendingClearOwnerRef = useRef<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const folderInputRef = useRef<HTMLInputElement | null>(null);
+  const pickerCallbackRef =
+    useRef<DashboardUploadPickerOptions["onFilesSelected"] | null>(null);
   const hasActiveUploads = useMemo(
     () => upload.items.some((item) => isActiveUploadStatus(item.status)),
+    [upload.items],
+  );
+  const shouldRetainPickerFiles = useMemo(
+    () =>
+      upload.items.some(
+        (item) =>
+          isActiveUploadStatus(item.status) ||
+          (item.status === "error" && !item.requiresReselect),
+      ),
     [upload.items],
   );
 
@@ -249,6 +270,46 @@ export function DashboardUploadProvider({ children }: { children: ReactNode }) {
     [hasActiveUploads],
   );
 
+  const handlePickerChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(event.currentTarget.files ?? []);
+      pickerCallbackRef.current?.(files);
+      // Keep the FileList mounted in this provider while active/retryable
+      // uploads may still need browser-backed read permission.
+    },
+    [],
+  );
+
+  const openProviderPicker = useCallback(
+    (
+      input: HTMLInputElement | null,
+      { accept, onFilesSelected }: DashboardUploadPickerOptions,
+    ) => {
+      if (!input) return;
+      pickerCallbackRef.current = onFilesSelected;
+      input.accept = accept ?? "";
+      if (!shouldRetainPickerFiles) {
+        input.value = "";
+      }
+      input.click();
+    },
+    [shouldRetainPickerFiles],
+  );
+
+  const openFilePicker = useCallback(
+    (options: DashboardUploadPickerOptions) => {
+      openProviderPicker(fileInputRef.current, options);
+    },
+    [openProviderPicker],
+  );
+
+  const openFolderPicker = useCallback(
+    (options: DashboardUploadPickerOptions) => {
+      openProviderPicker(folderInputRef.current, options);
+    },
+    [openProviderPicker],
+  );
+
   useEffect(() => {
     if (hasActiveUploads) return;
     const ownerKey = pendingClearOwnerRef.current;
@@ -260,13 +321,52 @@ export function DashboardUploadProvider({ children }: { children: ReactNode }) {
     });
   }, [hasActiveUploads]);
 
+  useEffect(() => {
+    if (shouldRetainPickerFiles) return;
+    pickerCallbackRef.current = null;
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (folderInputRef.current) folderInputRef.current.value = "";
+  }, [shouldRetainPickerFiles]);
+
   const value = useMemo(
-    () => ({ upload, configureGalleryUpload, clearGalleryUpload }),
-    [upload, configureGalleryUpload, clearGalleryUpload],
+    () => ({
+      upload,
+      configureGalleryUpload,
+      clearGalleryUpload,
+      openFilePicker,
+      openFolderPicker,
+    }),
+    [
+      upload,
+      configureGalleryUpload,
+      clearGalleryUpload,
+      openFilePicker,
+      openFolderPicker,
+    ],
   );
 
   return (
     <DashboardUploadContext.Provider value={value}>
+      <input
+        ref={fileInputRef}
+        data-testid="dashboard-upload-file-input"
+        className="sr-only"
+        type="file"
+        multiple
+        onChange={handlePickerChange}
+      />
+      <input
+        ref={folderInputRef}
+        data-testid="dashboard-upload-folder-input"
+        className="sr-only"
+        type="file"
+        multiple
+        {...({ webkitdirectory: "", directory: "" } as Record<
+          string,
+          string
+        >)}
+        onChange={handlePickerChange}
+      />
       {children}
       <DashboardUploadStatusBar upload={upload} />
     </DashboardUploadContext.Provider>
