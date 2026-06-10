@@ -99,7 +99,6 @@ function useUploadSummary(items: UploadItem[]) {
       .find(Boolean);
     const uploadPanelOpen =
       activeCount > 0 ||
-      completedCount > 0 ||
       failedCount > 0 ||
       blockedCount > 0;
     const shownCount = progressItems.length;

@@ -954,6 +954,24 @@ export async function addAssetToGallery(
   if (!res.ok) throw new Error(`Failed to add asset: ${res.status}`);
 }
 
+export type GalleryAssetOrderItem = {
+  asset_id: string;
+  sort_order: number;
+};
+
+export async function reorderGalleryAssets(
+  _token: string,
+  galleryId: string,
+  order: GalleryAssetOrderItem[],
+): Promise<void> {
+  const res = await authFetch(`/api/v1/galleries/${galleryId}/assets/reorder`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ order }),
+  });
+  if (!res.ok) throw new Error(`Failed to reorder assets: ${res.status}`);
+}
+
 export async function listGalleryAssets(
   _token: string,
   galleryId: string,

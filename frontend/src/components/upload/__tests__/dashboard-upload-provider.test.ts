@@ -153,4 +153,34 @@ describe("DashboardUploadProvider", () => {
       addEventListener.mock.calls.filter(([type]) => type === "beforeunload"),
     ).toHaveLength(0);
   });
+
+  it("hides the routed-away status bar when every upload is complete", () => {
+    uploadState.useUpload.mockReturnValue(
+      mockUpload({
+        items: [
+          {
+            id: "upload-1",
+            file: new File(["photo-bytes"], "photo.jpg", {
+              type: "image/jpeg",
+            }),
+            progress: 100,
+            status: "complete",
+            uploadDestination: { galleryId: "gallery-1" },
+          },
+        ],
+      }),
+    );
+
+    render(
+      createElement(
+        DashboardUploadProvider,
+        null,
+        createElement("main", null, "Dashboard"),
+      ),
+    );
+
+    expect(
+      screen.queryByTestId("dashboard-upload-status"),
+    ).not.toBeInTheDocument();
+  });
 });

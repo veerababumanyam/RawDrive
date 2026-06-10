@@ -4,6 +4,7 @@ import {
   deleteGallery,
   listGalleryMediaKeys,
   listGalleryShareLinks,
+  reorderGalleryAssets,
   revokeGalleryShareLink,
   upsertGalleryMediaKey,
 } from "../galleries";
@@ -92,6 +93,28 @@ describe("gallery share API", () => {
       expect.objectContaining({
         method: "DELETE",
         keepalive: true,
+      }),
+    );
+  });
+
+  it("persists gallery photo order through the protected reorder route", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 204 });
+
+    await reorderGalleryAssets("token", "gallery-1", [
+      { asset_id: "asset-2", sort_order: 0 },
+      { asset_id: "asset-1", sort_order: 1 },
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/v1/galleries/gallery-1/assets/reorder"),
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          order: [
+            { asset_id: "asset-2", sort_order: 0 },
+            { asset_id: "asset-1", sort_order: 1 },
+          ],
+        }),
       }),
     );
   });

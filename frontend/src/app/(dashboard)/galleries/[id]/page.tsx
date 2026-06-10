@@ -20,10 +20,12 @@ import {
   listGalleryAlbums,
   listGalleryAssets,
   listGalleryShareLinks,
+  reorderGalleryAssets,
   updateGallery,
   type Gallery,
   type GalleryAlbum,
   type GalleryAsset,
+  type GalleryAssetOrderItem,
 } from "@/lib/api/galleries";
 import {
   listProofingSelections,
@@ -213,6 +215,8 @@ const SHARE_UNAVAILABLE_MESSAGE =
 type ShareLinkChannel = "copy" | "email" | "whatsapp";
 const ASSET_SETTLE_REFRESH_DELAYS_MS = [1200, 4000] as const;
 const FACE_INDEX_REINDEX_CONCURRENCY = 3;
+const ASSET_ALBUM_DRAG_TYPE = "application/x-rawdrive-asset-ids";
+const ASSET_REORDER_DRAG_TYPE = "application/x-rawdrive-reorder-asset-id";
 const UPLOAD_DROPZONE_BACKEND_PREVIEW_VARIANTS = [
   "display_webp",
   "thumb_lg_webp",
@@ -259,8 +263,72 @@ function galleryAssetSequenceComparator(
   return a.asset_id.localeCompare(b.asset_id);
 }
 
+function galleryAssetClipNumberComparator(
+  a: GalleryAsset,
+  b: GalleryAsset,
+): number {
+  const aFilename = galleryAssetFilename(a);
+  const bFilename = galleryAssetFilename(b);
+  if (aFilename && bFilename) {
+    const filenameDelta = aFilename.localeCompare(bFilename, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
+    if (filenameDelta !== 0) return filenameDelta;
+  } else if (aFilename !== bFilename) {
+    return aFilename ? -1 : 1;
+  }
+
+  const addedAtDelta =
+    galleryAssetTimestamp(a.added_at) - galleryAssetTimestamp(b.added_at);
+  if (addedAtDelta !== 0) return addedAtDelta;
+
+  return a.asset_id.localeCompare(b.asset_id);
+}
+
+function withSequentialSortOrder<T extends GalleryAsset>(entries: T[]): T[] {
+  return entries.map((entry, index) => ({ ...entry, sort_order: index }));
+}
+
 function orderGalleryAssetEntries<T extends GalleryAsset>(entries: T[]): T[] {
   return [...entries].sort(galleryAssetSequenceComparator);
+}
+
+function orderGalleryAssetEntriesByClipNumber<T extends GalleryAsset>(
+  entries: T[],
+): T[] {
+  return withSequentialSortOrder(
+    [...entries].sort(galleryAssetClipNumberComparator),
+  );
+}
+
+function moveGalleryAssetEntry<T extends GalleryAsset>(
+  entries: T[],
+  sourceAssetId: string,
+  targetAssetId: string,
+): T[] | null {
+  if (sourceAssetId === targetAssetId) return null;
+  const sourceIndex = entries.findIndex(
+    (entry) => entry.asset_id === sourceAssetId,
+  );
+  const targetIndex = entries.findIndex(
+    (entry) => entry.asset_id === targetAssetId,
+  );
+  if (sourceIndex < 0 || targetIndex < 0) return null;
+
+  const next = [...entries];
+  const [moved] = next.splice(sourceIndex, 1);
+  next.splice(targetIndex, 0, moved);
+  return withSequentialSortOrder(next);
+}
+
+function galleryAssetReorderPayload(
+  entries: Array<Pick<GalleryAsset, "asset_id" | "sort_order">>,
+): GalleryAssetOrderItem[] {
+  return entries.map((entry, index) => ({
+    asset_id: entry.asset_id,
+    sort_order: entry.sort_order ?? index,
+  }));
 }
 
 function assetHasWebPDisplay(asset: Asset | null | undefined): boolean {
@@ -538,6 +606,13 @@ export default function GalleryDetailPage({
   const { id } = use(params);
   const [gallery, setGallery] = useState<Gallery | null>(null);
   const [assets, setAssets] = useState<GalleryAssetRecord[]>([]);
+  const [draggedReorderAssetId, setDraggedReorderAssetId] = useState<
+    string | null
+  >(null);
+  const [dragOverReorderAssetId, setDragOverReorderAssetId] = useState<
+    string | null
+  >(null);
+  const [reorderingAssetIds, setReorderingAssetIds] = useState(false);
   const galleryMediaAssets = useMemo(
     () => assets.map((entry) => entry.asset),
     [assets],
@@ -855,6 +930,50 @@ export default function GalleryDetailPage({
       }
     };
   }, []);
+
+  const persistGalleryAssetOrder = useCallback(
+    async (
+      nextAssets: GalleryAssetRecord[],
+      previousAssets: GalleryAssetRecord[],
+    ): Promise<GalleryAssetRecord[]> => {
+      const t = getStoredAccessToken();
+      if (!t) throw new Error("missing auth token");
+
+      const nextSignature = assetRowsSignature(nextAssets);
+      setAssets(nextAssets);
+      assetRowsSignatureRef.current = nextSignature;
+
+      try {
+        await reorderGalleryAssets(
+          t,
+          id,
+          galleryAssetReorderPayload(nextAssets),
+        );
+        return nextAssets;
+      } catch (err) {
+        setAssets(previousAssets);
+        assetRowsSignatureRef.current = assetRowsSignature(previousAssets);
+        throw err;
+      }
+    },
+    [id],
+  );
+
+  const persistGalleryAssetsByClipNumber = useCallback(
+    async (
+      entries: GalleryAssetRecord[] | null,
+    ): Promise<GalleryAssetRecord[] | null> => {
+      if (!entries || entries.length < 2) return entries;
+
+      const orderedAssets = orderGalleryAssetEntriesByClipNumber(entries);
+      if (assetRowsSignature(orderedAssets) === assetRowsSignature(entries)) {
+        return entries;
+      }
+
+      return persistGalleryAssetOrder(orderedAssets, entries);
+    },
+    [persistGalleryAssetOrder],
+  );
 
   const refreshAlbums = useCallback(async () => {
     const t = getStoredAccessToken();
@@ -1434,6 +1553,40 @@ export default function GalleryDetailPage({
     [visibleAssets, visibleLimit],
   );
   const hasMoreAssets = visibleAssets.length > pagedAssets.length;
+  const canReorderGalleryAssets =
+    !activeAlbum && !faceFilterIds && !proofingFilterAssetIds;
+  const handleGalleryAssetReorder = useCallback(
+    async (sourceAssetId: string, targetAssetId: string) => {
+      if (!canReorderGalleryAssets || reorderingAssetIds) return;
+      const nextAssets = moveGalleryAssetEntry(
+        assets,
+        sourceAssetId,
+        targetAssetId,
+      );
+      if (!nextAssets) return;
+
+      setReorderingAssetIds(true);
+      showGalleryActionStatus("Saving photo order...");
+      try {
+        await persistGalleryAssetOrder(nextAssets, assets);
+        showGalleryActionStatus("Photo order saved.", "success", 4000);
+      } catch (err) {
+        console.warn("Failed to reorder gallery photos:", err);
+        showGalleryActionStatus("Photo order update failed.", "error", 7000);
+      } finally {
+        setReorderingAssetIds(false);
+        setDraggedReorderAssetId(null);
+        setDragOverReorderAssetId(null);
+      }
+    },
+    [
+      assets,
+      canReorderGalleryAssets,
+      persistGalleryAssetOrder,
+      reorderingAssetIds,
+      showGalleryActionStatus,
+    ],
+  );
   // Continuous scrolling: grow the render window automatically as the
   // photographer nears the end of the mounted tiles. The "Load more photos"
   // button remains as a visible fallback (and for no-IntersectionObserver
@@ -1804,14 +1957,10 @@ export default function GalleryDetailPage({
   const uploadPanelOpen =
     activeUploadCount > 0 ||
     failedUploadCount > 0 ||
-    blockedUploadCount > 0 ||
-    completedUploadCount > 0;
+    blockedUploadCount > 0;
   const uploadDialogOpen = showUploadDialog;
   const backgroundUploadBarVisible = uploadPanelOpen;
-  const uploadDialogCanClose =
-    activeUploadCount === 0 &&
-    failedUploadCount === 0 &&
-    blockedUploadCount === 0;
+  const uploadDialogCanClose = true;
   const uploadStage: "details" | "processing" | "visibility" =
     activeUploadCount > 0
       ? "processing"
@@ -2154,7 +2303,9 @@ export default function GalleryDetailPage({
 
       // Reload assets list after linking
       try {
-        const hydratedAssets = await refreshGalleryAssets();
+        const hydratedAssets = await persistGalleryAssetsByClipNumber(
+          await refreshGalleryAssets(),
+        );
         if (
           tetheredAutoOpenRef.current &&
           newlyAddedTetheredAssetIds.length > 0
@@ -2183,7 +2334,13 @@ export default function GalleryDetailPage({
         await refreshAlbums();
       }
     })();
-  }, [upload.items, id, refreshAlbums, refreshGalleryAssets]);
+  }, [
+    upload.items,
+    id,
+    refreshAlbums,
+    refreshGalleryAssets,
+    persistGalleryAssetsByClipNumber,
+  ]);
 
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -3466,7 +3623,7 @@ export default function GalleryDetailPage({
                       )}
                       onDragOver={(e) => {
                         const hasInternal = e.dataTransfer.types.includes(
-                          "application/x-rawdrive-asset-ids",
+                          ASSET_ALBUM_DRAG_TYPE,
                         );
                         if (hasInternal) {
                           e.preventDefault();
@@ -3487,9 +3644,8 @@ export default function GalleryDetailPage({
                           "ring-2",
                           "ring-accent-primary",
                         );
-                        const raw = e.dataTransfer.getData(
-                          "application/x-rawdrive-asset-ids",
-                        );
+                        const raw =
+                          e.dataTransfer.getData(ASSET_ALBUM_DRAG_TYPE);
                         if (!raw) return;
                         e.preventDefault();
                         try {
@@ -3703,6 +3859,16 @@ export default function GalleryDetailPage({
                     entry.asset && selectedAssetIds.has(entry.asset.id),
                   );
                   const tileLabel = entry.asset?.filename || "photo";
+                  const isDraggedReorderAsset =
+                    draggedReorderAssetId === entry.asset_id;
+                  const isReorderDropTarget =
+                    dragOverReorderAssetId === entry.asset_id &&
+                    draggedReorderAssetId !== entry.asset_id;
+                  const canDragReorderAsset =
+                    canReorderGalleryAssets &&
+                    !bulkMode &&
+                    !reorderingAssetIds &&
+                    Boolean(entry.asset);
 
                   return (
                     <article
@@ -3710,28 +3876,77 @@ export default function GalleryDetailPage({
                       className={cn(
                         "surface-panel relative cursor-pointer overflow-hidden transition-shadow hover:shadow-lg group",
                         PHOTO_VIEW_TILE[photoViewMode],
+                        isDraggedReorderAsset && "opacity-70",
+                        isReorderDropTarget &&
+                          "ring-2 ring-accent-primary ring-offset-2 ring-offset-surface-base",
                         bulkMode &&
                           entry.asset &&
                           isSelected &&
                           "ring-2 ring-accent-primary",
                       )}
-                      // QA #18: in bulk mode, each tile is draggable. Drop
-                      // target is the album chip above. Carries either the
-                      // whole selection set (when the dragged asset is part
-                      // of the selection) or just this one asset (when
-                      // dragging an unselected tile).
+                      // Owner drag payloads stay split by intent: All Photos
+                      // uses move-style reorder, while bulk/sub-gallery drags
+                      // keep the existing album-membership copy payload.
                       draggable={!!entry.asset}
                       onDragStart={(e) => {
                         if (!entry.asset) return;
+                        if (canDragReorderAsset) {
+                          e.dataTransfer.setData(
+                            ASSET_REORDER_DRAG_TYPE,
+                            entry.asset_id,
+                          );
+                          e.dataTransfer.effectAllowed = "move";
+                          setDraggedReorderAssetId(entry.asset_id);
+                          return;
+                        }
                         const ids =
                           bulkMode && isSelected
                             ? Array.from(selectedAssetIds)
                             : [entry.asset.id];
                         e.dataTransfer.setData(
-                          "application/x-rawdrive-asset-ids",
+                          ASSET_ALBUM_DRAG_TYPE,
                           JSON.stringify(ids),
                         );
                         e.dataTransfer.effectAllowed = "copy";
+                      }}
+                      onDragOver={(e) => {
+                        if (!canReorderGalleryAssets || !entry.asset) return;
+                        if (
+                          !Array.from(e.dataTransfer.types).includes(
+                            ASSET_REORDER_DRAG_TYPE,
+                          )
+                        )
+                          return;
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                        setDragOverReorderAssetId(entry.asset_id);
+                      }}
+                      onDragLeave={(e) => {
+                        const related = e.relatedTarget;
+                        if (
+                          related instanceof Node &&
+                          e.currentTarget.contains(related)
+                        )
+                          return;
+                        if (dragOverReorderAssetId === entry.asset_id) {
+                          setDragOverReorderAssetId(null);
+                        }
+                      }}
+                      onDrop={(e) => {
+                        const sourceAssetId = e.dataTransfer.getData(
+                          ASSET_REORDER_DRAG_TYPE,
+                        );
+                        if (!sourceAssetId || !entry.asset) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void handleGalleryAssetReorder(
+                          sourceAssetId,
+                          entry.asset_id,
+                        );
+                      }}
+                      onDragEnd={() => {
+                        setDraggedReorderAssetId(null);
+                        setDragOverReorderAssetId(null);
                       }}
                       onClick={() => {
                         if (bulkMode && entry.asset) {

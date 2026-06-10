@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 	"unsafe"
 
 	"github.com/go-chi/chi/v5"
@@ -203,6 +204,42 @@ func TestRateLimitByRouteUsesDedicatedUploadProtocolLimiter(t *testing.T) {
 	handler.ServeHTTP(oauth, httptest.NewRequest(http.MethodGet, "/auth/oauth/google", nil))
 	if oauth.Code != http.StatusNoContent {
 		t.Fatalf("oauth start must bypass top-level global limiter so its route-specific limiter can run, got %d", oauth.Code)
+	}
+}
+
+func TestOAuthStartDefaultLimitAllowsMobileRetryBurst(t *testing.T) {
+	t.Setenv("OAUTH_START_RATE_LIMIT_PER_MINUTE", "")
+
+	const retryBurst = 60
+	maxRequests := oauthStartRateLimitPerMinute()
+	if maxRequests < retryBurst {
+		t.Fatalf("OAuth start default limit must allow a moderate mobile/shared-IP retry burst: got %d, want at least %d", maxRequests, retryBurst)
+	}
+
+	limiter, _ := middleware.RateLimitWithValkey(nil, "oauth_start", maxRequests, time.Minute)
+	handler := limiter(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	for i := 0; i < retryBurst; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/auth/oauth/google", nil)
+		req.RemoteAddr = "203.0.113.77:5000"
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code == http.StatusTooManyRequests {
+			t.Fatalf("OAuth start request %d/%d was rate limited by the default bucket", i+1, retryBurst)
+		}
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("OAuth start request %d/%d got unexpected status %d", i+1, retryBurst, rec.Code)
+		}
+	}
+}
+
+func TestOAuthStartLimitEnvOverride(t *testing.T) {
+	t.Setenv("OAUTH_START_RATE_LIMIT_PER_MINUTE", "42")
+
+	if got := oauthStartRateLimitPerMinute(); got != 42 {
+		t.Fatalf("OAuth start env override = %d, want 42", got)
 	}
 }
 

@@ -1338,6 +1338,10 @@ func envIntOrDefault(key string, def int) int {
 	return def
 }
 
+func oauthStartRateLimitPerMinute() int {
+	return envIntOrDefault("OAUTH_START_RATE_LIMIT_PER_MINUTE", 300)
+}
+
 // kekRequiredForEnv reports whether PLATFORM_SETTINGS_KEK must be present
 // (i.e. at-rest envelope encryption is mandatory) for the given APP_ENV.
 //
@@ -1952,9 +1956,14 @@ func main() {
 	}
 
 	// OAuth start is a browser handoff, not a credential guess. It gets its
-	// own small bucket so gallery/media activity in the app-wide limiter cannot
-	// lock a legitimate user out of Google sign-in.
-	oauthStartLimiter, _ := middleware.RateLimitWithValkey(valkeyClient, "oauth_start", 30, time.Minute)
+	// own bucket so gallery/media activity in the app-wide limiter cannot lock
+	// a legitimate user out of Google sign-in. Keep this materially looser than
+	// credential endpoints: mobile browsers and shared studio/NAT networks can
+	// retry redirects several times, while the callback still validates signed
+	// state/nonce before issuing a session.
+	oauthStartRateMax := oauthStartRateLimitPerMinute()
+	log.Printf("OAuth start rate limit: %d requests / %s per client IP", oauthStartRateMax, time.Minute)
+	oauthStartLimiter, _ := middleware.RateLimitWithValkey(valkeyClient, "oauth_start", oauthStartRateMax, time.Minute)
 	r.With(oauthStartLimiter).Get("/auth/oauth/google", authHandler.OAuthGoogle)
 	r.With(oauthStartLimiter).Get("/api/v1/auth/oauth/google", authHandler.OAuthGoogle)
 

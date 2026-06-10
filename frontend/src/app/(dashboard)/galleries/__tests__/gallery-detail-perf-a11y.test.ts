@@ -101,6 +101,29 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("setVisibleLimit((current) =>");
   });
 
+  it("allows owner mouse reordering and persists upload batches by clip-number order", () => {
+    const source = readDetailPage();
+
+    expect(source).toContain("reorderGalleryAssets");
+    expect(source).toContain("ASSET_REORDER_DRAG_TYPE");
+    expect(source).toContain("ASSET_ALBUM_DRAG_TYPE");
+    expect(source).toContain("galleryAssetClipNumberComparator");
+    expect(source).toContain("orderGalleryAssetEntriesByClipNumber");
+    expect(source).toContain("moveGalleryAssetEntry");
+    expect(source).toContain("galleryAssetReorderPayload");
+    expect(source).toContain("persistGalleryAssetsByClipNumber");
+    expect(source).toContain("await refreshGalleryAssets()");
+    expect(source).toContain("const canReorderGalleryAssets =");
+    expect(source).toContain("!activeAlbum && !faceFilterIds");
+    expect(source).toContain("handleGalleryAssetReorder");
+    expect(source).toContain('e.dataTransfer.effectAllowed = "move"');
+    expect(source).toContain('e.dataTransfer.dropEffect = "move"');
+    expect(source).toContain("Photo order saved.");
+    expect(source).toContain("Photo order update failed.");
+    expect(source).toContain("await reorderGalleryAssets(");
+    expect(source).toContain("galleryAssetReorderPayload(nextAssets)");
+  });
+
   // F-046: the grid must render a bounded window of the filtered assets with
   // a load-more affordance, not map the entire visibleAssets set at once.
   it("F-046: grid renders a paged window with a Load-more control, not the full set", () => {
@@ -189,6 +212,10 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain('data-testid="upload-dialog-back"');
     expect(source).toContain("Back to gallery");
     expect(source).toContain("Back to gallery; uploads continue");
+    expect(source).toContain("const uploadDialogCanClose = true;");
+    expect(source).not.toContain(
+      "activeUploadCount === 0 &&\n    failedUploadCount === 0 &&\n    blockedUploadCount === 0",
+    );
     expect(source).not.toContain("disabled={activeUploadCount > 0}");
     const uploadBackStart = source.indexOf('data-testid="upload-dialog-back"');
     const uploadBackEnd = source.indexOf("<ChevronLeft />", uploadBackStart);
@@ -228,7 +255,13 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("backgroundUploadBarVisible");
     expect(source).toContain("const backgroundUploadBarVisible = uploadPanelOpen;");
     expect(source).toContain('data-testid="background-upload-status"');
-    expect(source).toContain("completedUploadCount > 0");
+    const panelOpenStart = source.indexOf("const uploadPanelOpen =");
+    const panelOpenEnd = source.indexOf("const uploadDialogOpen", panelOpenStart);
+    const panelOpenSource = source.slice(panelOpenStart, panelOpenEnd);
+    expect(panelOpenSource).toContain("activeUploadCount > 0");
+    expect(panelOpenSource).toContain("failedUploadCount > 0");
+    expect(panelOpenSource).toContain("blockedUploadCount > 0");
+    expect(panelOpenSource).not.toContain("completedUploadCount > 0");
     expect(source).not.toContain("activeUploadLeaveWarning");
     expect(source).not.toContain("beforeunload");
     expect(source).not.toContain("Closing or reloading this browser tab");
@@ -358,8 +391,9 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("void refreshAlbums()");
     expect(source).toContain("Promise<GalleryAssetRecord[] | null>");
     expect(source).toContain(
-      "const hydratedAssets = await refreshGalleryAssets()",
+      "const hydratedAssets = await persistGalleryAssetsByClipNumber(",
     );
+    expect(source).toContain("await refreshGalleryAssets(),");
   });
 
   it("keeps the upload dialog mobile-first by hiding desktop-only progress tabs and helper cards", () => {
