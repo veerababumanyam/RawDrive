@@ -108,6 +108,10 @@ describe("DashboardUploadProvider", () => {
     expect(statusBarSource).toContain("upload.retryAll");
     expect(statusBarSource).toContain("Cancel uploads");
     expect(statusBarSource).toContain("upload.cancelAll");
+    expect(statusBarSource).toContain("Hide upload status");
+    expect(statusBarSource).toContain("onHideStatus");
+    expect(statusBarSource).toContain("GlassIconButton");
+    expect(statusBarSource).toContain("<XMark");
     expect(statusBarSource).not.toContain("beforeunload");
     expect(statusBarSource).not.toContain("addEventListener");
     expect(source).toContain('data-testid="dashboard-upload-file-input"');
@@ -115,6 +119,10 @@ describe("DashboardUploadProvider", () => {
     expect(source).toContain("openFilePicker");
     expect(source).toContain("openFolderPicker");
     expect(source).toContain("shouldRetainPickerFiles");
+    expect(source).toContain("uploadStatusBarHidden");
+    expect(source).toContain("setUploadStatusBarHidden(false)");
+    expect(source).toContain("hasActionableErrors");
+    expect(source).toContain("hasNewItems");
   });
 
   it("keeps gallery upload configuration while routed-away uploads are active", () => {
@@ -171,6 +179,44 @@ describe("DashboardUploadProvider", () => {
     expect(
       addEventListener.mock.calls.filter(([type]) => type === "beforeunload"),
     ).toHaveLength(0);
+  });
+
+  it("hides routed-away active upload status without canceling the folder upload", () => {
+    const upload = mockUpload({
+      items: [
+        {
+          id: "upload-1",
+          file: new File(["photo-bytes"], "photo.jpg", {
+            type: "image/jpeg",
+          }),
+          progress: 24,
+          status: "uploading",
+          uploadDestination: { galleryId: "gallery-1" },
+        },
+      ],
+    });
+    uploadState.useUpload.mockReturnValue(upload);
+
+    render(
+      createElement(
+        DashboardUploadProvider,
+        null,
+        createElement("main", null, "Dashboard"),
+      ),
+    );
+
+    expect(screen.getByTestId("dashboard-upload-status")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Hide upload status" }),
+    );
+
+    expect(
+      screen.queryByTestId("dashboard-upload-status"),
+    ).not.toBeInTheDocument();
+    expect(upload.cancelAll).not.toHaveBeenCalled();
+    expect(upload.clearFinished).not.toHaveBeenCalled();
+    expect(upload.items).toHaveLength(1);
   });
 
   it("opens a provider-owned folder picker so selected folder files survive route changes", () => {
