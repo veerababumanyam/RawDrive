@@ -321,8 +321,22 @@ func clientIPForAudit(r *http.Request) string {
 // in main.go and avoids an auth→middleware→repository→auth import
 // cycle that would otherwise block wiring the limiter here.
 func (h *Handler) Routes() chi.Router {
+	return h.routes(false)
+}
+
+// RoutesWithoutOAuthStart returns the auth subrouter without GET
+// /oauth/google. cmd/api mounts that start endpoint separately with a dedicated
+// OAuth-start limiter so global gallery/media traffic cannot burn the sign-in
+// budget.
+func (h *Handler) RoutesWithoutOAuthStart() chi.Router {
+	return h.routes(true)
+}
+
+func (h *Handler) routes(skipOAuthStart bool) chi.Router {
 	r := chi.NewRouter()
-	r.Get("/oauth/google", h.OAuthGoogle)
+	if !skipOAuthStart {
+		r.Get("/oauth/google", h.OAuthGoogle)
+	}
 	r.Get("/oauth/google/status", h.OAuthGoogleStatus)
 	r.Get("/oauth/google/callback", h.OAuthGoogleCallback)
 	r.Post("/refresh", h.RefreshToken)

@@ -443,17 +443,17 @@ var defaultTrustedProxyCIDRs = []string{
 }
 
 // parseTrustedProxyCIDRs reads TRUSTED_PROXY_CIDR (comma-separated CIDRs)
-// and returns the parsed networks. Config resolution follows the project
-// order: env var present → use it; absent → fall back to the documented
-// private/loopback defaults and warn (feature stays enabled but with the
-// safe default posture, never disabled — rate limiting is a hard security
-// control). Unparseable entries are skipped with a warning rather than
-// crashing the boot path.
+// and returns the parsed networks. The explicit env entries extend the
+// private/loopback defaults instead of replacing them: production may add
+// public edge CIDRs, but the backend still sits behind a same-host/docker
+// proxy hop that must remain trusted for real client IP restoration.
+// Unparseable entries are skipped with a warning rather than crashing the boot
+// path.
 func parseTrustedProxyCIDRs() []*net.IPNet {
 	raw := strings.TrimSpace(os.Getenv("TRUSTED_PROXY_CIDR"))
-	specs := defaultTrustedProxyCIDRs
+	specs := append([]string{}, defaultTrustedProxyCIDRs...)
 	if raw != "" {
-		specs = strings.Split(raw, ",")
+		specs = append(specs, strings.Split(raw, ",")...)
 	} else {
 		log.Printf("middleware: TRUSTED_PROXY_CIDR not set — defaulting to private/loopback ranges %v for proxy-header trust; set it explicitly in production", defaultTrustedProxyCIDRs)
 	}

@@ -597,6 +597,19 @@ func TestOAuthGoogleStatus_EnabledWhenConfigured(t *testing.T) {
 	assert.True(t, result["enabled"], "status must report enabled when oauth is configured")
 }
 
+func TestRoutesWithoutOAuthStartKeepsOAuthSupportRoutes(t *testing.T) {
+	handler, _ := newOAuthHandler()
+	r := handler.RoutesWithoutOAuthStart()
+
+	start := httptest.NewRecorder()
+	r.ServeHTTP(start, httptest.NewRequest(http.MethodGet, "/oauth/google", nil))
+	assert.Equal(t, http.StatusNotFound, start.Code)
+
+	status := httptest.NewRecorder()
+	r.ServeHTTP(status, httptest.NewRequest(http.MethodGet, "/oauth/google/status", nil))
+	assert.Equal(t, http.StatusOK, status.Code)
+}
+
 // TestOAuthGoogleStatus_DisabledWhenNil asserts the public status probe reports
 // enabled==false when no OAuth service is wired (h.oauth == nil). setupAuthRouter
 // builds the handler with nil oauth, matching an unconfigured deployment (OBS-2).

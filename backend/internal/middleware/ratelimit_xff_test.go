@@ -109,6 +109,24 @@ func TestF008_TrustedProxyXFFStillHonored(t *testing.T) {
 	}
 }
 
+// TestTrustedProxyEnvExtendsPrivateDefaults guards the production topology:
+// operators may add public edge CIDRs through TRUSTED_PROXY_CIDR, but that must
+// not drop the private docker/nginx hop. If the docker hop stops being trusted,
+// every browser shares one backend rate-limit bucket and public OAuth starts can
+// return 429 "Too Many Requests" for unrelated users.
+func TestTrustedProxyEnvExtendsPrivateDefaults(t *testing.T) {
+	t.Setenv("TRUSTED_PROXY_CIDR", "198.51.100.0/24")
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/oauth/google", nil)
+	req.RemoteAddr = "172.18.0.4:5000"
+	req.Header.Set("X-Forwarded-For", "203.0.113.44")
+
+	got := clientIPForRateLimit(req, parseTrustedProxyCIDRs())
+	if got != "203.0.113.44" {
+		t.Fatalf("trusted docker proxy must preserve the real client IP even when TRUSTED_PROXY_CIDR adds public edges; got %q", got)
+	}
+}
+
 // TestF008_UntrustedPeerNoXFFKeysOnRemoteAddr is a focused unit check on the
 // IP-selection helper: with an untrusted peer, attacker-supplied
 // X-Forwarded-For / X-Real-IP are ignored and the bucket key is the peer

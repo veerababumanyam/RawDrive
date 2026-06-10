@@ -1136,6 +1136,82 @@ func newValkeyClient() (middleware.ValkeyClient, *redis.Client) {
 	return middleware.NewRedisValkeyClient(rdb), rdb
 }
 
+type rateLimitBypass func(*http.Request) bool
+
+func rateLimitExcept(limiter func(http.Handler) http.Handler, bypasses ...rateLimitBypass) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		limited := limiter(next)
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			for _, bypass := range bypasses {
+				if bypass(r) {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+			limited.ServeHTTP(w, r)
+		})
+	}
+}
+
+func rateLimitExceptPaths(limiter func(http.Handler) http.Handler, paths ...string) func(http.Handler) http.Handler {
+	excluded := make(map[string]struct{}, len(paths))
+	for _, p := range paths {
+		excluded[p] = struct{}{}
+	}
+
+	return rateLimitExcept(limiter, func(r *http.Request) bool {
+		_, ok := excluded[r.URL.Path]
+		return ok
+	})
+}
+
+func rateLimitByRoute(
+	globalLimiter func(http.Handler) http.Handler,
+	uploadProtocolLimiter func(http.Handler) http.Handler,
+) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		globalLimited := globalLimiter(next)
+		uploadProtocolLimited := uploadProtocolLimiter(next)
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if oauthStartRateLimitBypass(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if uploadProtocolRateLimitBypass(r) {
+				uploadProtocolLimited.ServeHTTP(w, r)
+				return
+			}
+			globalLimited.ServeHTTP(w, r)
+		})
+	}
+}
+
+func oauthStartRateLimitBypass(r *http.Request) bool {
+	return r.Method == http.MethodGet &&
+		(r.URL.Path == "/auth/oauth/google" || r.URL.Path == "/api/v1/auth/oauth/google")
+}
+
+func uploadProtocolRateLimitBypass(r *http.Request) bool {
+	if r.URL.Path == "/api/v1/uploads" {
+		return r.Method == http.MethodPost
+	}
+	if !strings.HasPrefix(r.URL.Path, "/api/v1/uploads/") {
+		return false
+	}
+
+	uploadID := strings.TrimPrefix(r.URL.Path, "/api/v1/uploads/")
+	if uploadID == "" || strings.Contains(uploadID, "/") {
+		return false
+	}
+
+	switch r.Method {
+	case http.MethodPatch, http.MethodHead, http.MethodDelete:
+		return true
+	default:
+		return false
+	}
+}
+
 // valkeyAnalyticsCache adapts the raw go-redis client to the storage service's
 // shared analytics-cache seam (GET/SET/DEL of a serialized analytics blob). All
 // ops are best-effort: a Valkey error never fails a storage request — the
@@ -1306,7 +1382,18 @@ func main() {
 	// (fail-closed) rather than disabling the limit.
 	valkeyClient, valkeyRaw := newValkeyClient()
 	globalLimiter, _ := middleware.RateLimitWithValkey(valkeyClient, "global", globalRateMax, globalRateWindow)
-	r.Use(globalLimiter)
+	// Upload protocol requests are authenticated, tied to workspace/session
+	// state, and naturally high-volume during camera-card ingest. Keep them out
+	// of the app-wide navigation/auth bucket so a legitimate 400+ file upload
+	// cannot lock itself or OAuth out, but keep a dedicated per-IP guard.
+	uploadProtocolRateMax := envIntOrDefault("UPLOAD_PROTOCOL_RATE_LIMIT_PER_MINUTE", 6000)
+	uploadProtocolRateWindow := time.Duration(envIntOrDefault("UPLOAD_PROTOCOL_RATE_LIMIT_WINDOW_SECONDS", 60)) * time.Second
+	if os.Getenv("APP_ENV") == "development" {
+		uploadProtocolRateMax = 100000
+	}
+	uploadProtocolLimiter, _ := middleware.RateLimitWithValkey(valkeyClient, "upload_protocol", uploadProtocolRateMax, uploadProtocolRateWindow)
+	log.Printf("Upload protocol rate limit: %d requests / %s per client IP", uploadProtocolRateMax, uploadProtocolRateWindow)
+	r.Use(rateLimitByRoute(globalLimiter, uploadProtocolLimiter))
 
 	// ──────────────────────── Database Connection (shared M1 + M2) ────────────────
 	dbURL := os.Getenv("DATABASE_URL")
@@ -1797,11 +1884,18 @@ func main() {
 		})
 	}
 
-	// Mount the rest of the auth routes (oauth, refresh, logout). The
+	// OAuth start is a browser handoff, not a credential guess. It gets its
+	// own small bucket so gallery/media activity in the app-wide limiter cannot
+	// lock a legitimate user out of Google sign-in.
+	oauthStartLimiter, _ := middleware.RateLimitWithValkey(valkeyClient, "oauth_start", 30, time.Minute)
+	r.With(oauthStartLimiter).Get("/auth/oauth/google", authHandler.OAuthGoogle)
+	r.With(oauthStartLimiter).Get("/api/v1/auth/oauth/google", authHandler.OAuthGoogle)
+
+	// Mount the rest of the auth routes (oauth status/callback, refresh, logout). The
 	// credential endpoints above are deliberately NOT inside Routes()
 	// — see the comment on authHandler.Routes() for why.
-	r.Mount("/auth", authHandler.Routes())
-	r.Mount("/api/v1/auth", authHandler.Routes())
+	r.Mount("/auth", authHandler.RoutesWithoutOAuthStart())
+	r.Mount("/api/v1/auth", authHandler.RoutesWithoutOAuthStart())
 
 	// Public states listing — used by /register before the user has any
 	// credentials, so it must not sit behind JWT middleware. Cache-Control

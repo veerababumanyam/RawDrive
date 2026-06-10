@@ -112,6 +112,100 @@ func TestF010_RechargeAuthRouteAcceptsInjectedClaims(t *testing.T) {
 	}
 }
 
+func TestRateLimitExceptPathsBypassesOnlyExactOAuthStart(t *testing.T) {
+	alwaysLimited := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+		})
+	}
+
+	handler := rateLimitExceptPaths(alwaysLimited, "/auth/oauth/google")(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		}),
+	)
+
+	bypassed := httptest.NewRecorder()
+	handler.ServeHTTP(bypassed, httptest.NewRequest(http.MethodGet, "/auth/oauth/google", nil))
+	if bypassed.Code != http.StatusNoContent {
+		t.Fatalf("OAuth start must bypass the global limiter, got %d", bypassed.Code)
+	}
+
+	limited := httptest.NewRecorder()
+	handler.ServeHTTP(limited, httptest.NewRequest(http.MethodGet, "/auth/oauth/google/callback", nil))
+	if limited.Code != http.StatusTooManyRequests {
+		t.Fatalf("non-excluded auth paths must still use the global limiter, got %d", limited.Code)
+	}
+}
+
+func TestUploadProtocolRateLimitBypassOnlyChunkedUploadProtocol(t *testing.T) {
+	uploadID := uuid.NewString()
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		want   bool
+	}{
+		{"create session", http.MethodPost, "/api/v1/uploads", true},
+		{"patch chunk", http.MethodPatch, "/api/v1/uploads/" + uploadID, true},
+		{"head offset", http.MethodHead, "/api/v1/uploads/" + uploadID, true},
+		{"delete session", http.MethodDelete, "/api/v1/uploads/" + uploadID, true},
+		{"balance stays global limited", http.MethodGet, "/api/v1/uploads/balance", false},
+		{"packages stays global limited", http.MethodGet, "/api/v1/uploads/packages", false},
+		{"refund stays global limited", http.MethodPost, "/api/v1/uploads/purchases/" + uploadID + "/refund", false},
+		{"nested path rejected", http.MethodPatch, "/api/v1/uploads/" + uploadID + "/parts", false},
+		{"wrong method for upload id", http.MethodPost, "/api/v1/uploads/" + uploadID, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			if got := uploadProtocolRateLimitBypass(req); got != tt.want {
+				t.Fatalf("uploadProtocolRateLimitBypass(%s %s) = %v, want %v", tt.method, tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRateLimitByRouteUsesDedicatedUploadProtocolLimiter(t *testing.T) {
+	globalLimited := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("X-Test-Limiter", "global")
+			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+		})
+	}
+	uploadLimited := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("X-Test-Limiter", "upload")
+			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+		})
+	}
+
+	handler := rateLimitByRoute(globalLimited, uploadLimited)(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		}),
+	)
+
+	upload := httptest.NewRecorder()
+	handler.ServeHTTP(upload, httptest.NewRequest(http.MethodPost, "/api/v1/uploads", nil))
+	if upload.Code != http.StatusTooManyRequests || upload.Header().Get("X-Test-Limiter") != "upload" {
+		t.Fatalf("upload session create must use upload limiter, got status %d limiter %q", upload.Code, upload.Header().Get("X-Test-Limiter"))
+	}
+
+	limited := httptest.NewRecorder()
+	handler.ServeHTTP(limited, httptest.NewRequest(http.MethodGet, "/api/v1/uploads/packages", nil))
+	if limited.Code != http.StatusTooManyRequests || limited.Header().Get("X-Test-Limiter") != "global" {
+		t.Fatalf("non-protocol upload endpoints must use global limiter, got status %d limiter %q", limited.Code, limited.Header().Get("X-Test-Limiter"))
+	}
+
+	oauth := httptest.NewRecorder()
+	handler.ServeHTTP(oauth, httptest.NewRequest(http.MethodGet, "/auth/oauth/google", nil))
+	if oauth.Code != http.StatusNoContent {
+		t.Fatalf("oauth start must bypass top-level global limiter so its route-specific limiter can run, got %d", oauth.Code)
+	}
+}
+
 // ── F-035: storage proxy key sanitization + strict public-thumbnail gate. ───
 
 func TestF035_ValidateStorageKey(t *testing.T) {
