@@ -115,6 +115,21 @@ describe("gallery route contracts", () => {
     expect(source).toContain("coverAssets[coverAssetId]");
   });
 
+  it("bounds gallery-list cover fallback hydration concurrency", () => {
+    const source = fs.readFileSync(
+      path.join(dashboardRoot, "galleries/page.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("COVER_HYDRATE_CONCURRENCY");
+    expect(source).toContain(
+      "Math.min(\n            COVER_HYDRATE_CONCURRENCY,\n            missingCoverAssetIds.length,",
+    );
+    expect(source).not.toContain(
+      "Promise.all(\n      missingCoverAssetIds.map(async",
+    );
+  });
+
   it("creates durable share links before copying gallery-detail public URLs", () => {
     const source = fs.readFileSync(
       path.join(dashboardRoot, "galleries/[id]/page.tsx"),

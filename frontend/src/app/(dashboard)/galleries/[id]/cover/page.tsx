@@ -308,6 +308,7 @@ const GRID_LAYOUTS: { id: GridLayout; label: string }[] = [
 // viewer renders with grid.gap=8 — typical wedding gallery spacing.
 const DEFAULT_GRID_GAP = 8;
 const COVER_PHOTO_PAGE_SIZE = 36;
+const HYDRATE_CONCURRENCY = 6;
 const COVER_COLORS = designComponents.mediaCover.presetColors;
 const COVER_FIELD_CLASS = "input-base w-full text-sm";
 const COVER_RANGE_CLASS = "cover-range-input";
@@ -2135,17 +2136,30 @@ async function hydrateGalleryAssets(
   token: string,
   rows: Awaited<ReturnType<typeof listGalleryAssets>>,
 ): Promise<Asset[]> {
-  const hydrated = rows.every((entry) => entry.asset !== undefined)
-    ? rows.map((entry) => entry.asset ?? null)
-    : await Promise.all(
-        rows.map(async (entry) => {
-          try {
-            return await getAsset(token, entry.asset_id);
-          } catch {
-            return null;
-          }
-        }),
-      );
+  if (rows.every((entry) => entry.asset !== undefined)) {
+    return rows
+      .map((entry) => entry.asset ?? null)
+      .filter((asset): asset is Asset => asset !== null);
+  }
+
+  const hydrated = new Array<Asset | null>(rows.length);
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < rows.length) {
+      const index = cursor++;
+      const entry = rows[index];
+      try {
+        hydrated[index] = await getAsset(token, entry.asset_id);
+      } catch {
+        hydrated[index] = null;
+      }
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(HYDRATE_CONCURRENCY, rows.length) }, () =>
+      worker(),
+    ),
+  );
   return hydrated.filter((asset): asset is Asset => asset !== null);
 }
 

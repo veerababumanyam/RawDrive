@@ -13,8 +13,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/rawdrive/backend/internal/face"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rawdrive/backend/internal/face"
 )
 
 func TestFaceRepo_ListClusterFaces_UsesGalleryAssetMembership(t *testing.T) {

@@ -53,6 +53,8 @@ import {
   XMark,
 } from "@/components/icons";
 
+const COVER_HYDRATE_CONCURRENCY = 6;
+
 function GalleryCoverPreview({
   gallery,
   coverAsset,
@@ -945,19 +947,35 @@ export default function GalleriesPage() {
     if (!token || missingCoverAssetIds.length === 0) return;
     let cancelled = false;
 
-    void Promise.all(
-      missingCoverAssetIds.map(async (assetId) => {
+    const hydrated = new Array<Asset | null>(missingCoverAssetIds.length);
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < missingCoverAssetIds.length) {
+        const index = cursor++;
+        const assetId = missingCoverAssetIds[index];
         try {
-          return await getAsset(token, assetId);
+          hydrated[index] = await getAsset(token, assetId);
         } catch {
-          return null;
+          hydrated[index] = null;
         }
-      }),
-    ).then((assets) => {
+      }
+    };
+
+    void Promise.all(
+      Array.from(
+        {
+          length: Math.min(
+            COVER_HYDRATE_CONCURRENCY,
+            missingCoverAssetIds.length,
+          ),
+        },
+        () => worker(),
+      ),
+    ).then(() => {
       if (cancelled) return;
       setCoverAssets((prev) => {
         const next = { ...prev };
-        for (const asset of assets) {
+        for (const asset of hydrated) {
           if (asset) next[asset.id] = asset;
         }
         return next;

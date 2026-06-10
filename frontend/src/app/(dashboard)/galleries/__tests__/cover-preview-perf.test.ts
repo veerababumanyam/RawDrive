@@ -32,6 +32,13 @@ describe("gallery cover & preview — batch hydration (PERF-23)", () => {
     expect(source).toMatch(/entry\.asset !== undefined/);
   });
 
+  it("cover page bounds degraded asset-hydration fallback concurrency", () => {
+    const source = read(coverPagePath);
+    expect(source).toContain("HYDRATE_CONCURRENCY");
+    expect(source).toContain("Math.min(HYDRATE_CONCURRENCY, rows.length)");
+    expect(source).not.toContain("Promise.all(\n        rows.map(async");
+  });
+
   it("cover page pages the gallery-photo picker instead of rendering every asset", () => {
     const source = read(coverPagePath);
     expect(source).toContain("COVER_PHOTO_PAGE_SIZE");
