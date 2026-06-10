@@ -108,10 +108,8 @@ describe("DashboardUploadProvider", () => {
     expect(statusBarSource).toContain("upload.retryAll");
     expect(statusBarSource).toContain("Cancel uploads");
     expect(statusBarSource).toContain("upload.cancelAll");
-    expect(statusBarSource).toContain("Hide upload status");
-    expect(statusBarSource).toContain("onHideStatus");
-    expect(statusBarSource).toContain("GlassIconButton");
-    expect(statusBarSource).toContain("<XMark");
+    expect(statusBarSource).not.toContain("Hide upload status");
+    expect(statusBarSource).not.toContain("onHideStatus");
     expect(statusBarSource).not.toContain("beforeunload");
     expect(statusBarSource).not.toContain("addEventListener");
     expect(source).toContain('data-testid="dashboard-upload-file-input"');
@@ -119,10 +117,8 @@ describe("DashboardUploadProvider", () => {
     expect(source).toContain("openFilePicker");
     expect(source).toContain("openFolderPicker");
     expect(source).toContain("shouldRetainPickerFiles");
-    expect(source).toContain("uploadStatusBarHidden");
-    expect(source).toContain("setUploadStatusBarHidden(false)");
-    expect(source).toContain("hasActionableErrors");
-    expect(source).toContain("hasNewItems");
+    expect(source).not.toContain("uploadStatusBarHidden");
+    expect(source).not.toContain("setUploadStatusBarHidden");
   });
 
   it("keeps gallery upload configuration while routed-away uploads are active", () => {
@@ -181,7 +177,7 @@ describe("DashboardUploadProvider", () => {
     ).toHaveLength(0);
   });
 
-  it("hides routed-away active upload status without canceling the folder upload", () => {
+  it("keeps routed-away folder upload status visible until cancel or completion", () => {
     const upload = mockUpload({
       items: [
         {
@@ -206,14 +202,12 @@ describe("DashboardUploadProvider", () => {
     );
 
     expect(screen.getByTestId("dashboard-upload-status")).toBeInTheDocument();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Hide upload status" }),
-    );
-
     expect(
-      screen.queryByTestId("dashboard-upload-status"),
+      screen.queryByRole("button", { name: "Hide upload status" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Cancel uploads" }),
+    ).toBeInTheDocument();
     expect(upload.cancelAll).not.toHaveBeenCalled();
     expect(upload.clearFinished).not.toHaveBeenCalled();
     expect(upload.items).toHaveLength(1);

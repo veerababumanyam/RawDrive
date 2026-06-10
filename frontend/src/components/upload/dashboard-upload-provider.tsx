@@ -22,8 +22,7 @@ import {
 } from "@/hooks/use-upload";
 import { getApiBaseUrl } from "@/lib/api/base-url";
 import { getStoredAccessToken } from "@/lib/auth";
-import { UploadCloud, XMark } from "@/components/icons";
-import { GlassIconButton } from "@/components/ui/glass-icon-button";
+import { UploadCloud } from "@/components/icons";
 
 type DashboardUploadConfig = {
   ownerKey: string;
@@ -138,12 +137,8 @@ function useUploadSummary(items: UploadItem[]) {
 }
 
 function DashboardUploadStatusBar({
-  hidden,
-  onHideStatus,
   upload,
 }: {
-  hidden: boolean;
-  onHideStatus: () => void;
   upload: ReturnType<typeof useUpload>;
 }) {
   const pathname = usePathname();
@@ -152,7 +147,7 @@ function DashboardUploadStatusBar({
     /^\/galleries\/[^/]+$/.test(pathname) ||
     /^\/galleries\/[^/]+\/$/.test(pathname);
 
-  if (hidden || !summary.uploadPanelOpen || isExactGalleryDetail) return null;
+  if (!summary.uploadPanelOpen || isExactGalleryDetail) return null;
 
   return (
     <div
@@ -222,15 +217,6 @@ function DashboardUploadStatusBar({
               Cancel uploads
             </button>
           )}
-          <GlassIconButton
-            type="button"
-            size="sm"
-            variant="ghost"
-            label="Hide upload status"
-            onClick={onHideStatus}
-          >
-            <XMark className="h-4 w-4" aria-hidden="true" />
-          </GlassIconButton>
           {summary.activeCount === 0 && summary.completedCount > 0 && (
             <button
               type="button"
@@ -250,7 +236,6 @@ export function DashboardUploadProvider({ children }: { children: ReactNode }) {
   const apiUrl = useMemo(() => getApiBaseUrl(), []);
   const token = useMemo(() => getStoredAccessToken(), []);
   const [config, setConfig] = useState<DashboardUploadConfig | null>(null);
-  const [uploadStatusBarHidden, setUploadStatusBarHidden] = useState(false);
   const upload = useUpload(apiUrl, token, config?.options);
   const pendingClearOwnerRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -258,7 +243,6 @@ export function DashboardUploadProvider({ children }: { children: ReactNode }) {
   const pickerCallbackRef =
     useRef<DashboardUploadPickerOptions["onFilesSelected"] | null>(null);
   const hasActiveUploadsRef = useRef(false);
-  const uploadItemIdsRef = useRef<Set<string>>(new Set());
   const shouldRetainPickerFilesRef = useRef(false);
   const hasActiveUploads = useMemo(
     () => upload.items.some((item) => isActiveUploadStatus(item.status)),
@@ -277,24 +261,6 @@ export function DashboardUploadProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     hasActiveUploadsRef.current = hasActiveUploads;
   }, [hasActiveUploads]);
-
-  useEffect(() => {
-    const currentIds = new Set(upload.items.map((item) => item.id));
-    const hasNewItems = upload.items.some(
-      (item) => !uploadItemIdsRef.current.has(item.id),
-    );
-    const hasActionableErrors = upload.items.some(
-      (item) =>
-        item.status === "error" ||
-        item.status === "blocked" ||
-        item.status === "needs_desktop",
-    );
-
-    if (!hasActiveUploads || hasNewItems || hasActionableErrors) {
-      setUploadStatusBarHidden(false);
-    }
-    uploadItemIdsRef.current = currentIds;
-  }, [hasActiveUploads, upload.items]);
 
   useEffect(() => {
     shouldRetainPickerFilesRef.current = shouldRetainPickerFiles;
@@ -421,11 +387,7 @@ export function DashboardUploadProvider({ children }: { children: ReactNode }) {
         onChange={handlePickerChange}
       />
       {children}
-      <DashboardUploadStatusBar
-        hidden={uploadStatusBarHidden}
-        onHideStatus={() => setUploadStatusBarHidden(true)}
-        upload={upload}
-      />
+      <DashboardUploadStatusBar upload={upload} />
     </DashboardUploadContext.Provider>
   );
 }
