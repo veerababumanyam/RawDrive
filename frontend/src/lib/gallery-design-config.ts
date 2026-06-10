@@ -22,6 +22,7 @@
  */
 
 export type CoverDevice = "desktop" | "phone";
+export type CoverDeviceTarget = CoverDevice | "both";
 
 export type CoverPresetId =
   | "classic-wedding"
@@ -327,6 +328,66 @@ function readAssetSlots(raw: unknown): Array<string | null> | undefined {
   if (!Array.isArray(raw)) return undefined;
   const slots = raw.map((entry) => (typeof entry === "string" ? entry : null));
   return slots.length > 0 ? slots : undefined;
+}
+
+function mutableRecord(raw: unknown): Record<string, unknown> {
+  return { ...(asObject(raw) ?? {}) };
+}
+
+function assetSlotsWithPrimary(
+  rawSlots: unknown,
+  assetId: string,
+): Array<string | null> {
+  const slots = readAssetSlots(rawSlots) ?? [];
+  const next = [...slots];
+  if (next.length === 0) next.push(assetId);
+  else next[0] = assetId;
+  return next;
+}
+
+function coverProfileWithPrimaryAsset(
+  rawProfile: unknown,
+  assetId: string,
+): Record<string, unknown> {
+  const profile = mutableRecord(rawProfile);
+  profile.assetId = assetId;
+  profile.assetSlots = assetSlotsWithPrimary(profile.assetSlots, assetId);
+  return profile;
+}
+
+export function buildGalleryCoverDeviceDesignConfig(
+  settings: Record<string, unknown> | undefined | null,
+  assetId: string,
+  target: CoverDeviceTarget,
+): Record<string, unknown> {
+  const trimmedAssetId = assetId.trim();
+  if (!trimmedAssetId) {
+    throw new Error("Cover asset id is required.");
+  }
+
+  const root = mutableRecord(asObject(settings)?.design_config);
+  const cover = mutableRecord(root.cover);
+  const deviceProfiles = mutableRecord(cover.deviceProfiles);
+
+  if (target === "desktop" || target === "both") {
+    deviceProfiles.desktop = coverProfileWithPrimaryAsset(
+      deviceProfiles.desktop,
+      trimmedAssetId,
+    );
+    cover.assetId = trimmedAssetId;
+    cover.assetSlots = assetSlotsWithPrimary(cover.assetSlots, trimmedAssetId);
+  }
+
+  if (target === "phone" || target === "both") {
+    deviceProfiles.phone = coverProfileWithPrimaryAsset(
+      deviceProfiles.phone,
+      trimmedAssetId,
+    );
+  }
+
+  cover.deviceProfiles = deviceProfiles;
+  root.cover = cover;
+  return root;
 }
 
 function readPointList(raw: unknown): CoverPoint[] | undefined {

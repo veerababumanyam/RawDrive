@@ -183,6 +183,40 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("if (e.currentTarget !== e.target) return;");
   });
 
+  it("lets owners set a photo as the desktop or phone gallery cover from the tile", () => {
+    const source = readDetailPage();
+
+    expect(source).toContain("buildGalleryCoverDeviceDesignConfig");
+    expect(source).toContain("updateGalleryDesign(token, id, payload)");
+    expect(source).toContain("handleSetCoverAsset");
+    expect(source).toContain("desktopCoverAssetId");
+    expect(source).toContain("phoneCoverAssetId");
+    expect(source).toContain(
+      'resolveCoverDeviceProfile(galleryDesignConfig, "desktop")',
+    );
+    expect(source).toContain(
+      'resolveCoverDeviceProfile(galleryDesignConfig, "phone")',
+    );
+    expect(source).toContain("<MonitorPlay />");
+    expect(source).toContain("<Smartphone />");
+    expect(source).toContain("as desktop cover");
+    expect(source).toContain("as phone cover");
+    expect(source).toContain("is the desktop cover");
+    expect(source).toContain("is the phone cover");
+  });
+
+  it("generates email and WhatsApp share text with the studio name", () => {
+    const source = readDetailPage();
+
+    expect(source).toContain("galleryShareStudioName");
+    expect(source).toContain("workspaceProfile?.brand_name?.trim()");
+    expect(source).toContain("workspaceProfile?.name?.trim()");
+    expect(source).toContain("gallery.owner_workspace_name?.trim()");
+    expect(source).toContain("by ${studioName}: ${url}");
+    expect(source).toContain("buildShareEmailHref(");
+    expect(source).toContain("galleryShareStudioName(gallery, workspaceProfile)");
+  });
+
   it("uses the shared media-key recovery fallback for locked encrypted tiles", () => {
     const source = readDetailPage();
 

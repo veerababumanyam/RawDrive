@@ -2,7 +2,15 @@
 import { getApiBaseUrl } from "@/lib/api/base-url";
 
 import Link from "next/link";
-import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from "react";
 import { getStoredAccessToken } from "@/lib/auth";
 import {
   bulkAssetAction,
@@ -22,6 +30,7 @@ import {
   listGalleryShareLinks,
   reorderGalleryAssets,
   updateGallery,
+  updateGalleryDesign,
   type Gallery,
   type GalleryAlbum,
   type GalleryAsset,
@@ -41,7 +50,6 @@ import {
 } from "@/lib/api/favorites";
 import { readEmbeddedVideos, type EmbeddedVideo } from "@/lib/embedded-videos";
 import { assetIsProcessing } from "@/lib/dashboard-ui";
-import { readGalleryClientSideMediaEncryptionEnabled } from "@/lib/gallery-design-config";
 import { getOrCreateSyncedGalleryMediaKey } from "@/lib/media-encryption/gallery-media-key-sync";
 import {
   appendStoredGalleryKeyFragment,
@@ -80,6 +88,8 @@ import {
   ChatBubble,
   ChevronLeft,
   UploadCloud,
+  MonitorPlay,
+  Smartphone,
 } from "@/components/icons";
 import { useDashboardUploadContext } from "@/components/upload/dashboard-upload-provider";
 import { useUpload } from "@/hooks/use-upload";
@@ -105,6 +115,13 @@ import { ResizableWorkspaceSplit } from "@/components/gallery/resizable-workspac
 import { ShareQrPopover } from "@/components/gallery/share-qr-popover";
 import { galleryShareExpiryDays } from "@/lib/gallery-share-expiry";
 import { resolveStablePublicGalleryShareLink } from "@/lib/gallery-share-link-resolver";
+import {
+  buildGalleryCoverDeviceDesignConfig,
+  readGalleryClientSideMediaEncryptionEnabled,
+  readPublicDesignConfig,
+  resolveCoverDeviceProfile,
+  type CoverDeviceTarget,
+} from "@/lib/gallery-design-config";
 import {
   LockedMediaFallback,
   MediaKeyRecoveryBanner,
@@ -584,18 +601,42 @@ function formatTetheredRelativeTime(timestamp: number): string {
   return `${Math.floor(seconds / 3600)}h ago`;
 }
 
-function buildShareText(gallery: Gallery, label: string, url: string): string {
+function galleryShareStudioName(
+  gallery: Gallery,
+  workspaceProfile: WorkspaceProfile | null,
+): string {
+  return (
+    workspaceProfile?.brand_name?.trim() ||
+    workspaceProfile?.name?.trim() ||
+    gallery.owner_workspace_name?.trim() ||
+    "RawDrive"
+  );
+}
+
+function buildShareText(
+  gallery: Gallery,
+  label: string,
+  url: string,
+  studioName: string,
+): string {
   const galleryTitle = gallery.title?.trim() || "Gallery";
-  return `${label} from ${galleryTitle}: ${url}`;
+  return `${label} from ${galleryTitle} by ${studioName}: ${url}`;
 }
 
 function buildShareEmailHref(
   gallery: Gallery,
   label: string,
   url: string,
+  studioName: string,
 ): string {
-  const subject = `${gallery.title?.trim() || "Gallery"} - ${label}`;
-  return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(buildShareText(gallery, label, url))}`;
+  const subject = `${gallery.title?.trim() || "Gallery"} - ${studioName}`;
+  return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(buildShareText(gallery, label, url, studioName))}`;
+}
+
+function galleryCoverTargetLabel(target: CoverDeviceTarget): string {
+  if (target === "desktop") return "desktop";
+  if (target === "phone") return "phone";
+  return "desktop and phone";
 }
 
 export default function GalleryDetailPage({
@@ -616,6 +657,22 @@ export default function GalleryDetailPage({
   const galleryMediaAssets = useMemo(
     () => assets.map((entry) => entry.asset),
     [assets],
+  );
+  const galleryDesignConfig = useMemo(
+    () => readPublicDesignConfig(gallery?.settings),
+    [gallery?.settings],
+  );
+  const desktopCoverAssetId = useMemo(
+    () =>
+      resolveCoverDeviceProfile(galleryDesignConfig, "desktop").cover.assetId ||
+      gallery?.cover_asset_id,
+    [gallery?.cover_asset_id, galleryDesignConfig],
+  );
+  const phoneCoverAssetId = useMemo(
+    () =>
+      resolveCoverDeviceProfile(galleryDesignConfig, "phone").cover.assetId ||
+      desktopCoverAssetId,
+    [desktopCoverAssetId, galleryDesignConfig],
   );
   const shareMediaKeyIds = useMemo(
     () =>
@@ -1198,11 +1255,16 @@ export default function GalleryDetailPage({
         );
         return;
       }
-      const href = buildShareEmailHref(gallery, label, url);
+      const href = buildShareEmailHref(
+        gallery,
+        label,
+        url,
+        galleryShareStudioName(gallery, workspaceProfile),
+      );
       window.location.href = href;
       setShareMessage("Email share link opened.");
     },
-    [createWorkingShareUrl, gallery],
+    [createWorkingShareUrl, gallery, workspaceProfile],
   );
 
   const openWhatsAppShare = useCallback(
@@ -1219,14 +1281,19 @@ export default function GalleryDetailPage({
       }
       window.open(
         `https://wa.me/?text=${encodeURIComponent(
-          buildShareText(gallery, label, url),
+          buildShareText(
+            gallery,
+            label,
+            url,
+            galleryShareStudioName(gallery, workspaceProfile),
+          ),
         )}`,
         "_blank",
         "noopener,noreferrer",
       );
       setShareMessage("WhatsApp share opened.");
     },
-    [createWorkingShareUrl, gallery],
+    [createWorkingShareUrl, gallery, workspaceProfile],
   );
 
   const togglePublishState = useCallback(async () => {
@@ -1703,6 +1770,69 @@ export default function GalleryDetailPage({
   // a once-per-mount snapshot via a lazy useState initializer is correct
   // and stable for the upload hook + the SSE subscription below.
   const [token] = useState<string | null>(() => getStoredAccessToken());
+
+  const handleSetCoverAsset = useCallback(
+    async (
+      e: MouseEvent<HTMLButtonElement>,
+      asset: Asset,
+      target: CoverDeviceTarget,
+    ) => {
+      e.stopPropagation();
+      if (!token) {
+        showGalleryActionStatus(
+          "Your session expired. Please log in again.",
+          "error",
+          7000,
+        );
+        return;
+      }
+      if (!gallery) return;
+
+      const targetLabel = galleryCoverTargetLabel(target);
+      showGalleryActionStatus(`Saving ${targetLabel} cover...`);
+      try {
+        const payload = buildGalleryCoverDeviceDesignConfig(
+          gallery.settings,
+          asset.id,
+          target,
+        );
+        await updateGalleryDesign(token, id, payload);
+        const payloadVersion =
+          typeof payload.version === "number" && Number.isFinite(payload.version)
+            ? payload.version
+            : 0;
+        const savedDesignConfig = {
+          ...payload,
+          version: payloadVersion + 1,
+        };
+
+        setGallery((current) => {
+          if (!current) return current;
+          return {
+            ...current,
+            cover_asset_id:
+              target === "phone" ? current.cover_asset_id : asset.id,
+            settings: {
+              ...(current.settings ?? {}),
+              design_config: savedDesignConfig,
+            },
+            updated_at: new Date().toISOString(),
+          };
+        });
+        showGalleryActionStatus(
+          `${asset.filename || "Photo"} saved as ${targetLabel} cover.`,
+          "success",
+          5000,
+        );
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to update cover.";
+        setError(message);
+        showGalleryActionStatus("Cover update failed.", "error", 7000);
+      }
+    },
+    [gallery, id, showGalleryActionStatus, token],
+  );
 
   // ──────── Terms-of-Service / copyright acceptance gate ────────
   // A photographer must accept the active Terms (copyright/IP ownership,
@@ -3889,6 +4019,11 @@ export default function GalleryDetailPage({
                     !bulkMode &&
                     !reorderingAssetIds &&
                     Boolean(entry.asset);
+                  const isDesktopCover =
+                    Boolean(entry.asset) &&
+                    entry.asset!.id === desktopCoverAssetId;
+                  const isPhoneCover =
+                    Boolean(entry.asset) && entry.asset!.id === phoneCoverAssetId;
 
                   return (
                     <article
@@ -4043,6 +4178,59 @@ export default function GalleryDetailPage({
                               : null
                           }
                         />
+                        {!bulkMode && entry.asset && !isProcessing && (
+                          <div
+                            className="absolute bottom-2 left-2 z-10 flex items-center gap-1.5"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <GlassIconButton
+                              size="md"
+                              variant={isDesktopCover ? "success" : "glass"}
+                              active={isDesktopCover}
+                              label={
+                                isDesktopCover
+                                  ? `${entry.asset.filename} is the desktop cover`
+                                  : `Set ${entry.asset.filename} as desktop cover`
+                              }
+                              className={cn(
+                                "!text-text-media shadow-elevation-1 ring-2 ring-surface-raised/60 hover:!text-text-media",
+                                isDesktopCover
+                                  ? "!bg-feedback-success hover:!bg-feedback-success/90"
+                                  : "!bg-surface-scrim-strong/70 hover:!bg-surface-scrim-strong/80",
+                              )}
+                              onClick={(e) =>
+                                void handleSetCoverAsset(
+                                  e,
+                                  entry.asset!,
+                                  "desktop",
+                                )
+                              }
+                            >
+                              <MonitorPlay />
+                            </GlassIconButton>
+                            <GlassIconButton
+                              size="md"
+                              variant={isPhoneCover ? "success" : "glass"}
+                              active={isPhoneCover}
+                              label={
+                                isPhoneCover
+                                  ? `${entry.asset.filename} is the phone cover`
+                                  : `Set ${entry.asset.filename} as phone cover`
+                              }
+                              className={cn(
+                                "!text-text-media shadow-elevation-1 ring-2 ring-surface-raised/60 hover:!text-text-media",
+                                isPhoneCover
+                                  ? "!bg-feedback-success hover:!bg-feedback-success/90"
+                                  : "!bg-surface-scrim-strong/70 hover:!bg-surface-scrim-strong/80",
+                              )}
+                              onClick={(e) =>
+                                void handleSetCoverAsset(e, entry.asset!, "phone")
+                              }
+                            >
+                              <Smartphone />
+                            </GlassIconButton>
+                          </div>
+                        )}
                         {!bulkMode && entry.asset && !isProcessing && (
                           <div
                             className="absolute bottom-2 right-2 z-10 flex items-center gap-1.5"

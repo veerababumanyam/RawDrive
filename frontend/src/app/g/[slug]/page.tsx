@@ -43,6 +43,19 @@ interface Props {
 
 export const dynamic = "force-dynamic";
 
+function pickSharePreviewCoverKey(
+  manifest: Record<string, string> | null | undefined,
+): string | undefined {
+  if (!manifest) return undefined;
+  return (
+    manifest["og_image"] ||
+    manifest["cover_1280"] ||
+    manifest["cover_1920"] ||
+    manifest["display_webp"] ||
+    manifest["thumb_lg_webp"]
+  );
+}
+
 function PublicGalleryUnavailable({
   title,
   body,
@@ -442,32 +455,34 @@ export async function generateMetadata({ params, searchParams }: Props) {
     const brandName = branding?.can_customize
       ? branding.brand_name
       : "RawDrive";
+    const shareTitle = `${gallery.title} | ${brandName}`;
     const description =
       gallery.description || `View ${gallery.title} by ${brandName}`;
     // Rich share preview: prefer the purpose-built og_image derivative
     // (1200x630), then responsive cover variants, then the large thumb.
     // Skip encrypted covers — their bytes cannot be fetched by crawlers.
+    const profileCoverManifests = readPublicCoverProfileThumbnails(
+      gallery.settings,
+    );
+    const phoneCoverManifest = profileCoverManifests?.phone;
     const coverManifest = {
       ...(gallery.cover_asset?.thumbnail_urls ?? {}),
       ...(gallery.cover_thumbnails ?? {}),
     } as Record<string, string>;
     const ogKey =
-      coverManifest["og_image"] ||
-      coverManifest["cover_1280"] ||
-      coverManifest["cover_1920"] ||
-      coverManifest["display_webp"] ||
-      coverManifest["thumb_lg_webp"];
+      pickSharePreviewCoverKey(phoneCoverManifest) ||
+      pickSharePreviewCoverKey(coverManifest);
     const ogImageUrl =
       ogKey && !ogKey.toLowerCase().split("?", 1)[0].endsWith(".enc")
         ? getStorageBackedUrl(ogKey)
         : undefined;
     const canonicalPath = `/g/${slug}`;
     return {
-      title: `${gallery.title} | ${brandName}`,
+      title: shareTitle,
       description,
       alternates: { canonical: canonicalPath },
       openGraph: {
-        title: gallery.title,
+        title: shareTitle,
         description,
         type: "website",
         url: canonicalPath,
@@ -487,7 +502,7 @@ export async function generateMetadata({ params, searchParams }: Props) {
       },
       twitter: {
         card: ogImageUrl ? "summary_large_image" : "summary",
-        title: gallery.title,
+        title: shareTitle,
         description,
         ...(ogImageUrl ? { images: [ogImageUrl] } : {}),
       },

@@ -17,14 +17,20 @@ describe("public gallery metadata", () => {
     );
   });
 
-  it("prefers the gallery cover image for Open Graph and Twitter previews", () => {
-    expect(source).toContain('coverManifest["og_image"]');
-    expect(source).toContain('coverManifest["cover_1280"]');
-    expect(source).toContain('coverManifest["cover_1920"]');
-    expect(source).toContain('coverManifest["display_webp"]');
-    expect(source).toContain('coverManifest["thumb_lg_webp"]');
+  it("prefers the phone cover profile image for Open Graph and Twitter previews", () => {
+    expect(source).toContain("pickSharePreviewCoverKey");
+    expect(source).toContain("readPublicCoverProfileThumbnails");
+    expect(source).toContain("const phoneCoverManifest");
+    expect(source).toContain("pickSharePreviewCoverKey(phoneCoverManifest)");
+    expect(source).toContain("pickSharePreviewCoverKey(coverManifest)");
     expect(source).toContain("getStorageBackedUrl(ogKey)");
     expect(source).toContain("summary_large_image");
     expect(source).toContain("images: [ogImageUrl]");
+  });
+
+  it("includes the studio name in crawler-visible share titles", () => {
+    expect(source).toContain("const shareTitle = `${gallery.title} | ${brandName}`");
+    expect(source).toContain("title: shareTitle");
+    expect(source).toContain("siteName: brandName");
   });
 });

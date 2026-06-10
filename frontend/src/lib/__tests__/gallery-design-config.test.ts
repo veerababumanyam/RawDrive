@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildGalleryCoverDeviceDesignConfig,
   normalizeSlideshowIntervalMs,
   readGalleryClientSideMediaEncryptionEnabled,
   readGalleryCoverAssetId,
@@ -393,5 +394,84 @@ describe("readGalleryCoverAssetId", () => {
   it("falls back to cover_asset_id when no design cover is saved", () => {
     expect(readGalleryCoverAssetId({}, "legacy-cover")).toBe("legacy-cover");
     expect(readGalleryCoverAssetId(null, "legacy-cover")).toBe("legacy-cover");
+  });
+});
+
+describe("buildGalleryCoverDeviceDesignConfig", () => {
+  it("sets the desktop cover while preserving the phone cover profile", () => {
+    const payload = buildGalleryCoverDeviceDesignConfig(
+      {
+        design_config: {
+          version: 4,
+          theme: { id: "liquid-glass", variant: "dark" },
+          cover: {
+            assetId: "old-desktop",
+            assetSlots: ["old-desktop", "second-slot"],
+            title: "Wedding",
+            deviceProfiles: {
+              desktop: {
+                assetId: "old-desktop",
+                zoom: 1.25,
+                assetSlots: ["old-desktop", "second-slot"],
+              },
+              phone: {
+                assetId: "phone-cover",
+                zoom: 1.5,
+                assetSlots: ["phone-cover"],
+              },
+            },
+          },
+        },
+      },
+      "new-desktop",
+      "desktop",
+    );
+
+    expect(payload.version).toBe(4);
+    expect(payload.theme).toEqual({ id: "liquid-glass", variant: "dark" });
+    expect(payload.cover).toMatchObject({
+      assetId: "new-desktop",
+      assetSlots: ["new-desktop", "second-slot"],
+      title: "Wedding",
+      deviceProfiles: {
+        desktop: {
+          assetId: "new-desktop",
+          zoom: 1.25,
+          assetSlots: ["new-desktop", "second-slot"],
+        },
+        phone: {
+          assetId: "phone-cover",
+          zoom: 1.5,
+          assetSlots: ["phone-cover"],
+        },
+      },
+    });
+  });
+
+  it("sets only the phone cover without changing the flat desktop cover", () => {
+    const payload = buildGalleryCoverDeviceDesignConfig(
+      {
+        design_config: {
+          cover: {
+            assetId: "desktop-cover",
+            assetSlots: ["desktop-cover"],
+            deviceProfiles: {
+              desktop: { assetId: "desktop-cover" },
+            },
+          },
+        },
+      },
+      "phone-cover",
+      "phone",
+    );
+
+    expect(payload.cover).toMatchObject({
+      assetId: "desktop-cover",
+      assetSlots: ["desktop-cover"],
+      deviceProfiles: {
+        desktop: { assetId: "desktop-cover" },
+        phone: { assetId: "phone-cover", assetSlots: ["phone-cover"] },
+      },
+    });
   });
 });
