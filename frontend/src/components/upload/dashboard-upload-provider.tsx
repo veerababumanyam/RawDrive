@@ -6,7 +6,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -136,19 +135,6 @@ function DashboardUploadStatusBar({
   const isExactGalleryDetail =
     /^\/galleries\/[^/]+$/.test(pathname) ||
     /^\/galleries\/[^/]+\/$/.test(pathname);
-
-  useEffect(() => {
-    if (summary.activeCount === 0) return;
-    const warnBeforeUploadLeaves = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue =
-        "Upload still running. Keep this tab open until RawDrive finishes uploading.";
-      return event.returnValue;
-    };
-    window.addEventListener("beforeunload", warnBeforeUploadLeaves);
-    return () =>
-      window.removeEventListener("beforeunload", warnBeforeUploadLeaves);
-  }, [summary.activeCount]);
 
   if (!summary.uploadPanelOpen || isExactGalleryDetail) return null;
 
