@@ -416,53 +416,75 @@ export default function DashboardPage() {
         </section>
       )}
 
-      <section className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-        {stats.map((stat) => {
-          const StatIcon = stat.icon;
-          return (
-            <Link
-              key={stat.label}
-              href={stat.href}
-              aria-label={`Open ${stat.label}`}
-              className="surface-panel group rounded-xl p-6 transition-colors hover:bg-surface-container-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
-            >
-              <div className="mb-4 flex items-start justify-between">
-                <StatIcon className={cn("h-5 w-5", stat.toneClass)} />
-                <span
-                  className={cn(
-                    "rounded-full bg-surface-container-high px-2 py-1 text-[10px] font-semibold transition-colors group-hover:bg-surface-container-highest",
-                    stat.toneClass,
-                  )}
-                >
-                  {stat.meta}
-                </span>
-              </div>
-              <p className="text-xs uppercase tracking-[0.22em] text-text-tertiary">
-                {stat.label}
-              </p>
-              <p
-                className={cn(
-                  "mt-3 font-headline text-3xl font-bold",
-                  stat.toneClass,
-                )}
+      <div className="dashboard-overview-grid">
+        <section className="dashboard-stats-grid" aria-label="Studio summary">
+          {stats.map((stat) => {
+            const StatIcon = stat.icon;
+            return (
+              <Link
+                key={stat.label}
+                href={stat.href}
+                aria-label={`Open ${stat.label}`}
+                className="surface-panel dashboard-stat-card group"
               >
-                {stat.value}
-              </p>
-              {stat.label === "Storage Used" ? (
-                <div className="mt-4 h-1.5 rounded-full bg-surface-container-high">
-                  <div
-                    className="h-1.5 rounded-full bg-accent"
-                    style={{ width: `${storagePercent}%` }}
+                <div className="dashboard-stat-card__header">
+                  <StatIcon
+                    className={cn("dashboard-stat-card__icon", stat.toneClass)}
                   />
+                  <span
+                    className={cn(
+                      "dashboard-stat-card__meta",
+                      stat.toneClass,
+                    )}
+                  >
+                    {stat.meta}
+                  </span>
                 </div>
-              ) : null}
-            </Link>
-          );
-        })}
-      </section>
+                <div>
+                  <p className="dashboard-stat-card__label">{stat.label}</p>
+                  <p
+                    className={cn(
+                      "dashboard-stat-card__value font-headline",
+                      stat.toneClass,
+                    )}
+                  >
+                    {stat.value}
+                  </p>
+                </div>
+                {stat.label === "Storage Used" ? (
+                  <div className="dashboard-stat-card__progress">
+                    <div
+                      className="dashboard-stat-card__progress-fill"
+                      style={{ width: `${storagePercent}%` }}
+                    />
+                  </div>
+                ) : null}
+              </Link>
+            );
+          })}
+        </section>
 
-      <div className="grid grid-cols-12 gap-8">
-        <section className="col-span-12 lg:col-span-8">
+        <section className="surface-panel dashboard-quick-panel">
+          <h3 className="dashboard-quick-panel__title">Quick Actions</h3>
+          <div className="dashboard-quick-grid">
+            {quickActions.map((action) => (
+              <Link
+                key={action.label}
+                href={action.href}
+                className="dashboard-quick-action-link group"
+              >
+                <action.icon className="dashboard-quick-action-link__icon text-accent transition-transform group-hover:scale-110" />
+                <span className="dashboard-quick-action-link__label">
+                  {action.label}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <div className="dashboard-content-grid">
+        <section>
           <div className="mb-6 flex items-end justify-between">
             <div>
               <h2 className="font-headline text-xl font-bold text-text-primary">
@@ -586,25 +608,7 @@ export default function DashboardPage() {
           )}
         </section>
 
-        <aside className="col-span-12 space-y-8 lg:col-span-4">
-          <section className="surface-panel p-6">
-            <h3 className="mb-6 font-headline text-lg font-bold text-text-primary">
-              Quick Actions
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              {quickActions.map((action) => (
-                <Link
-                  key={action.label}
-                  href={action.href}
-                  className="group flex flex-col items-center justify-center rounded-xl bg-surface-container-high p-4 text-text-primary transition-colors hover:bg-surface-container-highest"
-                >
-                  <action.icon className="mb-2 h-5 w-5 text-accent transition-transform group-hover:scale-110" />
-                  <span className="text-xs font-semibold">{action.label}</span>
-                </Link>
-              ))}
-            </div>
-          </section>
-
+        <aside>
           <section className="surface-panel p-6">
             <div className="mb-6 flex items-center justify-between">
               <h3 className="font-headline text-lg font-bold text-text-primary">

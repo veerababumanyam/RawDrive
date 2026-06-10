@@ -53,4 +53,19 @@ describe("dashboard affordances (UAT 2026-06-04)", () => {
       '<MoreVertical className="h-4 w-4 text-text-tertiary',
     );
   });
+
+  it("keeps dashboard summary cards compact and grouped with quick actions", () => {
+    expect(source).toContain('className="dashboard-overview-grid"');
+    expect(source).toContain('className="dashboard-stats-grid"');
+    expect(source).toContain(
+      'className="surface-panel dashboard-stat-card group"',
+    );
+    expect(source).toContain(
+      'className="surface-panel dashboard-quick-panel"',
+    );
+    expect(source).toContain('className="dashboard-content-grid"');
+    expect(source).not.toContain(
+      'className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4"',
+    );
+  });
 });

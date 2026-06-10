@@ -1674,6 +1674,177 @@ body[data-chrome="marketing"] {
   color: color-mix(in srgb, var(--accent-default) 72%, var(--text-secondary));
 }
 
+.dashboard-overview-grid,
+.dashboard-content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+}
+
+.dashboard-stats-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.dashboard-stat-card {
+  display: flex;
+  min-height: calc(var(--space-20) + var(--space-6));
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    background-color var(--duration-fast) var(--easing-default),
+    border-color var(--duration-fast) var(--easing-default),
+    box-shadow var(--duration-fast) var(--easing-default),
+    transform var(--duration-normal) var(--easing-bounce);
+}
+
+.dashboard-stat-card:hover {
+  border-color: color-mix(in srgb, var(--outline-variant) 42%, transparent);
+  background: var(--surface-container-high);
+  transform: translateY(calc(var(--space-0-5) * -1));
+}
+
+.dashboard-stat-card:focus-visible,
+.dashboard-quick-action-link:focus-visible {
+  outline: var(--focus-ring-width) solid var(--border-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.dashboard-stat-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.dashboard-stat-card__icon,
+.dashboard-quick-action-link__icon {
+  width: var(--space-5);
+  height: var(--space-5);
+  flex: 0 0 auto;
+}
+
+.dashboard-stat-card__meta {
+  border-radius: var(--radius-full);
+  background: var(--surface-container-high);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--type-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-xs);
+  transition: background-color var(--duration-fast) var(--easing-default);
+}
+
+.dashboard-stat-card:hover .dashboard-stat-card__meta {
+  background: var(--surface-container-highest);
+}
+
+.dashboard-stat-card__label {
+  color: var(--text-tertiary);
+  font-size: var(--type-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0;
+  line-height: var(--leading-xs);
+  text-transform: uppercase;
+}
+
+.dashboard-stat-card__value {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--type-2xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--leading-2xl);
+}
+
+.dashboard-stat-card__progress {
+  height: var(--space-1);
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--surface-container-high);
+}
+
+.dashboard-stat-card__progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-default);
+}
+
+.dashboard-quick-panel {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.dashboard-quick-panel__title {
+  color: var(--text-primary);
+  font-size: var(--type-lg);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--leading-lg);
+}
+
+.dashboard-quick-grid {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.dashboard-quick-action-link {
+  display: flex;
+  min-height: calc(var(--touch-target-min) + var(--space-8));
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-xl);
+  background: var(--surface-container-high);
+  color: var(--text-primary);
+  text-align: center;
+  text-decoration: none;
+  transition:
+    background-color var(--duration-fast) var(--easing-default),
+    color var(--duration-fast) var(--easing-default);
+}
+
+.dashboard-quick-action-link:hover {
+  background: var(--surface-container-highest);
+}
+
+.dashboard-quick-action-link__label {
+  font-size: var(--type-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-xs);
+}
+
+@media (min-width: 640px) {
+  .dashboard-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .dashboard-overview-grid,
+  .dashboard-content-grid {
+    grid-template-columns: minmax(0, 2fr) minmax(
+        calc(var(--space-20) * 4),
+        1fr
+      );
+    align-items: stretch;
+  }
+}
+
+@media (min-width: 1280px) {
+  .dashboard-stats-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 .crm-stat-card {
   display: flex;
   min-height: calc(var(--space-20) + var(--space-10));
