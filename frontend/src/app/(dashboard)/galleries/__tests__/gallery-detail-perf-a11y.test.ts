@@ -229,9 +229,9 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("const backgroundUploadBarVisible = uploadPanelOpen;");
     expect(source).toContain('data-testid="background-upload-status"');
     expect(source).toContain("completedUploadCount > 0");
-    expect(source).toContain("activeUploadLeaveWarning");
-    expect(source).toContain("beforeunload");
-    expect(source).toContain("Closing or reloading this browser tab");
+    expect(source).not.toContain("activeUploadLeaveWarning");
+    expect(source).not.toContain("beforeunload");
+    expect(source).not.toContain("Closing or reloading this browser tab");
     expect(source).toContain(
       "Upload continues while you use Dashboard, Messages, Settings, or this gallery.",
     );

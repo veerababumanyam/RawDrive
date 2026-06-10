@@ -1843,8 +1843,6 @@ export default function GalleryDetailPage({
     upload.isPaused && activeUploadCount > 0
       ? `Paused ${activeUploadCount} ${activeUploadCount === 1 ? "upload" : "uploads"}`
       : uploadStatusHeadline;
-  const activeUploadLeaveWarning =
-    "Uploads are still running. Closing or reloading this browser tab will stop them.";
   const activeUploadStatusHint =
     "Upload continues while you use Dashboard, Messages, Settings, or this gallery. Keep this browser tab open until uploads finish.";
   const galleryActionToneClass =
@@ -1865,18 +1863,6 @@ export default function GalleryDetailPage({
     upload.clearFinished();
     setShowUploadDialog(false);
   };
-
-  useEffect(() => {
-    if (activeUploadCount === 0) return;
-    const warnBeforeUploadLeaves = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = activeUploadLeaveWarning;
-      return activeUploadLeaveWarning;
-    };
-    window.addEventListener("beforeunload", warnBeforeUploadLeaves);
-    return () =>
-      window.removeEventListener("beforeunload", warnBeforeUploadLeaves);
-  }, [activeUploadCount, activeUploadLeaveWarning]);
 
   useEffect(() => {
     if (!uploadDialogOpen) return;
