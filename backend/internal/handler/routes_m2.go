@@ -40,7 +40,8 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 	shareHandler := NewShareLinkHandler(deps.ShareLinkService).
 		WithGalleryShareEmail(deps.GalleryShareSender, deps.GalleryService, deps.PublicBaseURL, deps.GalleryShareLogRepo)
 	proofingHandler := NewProofingHandler(deps.ProofingService).
-		WithGalleryService(deps.GalleryService)
+		WithGalleryService(deps.GalleryService).
+		WithGalleryReadAccessPool(deps.Pool)
 	storageConfigHandler := NewStorageConfigHandler(deps.StorageConfigService)
 
 	// M11 handlers
@@ -215,7 +216,9 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 		// main.go (e.g. test harness without DB), this entire block stays
 		// dormant rather than crashing on a nil method receiver.
 		if deps.GalleryFavoritesService != nil {
-			favHandler := NewGalleryFavoritesHandler(deps.GalleryFavoritesService).WithGalleryResolver(deps.GalleryService)
+			favHandler := NewGalleryFavoritesHandler(deps.GalleryFavoritesService).
+				WithGalleryResolver(deps.GalleryService).
+				WithGalleryReadAccessPool(deps.Pool)
 			r.Get("/{id}/favorites", favHandler.Summarize)
 		}
 
@@ -231,7 +234,9 @@ func RegisterM2Routes(r chi.Router, deps M2Dependencies) *GalleryHandler {
 
 		// M13: Enhanced Proofing (sessions, comments, album approval)
 		if deps.ProofingSessionSvc != nil {
-			psHandler := NewProofingSessionHandler(deps.ProofingSessionSvc, deps.ProofingCommentSvc, deps.AlbumApprovalSvc).WithGalleryResolver(deps.GalleryService)
+			psHandler := NewProofingSessionHandler(deps.ProofingSessionSvc, deps.ProofingCommentSvc, deps.AlbumApprovalSvc).
+				WithGalleryResolver(deps.GalleryService).
+				WithGalleryReadAccessPool(deps.Pool)
 			r.Post("/{id}/proofing/sessions", psHandler.CreateSession)
 			r.Get("/{id}/proofing/sessions", psHandler.ListSessions)
 			r.Patch("/{id}/proofing/sessions/{sessionId}", psHandler.UpdateSession)

@@ -36,11 +36,8 @@ func TestAuthz_GalleryScopedOwnerMethodsGuardWorkspace(t *testing.T) {
 		{"share_link_handler.go", "ShareLinkHandler", []string{
 			"Create", "ListByGallery",
 		}},
-		{"proofing_handler.go", "ProofingHandler", []string{
-			"ListByGallery", "ExportCSV",
-		}},
 		{"proofing_session_handler.go", "ProofingSessionHandler", []string{
-			"CreateSession", "ListSessions",
+			"CreateSession",
 		}},
 		{"gallery_analytics_handler.go", "GalleryAnalyticsHandler", []string{
 			"GetSummary", "GetDailyStats", "GetDeviceBreakdown", "GetDownloadVelocity",
@@ -48,9 +45,6 @@ func TestAuthz_GalleryScopedOwnerMethodsGuardWorkspace(t *testing.T) {
 		}},
 		{"download_handler.go", "DownloadHandler", []string{
 			"CreateJob", "ListJobs", "GetAudit", "GetAuditCSV", "DownloadZIP",
-		}},
-		{"gallery_favorites_handler.go", "GalleryFavoritesHandler", []string{
-			"Summarize",
 		}},
 		{"gallery_cover_handler.go", "GalleryCoverHandler", []string{
 			"UpdateCover",
@@ -76,6 +70,40 @@ func TestAuthz_GalleryScopedOwnerMethodsGuardWorkspace(t *testing.T) {
 	}
 }
 
+func TestAuthz_GalleryScopedSharedReadMethodsGuardReadableWorkspace(t *testing.T) {
+	type fileCensus struct {
+		file    string
+		recv    string
+		methods []string
+	}
+	cases := []fileCensus{
+		{"proofing_handler.go", "ProofingHandler", []string{
+			"ListByGallery", "ExportCSV",
+		}},
+		{"proofing_session_handler.go", "ProofingSessionHandler", []string{
+			"ListSessions", "GetComments", "ListAlbumApprovals",
+		}},
+		{"gallery_favorites_handler.go", "GalleryFavoritesHandler", []string{
+			"Summarize",
+		}},
+	}
+
+	for _, fc := range cases {
+		source := readHandlerSource(t, fc.file)
+		for _, m := range fc.methods {
+			sig := "func (h *" + fc.recv + ") " + m
+			if !strings.Contains(source, sig) {
+				t.Errorf("%s: method %s not found (signature %q)", fc.file, m, sig)
+				continue
+			}
+			body := functionBodyTolerant(source, sig)
+			if !strings.Contains(body, "guardGalleryReadableWorkspace") {
+				t.Errorf("%s.%s must allow owner or account-share reads via guardGalleryReadableWorkspace", fc.recv, m)
+			}
+		}
+	}
+}
+
 func TestAuthz_AssetScopedOwnerMethodsGuardWorkspace(t *testing.T) {
 	type fileCensus struct {
 		file    string
@@ -83,7 +111,7 @@ func TestAuthz_AssetScopedOwnerMethodsGuardWorkspace(t *testing.T) {
 		methods []string
 	}
 	cases := []fileCensus{
-		{"asset_handler.go", "AssetHandler", []string{"GetByID", "Download", "SoftDelete"}},
+		{"asset_handler.go", "AssetHandler", []string{"Download", "SoftDelete"}},
 		{"edge_delivery_handler.go", "EdgeDeliveryHandler", []string{"ServeDerivative"}},
 	}
 	for _, fc := range cases {
@@ -99,6 +127,14 @@ func TestAuthz_AssetScopedOwnerMethodsGuardWorkspace(t *testing.T) {
 				t.Errorf("%s.%s must enforce tenant ownership via guardAssetWorkspace (workspace-scoped asset lookup) before serving (cross-tenant IDOR otherwise)", fc.recv, m)
 			}
 		}
+	}
+}
+
+func TestAuthz_AssetScopedSharedReadMethodsGuardReadableWorkspace(t *testing.T) {
+	source := readHandlerSource(t, "asset_handler.go")
+	body := functionBodyTolerant(source, "func (h *AssetHandler) GetByID")
+	if !strings.Contains(body, "GetByIDReadableByWorkspace") {
+		t.Errorf("AssetHandler.GetByID must allow owner or account-share reads via GetByIDReadableByWorkspace")
 	}
 }
 

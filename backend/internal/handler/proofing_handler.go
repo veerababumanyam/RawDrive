@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/rawdrive/backend/internal/service"
 )
@@ -19,6 +20,7 @@ type ProofingHandler struct {
 	gallerySvc  *service.GalleryService // optional, for selection limit checks
 	accessSvc   *service.GalleryAccessService
 	shareSvc    *service.ShareLinkService
+	readPool    *pgxpool.Pool
 }
 
 func NewProofingHandler(svc *service.ProofingService) *ProofingHandler {
@@ -28,6 +30,11 @@ func NewProofingHandler(svc *service.ProofingService) *ProofingHandler {
 // WithGalleryService injects the gallery service for selection limit enforcement.
 func (h *ProofingHandler) WithGalleryService(gs *service.GalleryService) *ProofingHandler {
 	h.gallerySvc = gs
+	return h
+}
+
+func (h *ProofingHandler) WithGalleryReadAccessPool(pool *pgxpool.Pool) *ProofingHandler {
+	h.readPool = pool
 	return h
 }
 
@@ -48,8 +55,7 @@ func (h *ProofingHandler) ListByGallery(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// tenant-ownership guard (integration audit 2026-05-31)
-	if _, _, ok := guardGalleryWorkspace(w, r, h.gallerySvc, galleryID); !ok {
+	if _, _, ok := guardGalleryReadableWorkspace(w, r, h.gallerySvc, h.readPool, galleryID); !ok {
 		return
 	}
 
@@ -73,8 +79,7 @@ func (h *ProofingHandler) ExportCSV(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid gallery id"}`, http.StatusBadRequest)
 		return
 	}
-	// tenant-ownership guard (integration audit 2026-05-31)
-	if _, _, ok := guardGalleryWorkspace(w, r, h.gallerySvc, galleryID); !ok {
+	if _, _, ok := guardGalleryReadableWorkspace(w, r, h.gallerySvc, h.readPool, galleryID); !ok {
 		return
 	}
 	selections, err := h.proofingSvc.ListByGallery(r.Context(), galleryID)

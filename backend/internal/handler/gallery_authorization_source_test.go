@@ -54,7 +54,6 @@ func TestAlbumHandler_ObjectRoutesResolveWorkspaceScopedAlbum(t *testing.T) {
 
 	for _, fn := range []string{
 		"Create",
-		"List",
 		"GetByID",
 		"Breadcrumb",
 		"ListAssets",
@@ -65,6 +64,11 @@ func TestAlbumHandler_ObjectRoutesResolveWorkspaceScopedAlbum(t *testing.T) {
 		if !strings.Contains(body, "requireAlbumInWorkspace") && !strings.Contains(body, "requireGalleryInWorkspace") {
 			t.Fatalf("%s must resolve its gallery/album through a workspace-scoped authorization helper", fn)
 		}
+	}
+
+	body := functionBody(t, source, "func (h *AlbumHandler) List")
+	if !strings.Contains(body, "requireGalleryReadable") {
+		t.Fatalf("List must allow owner or account-share reads through requireGalleryReadable")
 	}
 }
 

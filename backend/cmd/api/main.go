@@ -469,6 +469,7 @@ func thumbnailAssetID(key string) (uuid.UUID, bool) {
 // workspace-JWT branch (which a logged-out viewer always fails → 401). The .enc
 // cache guard on the byte path keeps the ciphertext private (never public-cached).
 var encryptedDisplayDerivativeRe = regexp.MustCompile(`^derivatives/([0-9a-fA-F-]{36})/display_webp\.webp\.enc$`)
+var plainDisplayDerivativeRe = regexp.MustCompile(`^derivatives/([0-9a-fA-F-]{36})/display_webp\.webp$`)
 
 // encryptedDisplayDerivativeAssetID returns the asset UUID the encrypted
 // full-size display derivative belongs to, or uuid.Nil + false when the key is
@@ -483,6 +484,28 @@ func encryptedDisplayDerivativeAssetID(key string) (uuid.UUID, bool) {
 		return uuid.Nil, false
 	}
 	return id, true
+}
+
+func plainDisplayDerivativeAssetID(key string) (uuid.UUID, bool) {
+	m := plainDisplayDerivativeRe.FindStringSubmatch(key)
+	if len(m) != 2 {
+		return uuid.Nil, false
+	}
+	id, err := uuid.Parse(m[1])
+	if err != nil {
+		return uuid.Nil, false
+	}
+	return id, true
+}
+
+func storageDerivativeAssetID(key string) (uuid.UUID, bool) {
+	if assetID, ok := thumbnailAssetID(key); ok {
+		return assetID, true
+	}
+	if assetID, ok := encryptedDisplayDerivativeAssetID(key); ok {
+		return assetID, true
+	}
+	return plainDisplayDerivativeAssetID(key)
 }
 
 // thumbnailGalleryProtection is the per-gallery protection snapshot the byte
@@ -671,6 +694,18 @@ func storageKeyBelongsToWorkspace(ctx context.Context, pool *pgxpool.Pool, key s
 			   AND a.deleted_at IS NULL
 			UNION
 			SELECT 1
+			  FROM asset_derivatives d
+			  JOIN assets a ON a.id = d.asset_id
+			  JOIN gallery_assets ga ON ga.asset_id = a.id
+			  JOIN gallery_workspace_shares s ON s.gallery_id = ga.gallery_id
+			  JOIN galleries g ON g.id = ga.gallery_id
+			 WHERE d.storage_key = $1
+			   AND s.shared_workspace_id = $2
+			   AND s.revoked_at IS NULL
+			   AND a.deleted_at IS NULL
+			   AND g.deleted_at IS NULL
+			UNION
+			SELECT 1
 			  FROM photographer_profiles p
 			 WHERE p.workspace_id = $2
 			   AND $1 IN (
@@ -686,7 +721,39 @@ func storageKeyBelongsToWorkspace(ctx context.Context, pool *pgxpool.Pool, key s
 	if err != nil {
 		return false, err
 	}
+	if !ok {
+		if assetID, isDerivativeKey := storageDerivativeAssetID(key); isDerivativeKey {
+			return storageAssetReadableByWorkspace(ctx, pool, assetID, wsID)
+		}
+	}
 	return ok, nil
+}
+
+func storageAssetReadableByWorkspace(ctx context.Context, pool *pgxpool.Pool, assetID, workspaceID uuid.UUID) (bool, error) {
+	var ok bool
+	err := pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			  FROM assets a
+			 WHERE a.id = $1
+			   AND a.deleted_at IS NULL
+			   AND (
+			     a.workspace_id = $2
+			     OR EXISTS (
+			       SELECT 1
+			         FROM gallery_assets ga
+			         JOIN gallery_workspace_shares s ON s.gallery_id = ga.gallery_id
+			         JOIN galleries g ON g.id = ga.gallery_id
+			        WHERE ga.asset_id = a.id
+			          AND s.shared_workspace_id = $2
+			          AND s.revoked_at IS NULL
+			          AND g.deleted_at IS NULL
+			     )
+			   )
+		)`,
+		assetID, workspaceID,
+	).Scan(&ok)
+	return ok, err
 }
 
 type platformSettingsSMTPReader struct {

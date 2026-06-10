@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/rawdrive/backend/internal/service"
 )
@@ -18,6 +19,7 @@ type ProofingSessionHandler struct {
 	// galleryResolver enforces tenant ownership on gallery-scoped routes via
 	// guardGalleryWorkspace. Nil-safe: when unwired the guard fails closed.
 	galleryResolver *service.GalleryService
+	readPool        *pgxpool.Pool
 }
 
 // NewProofingSessionHandler creates a new ProofingSessionHandler.
@@ -33,6 +35,11 @@ func (h *ProofingSessionHandler) WithGalleryResolver(gs *service.GalleryService)
 	return h
 }
 
+func (h *ProofingSessionHandler) WithGalleryReadAccessPool(pool *pgxpool.Pool) *ProofingSessionHandler {
+	h.readPool = pool
+	return h
+}
+
 // CreateSession handles POST /galleries/{id}/proofing/sessions
 func (h *ProofingSessionHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	galleryID, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -41,7 +48,6 @@ func (h *ProofingSessionHandler) CreateSession(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// tenant-ownership guard (integration audit 2026-05-31)
 	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
 		return
 	}
@@ -78,8 +84,7 @@ func (h *ProofingSessionHandler) ListSessions(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// tenant-ownership guard (integration audit 2026-05-31)
-	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
+	if _, _, ok := guardGalleryReadableWorkspace(w, r, h.galleryResolver, h.readPool, galleryID); !ok {
 		return
 	}
 
@@ -256,7 +261,6 @@ func (h *ProofingSessionHandler) CreateComment(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// tenant-ownership guard (integration audit 2026-05-31)
 	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
 		return
 	}
@@ -317,8 +321,7 @@ func (h *ProofingSessionHandler) GetComments(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// tenant-ownership guard (integration audit 2026-05-31)
-	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
+	if _, _, ok := guardGalleryReadableWorkspace(w, r, h.galleryResolver, h.readPool, galleryID); !ok {
 		return
 	}
 
@@ -346,7 +349,6 @@ func (h *ProofingSessionHandler) SubmitAlbumApproval(w http.ResponseWriter, r *h
 		return
 	}
 
-	// tenant-ownership guard (integration audit 2026-05-31)
 	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
 		return
 	}
@@ -399,8 +401,7 @@ func (h *ProofingSessionHandler) ListAlbumApprovals(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// tenant-ownership guard (integration audit 2026-05-31)
-	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
+	if _, _, ok := guardGalleryReadableWorkspace(w, r, h.galleryResolver, h.readPool, galleryID); !ok {
 		return
 	}
 

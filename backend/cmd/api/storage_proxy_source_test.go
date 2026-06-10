@@ -40,6 +40,9 @@ func TestStorageKeyWorkspaceResolverCoversOriginalsAndDerivatives(t *testing.T) 
 		"SELECT EXISTS",
 		"assets",
 		"asset_derivatives",
+		"gallery_workspace_shares",
+		"storageDerivativeAssetID",
+		"storageAssetReadableByWorkspace",
 		"workspace_id",
 		"storage_key",
 	} {

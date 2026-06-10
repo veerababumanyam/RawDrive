@@ -1128,6 +1128,49 @@ func (r *AssetRepo) GetByIDAndWorkspace(ctx context.Context, id, workspaceID uui
 	return a, nil
 }
 
+// GetByIDReadableByWorkspace retrieves an asset owned by the workspace or
+// linked to a gallery shared with the workspace. Direct asset mutations keep
+// using GetByIDAndWorkspace; this read path supports account-shared gallery
+// dashboards that need to refetch asset metadata after asset.ready events.
+func (r *AssetRepo) GetByIDReadableByWorkspace(ctx context.Context, id, workspaceID uuid.UUID) (*Asset, error) {
+	a := &Asset{}
+	err := r.pool.QueryRow(ctx,
+		`SELECT a.id, a.workspace_id, a.filename, a.content_type, a.size_bytes, a.storage_key, a.storage_driver,
+		 a.width, a.height, a.blurhash, a.exif_data, a.thumbnail_urls, a.uploaded_by, a.status, a.processing_error,
+		 a.created_at, a.updated_at, a.deleted_at,
+		 a.is_encrypted, a.encryption_algo, a.encryption_version, a.media_encryption
+		 FROM assets a
+		 WHERE a.id = $1
+		   AND a.deleted_at IS NULL
+		   AND (
+		     a.workspace_id = $2
+		     OR EXISTS (
+		       SELECT 1
+		         FROM gallery_assets ga
+		         JOIN gallery_workspace_shares s ON s.gallery_id = ga.gallery_id
+		         JOIN galleries g ON g.id = ga.gallery_id
+		        WHERE ga.asset_id = a.id
+		          AND s.shared_workspace_id = $2
+		          AND s.revoked_at IS NULL
+		          AND g.deleted_at IS NULL
+		     )
+		   )`,
+		id, workspaceID,
+	).Scan(&a.ID, &a.WorkspaceID, &a.Filename, &a.ContentType, &a.SizeBytes,
+		&a.StorageKey, &a.StorageDriver, &a.Width, &a.Height, &a.Blurhash,
+		&a.ExifData, &a.ThumbnailURLs, &a.UploadedBy, &a.Status, &a.ProcessingError,
+		&a.CreatedAt, &a.UpdatedAt, &a.DeletedAt,
+		&a.IsEncrypted, &a.EncryptionAlgo, &a.EncryptionVersion, &a.MediaEncryption,
+	)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("asset repo get by id readable by workspace: %w", err)
+	}
+	return a, nil
+}
+
 // TimelineGroup represents a date bucket with its assets.
 type TimelineGroup struct {
 	Date       string  `json:"date"`

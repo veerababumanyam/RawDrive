@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/rawdrive/backend/internal/repository"
 	"github.com/rawdrive/backend/internal/service"
@@ -29,6 +30,7 @@ type GalleryFavoritesHandler struct {
 	// route via guardGalleryWorkspace. Nil-safe: when unwired the guard fails
 	// closed. Unused by the public (slug-addressed) endpoints.
 	galleryResolver *service.GalleryService
+	readPool        *pgxpool.Pool
 
 	// S4-G6 (integration audit 2026-05-31): the public favorites endpoints
 	// used to skip the gallery password / access-mode gate entirely — a guest
@@ -58,6 +60,11 @@ func NewGalleryFavoritesHandler(svc *service.GalleryFavoritesService) *GalleryFa
 // Chainable; tolerates a nil resolver (the guard fails closed when nil).
 func (h *GalleryFavoritesHandler) WithGalleryResolver(gs *service.GalleryService) *GalleryFavoritesHandler {
 	h.galleryResolver = gs
+	return h
+}
+
+func (h *GalleryFavoritesHandler) WithGalleryReadAccessPool(pool *pgxpool.Pool) *GalleryFavoritesHandler {
+	h.readPool = pool
 	return h
 }
 
@@ -224,8 +231,7 @@ func (h *GalleryFavoritesHandler) Summarize(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// tenant-ownership guard (integration audit 2026-05-31)
-	if _, _, ok := guardGalleryWorkspace(w, r, h.galleryResolver, galleryID); !ok {
+	if _, _, ok := guardGalleryReadableWorkspace(w, r, h.galleryResolver, h.readPool, galleryID); !ok {
 		return
 	}
 

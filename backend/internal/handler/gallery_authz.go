@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/rawdrive/backend/internal/repository"
 )
@@ -54,6 +55,67 @@ func guardGalleryWorkspace(w http.ResponseWriter, r *http.Request, resolver gall
 		return nil, uuid.Nil, false
 	}
 	if gallery == nil || gallery.WorkspaceID != workspaceID {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return nil, uuid.Nil, false
+	}
+	return gallery, workspaceID, true
+}
+
+func galleryReadableByWorkspace(ctx context.Context, pool *pgxpool.Pool, galleryID, workspaceID uuid.UUID) (bool, error) {
+	if pool == nil {
+		return false, nil
+	}
+	var readable bool
+	err := pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			  FROM galleries g
+			 WHERE g.id = $1
+			   AND g.deleted_at IS NULL
+			   AND (
+			     g.workspace_id = $2
+			     OR EXISTS (
+			       SELECT 1
+			         FROM gallery_workspace_shares s
+			        WHERE s.gallery_id = g.id
+			          AND s.shared_workspace_id = $2
+			          AND s.revoked_at IS NULL
+			     )
+			   )
+		)`,
+		galleryID, workspaceID,
+	).Scan(&readable)
+	return readable, err
+}
+
+func guardGalleryReadableWorkspace(w http.ResponseWriter, r *http.Request, resolver galleryWorkspaceResolver, pool *pgxpool.Pool, galleryID uuid.UUID) (*repository.Gallery, uuid.UUID, bool) {
+	workspaceID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
+		return nil, uuid.Nil, false
+	}
+	if resolver == nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return nil, uuid.Nil, false
+	}
+	gallery, err := resolver.GetByID(r.Context(), galleryID)
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return nil, uuid.Nil, false
+	}
+	if gallery == nil {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return nil, uuid.Nil, false
+	}
+	if gallery.WorkspaceID == workspaceID {
+		return gallery, workspaceID, true
+	}
+	readable, err := galleryReadableByWorkspace(r.Context(), pool, galleryID, workspaceID)
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return nil, uuid.Nil, false
+	}
+	if !readable {
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return nil, uuid.Nil, false
 	}

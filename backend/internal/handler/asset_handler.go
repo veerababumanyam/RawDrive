@@ -174,11 +174,22 @@ func (h *AssetHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// tenant-ownership guard (integration audit 2026-05-31): the workspace-scoped
-	// repo lookup is the IDOR remediation — it returns 404 on a cross-tenant id so
-	// asset existence is never disclosed across workspaces.
-	asset, _, ok := guardAssetWorkspace(w, r, h.assetRepo, id)
+	workspaceID, ok := getWorkspaceID(r)
 	if !ok {
+		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
+		return
+	}
+	if h.assetRepo == nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	asset, err := h.assetRepo.GetByIDReadableByWorkspace(r.Context(), id, workspaceID)
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	if asset == nil {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
 	}
 

@@ -116,6 +116,24 @@ func (h *AlbumHandler) requireGalleryInWorkspace(w http.ResponseWriter, r *http.
 	return workspaceID, true
 }
 
+func (h *AlbumHandler) requireGalleryReadable(w http.ResponseWriter, r *http.Request, galleryID uuid.UUID) (uuid.UUID, bool) {
+	workspaceID, ok := getWorkspaceID(r)
+	if !ok {
+		http.Error(w, `{"error":"missing workspace_id"}`, http.StatusBadRequest)
+		return uuid.Nil, false
+	}
+	readable, err := galleryReadableByWorkspace(r.Context(), h.pool, galleryID, workspaceID)
+	if err != nil {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return uuid.Nil, false
+	}
+	if !readable {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return uuid.Nil, false
+	}
+	return workspaceID, true
+}
+
 func (h *AlbumHandler) requireAlbumInWorkspace(w http.ResponseWriter, r *http.Request, albumID uuid.UUID) (*repository.Album, uuid.UUID, bool) {
 	workspaceID, ok := getWorkspaceID(r)
 	if !ok {
@@ -185,7 +203,7 @@ func (h *AlbumHandler) List(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid gallery_id"}`, http.StatusBadRequest)
 		return
 	}
-	if _, ok := h.requireGalleryInWorkspace(w, r, galleryID); !ok {
+	if _, ok := h.requireGalleryReadable(w, r, galleryID); !ok {
 		return
 	}
 
