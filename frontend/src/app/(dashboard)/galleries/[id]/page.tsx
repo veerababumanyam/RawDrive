@@ -2186,6 +2186,16 @@ export default function GalleryDetailPage({
     document.addEventListener("keydown", closeOnEscape);
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [uploadDialogOpen, uploadDialogCanClose]);
+  const uploadAutoMinimizedRef = useRef(false);
+  useEffect(() => {
+    if (activeUploadCount === 0) {
+      uploadAutoMinimizedRef.current = false;
+      return;
+    }
+    if (uploadAutoMinimizedRef.current || !showUploadDialog) return;
+    uploadAutoMinimizedRef.current = true;
+    setShowUploadDialog(false);
+  }, [activeUploadCount, showUploadDialog]);
   const prevActiveUploadCountRef = useRef(0);
   const [uploadToast, setUploadToast] = useState<{
     visible: boolean;

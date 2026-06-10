@@ -353,7 +353,13 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain(
       "Upload continues while you use Dashboard, Messages, Settings, or this gallery.",
     );
-    expect(source).not.toContain("uploadAutoMinimizedRef");
+    expect(source).toContain("const uploadAutoMinimizedRef = useRef(false)");
+    expect(source).toContain("if (activeUploadCount === 0) {");
+    expect(source).toContain("uploadAutoMinimizedRef.current = false;");
+    expect(source).toContain(
+      "if (uploadAutoMinimizedRef.current || !showUploadDialog) return;",
+    );
+    expect(source).toContain("uploadAutoMinimizedRef.current = true;");
     expect(source).toContain("if (activeUploadCount > 0) {");
     expect(source).toContain("return;");
     expect(source).toContain("setShowUploadDialog(false)");

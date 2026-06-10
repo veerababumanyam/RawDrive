@@ -122,8 +122,16 @@ describe("DashboardUploadProvider", () => {
 
     expect(source).toContain("pendingClearOwnerRef");
     expect(source).toContain("hasActiveUploads");
+    expect(source).toContain("hasActiveUploadsRef");
+    expect(source).toContain("shouldRetainPickerFilesRef");
     expect(source).toContain("isActiveUploadStatus(item.status)");
-    expect(source).toContain("if (hasActiveUploads)");
+    expect(source).toContain(
+      "if (hasActiveUploads || shouldRetainPickerFiles) return;",
+    );
+    expect(source).toContain("const pickerHasFiles =");
+    expect(source).toContain("Boolean(folderInputRef.current?.files?.length)");
+    expect(source).toContain("shouldRetainPickerFilesRef.current");
+    expect(source).toContain("pickerCallbackRef.current = null;");
     expect(source).toContain("return current;");
     expect(source).toContain("pendingClearOwnerRef.current = ownerKey");
   });

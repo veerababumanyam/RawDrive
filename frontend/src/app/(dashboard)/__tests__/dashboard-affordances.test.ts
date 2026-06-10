@@ -9,7 +9,9 @@ import { describe, expect, it } from "vitest";
 
 const repoRoot = path.resolve(__dirname, "../../../..");
 const pagePath = path.join(repoRoot, "src/app/(dashboard)/dashboard/page.tsx");
+const globalsPath = path.join(repoRoot, "src/app/globals.css");
 const source = fs.readFileSync(pagePath, "utf8");
+const globals = fs.readFileSync(globalsPath, "utf8");
 
 describe("dashboard affordances (UAT 2026-06-04)", () => {
   it("BUG-3: the welcome banner ⋮ is a real, persisted dismiss (not a dead button)", () => {
@@ -29,14 +31,14 @@ describe("dashboard affordances (UAT 2026-06-04)", () => {
   });
 
   it("BUG-6/7: empty stat cards show an honest zero, not a loading-looking em-dash", () => {
-    expect(source).toContain('label: "Active Clients",');
+    expect(source).toContain('label: "Active clients",');
     expect(source).toContain('value: "0",');
-    expect(source).toContain('label: "Revenue This Month",');
+    expect(source).toContain('label: "Revenue this month",');
     expect(source).toContain('value: "₹0",');
     // Neither card may regress to the bare em-dash placeholder.
-    expect(source).not.toMatch(/label: "Active Clients",\s*\n\s*value: "—"/);
+    expect(source).not.toMatch(/label: "Active clients",\s*\n\s*value: "—"/);
     expect(source).not.toMatch(
-      /label: "Revenue This Month",\s*\n\s*value: "—"/,
+      /label: "Revenue this month",\s*\n\s*value: "—"/,
     );
   });
 
@@ -55,11 +57,19 @@ describe("dashboard affordances (UAT 2026-06-04)", () => {
   });
 
   it("keeps dashboard summary cards compact and grouped with quick actions", () => {
+    expect(source).toContain('className="dashboard-page"');
+    expect(source).toContain("Quick actions");
+    expect(source).toContain("Recent galleries");
+    expect(source).toContain("Recent activity");
+    expect(source).not.toContain("Quick Actions");
+    expect(source).not.toContain("Recent Galleries");
+    expect(source).not.toContain("Recent Activity");
     expect(source).toContain('className="dashboard-overview-grid"');
     expect(source).toContain('className="dashboard-stats-grid"');
     expect(source).toContain(
       'className="surface-panel dashboard-stat-card group"',
     );
+    expect(source).toContain('className="dashboard-stat-card__body"');
     expect(source).toContain(
       'className="surface-panel dashboard-quick-panel"',
     );
@@ -67,5 +77,29 @@ describe("dashboard affordances (UAT 2026-06-04)", () => {
     expect(source).not.toContain(
       'className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4"',
     );
+    expect(source).not.toContain("font-bold uppercase tracking-[0.22em]");
+    expect(globals).toContain(".dashboard-page");
+    expect(globals).toContain(".dashboard-stats-grid");
+    expect(globals).toContain("align-items: start;");
+    expect(globals).toContain("grid-template-areas:");
+    expect(globals).toContain("min-height: var(--touch-target-min);");
+    expect(globals).not.toContain(
+      "min-height: calc(var(--space-20) + var(--space-6));",
+    );
+    const statLabelStart = globals.indexOf(".dashboard-stat-card__label");
+    const statLabelEnd = globals.indexOf(
+      ".dashboard-stat-card__value",
+      statLabelStart,
+    );
+    const statLabelBlock = globals.slice(statLabelStart, statLabelEnd);
+    expect(statLabelBlock).not.toContain("text-transform: uppercase;");
+    const statValueStart = globals.indexOf(".dashboard-stat-card__value");
+    const statValueEnd = globals.indexOf(
+      ".dashboard-stat-card__progress",
+      statValueStart,
+    );
+    const statValueBlock = globals.slice(statValueStart, statValueEnd);
+    expect(statValueBlock).toContain("font-size: var(--type-lg);");
+    expect(statValueBlock).not.toContain("font-size: var(--type-2xl);");
   });
 });

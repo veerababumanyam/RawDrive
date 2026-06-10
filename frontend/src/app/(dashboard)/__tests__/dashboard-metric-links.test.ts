@@ -14,7 +14,7 @@ describe("dashboard metric links", () => {
       'const GALLERY_CREATE_HREF = "/galleries?create=true"',
     );
     expect(source).toContain(
-      '{ label: "Create Gallery", icon: Plus, href: GALLERY_CREATE_HREF }',
+      '{ label: "Create gallery", icon: Plus, href: GALLERY_CREATE_HREF }',
     );
     expect(source).toContain("href={GALLERY_CREATE_HREF}");
   });

@@ -242,6 +242,8 @@ export function DashboardUploadProvider({ children }: { children: ReactNode }) {
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const pickerCallbackRef =
     useRef<DashboardUploadPickerOptions["onFilesSelected"] | null>(null);
+  const hasActiveUploadsRef = useRef(false);
+  const shouldRetainPickerFilesRef = useRef(false);
   const hasActiveUploads = useMemo(
     () => upload.items.some((item) => isActiveUploadStatus(item.status)),
     [upload.items],
@@ -256,6 +258,14 @@ export function DashboardUploadProvider({ children }: { children: ReactNode }) {
     [upload.items],
   );
 
+  useEffect(() => {
+    hasActiveUploadsRef.current = hasActiveUploads;
+  }, [hasActiveUploads]);
+
+  useEffect(() => {
+    shouldRetainPickerFilesRef.current = shouldRetainPickerFiles;
+  }, [shouldRetainPickerFiles]);
+
   const configureGalleryUpload = useCallback(
     (ownerKey: string, options: UseUploadOptions) => {
       pendingClearOwnerRef.current = null;
@@ -264,20 +274,24 @@ export function DashboardUploadProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const clearGalleryUpload = useCallback(
-    (ownerKey: string) => {
-      setConfig((current) => {
-        if (current?.ownerKey !== ownerKey) return current;
-        if (hasActiveUploads) {
-          pendingClearOwnerRef.current = ownerKey;
-          return current;
-        }
-        pendingClearOwnerRef.current = null;
-        return null;
-      });
-    },
-    [hasActiveUploads],
-  );
+  const clearGalleryUpload = useCallback((ownerKey: string) => {
+    setConfig((current) => {
+      if (current?.ownerKey !== ownerKey) return current;
+      const pickerHasFiles =
+        Boolean(fileInputRef.current?.files?.length) ||
+        Boolean(folderInputRef.current?.files?.length);
+      if (
+        hasActiveUploadsRef.current ||
+        shouldRetainPickerFilesRef.current ||
+        pickerHasFiles
+      ) {
+        pendingClearOwnerRef.current = ownerKey;
+        return current;
+      }
+      pendingClearOwnerRef.current = null;
+      return null;
+    });
+  }, []);
 
   const handlePickerChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -320,7 +334,10 @@ export function DashboardUploadProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    if (hasActiveUploads) return;
+    if (hasActiveUploads || shouldRetainPickerFiles) return;
+    pickerCallbackRef.current = null;
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (folderInputRef.current) folderInputRef.current.value = "";
     const ownerKey = pendingClearOwnerRef.current;
     if (!ownerKey) return;
     setConfig((current) => {
@@ -328,14 +345,7 @@ export function DashboardUploadProvider({ children }: { children: ReactNode }) {
       pendingClearOwnerRef.current = null;
       return null;
     });
-  }, [hasActiveUploads]);
-
-  useEffect(() => {
-    if (shouldRetainPickerFiles) return;
-    pickerCallbackRef.current = null;
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    if (folderInputRef.current) folderInputRef.current.value = "";
-  }, [shouldRetainPickerFiles]);
+  }, [hasActiveUploads, shouldRetainPickerFiles]);
 
   const value = useMemo(
     () => ({

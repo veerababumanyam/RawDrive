@@ -46,10 +46,10 @@ type GalleryCard = {
 const GALLERY_CREATE_HREF = "/galleries?create=true";
 
 const quickActions = [
-  { label: "Create Gallery", icon: Plus, href: GALLERY_CREATE_HREF },
-  { label: "Send Invoice", icon: Wallet, href: "/billing" },
-  { label: "Add Client", icon: UserPlus, href: "/crm/contacts" },
-  { label: "New Booking", icon: Sparkles, href: "/calendar" },
+  { label: "Create gallery", icon: Plus, href: GALLERY_CREATE_HREF },
+  { label: "Send invoice", icon: Wallet, href: "/billing" },
+  { label: "Add client", icon: UserPlus, href: "/crm/contacts" },
+  { label: "New booking", icon: Sparkles, href: "/calendar" },
 ];
 
 // First-name extraction for the greeting banner. Falls back to the
@@ -339,9 +339,9 @@ export default function DashboardPage() {
   const stats = useMemo(
     () => [
       {
-        label: "Total Galleries",
+        label: "Total galleries",
         value: galleries.length > 0 ? galleries.length.toString() : "0",
-        meta: "Open",
+        meta: "open",
         toneClass: "text-accent",
         href: "/galleries",
         icon: Cloud,
@@ -351,15 +351,15 @@ export default function DashboardPage() {
         // (deferred). Show an honest zero baseline instead of an em-dash that
         // reads as a loading/error state. Replace with a live count when the
         // contacts metric is wired.
-        label: "Active Clients",
+        label: "Active clients",
         value: "0",
-        meta: "CRM",
+        meta: "crm",
         toneClass: "text-accent-primary",
         href: "/crm/contacts",
         icon: UserPlus,
       },
       {
-        label: "Storage Used",
+        label: "Storage used",
         value: storageUsed,
         meta: storageMeta,
         toneClass: "text-accent-secondary",
@@ -370,9 +370,9 @@ export default function DashboardPage() {
         // BUG-7: not yet wired to a billing/revenue source (deferred). Show an
         // honest ₹0 baseline rather than an em-dash that reads as loading/error.
         // Replace with the real month-to-date figure when billing is wired.
-        label: "Revenue This Month",
+        label: "Revenue this month",
         value: "₹0",
-        meta: "Billing",
+        meta: "billing",
         toneClass: "text-accent-tertiary",
         href: "/billing",
         icon: Wallet,
@@ -382,24 +382,23 @@ export default function DashboardPage() {
   );
 
   return (
-    <div className="space-y-8">
+    <div className="dashboard-page">
       {error && (
         <div className="mb-4 rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
           {error}
         </div>
       )}
       {!welcomeDismissed && (
-        <section className="glass-card relative overflow-hidden p-8">
-          <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-accent-muted blur-[100px]" />
-          <div className="relative z-10 flex items-start justify-between gap-6">
+        <section className="glass-card dashboard-welcome-card">
+          <div className="dashboard-welcome-content">
             <div>
-              <h1 className="font-headline text-3xl font-bold tracking-tight text-text-primary">
+              <h1 className="dashboard-welcome-title font-headline">
                 Welcome back, {greetingName(user)}!
               </h1>
-              <p className="mt-2 max-w-2xl text-text-secondary">
+              <p className="dashboard-welcome-copy">
                 {galleries.length === 0
                   ? "Create your first gallery to start delivering work to clients."
-                  : `You have ${galleries.length} ${galleries.length === 1 ? "gallery" : "galleries"} in your studio. Let's make some magic.`}
+                  : `You have ${galleries.length} ${galleries.length === 1 ? "gallery" : "galleries"} in your studio.`}
               </p>
             </div>
             {/* BUG-3: the ⋮ here did nothing. Make it an honest, persisted
@@ -417,6 +416,24 @@ export default function DashboardPage() {
       )}
 
       <div className="dashboard-overview-grid">
+        <section className="surface-panel dashboard-quick-panel">
+          <h3 className="dashboard-quick-panel__title">Quick actions</h3>
+          <div className="dashboard-quick-grid">
+            {quickActions.map((action) => (
+              <Link
+                key={action.label}
+                href={action.href}
+                className="dashboard-quick-action-link group"
+              >
+                <action.icon className="dashboard-quick-action-link__icon text-accent transition-transform group-hover:scale-110" />
+                <span className="dashboard-quick-action-link__label">
+                  {action.label}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+
         <section className="dashboard-stats-grid" aria-label="Studio summary">
           {stats.map((stat) => {
             const StatIcon = stat.icon;
@@ -440,7 +457,7 @@ export default function DashboardPage() {
                     {stat.meta}
                   </span>
                 </div>
-                <div>
+                <div className="dashboard-stat-card__body">
                   <p className="dashboard-stat-card__label">{stat.label}</p>
                   <p
                     className={cn(
@@ -451,7 +468,7 @@ export default function DashboardPage() {
                     {stat.value}
                   </p>
                 </div>
-                {stat.label === "Storage Used" ? (
+                {stat.label === "Storage used" ? (
                   <div className="dashboard-stat-card__progress">
                     <div
                       className="dashboard-stat-card__progress-fill"
@@ -463,56 +480,38 @@ export default function DashboardPage() {
             );
           })}
         </section>
-
-        <section className="surface-panel dashboard-quick-panel">
-          <h3 className="dashboard-quick-panel__title">Quick Actions</h3>
-          <div className="dashboard-quick-grid">
-            {quickActions.map((action) => (
-              <Link
-                key={action.label}
-                href={action.href}
-                className="dashboard-quick-action-link group"
-              >
-                <action.icon className="dashboard-quick-action-link__icon text-accent transition-transform group-hover:scale-110" />
-                <span className="dashboard-quick-action-link__label">
-                  {action.label}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
       </div>
 
       <div className="dashboard-content-grid">
         <section>
-          <div className="mb-6 flex items-end justify-between">
+          <div className="dashboard-section-header">
             <div>
-              <h2 className="font-headline text-xl font-bold text-text-primary">
-                Recent Galleries
+              <h2 className="dashboard-section-title font-headline">
+                Recent galleries
               </h2>
-              <p className="text-sm text-text-secondary">
+              <p className="dashboard-section-copy">
                 Manage and share your latest shoots
               </p>
             </div>
             <Link
               href="/galleries"
-              className="text-sm font-semibold text-accent hover:underline"
+              className="dashboard-section-link"
             >
-              View All
+              View all
             </Link>
           </div>
 
           {loading ? (
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="dashboard-gallery-grid">
               {[1, 2, 3, 4].map((item) => (
                 <div
                   key={item}
-                  className="h-80 animate-pulse rounded-2xl bg-surface-container-high"
+                  className="dashboard-gallery-skeleton"
                 />
               ))}
             </div>
           ) : cards.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border-default p-10 text-center">
+            <div className="dashboard-empty-panel">
               <p className="text-text-secondary">No galleries yet.</p>
               <Link
                 href={GALLERY_CREATE_HREF}
@@ -522,7 +521,7 @@ export default function DashboardPage() {
               </Link>
             </div>
           ) : (
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="dashboard-gallery-grid">
               {cards.map((card) => {
                 const coverAssetId = readGalleryCoverAssetId(
                   card.gallery.settings,
@@ -536,9 +535,9 @@ export default function DashboardPage() {
                           ? card.id
                           : `/galleries/${card.id}`
                       }
-                      className="surface-panel group block overflow-hidden rounded-2xl transition-transform duration-300 hover:scale-[1.02]"
+                      className="surface-panel dashboard-gallery-card group"
                     >
-                      <div className="relative h-48 overflow-hidden bg-surface-container-high">
+                      <div className="dashboard-gallery-card__media">
                         <DashboardGalleryCover
                           gallery={card.gallery}
                           coverAsset={
@@ -560,7 +559,7 @@ export default function DashboardPage() {
                         <div className="absolute bottom-4 left-4">
                           <span
                             className={cn(
-                              "rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em]",
+                              "dashboard-gallery-card__status",
                               card.chipClass,
                             )}
                           >
@@ -569,12 +568,12 @@ export default function DashboardPage() {
                         </div>
                       </div>
 
-                      <div className="p-5">
-                        <div className="mb-3 pr-12">
-                          <h3 className="font-headline text-lg font-bold text-text-primary">
+                      <div className="dashboard-gallery-card__body">
+                        <div className="dashboard-gallery-card__heading">
+                          <h3 className="dashboard-gallery-card__title font-headline">
                             {card.title}
                           </h3>
-                          <p className="mt-1 text-xs text-text-secondary">
+                          <p className="dashboard-gallery-card__meta">
                             {card.meta}
                           </p>
                         </div>
@@ -609,10 +608,10 @@ export default function DashboardPage() {
         </section>
 
         <aside>
-          <section className="surface-panel p-6">
-            <div className="mb-6 flex items-center justify-between">
-              <h3 className="font-headline text-lg font-bold text-text-primary">
-                Recent Activity
+          <section className="surface-panel dashboard-activity-panel">
+            <div className="dashboard-activity-panel__header">
+              <h3 className="dashboard-activity-panel__title font-headline">
+                Recent activity
               </h3>
               <FileText className="h-4 w-4 text-text-tertiary" />
             </div>
@@ -623,15 +622,15 @@ export default function DashboardPage() {
                 working with clients.
               </p>
             ) : (
-              <div className="space-y-6">
+              <div className="dashboard-activity-list">
                 {galleries.slice(0, 4).map((gallery) => (
-                  <div key={gallery.id} className="flex gap-4">
+                  <div key={gallery.id} className="dashboard-activity-item">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-accent">
                       <Sparkles className="h-5 w-5" />
                     </div>
                     <div className="flex-1">
                       <p className="text-sm leading-tight text-text-primary">
-                        Gallery{" "}
+                        gallery{" "}
                         <span className="font-semibold">{gallery.title}</span>{" "}
                         {gallery.is_published ? "published" : "created"}
                       </p>
