@@ -178,16 +178,34 @@ describe("gallery detail page — perf & a11y contracts", () => {
     const source = readDetailPage();
 
     expect(source).toContain("showUploadDialog");
+    expect(source).toContain("useDashboardUploadContext");
+    expect(source).toContain("configureGalleryUpload");
+    expect(source).toContain("clearGalleryUpload");
+    expect(source).toContain("const localUpload = useUpload");
+    expect(source).toContain("const upload = dashboardUpload ?? localUpload");
+    expect(source).toContain("route changes do not break or unbind pending uploads");
     expect(source).toContain('data-testid="gallery-upload-dialog"');
     expect(source).toContain("handleUploadDialogBack");
     expect(source).toContain('data-testid="upload-dialog-back"');
     expect(source).toContain("Back to gallery");
-    expect(source).toContain("uploadDialogDismissed");
     expect(source).toContain("Back to gallery; uploads continue");
     expect(source).not.toContain("disabled={activeUploadCount > 0}");
+    const uploadBackStart = source.indexOf('data-testid="upload-dialog-back"');
+    const uploadBackEnd = source.indexOf("<ChevronLeft />", uploadBackStart);
+    const uploadBackButton = source.slice(uploadBackStart, uploadBackEnd);
+    expect(uploadBackButton).not.toContain(
+      "disabled:cursor-not-allowed disabled:opacity-50",
+    );
     expect(source).toContain("upload.clearFinished()");
     expect(source).toContain('role="dialog"');
-    expect(source).toContain('aria-modal="true"');
+    expect(source).not.toContain('aria-modal="true"');
+    expect(source).toContain('data-testid="gallery-upload-dialog-shell"');
+    expect(source).toContain("pointer-events-none fixed inset-x-0 bottom-24");
+    expect(source).toContain("sm:bottom-28");
+    expect(source).toContain("pointer-events-auto flex");
+    expect(source).not.toContain(
+      "fixed inset-0 z-[70] flex items-center justify-center bg-surface-scrim",
+    );
     expect(source).toContain("Upload photos to gallery");
     expect(source).toContain("Camera JPEG/JFIF");
     expect(source).toContain("HEIC/HEIF, AVIF");
@@ -196,6 +214,8 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("Details");
     expect(source).toContain("Processing");
     expect(source).toContain("Visibility");
+    expect(source).toContain("Preparing and uploading");
+    expect(source).toContain("Prepare and upload");
     expect(source).toContain("Select files");
     expect(source).toContain("Choose folder");
     expect(source).toContain("photoFolderInputRef");
@@ -206,27 +226,32 @@ describe("gallery detail page — perf & a11y contracts", () => {
     );
     expect(source).not.toContain('document.createElement("input")');
     expect(source).toContain("backgroundUploadBarVisible");
+    expect(source).toContain("const backgroundUploadBarVisible = uploadPanelOpen;");
     expect(source).toContain('data-testid="background-upload-status"');
+    expect(source).toContain("completedUploadCount > 0");
     expect(source).toContain("activeUploadLeaveWarning");
     expect(source).toContain("beforeunload");
     expect(source).toContain("Keep this page open until uploads finish.");
     expect(source).toContain("Gallery tools stay available.");
-    expect(source).toContain("uploadAutoMinimizedRef");
-    expect(source).toContain("setUploadDialogDismissed(true)");
+    expect(source).not.toContain("uploadAutoMinimizedRef");
+    expect(source).toContain("if (activeUploadCount > 0) {");
+    expect(source).toContain("return;");
     expect(source).toContain("setShowUploadDialog(false)");
-    expect(source).toContain("setUploadDialogDismissed(false)");
-    expect(source).toContain("Only uploads locked until complete");
+    expect(source).not.toContain("Gallery stays usable during upload");
+    expect(source).not.toContain("Only uploads locked until complete");
     expect(source).toContain("z-[80]");
     expect(source).not.toContain("upload.pauseAll");
     expect(source).not.toContain("upload.resumeAll");
-    expect(source).not.toContain("upload.cancelAll");
-    expect(source).not.toContain("Cancel all");
+    expect(source).toContain("upload.cancelAll");
+    expect(source).toContain("Cancel active uploads");
+    expect(source).toContain("upload.cancel(item.id)");
+    expect(source).toContain('aria-label={`Cancel ${item.file.name}`}');
     expect(source).not.toContain("Pause all");
     expect(source).toContain("setShowUploadDialog(true)");
     expect(source).not.toContain("TetheredShootingPanel");
   });
 
-  it("keeps the compact upload status bar non-destructive while uploads run", () => {
+  it("keeps the compact upload status bar informative and explicitly cancelable while uploads run", () => {
     const source = readDetailPage();
     const barStart = source.indexOf('data-testid="background-upload-status"');
     const barEnd = source.indexOf(
@@ -243,7 +268,11 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("Gallery tools stay available.");
     expect(backgroundBar).not.toContain("upload.pauseAll");
     expect(backgroundBar).not.toContain("upload.resumeAll");
-    expect(backgroundBar).not.toContain("upload.cancelAll");
+    expect(backgroundBar).toContain("upload.cancelAll");
+    expect(backgroundBar).toContain("Cancel active uploads");
+    expect(backgroundBar).toContain("upload.clearFinished");
+    expect(backgroundBar).toContain("Dismiss");
+    expect(backgroundBar).not.toContain("Cancel all");
   });
 
   it("shows delete and update action status without interrupting active uploads", () => {
@@ -342,7 +371,7 @@ describe("gallery detail page — perf & a11y contracts", () => {
     );
     expect(source).toContain("lg:hidden");
     expect(source).toContain("hidden space-y-4 lg:block");
-    expect(source).toContain("max-h-dvh");
+    expect(source).toContain("max-h-[min(82dvh,44rem)]");
     expect(source).toContain(
       "grid gap-4 overflow-y-auto p-4 sm:p-5 lg:grid-cols-3 lg:gap-6 lg:p-6",
     );

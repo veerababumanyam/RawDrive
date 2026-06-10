@@ -225,6 +225,48 @@ describe("Gallery settings — slideshow music", () => {
     expect(none.checked).toBe(true);
   });
 
+  it("updates and saves the slideshow speed", async () => {
+    mocks.updateGallerySettings.mockImplementation(
+      async (_token, _id, payload) =>
+        gallery({
+          settings: {
+            slideshow_interval_ms: (payload as Record<string, unknown>)
+              .slideshow_interval_ms,
+          },
+        }),
+    );
+
+    await renderPage();
+    await waitFor(() =>
+      screen.getByRole("heading", { name: "Slideshow music" }),
+    );
+
+    expect(
+      screen.getByText(
+        "5 seconds per photo for the cover and full-screen slideshow.",
+      ),
+    ).toBeInTheDocument();
+
+    const speedSlider = screen.getByLabelText("Slide speed");
+    fireEvent.change(speedSlider, { target: { value: "8" } });
+
+    expect(
+      screen.getByText(
+        "8 seconds per photo for the cover and full-screen slideshow.",
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save speed" }));
+
+    await waitFor(() =>
+      expect(mocks.updateGallerySettings).toHaveBeenCalledWith(
+        "token-1",
+        "gallery-1",
+        { slideshow_interval_ms: 8000 },
+      ),
+    );
+  });
+
   it("renders the library tracks with size, preview and delete controls", async () => {
     mocks.listMusicLibrary.mockResolvedValue([
       track({ id: "track-1", filename: "first-dance.mp3" }),

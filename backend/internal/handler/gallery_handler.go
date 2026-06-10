@@ -223,6 +223,26 @@ func normalizeGalleryDownloadQuality(value string) (string, error) {
 	return downloadQuality, nil
 }
 
+const (
+	gallerySlideshowIntervalMinMS = 2000
+	gallerySlideshowIntervalMaxMS = 15000
+)
+
+func decodeGallerySlideshowIntervalMS(value json.RawMessage) (int, error) {
+	var intervalMS int
+	if err := json.Unmarshal(value, &intervalMS); err != nil {
+		return 0, fmt.Errorf("invalid slideshow_interval_ms")
+	}
+	if intervalMS < gallerySlideshowIntervalMinMS || intervalMS > gallerySlideshowIntervalMaxMS {
+		return 0, fmt.Errorf(
+			"slideshow_interval_ms must be between %d and %d",
+			gallerySlideshowIntervalMinMS,
+			gallerySlideshowIntervalMaxMS,
+		)
+	}
+	return intervalMS, nil
+}
+
 func (h *GalleryHandler) validateLinkedEntity(ctx context.Context, workspaceID uuid.UUID, field string, id *uuid.UUID) error {
 	if h.pool == nil || id == nil {
 		return nil
@@ -1344,6 +1364,28 @@ func (h *GalleryHandler) Update(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"invalid watermark_config"}`, http.StatusBadRequest)
 			return
 		}
+	}
+	if value, ok := raw["slideshow_interval_ms"]; ok {
+		intervalMS, err := decodeGallerySlideshowIntervalMS(value)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+			return
+		}
+		if gallery.Settings == nil {
+			gallery.Settings = map[string]interface{}{}
+		}
+		gallery.Settings["slideshow_interval_ms"] = intervalMS
+	}
+	if value, ok := raw["client_side_media_encryption_enabled"]; ok {
+		var enabled bool
+		if err := json.Unmarshal(value, &enabled); err != nil {
+			http.Error(w, `{"error":"invalid client_side_media_encryption_enabled"}`, http.StatusBadRequest)
+			return
+		}
+		if gallery.Settings == nil {
+			gallery.Settings = map[string]interface{}{}
+		}
+		gallery.Settings["client_side_media_encryption_enabled"] = enabled
 	}
 	for _, field := range []string{"primary_contact_id", "contact_id", "project_id", "event_id", "deal_id", "invoice_id"} {
 		present, value, err := parseOptionalUUIDRaw(raw, field)

@@ -26,7 +26,9 @@ import {
   isFaceIndexUnavailableError,
 } from "@/lib/api/ai";
 
-const CHUNK_SIZE = 5 * 1024 * 1024;
+// Keep non-final multipart chunks above S3/B2's 5 MiB floor, but small enough
+// that the gallery queue reports progress before a whole camera JPEG finishes.
+export const CHUNK_SIZE = 8 * 1024 * 1024;
 const DEFAULT_METADATA_BUDGET = 512 * 1024;
 export const MAX_CONCURRENT_UPLOADS = 4;
 export const MAX_CHUNK_UPLOAD_ATTEMPTS = 6;
@@ -46,7 +48,7 @@ export interface UploadDestination {
   albumId?: string | null;
 }
 
-type UseUploadOptions = {
+export type UseUploadOptions = {
   encryption?: {
     getKey: () => Promise<GalleryMediaKey>;
   };
@@ -58,6 +60,14 @@ type UseUploadOptions = {
    * for a stale/unknown status — the page opens the acceptance modal.
    */
   onTermsRequired?: () => void;
+};
+
+type UploadEncryption = NonNullable<UseUploadOptions["encryption"]>;
+
+type QueuedUploadItem = UploadItem & {
+  uploadDestination?: UploadDestination;
+  uploadEncryption?: UploadEncryption | null;
+  uploadOnTermsRequired?: UseUploadOptions["onTermsRequired"];
 };
 
 async function runScreener(
@@ -131,7 +141,7 @@ async function uploadEncryptedDerivative(
     throw new Error(`Encrypted derivative upload failed: ${res.status}`);
 }
 
-function isActiveUploadStatus(status: UploadItem["status"]): boolean {
+export function isActiveUploadStatus(status: UploadItem["status"]): boolean {
   return (
     status === "uploading" ||
     status === "pending" ||
@@ -370,16 +380,16 @@ export function useUpload(
   const [isPaused, setIsPaused] = useState(false);
   const abortControllers = useRef<Map<string, AbortController>>(new Map());
   const uploadSessionIds = useRef<Map<string, string>>(new Map());
-  const pendingQueue = useRef<UploadItem[]>([]);
+  const pendingQueue = useRef<QueuedUploadItem[]>([]);
   const pausedItems = useRef<Set<string>>(new Set());
   const activeUploads = useRef(0);
   const pumpQueue = useRef<() => void>(() => {});
   const pausedRef = useRef(false);
+  const encryptionRef = useRef<UseUploadOptions["encryption"]>(encryption);
 
-  // Keep the latest destination in a ref so chunkedUpload (a stable callback)
-  // reads the CURRENT gallery/album at the moment each session is created,
-  // without re-creating the callback (and tearing the queue) on every album
-  // toggle.
+  // Keep the latest destination in a ref so addFiles can snapshot the active
+  // gallery/album onto every queued item without re-creating the queue when the
+  // visible gallery state changes.
   const destinationRef = useRef<UploadDestination | undefined>(destination);
 
   // Latest onTermsRequired callback in a ref so the stable chunkedUpload
@@ -393,6 +403,7 @@ export function useUpload(
   // .current asynchronously at upload time (well after commit), so effect
   // timing preserves the existing behavior.
   useEffect(() => {
+    encryptionRef.current = encryption;
     destinationRef.current = destination;
     onTermsRequiredRef.current = options?.onTermsRequired;
   });
@@ -404,11 +415,18 @@ export function useUpload(
   }, []);
 
   const chunkedUpload = useCallback(
-    async (item: UploadItem) => {
+    async (item: QueuedUploadItem) => {
       const controller = new AbortController();
       abortControllers.current.set(item.id, controller);
       let uploadIdForCleanup: string | undefined;
       let uploadSessionFinished = false;
+      const itemEncryption =
+        item.uploadEncryption === null
+          ? undefined
+          : (item.uploadEncryption ?? encryptionRef.current);
+      const itemDestination = item.uploadDestination ?? destinationRef.current;
+      const itemOnTermsRequired =
+        item.uploadOnTermsRequired ?? onTermsRequiredRef.current;
 
       // QA #16 (historic): refresh the token fresh at request time so
       // Authorization reflects the latest cached value. authFetch now
@@ -419,7 +437,7 @@ export function useUpload(
       void token; // kept in the signature for caller compatibility
 
       try {
-        if (encryption) {
+        if (itemEncryption) {
           const blockReason = getBrowserE2EEUploadBlockReason(item.file);
           if (blockReason) {
             updateItem(item.id, {
@@ -473,9 +491,9 @@ export function useUpload(
         let encryptedDerivatives: EncryptedDerivative[] = [];
         let faceIndexImage: Blob | undefined;
 
-        if (encryption) {
+        if (itemEncryption) {
           updateItem(item.id, { status: "encrypting", scanManifest: manifest });
-          const mediaKey = await encryption.getKey();
+          const mediaKey = await itemEncryption.getKey();
           const encryptedOriginal = await encryptBlob(item.file, {
             key: mediaKey.key,
             keyId: mediaKey.keyId,
@@ -522,12 +540,10 @@ export function useUpload(
 
         updateItem(item.id, { status: "uploading", scanManifest: manifest });
 
-        // S3-G4 / S3-G5: bind the session to its destination gallery (and
-        // sub-album, when one is the active upload target) so the backend links
-        // the finalized asset server-side. Read from the ref at request time so
-        // a mid-batch album switch routes subsequent uploads correctly. Omitted
-        // keys leave the session as a plain workspace upload (legacy behaviour).
-        const dest = destinationRef.current;
+        // S3-G4 / S3-G5: bind the session to the destination captured when the
+        // user selected these files. This lets queued files continue after route
+        // changes while still linking to the original gallery/sub-gallery.
+        const dest = itemDestination;
         // total_size MUST be the size of what we actually chunk and PATCH. In the
         // E2EE path that is the encrypted ciphertext (uploadBlob), not the
         // plaintext source; the chunk loop below iterates uploadBlob.size.
@@ -593,7 +609,7 @@ export function useUpload(
                 errorBody.message ??
                 "You must accept the Terms of Service before uploading.",
             });
-            onTermsRequiredRef.current?.();
+            itemOnTermsRequired?.();
             return;
           }
           // Event gallery upload gates are intentional 403 responses: the
@@ -732,10 +748,9 @@ export function useUpload(
             progress: 98,
             assetId: finalAssetId,
           });
-          const activeDest = destinationRef.current;
           try {
             await uploadAssetFaceIndexImage(finalAssetId, faceIndexImage, {
-              galleryId: activeDest?.galleryId,
+              galleryId: itemDestination?.galleryId,
               signal: controller.signal,
             });
           } catch (err) {
@@ -786,7 +801,7 @@ export function useUpload(
         pumpQueue.current();
       }
     },
-    [apiUrl, encryption, token, updateItem],
+    [apiUrl, token, updateItem],
   );
 
   // Keep pumpQueue.current pointing at a closure over the latest chunkedUpload
@@ -808,18 +823,26 @@ export function useUpload(
     };
   });
 
-  const enqueueUploads = useCallback((nextItems: UploadItem[]) => {
+  const enqueueUploads = useCallback((nextItems: QueuedUploadItem[]) => {
     pendingQueue.current.push(...nextItems);
     pumpQueue.current();
   }, []);
 
   const addFiles = useCallback(
     (files: File[]) => {
-      const newItems: UploadItem[] = files.map((file) => ({
+      const currentDestination = destinationRef.current
+        ? { ...destinationRef.current }
+        : undefined;
+      const currentEncryption = encryptionRef.current ?? null;
+      const currentOnTermsRequired = onTermsRequiredRef.current;
+      const newItems: QueuedUploadItem[] = files.map((file) => ({
         id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         file,
         progress: 0,
         status: "pending" as const,
+        uploadDestination: currentDestination,
+        uploadEncryption: currentEncryption,
+        uploadOnTermsRequired: currentOnTermsRequired,
       }));
 
       // 2026-05-21: a fresh batch should not inherit stale terminal rows
@@ -875,7 +898,10 @@ export function useUpload(
         updateItem(id, { status: "uploading" });
         return;
       }
-      const retryItem = { ...item, status: "pending" as const };
+      const retryItem = {
+        ...(item as QueuedUploadItem),
+        status: "pending" as const,
+      };
       updateItem(id, { status: "pending" });
       enqueueUploads([retryItem]);
     },
@@ -888,7 +914,11 @@ export function useUpload(
       if (item) {
         if (item.requiresReselect) return;
         pausedItems.current.delete(id);
-        const retryItem = { ...item, status: "pending" as const, progress: 0 };
+        const retryItem = {
+          ...(item as QueuedUploadItem),
+          status: "pending" as const,
+          progress: 0,
+        };
         updateItem(id, {
           status: "pending",
           progress: 0,
@@ -910,7 +940,7 @@ export function useUpload(
       (i) => i.status === "error" && !i.requiresReselect,
     );
     const retryItems = failed.map((item) => ({
-      ...item,
+      ...(item as QueuedUploadItem),
       status: "pending" as const,
       progress: 0,
     }));

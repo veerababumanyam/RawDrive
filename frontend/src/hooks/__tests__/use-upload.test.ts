@@ -3,11 +3,11 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 describe("useUpload", () => {
-  it("exports CHUNK_SIZE as 5MB", async () => {
-    // Verify the module exports correctly
+  it("exports CHUNK_SIZE as 8MB", async () => {
     const mod = await import("../use-upload");
     expect(mod.useUpload).toBeDefined();
     expect(typeof mod.useUpload).toBe("function");
+    expect(mod.CHUNK_SIZE).toBe(8 * 1024 * 1024);
   });
 
   it("useUpload accepts apiUrl, token, and an optional destination binding", async () => {
@@ -15,6 +15,22 @@ describe("useUpload", () => {
     // S3-G4: the third param is the optional { galleryId, albumId } destination
     // so CreateSession can bind the upload to a gallery for server-side linking.
     expect(useUpload.length).toBe(3); // apiUrl, token, destination?
+  });
+
+  it("snapshots gallery upload context onto each queued file for route changes", async () => {
+    const source = await readFile(
+      join(process.cwd(), "src/hooks/use-upload.ts"),
+      "utf8",
+    );
+
+    expect(source).toContain("type QueuedUploadItem");
+    expect(source).toContain("uploadDestination?: UploadDestination");
+    expect(source).toContain("uploadEncryption?: UploadEncryption | null");
+    expect(source).toContain("uploadOnTermsRequired?");
+    expect(source).toContain("const currentDestination = destinationRef.current");
+    expect(source).toContain("uploadDestination: currentDestination");
+    expect(source).toContain("const dest = itemDestination");
+    expect(source).toContain("galleryId: itemDestination?.galleryId");
   });
 
   it("exposes pause controls for all and per-photo upload flow", async () => {

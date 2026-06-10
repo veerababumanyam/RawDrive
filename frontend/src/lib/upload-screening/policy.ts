@@ -30,6 +30,7 @@ interface CacheEntry {
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
 let cache: CacheEntry | null = null;
+let inFlight: Promise<PolicyVersion[]> | null = null;
 
 /**
  * Fetch the active policy versions from the backend, using an in-memory
@@ -46,8 +47,11 @@ export async function fetchPolicyVersions(apiUrl: string): Promise<PolicyVersion
   if (cache && now - cache.fetchedAt < CACHE_TTL_MS) {
     return cache.versions;
   }
+  if (inFlight) {
+    return inFlight;
+  }
 
-  try {
+  inFlight = (async () => {
     const res = await fetch(`${apiUrl}/api/v1/upload-policy/versions`);
     if (!res.ok) {
       throw new Error(`policy catalog fetch failed: ${res.status}`);
@@ -55,12 +59,18 @@ export async function fetchPolicyVersions(apiUrl: string): Promise<PolicyVersion
     const body = (await res.json()) as CatalogResponse;
     cache = { versions: body.versions, fetchedAt: now };
     return body.versions;
+  })();
+
+  try {
+    return await inFlight;
   } catch (err) {
     // Network error: fall back to stale cache if available.
     if (cache) {
       return cache.versions;
     }
     throw err;
+  } finally {
+    inFlight = null;
   }
 }
 
@@ -87,6 +97,7 @@ export async function activePolicyVersion(apiUrl: string): Promise<string> {
  */
 export function _resetPolicyCache(): void {
   cache = null;
+  inFlight = null;
 }
 
 /**

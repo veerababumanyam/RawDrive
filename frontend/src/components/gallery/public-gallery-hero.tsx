@@ -9,6 +9,7 @@ import {
   type PublicAsset,
 } from "@/lib/api/galleries";
 import {
+  readGallerySlideshowIntervalMs,
   resolveCoverDeviceProfile,
   type CoverDevice,
   type CoverDeviceProfile,
@@ -579,11 +580,13 @@ function CoverSlideshow({
   assets,
   title,
   objectPosition,
+  intervalMs,
 }: {
   coverUrl: string;
   assets: PublicAsset[];
   title: string;
   objectPosition: string;
+  intervalMs: number;
 }) {
   const urls = [
     coverUrl,
@@ -598,9 +601,9 @@ function CoverSlideshow({
     if (urls.length <= 1) return;
     const timer = window.setInterval(() => {
       setIndex((current) => (current + 1) % urls.length);
-    }, 4500);
+    }, intervalMs);
     return () => window.clearInterval(timer);
-  }, [urls.length]);
+  }, [urls.length, intervalMs]);
 
   if (urls.length === 0) return null;
 
@@ -622,9 +625,20 @@ function CoverSlideshow({
 // so "Play", "View Gallery" and "Find Me" read as one consistent group.
 const COVER_CTA_CLASS = "glass-button glass-button--surface glass-button--md";
 
+function shouldSkipPageFullscreenForIOS() {
+  if (typeof navigator === "undefined") return false;
+  const userAgent = navigator.userAgent || "";
+  const platform = navigator.platform || "";
+  return (
+    /iPad|iPhone|iPod/.test(userAgent) ||
+    (platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+
 function requestPageFullscreenForSlideshow() {
   if (typeof document === "undefined") return;
   if (getFullscreenElement(document)) return;
+  if (shouldSkipPageFullscreenForIOS()) return;
 
   const target = document.documentElement;
   if (!isFullscreenSupportedForElement(target, document)) return;
@@ -759,6 +773,7 @@ export function PublicGalleryHero({
   // photo galleries; music only controlled whether audio was wired in.
   const slideshowEnabled = Boolean(slug) && assets.length > 0;
   const slideshowHasMusic = slideshowEnabled && hasMusic;
+  const slideshowIntervalMs = readGallerySlideshowIntervalMs(gallery.settings);
   // Auto-open on mount when the gallery has music, so the music plays as soon
   // as the /g/[slug] link opens — same UX the standalone launcher gave via
   // autoStart. Initializing state lazily from props (rather than a
@@ -788,6 +803,7 @@ export function PublicGalleryHero({
             ? publicGalleryMusicUrl(slug, ws, assetAccessToken, shareToken)
             : null
         }
+        intervalMs={slideshowIntervalMs}
         onClose={closeSlideshow}
       />
     ) : null;
@@ -1109,6 +1125,7 @@ export function PublicGalleryHero({
             assets={photoGridAssets}
             title={title}
             objectPosition={objectPosition}
+            intervalMs={slideshowIntervalMs}
           />
         ) : (
           <PublicCoverTemplateMedia

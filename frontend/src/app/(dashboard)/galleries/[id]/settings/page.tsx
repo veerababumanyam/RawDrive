@@ -33,6 +33,13 @@ import {
 } from "@/lib/api/workspace-profile";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
+import {
+  readGalleryClientSideMediaEncryptionEnabled,
+  readGallerySlideshowIntervalMs,
+  SLIDESHOW_INTERVAL_DEFAULT_MS,
+  SLIDESHOW_INTERVAL_MAX_MS,
+  SLIDESHOW_INTERVAL_MIN_MS,
+} from "@/lib/gallery-design-config";
 import { TermsAcceptanceModal } from "@/components/legal/terms-acceptance-modal";
 import { GalleryPageShell } from "@/components/gallery/gallery-page-shell";
 import { GalleryPageHeader } from "@/components/gallery/gallery-page-header";
@@ -450,6 +457,9 @@ export default function GallerySettingsPage({
   const [musicUploadStatus, setMusicUploadStatus] = useState("");
   const [musicError, setMusicError] = useState("");
   const [musicSelecting, setMusicSelecting] = useState(false);
+  const [slideshowIntervalDraftMs, setSlideshowIntervalDraftMs] = useState<
+    number | null
+  >(null);
   // Bumped after each upload/library mutation to make the library list reload.
   const [musicReloadKey, setMusicReloadKey] = useState(0);
   const [termsNeedsAcceptance, setTermsNeedsAcceptance] = useState(false);
@@ -742,6 +752,29 @@ export default function GallerySettingsPage({
     }
   };
 
+  const handleSlideshowIntervalSave = async () => {
+    const token = getStoredAccessToken();
+    if (!token || !gallery) return;
+    setSaving(true);
+    setSaveMsg("");
+    setMusicError("");
+    try {
+      const updated = await updateGallerySettings(token, id, {
+        slideshow_interval_ms: slideshowIntervalMs,
+      });
+      setGallery(updated);
+      setSlideshowIntervalDraftMs(null);
+      setSaveMsg("Slideshow speed saved");
+      setTimeout(() => setSaveMsg(""), 2000);
+    } catch (err) {
+      setMusicError(
+        err instanceof Error ? err.message : "Failed to save slideshow speed",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const openWatermarkPreview = () => {
     if (!gallery) return;
     const token = getStoredAccessToken();
@@ -1024,6 +1057,17 @@ export default function GallerySettingsPage({
   );
   const accessToken = getStoredAccessToken();
   const studioLogoPreviewUrl = logoPreviewURL(workspaceProfile, accessToken);
+  const savedSlideshowIntervalMs = readGallerySlideshowIntervalMs(
+    gallery.settings,
+  );
+  const slideshowIntervalMs =
+    slideshowIntervalDraftMs ?? savedSlideshowIntervalMs;
+  const slideshowSpeedDirty =
+    slideshowIntervalDraftMs !== null &&
+    slideshowIntervalMs !== savedSlideshowIntervalMs;
+  const clientSideMediaEncryptionEnabled = gallery
+    ? readGalleryClientSideMediaEncryptionEnabled(gallery.settings)
+    : false;
   const studioLogoName =
     workspaceProfile?.logo_metadata?.filename ||
     (workspaceProfile?.logo_asset_id ? "Uploaded logo" : "");
@@ -1055,6 +1099,7 @@ export default function GallerySettingsPage({
   ];
   const settingsSections = [
     { id: "gallery-settings-downloads", label: "Downloads" },
+    { id: "gallery-settings-upload", label: "Uploads" },
     { id: "gallery-settings-access", label: "Access" },
     { id: "gallery-settings-sharing", label: "Sharing" },
     { id: "gallery-settings-faceid", label: "AI & FaceID" },
@@ -1161,6 +1206,31 @@ export default function GallerySettingsPage({
                 </div>
               </div>
             )}
+          </section>
+
+          {/* Upload mode */}
+          <section
+            id="gallery-settings-upload"
+            className="surface-panel space-y-4 p-5"
+          >
+            <h2 className="text-lg font-semibold text-text-primary">Uploads</h2>
+            <p className="text-sm text-text-secondary">
+              Keep new photo uploads on the fast standard path, or turn on
+              browser-side encryption when this gallery needs secure-key access.
+            </p>
+            <ToggleRow
+              label="Client-side media encryption"
+              description={
+                clientSideMediaEncryptionEnabled
+                  ? "New uploads are encrypted in the browser before upload. This is slower and can require desktop support for large or camera-specific files."
+                  : "New uploads skip browser encryption for faster upload and preview. Existing encrypted photos still open through their secure gallery key."
+              }
+              checked={clientSideMediaEncryptionEnabled}
+              disabled={saving}
+              onChange={(v) =>
+                handleToggle("client_side_media_encryption_enabled", v)
+              }
+            />
           </section>
 
           {/* Access window / expiry */}
@@ -1844,6 +1914,49 @@ export default function GallerySettingsPage({
               stored in your workspace storage and counts toward your
               plan&rsquo;s allocated space.
             </p>
+
+            <div className="rounded-xl border border-border-subtle bg-surface-sunken/70 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <label
+                    htmlFor="slideshow-speed"
+                    className="text-sm font-medium text-text-primary"
+                  >
+                    Slide speed
+                  </label>
+                  <p className="mt-1 text-xs text-text-secondary">
+                    {Math.round(slideshowIntervalMs / 1000)} seconds per photo
+                    for the cover and full-screen slideshow.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleSlideshowIntervalSave()}
+                  disabled={saving || !slideshowSpeedDirty}
+                  className="btn-primary px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {saving && slideshowSpeedDirty ? "Saving..." : "Save speed"}
+                </button>
+              </div>
+              <input
+                id="slideshow-speed"
+                type="range"
+                min={SLIDESHOW_INTERVAL_MIN_MS / 1000}
+                max={SLIDESHOW_INTERVAL_MAX_MS / 1000}
+                step={1}
+                value={Math.round(slideshowIntervalMs / 1000)}
+                disabled={saving}
+                onChange={(event) =>
+                  setSlideshowIntervalDraftMs(Number(event.target.value) * 1000)
+                }
+                className="mt-4 w-full accent-accent-primary disabled:opacity-50"
+              />
+              <div className="mt-2 flex justify-between text-xs text-text-tertiary">
+                <span>{SLIDESHOW_INTERVAL_MIN_MS / 1000}s</span>
+                <span>{SLIDESHOW_INTERVAL_DEFAULT_MS / 1000}s default</span>
+                <span>{SLIDESHOW_INTERVAL_MAX_MS / 1000}s</span>
+              </div>
+            </div>
 
             <div className="space-y-1">
               <label

@@ -59,6 +59,7 @@ import {
   getWorkspaceProfile,
   type WorkspaceProfile,
 } from "@/lib/api/workspace-profile";
+import { readGalleryClientSideMediaEncryptionEnabled } from "@/lib/gallery-design-config";
 import { getAsset, type Asset } from "@/lib/api/assets";
 import { useUpload } from "@/hooks/use-upload";
 import {
@@ -2188,10 +2189,13 @@ export default function CoverDesignPage() {
   const token = useMemo(() => getStoredAccessToken(), []);
   const apiUrl = useMemo(() => getApiBaseUrl(), []);
   const uploadEncryption = useMemo(
-    () => ({
-      getKey: () => getOrCreateSyncedGalleryMediaKey(galleryId),
-    }),
-    [galleryId],
+    () =>
+      readGalleryClientSideMediaEncryptionEnabled(gallery?.settings)
+        ? {
+            getKey: () => getOrCreateSyncedGalleryMediaKey(galleryId),
+          }
+        : undefined,
+    [gallery?.settings, galleryId],
   );
   const upload = useUpload(apiUrl, token, {
     encryption: uploadEncryption,

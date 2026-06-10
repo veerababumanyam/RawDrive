@@ -72,15 +72,19 @@ describe("F-089: gallery detail page reads the access token once per mount", () 
     // now takes a single options object that carries BOTH the client-side
     // media-encryption key provider (feature branch) AND the S3-G4 destination
     // binding (galleryId / albumId, server-side gallery linkage), so the call
-    // spans multiple lines. We pin that the once-per-mount `token` snapshot
-    // feeds useUpload and that the `encryption: uploadEncryption` arg is the
-    // value handed in.
-    expect(source).toMatch(/const upload = useUpload\(apiUrl, token, \{/);
+    // spans multiple lines. The gallery detail page now prefers the
+    // dashboard-level upload queue so uploads can survive route changes, but
+    // the isolated local fallback must still be backed by the once-per-mount
+    // token snapshot.
+    expect(source).toMatch(/const localUpload = useUpload\(apiUrl, token, \{/);
     expect(source).toMatch(/encryption: uploadEncryption,/);
+    expect(source).toContain("const upload = dashboardUpload ?? localUpload");
 
     // And that the same call still allows trailing args after `token` (the
     // S3-G4 destination binding) while pinning the `token` snapshot as the
     // value that feeds useUpload.
-    expect(source).toMatch(/const upload = useUpload\(apiUrl, token(,| \)|\))/);
+    expect(source).toMatch(
+      /const localUpload = useUpload\(apiUrl, token(,| \)|\))/,
+    );
   });
 });

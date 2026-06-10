@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PublicGalleryHero } from "../public-gallery-hero";
 import type {
@@ -744,6 +744,40 @@ describe("PublicGalleryHero", () => {
     );
   });
 
+  it("uses the saved gallery slideshow speed when Play opens the slideshow", () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <PublicGalleryHero
+          gallery={{
+            ...gallery,
+            settings: { slideshow_interval_ms: 8000 },
+          }}
+          assets={[coverAsset, secondaryAsset]}
+          branding={branding}
+          slug="asha-ravi"
+          hasMusic={false}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Play slideshow" }));
+      expect(screen.getByAltText("Wedding (42).jpg")).toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(7999);
+      });
+      expect(screen.getByAltText("Wedding (42).jpg")).toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(screen.getByAltText("Wedding (43).jpg")).toBeInTheDocument();
+    } finally {
+      vi.runOnlyPendingTimers();
+      vi.useRealTimers();
+    }
+  });
+
   it("still opens from Play when the browser fullscreen request throws", () => {
     const fullscreenEnabledDescriptor = Object.getOwnPropertyDescriptor(
       document,
@@ -793,6 +827,101 @@ describe("PublicGalleryHero", () => {
         configurable: true,
         value: originalRequestFullscreen,
       });
+    }
+  });
+
+  it("does not request page fullscreen on iOS before opening the slideshow", () => {
+    const fullscreenEnabledDescriptor = Object.getOwnPropertyDescriptor(
+      document,
+      "fullscreenEnabled",
+    );
+    const originalRequestFullscreen =
+      document.documentElement.requestFullscreen;
+    const userAgentDescriptor = Object.getOwnPropertyDescriptor(
+      window.navigator,
+      "userAgent",
+    );
+    const platformDescriptor = Object.getOwnPropertyDescriptor(
+      window.navigator,
+      "platform",
+    );
+    const maxTouchPointsDescriptor = Object.getOwnPropertyDescriptor(
+      window.navigator,
+      "maxTouchPoints",
+    );
+    const requestFullscreen = vi.fn();
+
+    Object.defineProperty(document, "fullscreenEnabled", {
+      configurable: true,
+      get: () => true,
+    });
+    Object.defineProperty(document.documentElement, "requestFullscreen", {
+      configurable: true,
+      value: requestFullscreen,
+    });
+    Object.defineProperty(window.navigator, "userAgent", {
+      configurable: true,
+      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
+    });
+    Object.defineProperty(window.navigator, "platform", {
+      configurable: true,
+      value: "iPhone",
+    });
+    Object.defineProperty(window.navigator, "maxTouchPoints", {
+      configurable: true,
+      value: 5,
+    });
+
+    try {
+      render(
+        <PublicGalleryHero
+          gallery={gallery}
+          assets={[coverAsset, secondaryAsset]}
+          branding={branding}
+          slug="asha-ravi"
+          hasMusic={false}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Play slideshow" }));
+
+      expect(requestFullscreen).not.toHaveBeenCalled();
+      expect(
+        screen.getByRole("dialog", { name: "Gallery slideshow" }),
+      ).toBeInTheDocument();
+    } finally {
+      if (fullscreenEnabledDescriptor) {
+        Object.defineProperty(
+          document,
+          "fullscreenEnabled",
+          fullscreenEnabledDescriptor,
+        );
+      } else {
+        Reflect.deleteProperty(document, "fullscreenEnabled");
+      }
+      Object.defineProperty(document.documentElement, "requestFullscreen", {
+        configurable: true,
+        value: originalRequestFullscreen,
+      });
+      if (userAgentDescriptor) {
+        Object.defineProperty(window.navigator, "userAgent", userAgentDescriptor);
+      } else {
+        Reflect.deleteProperty(window.navigator, "userAgent");
+      }
+      if (platformDescriptor) {
+        Object.defineProperty(window.navigator, "platform", platformDescriptor);
+      } else {
+        Reflect.deleteProperty(window.navigator, "platform");
+      }
+      if (maxTouchPointsDescriptor) {
+        Object.defineProperty(
+          window.navigator,
+          "maxTouchPoints",
+          maxTouchPointsDescriptor,
+        );
+      } else {
+        Reflect.deleteProperty(window.navigator, "maxTouchPoints");
+      }
     }
   });
 

@@ -39,6 +39,7 @@ import {
 } from "@/lib/api/favorites";
 import { readEmbeddedVideos, type EmbeddedVideo } from "@/lib/embedded-videos";
 import { assetIsProcessing } from "@/lib/dashboard-ui";
+import { readGalleryClientSideMediaEncryptionEnabled } from "@/lib/gallery-design-config";
 import { getOrCreateSyncedGalleryMediaKey } from "@/lib/media-encryption/gallery-media-key-sync";
 import {
   appendStoredGalleryKeyFragment,
@@ -78,6 +79,7 @@ import {
   ChevronLeft,
   UploadCloud,
 } from "@/components/icons";
+import { useDashboardUploadContext } from "@/components/upload/dashboard-upload-provider";
 import { useUpload } from "@/hooks/use-upload";
 import { useInfiniteFetch } from "@/hooks/use-infinite-render";
 import { TermsAcceptanceModal } from "@/components/legal/terms-acceptance-modal";
@@ -633,7 +635,6 @@ export default function GalleryDetailPage({
     isBulk?: boolean;
   } | null>(null);
   const [showUploadDialog, setShowUploadDialog] = useState(false);
-  const [uploadDialogDismissed, setUploadDialogDismissed] = useState(false);
   const [tetheredEnabled, setTetheredEnabled] = useState(false);
   const [tetheredFolderName, setTetheredFolderName] = useState<string | null>(
     null,
@@ -1586,25 +1587,52 @@ export default function GalleryDetailPage({
     setTermsModalOpen(true);
   }, []);
 
-  // Client-side media encryption (feature branch): the upload hook fetches the
-  // per-gallery media key on demand and encrypts each WebP derivative in the
-  // browser before it leaves the device.
+  // Client-side media encryption is opt-in per gallery. When off, uploads use
+  // the faster plaintext path; existing encrypted assets still decrypt on view.
   const uploadEncryption = useMemo(
-    () => ({
-      getKey: () => getOrCreateSyncedGalleryMediaKey(id),
-    }),
-    [id],
+    () =>
+      readGalleryClientSideMediaEncryptionEnabled(gallery?.settings)
+        ? {
+            getKey: () => getOrCreateSyncedGalleryMediaKey(id),
+          }
+        : undefined,
+    [gallery?.settings, id],
   );
+  const dashboardUploadContext = useDashboardUploadContext();
+  const dashboardUpload = dashboardUploadContext?.upload;
+  const configureGalleryUpload =
+    dashboardUploadContext?.configureGalleryUpload;
+  const clearGalleryUpload = dashboardUploadContext?.clearGalleryUpload;
+  const uploadOwnerKey = useMemo(() => `gallery:${id}`, [id]);
   // S3-G4 / S3-G5: also bind every upload session to THIS gallery (and the
   // active sub-album, when one is selected) so the backend links the finalized
   // asset into the gallery server-side — idempotent, deterministic sort_order —
-  // at finalize. The destination fields update as the user switches albums; the
-  // hook reads them live via a ref so a mid-batch switch routes correctly.
-  const upload = useUpload(apiUrl, token, {
+  // at finalize. The hook snapshots these fields when files enter the queue so
+  // route changes do not break or unbind pending uploads.
+  const localUpload = useUpload(apiUrl, token, {
     encryption: uploadEncryption,
     destination: { galleryId: id, albumId: activeAlbum },
     onTermsRequired: openTermsModal,
   });
+  const upload = dashboardUpload ?? localUpload;
+
+  useEffect(() => {
+    if (!configureGalleryUpload || !clearGalleryUpload) return;
+    configureGalleryUpload(uploadOwnerKey, {
+      encryption: uploadEncryption,
+      destination: { galleryId: id, albumId: activeAlbum },
+      onTermsRequired: openTermsModal,
+    });
+    return () => clearGalleryUpload(uploadOwnerKey);
+  }, [
+    activeAlbum,
+    clearGalleryUpload,
+    configureGalleryUpload,
+    id,
+    openTermsModal,
+    uploadEncryption,
+    uploadOwnerKey,
+  ]);
   const linkedAssetIdsRef = useRef<Set<string>>(new Set());
   const uploadPreviewBackendAsset = useMemo(() => {
     const completedAssetIds = new Set(
@@ -1774,10 +1802,12 @@ export default function GalleryDetailPage({
     return `${n.toFixed(n >= 100 ? 0 : 1)} ${units[u]}`;
   };
   const uploadPanelOpen =
-    activeUploadCount > 0 || failedUploadCount > 0 || blockedUploadCount > 0;
-  const uploadDialogOpen =
-    showUploadDialog || (uploadPanelOpen && !uploadDialogDismissed);
-  const backgroundUploadBarVisible = uploadPanelOpen && !uploadDialogOpen;
+    activeUploadCount > 0 ||
+    failedUploadCount > 0 ||
+    blockedUploadCount > 0 ||
+    completedUploadCount > 0;
+  const uploadDialogOpen = showUploadDialog;
+  const backgroundUploadBarVisible = uploadPanelOpen;
   const uploadDialogCanClose =
     activeUploadCount === 0 &&
     failedUploadCount === 0 &&
@@ -1829,12 +1859,10 @@ export default function GalleryDetailPage({
       : "";
   const handleUploadDialogBack = () => {
     if (activeUploadCount > 0) {
-      setUploadDialogDismissed(true);
       setShowUploadDialog(false);
       return;
     }
     upload.clearFinished();
-    setUploadDialogDismissed(false);
     setShowUploadDialog(false);
   };
 
@@ -1862,24 +1890,11 @@ export default function GalleryDetailPage({
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [uploadDialogOpen, uploadDialogCanClose]);
   const prevActiveUploadCountRef = useRef(0);
-  const uploadAutoMinimizedRef = useRef(false);
   const [uploadToast, setUploadToast] = useState<{
     visible: boolean;
     completed: number;
     failed: number;
   } | null>(null);
-
-  useEffect(() => {
-    if (activeUploadCount > 0) {
-      if (!uploadAutoMinimizedRef.current) {
-        uploadAutoMinimizedRef.current = true;
-        setUploadDialogDismissed(true);
-        setShowUploadDialog(false);
-      }
-      return;
-    }
-    uploadAutoMinimizedRef.current = false;
-  }, [activeUploadCount]);
 
   useEffect(() => {
     const wasActive = prevActiveUploadCountRef.current > 0;
@@ -4043,7 +4058,6 @@ export default function GalleryDetailPage({
               <button
                 type="button"
                 onClick={() => {
-                  setUploadDialogDismissed(false);
                   setShowUploadDialog(true);
                 }}
                 className="btn-tertiary px-3 py-1.5 text-xs"
@@ -4057,6 +4071,25 @@ export default function GalleryDetailPage({
                   className="btn-tertiary px-3 py-1.5 text-xs"
                 >
                   Retry all
+                </button>
+              )}
+              {activeUploadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={upload.cancelAll}
+                  className="rounded-full border border-error/30 px-3 py-1.5 text-xs font-medium text-error transition-colors hover:bg-error/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
+                  aria-label="Cancel active uploads"
+                >
+                  Cancel
+                </button>
+              )}
+              {activeUploadCount === 0 && completedUploadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={upload.clearFinished}
+                  className="btn-tertiary px-3 py-1.5 text-xs"
+                >
+                  Dismiss
                 </button>
               )}
             </div>
@@ -4086,21 +4119,17 @@ export default function GalleryDetailPage({
 
       {uploadDialogOpen && (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-surface-scrim p-2 glass-blur-medium sm:p-4"
-          onClick={(e) => {
-            if (e.currentTarget === e.target && uploadDialogCanClose)
-              setShowUploadDialog(false);
-          }}
+          data-testid="gallery-upload-dialog-shell"
+          className="pointer-events-none fixed inset-x-0 bottom-24 z-[70] flex items-end justify-center p-2 sm:inset-x-auto sm:right-4 sm:bottom-28 sm:w-[48rem] sm:max-w-[calc(100vw-2rem)] sm:p-0"
         >
           <section
             ref={uploadDialogRef}
             data-testid="gallery-upload-dialog"
             role="dialog"
-            aria-modal="true"
             aria-label="Upload photos to gallery"
             aria-describedby="gallery-upload-dialog-description"
             tabIndex={-1}
-            className="flex max-h-dvh w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border-default bg-surface-elevated shadow-elevation-1"
+            className="pointer-events-auto flex max-h-[min(82dvh,44rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border-default bg-surface-elevated shadow-elevation-1"
           >
             <div className="flex items-start justify-between gap-3 border-b border-border-subtle px-4 py-3 sm:px-6 sm:py-4">
               <div className="flex min-w-0 items-start gap-3">
@@ -4129,6 +4158,11 @@ export default function GalleryDetailPage({
                   >
                     {uploadStatusHeadline}
                   </p>
+                  {activeUploadCount > 0 && (
+                    <p className="mt-1 text-xs text-text-tertiary">
+                      {activeUploadStatusHint}
+                    </p>
+                  )}
                   <div
                     data-testid="upload-mobile-status"
                     className="mt-3 flex items-center gap-2 rounded-xl border border-border-subtle bg-surface-sunken px-3 py-2 md:hidden"
@@ -4152,7 +4186,7 @@ export default function GalleryDetailPage({
                         {uploadStage === "details"
                           ? "Choose files or a folder"
                           : uploadStage === "processing"
-                            ? "Encrypting and uploading"
+                            ? "Preparing and uploading"
                             : gallery.is_published
                               ? "Client links live"
                               : "Private until published"}
@@ -4187,7 +4221,7 @@ export default function GalleryDetailPage({
                 {
                   key: "processing" as const,
                   label: "Processing",
-                  helper: "Encrypt and upload",
+                  helper: "Prepare and upload",
                 },
                 {
                   key: "visibility" as const,
@@ -4330,11 +4364,6 @@ export default function GalleryDetailPage({
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      {activeUploadCount > 0 && (
-                        <span className="rounded-full border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent">
-                          Only uploads locked until complete
-                        </span>
-                      )}
                       {activeUploadCount === 0 &&
                         retryableFailedUploadCount > 0 && (
                           <button
@@ -4393,6 +4422,13 @@ export default function GalleryDetailPage({
                           item.status === "error" ||
                           item.status === "blocked" ||
                           item.status === "needs_desktop";
+                        const isCancelable =
+                          item.status === "pending" ||
+                          item.status === "screening" ||
+                          item.status === "encrypting" ||
+                          item.status === "indexing_faces" ||
+                          item.status === "paused" ||
+                          item.status === "uploading";
                         const statusLabel =
                           item.status === "complete"
                             ? "Done"
@@ -4464,6 +4500,16 @@ export default function GalleryDetailPage({
                                   className="text-xs font-medium text-accent hover:underline"
                                 >
                                   Resume
+                                </button>
+                              )}
+                              {isCancelable && (
+                                <button
+                                  type="button"
+                                  onClick={() => upload.cancel(item.id)}
+                                  className="text-xs font-medium text-error hover:underline"
+                                  aria-label={`Cancel ${item.file.name}`}
+                                >
+                                  Cancel
                                 </button>
                               )}
                               {isTerminal && (

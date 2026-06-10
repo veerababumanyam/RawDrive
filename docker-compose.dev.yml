@@ -165,7 +165,7 @@ services:
       [
         "sh",
         "-lc",
-        "pnpm config set store-dir /pnpm/store && CI=true pnpm install --frozen-lockfile && pnpm dev --hostname 0.0.0.0 --port 3000",
+        "pnpm config set store-dir /pnpm/store && CI=true pnpm install --frozen-lockfile && rm -rf .next/dev .next/cache && pnpm dev --hostname 0.0.0.0 --port 3000",
       ]
     environment:
       # Browser-visible API origin; host browsers can reach this port.

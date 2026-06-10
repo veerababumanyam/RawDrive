@@ -1,11 +1,50 @@
 import { describe, expect, it } from "vitest";
 import {
+  normalizeSlideshowIntervalMs,
+  readGalleryClientSideMediaEncryptionEnabled,
   readGalleryCoverAssetId,
+  readGallerySlideshowIntervalMs,
   readPublicCoverProfileThumbnails,
   readPublicCoverThumbnails,
   readPublicDesignConfig,
   resolveCoverDeviceProfile,
 } from "../gallery-design-config";
+
+describe("readGallerySlideshowIntervalMs", () => {
+  it("reads the saved gallery slideshow speed and clamps unsafe values", () => {
+    expect(
+      readGallerySlideshowIntervalMs({ slideshow_interval_ms: 8000 }),
+    ).toBe(8000);
+    expect(
+      readGallerySlideshowIntervalMs({ slideshow_interval_ms: "12000" }),
+    ).toBe(12000);
+    expect(
+      readGallerySlideshowIntervalMs({ slideshow_interval_ms: 1000 }),
+    ).toBe(2000);
+    expect(
+      readGallerySlideshowIntervalMs({ slideshow_interval_ms: 30000 }),
+    ).toBe(15000);
+    expect(readGallerySlideshowIntervalMs({})).toBe(5000);
+    expect(normalizeSlideshowIntervalMs("bad")).toBe(5000);
+  });
+});
+
+describe("readGalleryClientSideMediaEncryptionEnabled", () => {
+  it("defaults to fast/plain uploads unless the gallery opts into client-side media encryption", () => {
+    expect(readGalleryClientSideMediaEncryptionEnabled(null)).toBe(false);
+    expect(readGalleryClientSideMediaEncryptionEnabled({})).toBe(false);
+    expect(
+      readGalleryClientSideMediaEncryptionEnabled({
+        client_side_media_encryption_enabled: false,
+      }),
+    ).toBe(false);
+    expect(
+      readGalleryClientSideMediaEncryptionEnabled({
+        client_side_media_encryption_enabled: true,
+      }),
+    ).toBe(true);
+  });
+});
 
 describe("readPublicDesignConfig", () => {
   it("returns null when settings has no design_config", () => {

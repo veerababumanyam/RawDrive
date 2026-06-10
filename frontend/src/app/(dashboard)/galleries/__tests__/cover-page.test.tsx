@@ -432,7 +432,10 @@ describe("CoverDesignPage", () => {
       );
     });
 
-    const requestBody = vi.mocked(mocks.authFetch).mock.calls.at(-1)?.[1]?.body;
+    const authFetchCalls = vi.mocked(mocks.authFetch).mock.calls as unknown as Array<
+      [string, RequestInit?]
+    >;
+    const requestBody = authFetchCalls.at(-1)?.[1]?.body;
     expect(typeof requestBody).toBe("string");
     const payload = JSON.parse(requestBody as string);
     expect(payload.videos.map((video: { id: string }) => video.id)).toEqual([

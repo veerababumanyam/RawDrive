@@ -46,6 +46,12 @@ export type CoverMediaMode =
   | "short-video"
   | "photo-grid";
 
+export const SLIDESHOW_INTERVAL_DEFAULT_MS = 5000;
+export const SLIDESHOW_INTERVAL_MIN_MS = 2000;
+export const SLIDESHOW_INTERVAL_MAX_MS = 15000;
+export const CLIENT_SIDE_MEDIA_ENCRYPTION_SETTING =
+  "client_side_media_encryption_enabled";
+
 export type CoverScrimStyle =
   | "none"
   | "soft-gradient"
@@ -222,6 +228,33 @@ function asObject(v: unknown): Record<string, unknown> | undefined {
   return v && typeof v === "object" && !Array.isArray(v)
     ? (v as Record<string, unknown>)
     : undefined;
+}
+
+export function normalizeSlideshowIntervalMs(value: unknown): number {
+  const rawValue = typeof value === "string" ? Number(value) : asNumber(value);
+  if (rawValue === undefined || !Number.isFinite(rawValue)) {
+    return SLIDESHOW_INTERVAL_DEFAULT_MS;
+  }
+  const interval = Math.round(rawValue);
+  return Math.min(
+    SLIDESHOW_INTERVAL_MAX_MS,
+    Math.max(SLIDESHOW_INTERVAL_MIN_MS, interval),
+  );
+}
+
+export function readGallerySlideshowIntervalMs(settings: unknown): number {
+  const rawSettings = asObject(settings);
+  return normalizeSlideshowIntervalMs(rawSettings?.slideshow_interval_ms);
+}
+
+export function readGalleryClientSideMediaEncryptionEnabled(
+  settings: unknown,
+): boolean {
+  const rawSettings = asObject(settings);
+  return (
+    rawSettings?.[CLIENT_SIDE_MEDIA_ENCRYPTION_SETTING] === true ||
+    rawSettings?.client_side_encryption_enabled === true
+  );
 }
 
 function asOneOf<T extends readonly string[]>(

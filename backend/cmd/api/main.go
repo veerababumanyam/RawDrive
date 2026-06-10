@@ -2354,11 +2354,21 @@ func main() {
 			log.Printf("M40: upload credit meter disabled (NoopGate — set UPLOAD_CREDIT_METER_ENABLED=true to enable)")
 		}
 
+		clientSideMediaEncryptionRequired := strings.EqualFold(
+			os.Getenv("CLIENT_SIDE_MEDIA_ENCRYPTION_REQUIRED"),
+			"true",
+		)
+		if clientSideMediaEncryptionRequired {
+			log.Printf("client-side media encryption REQUIRED for chunked uploads")
+		} else {
+			log.Printf("client-side media encryption optional for chunked uploads (set CLIENT_SIDE_MEDIA_ENCRYPTION_REQUIRED=true to require)")
+		}
+
 		chunkedHandler := handler.NewChunkedUploadHandler(uploadSvc, assetRepo, storageProvider, uploadSessionsRepo).
 			WithValidation(uploadValidationSvc).
 			WithStorageAccounting(storageAccountingSvc).
 			WithEncryptionMetadata(storageEncrypted, storageEncryptionAlgo, storageEncryptionVersion).
-			WithClientSideEncryptionRequired(true).
+			WithClientSideEncryptionRequired(clientSideMediaEncryptionRequired).
 			WithUploadCredit(uploadCreditGate).
 			// Terms-of-Service / copyright acceptance gate (migration 144). No
 			// upload — image or slideshow audio — proceeds until the photographer

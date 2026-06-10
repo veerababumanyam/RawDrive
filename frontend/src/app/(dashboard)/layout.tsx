@@ -28,6 +28,7 @@ import {
   PwaInstallBanner,
   PwaInstallHeaderButton,
 } from "@/components/pwa/install-banner";
+import { DashboardUploadProvider } from "@/components/upload/dashboard-upload-provider";
 import { ImpersonationBanner } from "@/components/admin/impersonation-banner";
 import { UploadCreditPill } from "@/components/streams/UploadCreditPill";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
@@ -504,7 +505,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const homeHref = getHomeHref(role);
 
   return (
-    <div className="min-h-[100dvh] overflow-x-clip bg-surface text-text-primary">
+    <DashboardUploadProvider>
+      <div className="min-h-[100dvh] overflow-x-clip bg-surface text-text-primary">
       {/* S5-G1: persistent read-only banner for admin impersonation sessions.
           Self-hides for normal sessions; when active it sets
           data-impersonation on <html> so mutating controls dim + disable. */}
@@ -617,6 +619,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           self-hides unless Chromium has emitted beforeinstallprompt,
           and respects a 30-day dismiss cooldown via localStorage. */}
       <PwaInstallBanner />
-    </div>
+      </div>
+    </DashboardUploadProvider>
   );
 }
