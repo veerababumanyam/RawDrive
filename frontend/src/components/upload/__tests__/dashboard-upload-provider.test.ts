@@ -1,8 +1,13 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { createElement } from "react";
+import { act, createElement } from "react";
 import type { ReactNode } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -84,6 +89,7 @@ afterEach(() => {
   uploadState.pathname = "/dashboard";
   uploadState.useUpload.mockReset();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe("DashboardUploadProvider", () => {
@@ -118,6 +124,11 @@ describe("DashboardUploadProvider", () => {
     expect(source).toContain("openFolderPicker");
     expect(source).toContain("shouldRetainPickerFiles");
     expect(source).toContain("const uploadPanelOpen = activeCount > 0;");
+    expect(source).toContain("folderPickerLocked");
+    expect(source).toContain("Selecting folder");
+    expect(source).toContain("FOLDER_PICKER_HANDOFF_LOCK_MS");
+    expect(source).toContain("hasActiveUploads || shouldRetainPickerFiles");
+    expect(source).toContain('addEventListener("cancel"');
     expect(source).not.toContain("uploadStatusBarHidden");
     expect(source).not.toContain("setUploadStatusBarHidden");
   });
@@ -352,6 +363,219 @@ describe("DashboardUploadProvider", () => {
     fireEvent.change(folderInput, { target: { files: [file] } });
 
     expect(onFilesSelected).toHaveBeenCalledWith([file]);
+  });
+
+  it("locks the routed-away status bar while the folder picker is open", () => {
+    const click = vi
+      .spyOn(HTMLInputElement.prototype, "click")
+      .mockImplementation(() => undefined);
+    const onFilesSelected = vi.fn();
+    uploadState.useUpload.mockReturnValue(mockUpload());
+
+    function PickerHarness() {
+      const context = useDashboardUploadContext();
+      return createElement(
+        "button",
+        {
+          type: "button",
+          onClick: () =>
+            context?.openFolderPicker({
+              accept: "image/jpeg",
+              onFilesSelected,
+            }),
+        },
+        "Open folder",
+      );
+    }
+
+    render(
+      createElement(
+        DashboardUploadProvider,
+        null,
+        createElement(PickerHarness),
+      ),
+    );
+
+    expect(
+      screen.queryByTestId("dashboard-upload-status"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open folder" }));
+
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("dashboard-upload-status")).toBeInTheDocument();
+    expect(screen.getByText("Selecting folder")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Cancel uploads" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("releases the folder-picker status lock when folder selection is cancelled", () => {
+    vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(
+      () => undefined,
+    );
+    uploadState.useUpload.mockReturnValue(mockUpload());
+
+    function PickerHarness() {
+      const context = useDashboardUploadContext();
+      return createElement(
+        "button",
+        {
+          type: "button",
+          onClick: () =>
+            context?.openFolderPicker({
+              accept: "image/jpeg",
+              onFilesSelected: vi.fn(),
+            }),
+        },
+        "Open folder",
+      );
+    }
+
+    render(
+      createElement(
+        DashboardUploadProvider,
+        null,
+        createElement(PickerHarness),
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open folder" }));
+    expect(screen.getByTestId("dashboard-upload-status")).toBeInTheDocument();
+
+    const folderInput = screen.getByTestId("dashboard-upload-folder-input");
+    fireEvent(folderInput, new Event("cancel"));
+
+    expect(
+      screen.queryByTestId("dashboard-upload-status"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the folder-picker status lock through selected-file handoff", () => {
+    vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(
+      () => undefined,
+    );
+    const onFilesSelected = vi.fn();
+    let upload = mockUpload();
+    uploadState.useUpload.mockImplementation(() => upload);
+
+    function PickerHarness() {
+      const context = useDashboardUploadContext();
+      return createElement(
+        "button",
+        {
+          type: "button",
+          onClick: () =>
+            context?.openFolderPicker({
+              accept: "image/jpeg",
+              onFilesSelected,
+            }),
+        },
+        "Open folder",
+      );
+    }
+
+    const view = render(
+      createElement(
+        DashboardUploadProvider,
+        null,
+        createElement(PickerHarness),
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open folder" }));
+    const folderInput = screen.getByTestId(
+      "dashboard-upload-folder-input",
+    ) as HTMLInputElement;
+    const file = new File(["photo-bytes"], "photo.jpg", {
+      type: "image/jpeg",
+    });
+
+    fireEvent.change(folderInput, { target: { files: [file] } });
+
+    expect(onFilesSelected).toHaveBeenCalledWith([file]);
+    expect(screen.getByTestId("dashboard-upload-status")).toBeInTheDocument();
+    expect(screen.getByText("Selecting folder")).toBeInTheDocument();
+
+    upload = mockUpload({
+      items: [
+        {
+          id: "upload-1",
+          file: new File(["0123456789"], "single.jpg", {
+            type: "image/jpeg",
+          }),
+          progress: 60,
+          status: "uploading",
+          uploadDestination: { galleryId: "gallery-1" },
+        },
+      ],
+    });
+
+    view.rerender(
+      createElement(
+        DashboardUploadProvider,
+        null,
+        createElement(PickerHarness),
+      ),
+    );
+
+    expect(screen.getByTestId("dashboard-upload-status")).toBeInTheDocument();
+    expect(screen.getByText("Uploading 1 file")).toBeInTheDocument();
+    expect(screen.getByText("6 B / 10 B · 60%")).toBeInTheDocument();
+    expect(screen.queryByText("Selecting folder")).not.toBeInTheDocument();
+  });
+
+  it("releases the folder-picker status lock after an empty selection grace period", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(
+      () => undefined,
+    );
+    const onFilesSelected = vi.fn();
+    uploadState.useUpload.mockReturnValue(mockUpload());
+
+    function PickerHarness() {
+      const context = useDashboardUploadContext();
+      return createElement(
+        "button",
+        {
+          type: "button",
+          onClick: () =>
+            context?.openFolderPicker({
+              accept: "image/jpeg",
+              onFilesSelected,
+            }),
+        },
+        "Open folder",
+      );
+    }
+
+    render(
+      createElement(
+        DashboardUploadProvider,
+        null,
+        createElement(PickerHarness),
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open folder" }));
+    const folderInput = screen.getByTestId("dashboard-upload-folder-input");
+    fireEvent.change(folderInput, { target: { files: [] } });
+
+    expect(screen.getByTestId("dashboard-upload-status")).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2999);
+    });
+
+    expect(screen.getByTestId("dashboard-upload-status")).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+
+    expect(
+      screen.queryByTestId("dashboard-upload-status"),
+    ).not.toBeInTheDocument();
   });
 
   it("hides the routed-away status bar when every upload is complete", () => {

@@ -48,6 +48,7 @@ type DashboardUploadPickerOptions = {
 
 const DashboardUploadContext =
   createContext<DashboardUploadContextValue | null>(null);
+const FOLDER_PICKER_HANDOFF_LOCK_MS = 3000;
 
 export function useDashboardUploadContext() {
   return useContext(DashboardUploadContext);
@@ -136,8 +137,10 @@ function useUploadSummary(items: UploadItem[]) {
 }
 
 function DashboardUploadStatusBar({
+  folderPickerLocked,
   upload,
 }: {
+  folderPickerLocked: boolean;
   upload: ReturnType<typeof useUpload>;
 }) {
   const pathname = usePathname();
@@ -145,8 +148,12 @@ function DashboardUploadStatusBar({
   const isExactGalleryDetail =
     /^\/galleries\/[^/]+$/.test(pathname) ||
     /^\/galleries\/[^/]+\/$/.test(pathname);
+  const uploadPanelOpen = summary.uploadPanelOpen || folderPickerLocked;
+  const headline = summary.uploadPanelOpen
+    ? summary.headline
+    : "Selecting folder";
 
-  if (!summary.uploadPanelOpen || isExactGalleryDetail) return null;
+  if (!uploadPanelOpen || isExactGalleryDetail) return null;
 
   return (
     <div
@@ -163,7 +170,7 @@ function DashboardUploadStatusBar({
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <p className="truncate text-sm font-semibold text-text-primary">
-                {summary.headline}
+                {headline}
               </p>
               {summary.bytesTotal > 0 && (
                 <span className="text-xs font-medium text-text-secondary">
@@ -235,12 +242,14 @@ export function DashboardUploadProvider({ children }: { children: ReactNode }) {
   const apiUrl = useMemo(() => getApiBaseUrl(), []);
   const token = useMemo(() => getStoredAccessToken(), []);
   const [config, setConfig] = useState<DashboardUploadConfig | null>(null);
+  const [folderPickerLocked, setFolderPickerLocked] = useState(false);
   const upload = useUpload(apiUrl, token, config?.options);
   const pendingClearOwnerRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const pickerCallbackRef =
     useRef<DashboardUploadPickerOptions["onFilesSelected"] | null>(null);
+  const folderPickerReleaseTimerRef = useRef<number | null>(null);
   const hasActiveUploadsRef = useRef(false);
   const shouldRetainPickerFilesRef = useRef(false);
   const hasActiveUploads = useMemo(
@@ -292,26 +301,51 @@ export function DashboardUploadProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const clearFolderPickerLock = useCallback(() => {
+    if (folderPickerReleaseTimerRef.current !== null) {
+      window.clearTimeout(folderPickerReleaseTimerRef.current);
+      folderPickerReleaseTimerRef.current = null;
+    }
+    setFolderPickerLocked(false);
+  }, []);
+
+  const scheduleFolderPickerLockRelease = useCallback(() => {
+    if (folderPickerReleaseTimerRef.current !== null) {
+      window.clearTimeout(folderPickerReleaseTimerRef.current);
+    }
+    folderPickerReleaseTimerRef.current = window.setTimeout(() => {
+      folderPickerReleaseTimerRef.current = null;
+      setFolderPickerLocked(false);
+    }, FOLDER_PICKER_HANDOFF_LOCK_MS);
+  }, []);
+
   const handlePickerChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(event.currentTarget.files ?? []);
       pickerCallbackRef.current?.(files);
+      if (event.currentTarget === folderInputRef.current) {
+        scheduleFolderPickerLockRelease();
+      }
       // Keep the FileList mounted in this provider while active/retryable
       // uploads may still need browser-backed read permission.
     },
-    [],
+    [scheduleFolderPickerLockRelease],
   );
 
   const openProviderPicker = useCallback(
     (
       input: HTMLInputElement | null,
       { accept, onFilesSelected }: DashboardUploadPickerOptions,
+      options?: { lockFolderSelection?: boolean },
     ) => {
       if (!input) return;
       pickerCallbackRef.current = onFilesSelected;
       input.accept = accept ?? "";
       if (!shouldRetainPickerFiles) {
         input.value = "";
+      }
+      if (options?.lockFolderSelection) {
+        setFolderPickerLocked(true);
       }
       input.click();
     },
@@ -327,9 +361,28 @@ export function DashboardUploadProvider({ children }: { children: ReactNode }) {
 
   const openFolderPicker = useCallback(
     (options: DashboardUploadPickerOptions) => {
-      openProviderPicker(folderInputRef.current, options);
+      openProviderPicker(folderInputRef.current, options, {
+        lockFolderSelection: true,
+      });
     },
     [openProviderPicker],
+  );
+
+  useEffect(() => {
+    const input = folderInputRef.current;
+    if (!input) return;
+    input.addEventListener("cancel", clearFolderPickerLock);
+    return () => input.removeEventListener("cancel", clearFolderPickerLock);
+  }, [clearFolderPickerLock]);
+
+  useEffect(
+    () => () => {
+      if (folderPickerReleaseTimerRef.current !== null) {
+        window.clearTimeout(folderPickerReleaseTimerRef.current);
+        folderPickerReleaseTimerRef.current = null;
+      }
+    },
+    [],
   );
 
   useEffect(() => {
@@ -386,7 +439,10 @@ export function DashboardUploadProvider({ children }: { children: ReactNode }) {
         onChange={handlePickerChange}
       />
       {children}
-      <DashboardUploadStatusBar upload={upload} />
+      <DashboardUploadStatusBar
+        folderPickerLocked={folderPickerLocked}
+        upload={upload}
+      />
     </DashboardUploadContext.Provider>
   );
 }
