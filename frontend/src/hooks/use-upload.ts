@@ -82,6 +82,14 @@ export function uploadCreateSessionErrorMessage(
   return `Create session failed: ${status}`;
 }
 
+export function cancelUploadsConfirmationMessage(activeCount?: number): string {
+  const countText =
+    typeof activeCount === "number" && activeCount > 0
+      ? `${activeCount} active/queued upload${activeCount === 1 ? "" : "s"}`
+      : "active and queued uploads";
+  return `Cancel ${countText}? Completed photos stay saved, but unfinished files will stop and must be selected again.`;
+}
+
 async function runScreener(
   file: File,
   apiUrl: string,
@@ -579,14 +587,18 @@ export function useUpload(
           if (dest.albumId) createBody.album_id = dest.albumId;
         }
 
-        const createRes = await authFetch("/api/v1/uploads", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(createBody),
-          signal: controller.signal,
-        });
+        const createRes = await retryUploadRequest(
+          () =>
+            authFetch("/api/v1/uploads", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(createBody),
+              signal: controller.signal,
+            }),
+          controller.signal,
+        );
 
         if (!createRes.ok) {
           let errorBody: { error?: string; message?: string } = {};

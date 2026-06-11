@@ -92,7 +92,10 @@ import {
 } from "@/components/icons";
 import { useDashboardUploadContext } from "@/components/upload/dashboard-upload-provider";
 import type { UploadItem } from "@/components/upload/upload-progress";
-import { useUpload } from "@/hooks/use-upload";
+import {
+  cancelUploadsConfirmationMessage,
+  useUpload,
+} from "@/hooks/use-upload";
 import { useInfiniteFetch } from "@/hooks/use-infinite-render";
 import { TermsAcceptanceModal } from "@/components/legal/terms-acceptance-modal";
 import { getTermsStatus } from "@/lib/api/legal";
@@ -4484,6 +4487,13 @@ export default function GalleryDetailPage({
                 <button
                   type="button"
                   onClick={() => {
+                    if (
+                      !window.confirm(
+                        cancelUploadsConfirmationMessage(activeUploadCount),
+                      )
+                    ) {
+                      return;
+                    }
                     activeUploadItems.forEach((item) => upload.cancel(item.id));
                   }}
                   className="btn-tertiary px-3 py-1.5 text-xs"
@@ -4778,6 +4788,15 @@ export default function GalleryDetailPage({
                         <button
                           type="button"
                           onClick={() => {
+                            if (
+                              !window.confirm(
+                                cancelUploadsConfirmationMessage(
+                                  activeUploadCount,
+                                ),
+                              )
+                            ) {
+                              return;
+                            }
                             activeUploadItems.forEach((item) =>
                               upload.cancel(item.id),
                             );

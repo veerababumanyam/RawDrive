@@ -63,6 +63,8 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/hooks/use-upload", () => ({
+  cancelUploadsConfirmationMessage: (activeCount?: number) =>
+    `Cancel ${activeCount ?? "all"} active/queued upload${activeCount === 1 ? "" : "s"}?`,
   isActiveUploadStatus: (status: string) =>
     [
       "uploading",
@@ -113,6 +115,8 @@ describe("DashboardUploadProvider", () => {
     expect(statusBarSource).toContain("Retry failed");
     expect(statusBarSource).toContain("upload.retryAll");
     expect(statusBarSource).toContain("Cancel uploads");
+    expect(statusBarSource).toContain("window.confirm");
+    expect(statusBarSource).toContain("cancelUploadsConfirmationMessage");
     expect(statusBarSource).toContain("upload.cancelAll");
     expect(statusBarSource).not.toContain("Hide upload status");
     expect(statusBarSource).not.toContain("onHideStatus");
@@ -223,6 +227,42 @@ describe("DashboardUploadProvider", () => {
     expect(upload.cancelAll).not.toHaveBeenCalled();
     expect(upload.clearFinished).not.toHaveBeenCalled();
     expect(upload.items).toHaveLength(1);
+  });
+
+  it("does not cancel routed-away uploads unless the user confirms", () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const upload = mockUpload({
+      items: [
+        {
+          id: "upload-1",
+          file: new File(["photo-bytes"], "photo.jpg", {
+            type: "image/jpeg",
+          }),
+          progress: 24,
+          status: "uploading",
+          uploadDestination: { galleryId: "gallery-1" },
+        },
+      ],
+    });
+    uploadState.useUpload.mockReturnValue(upload);
+
+    render(
+      createElement(
+        DashboardUploadProvider,
+        null,
+        createElement("main", null, "Dashboard"),
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel uploads" }));
+    expect(confirm).toHaveBeenCalledWith(
+      expect.stringContaining("Cancel 1 active/queued upload?"),
+    );
+    expect(upload.cancelAll).not.toHaveBeenCalled();
+
+    confirm.mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel uploads" }));
+    expect(upload.cancelAll).toHaveBeenCalledTimes(1);
   });
 
   it("keeps a mixed folder batch visible and reports aggregate progress", () => {

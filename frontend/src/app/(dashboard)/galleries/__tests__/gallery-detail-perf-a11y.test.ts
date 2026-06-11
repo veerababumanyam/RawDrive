@@ -384,6 +384,8 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).not.toContain("upload.cancelAll");
     expect(source).toContain("activeUploadItems");
     expect(source).toContain("Cancel active (");
+    expect(source).toContain("cancelUploadsConfirmationMessage");
+    expect(source).toContain("window.confirm");
     expect(source).toContain("upload.cancel(item.id)");
     expect(source).toContain("aria-label={`Cancel ${item.file.name}`}");
     expect(source).not.toContain("Pause all");
@@ -413,6 +415,7 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(backgroundBar).not.toContain("upload.resumeAll");
     expect(backgroundBar).not.toContain("upload.cancelAll");
     expect(backgroundBar).toContain("activeUploadItems.forEach");
+    expect(backgroundBar).toContain("window.confirm");
     expect(backgroundBar).toContain("upload.cancel(item.id)");
     expect(backgroundBar).toContain("Cancel uploads");
     expect(backgroundBar).toContain("upload.clearFinished");

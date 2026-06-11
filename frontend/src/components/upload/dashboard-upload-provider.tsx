@@ -15,6 +15,7 @@ import {
 } from "react";
 import type { UploadItem } from "@/components/upload/upload-progress";
 import {
+  cancelUploadsConfirmationMessage,
   isActiveUploadStatus,
   useUpload,
   type UploadDestination,
@@ -217,7 +218,15 @@ function DashboardUploadStatusBar({
           {summary.activeCount > 0 && (
             <button
               type="button"
-              onClick={upload.cancelAll}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    cancelUploadsConfirmationMessage(summary.activeCount),
+                  )
+                ) {
+                  upload.cancelAll();
+                }
+              }}
               className="btn-tertiary px-3 py-1.5 text-xs"
             >
               Cancel uploads

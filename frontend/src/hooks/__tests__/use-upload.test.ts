@@ -64,6 +64,37 @@ describe("useUpload", () => {
     expect(isRetryableUploadStatus(413)).toBe(false);
   });
 
+  it("retries transient create-session failures before failing a file", async () => {
+    const source = await readFile(
+      join(process.cwd(), "src/hooks/use-upload.ts"),
+      "utf8",
+    );
+    const createSessionStart = source.indexOf(
+      'authFetch("/api/v1/uploads"',
+    );
+    const createSessionBlock = source.slice(
+      Math.max(0, createSessionStart - 180),
+      createSessionStart + 420,
+    );
+
+    expect(createSessionStart).toBeGreaterThan(-1);
+    expect(createSessionBlock).toContain(
+      "const createRes = await retryUploadRequest",
+    );
+    expect(createSessionBlock).toContain("controller.signal");
+  });
+
+  it("requires confirmation before bulk-cancelling uploads", async () => {
+    const { cancelUploadsConfirmationMessage } = await import("../use-upload");
+
+    expect(cancelUploadsConfirmationMessage(4)).toContain(
+      "Cancel 4 active/queued uploads?",
+    );
+    expect(cancelUploadsConfirmationMessage()).toContain(
+      "active and queued uploads",
+    );
+  });
+
   it("uses bounded exponential backoff and honors Retry-After", async () => {
     const { uploadRetryDelayMs } = await import("../use-upload");
     expect(uploadRetryDelayMs(1)).toBe(1000);
