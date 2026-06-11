@@ -182,21 +182,26 @@ describe("gallery detail page — perf & a11y contracts", () => {
     );
   });
 
-  it("keeps per-tile quick actions visible, named, and directly accessible", () => {
+  it("keeps per-tile quick actions grouped in one named overflow menu", () => {
     const source = readDetailPage();
 
     expect(source).not.toContain(
       '"absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity"',
     );
-    expect(source).not.toContain("openMenuAssetId");
-    expect(source).not.toContain("EllipsisVertical");
-    expect(source).toContain("`Share ${entry.asset.filename}`");
-    expect(source).toContain("`Delete ${entry.asset.filename}`");
+    expect(source).toContain("openAssetActionMenuId");
+    expect(source).toContain("EllipsisVertical");
+    expect(source).toContain("`Open actions for ${entry.asset.filename}`");
+    expect(source).toContain('role="menu"');
+    expect(source).toContain('role="menuitem"');
+    expect(source).toContain("Set desktop cover");
+    expect(source).toContain("Set phone cover");
+    expect(source).toContain("Share photo");
+    expect(source).toContain("Delete photo");
     expect(source).toContain("void handleShareAsset(e, entry.asset!.id)");
     expect(source).toContain("setDeleteConfirm({");
     expect(source).toContain("assetId: entry.asset!.id");
     expect(source).toContain(
-      'className="absolute bottom-2 right-2 z-10 flex items-center gap-1.5"',
+      'className="absolute bottom-2 right-2 z-30"',
     );
     expect(source).toContain("if (e.currentTarget !== e.target) return;");
   });
@@ -215,12 +220,12 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain(
       'resolveCoverDeviceProfile(galleryDesignConfig, "phone")',
     );
-    expect(source).toContain("<MonitorPlay />");
-    expect(source).toContain("<Smartphone />");
-    expect(source).toContain("as desktop cover");
-    expect(source).toContain("as phone cover");
-    expect(source).toContain("is the desktop cover");
-    expect(source).toContain("is the phone cover");
+    expect(source).toContain("<MonitorPlay");
+    expect(source).toContain("<Smartphone");
+    expect(source).toContain("Set desktop cover");
+    expect(source).toContain("Set phone cover");
+    expect(source).toContain("Desktop cover set");
+    expect(source).toContain("Phone cover set");
   });
 
   it("fits gallery tile photos inside the preview frame without cropping them", () => {

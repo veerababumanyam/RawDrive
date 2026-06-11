@@ -89,6 +89,7 @@ import {
   UploadCloud,
   MonitorPlay,
   Smartphone,
+  EllipsisVertical,
 } from "@/components/icons";
 import { useDashboardUploadContext } from "@/components/upload/dashboard-upload-provider";
 import type { UploadItem } from "@/components/upload/upload-progress";
@@ -810,6 +811,9 @@ export default function GalleryDetailPage({
   const shareUrlInFlightRef = useRef<Map<string, Promise<string>>>(new Map());
   const shareUrlCacheGenerationRef = useRef(0);
   const [copiedAssetId, setCopiedAssetId] = useState<string | null>(null);
+  const [openAssetActionMenuId, setOpenAssetActionMenuId] = useState<
+    string | null
+  >(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{
     assetId: string;
     filename: string;
@@ -4104,6 +4108,9 @@ export default function GalleryDetailPage({
                   const isPhoneCover =
                     Boolean(entry.asset) &&
                     entry.asset!.id === phoneCoverAssetId;
+                  const assetActionMenuOpen =
+                    Boolean(entry.asset) &&
+                    openAssetActionMenuId === entry.asset!.id;
 
                   return (
                     <article
@@ -4260,107 +4267,141 @@ export default function GalleryDetailPage({
                         />
                         {!bulkMode && entry.asset && !isProcessing && (
                           <div
-                            className="absolute bottom-2 left-2 z-10 flex items-center gap-1.5"
+                            className="absolute bottom-2 right-2 z-30"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <GlassIconButton
                               size="md"
-                              variant={isDesktopCover ? "success" : "glass"}
-                              active={isDesktopCover}
-                              label={
-                                isDesktopCover
-                                  ? `${entry.asset.filename} is the desktop cover`
-                                  : `Set ${entry.asset.filename} as desktop cover`
-                              }
+                              variant="glass"
+                              active={assetActionMenuOpen}
+                              label={`Open actions for ${entry.asset.filename}`}
+                              aria-haspopup="menu"
+                              aria-expanded={assetActionMenuOpen}
                               className={cn(
-                                "!text-text-media shadow-elevation-1 ring-2 ring-surface-raised/60 hover:!text-text-media",
-                                isDesktopCover
-                                  ? "!bg-feedback-success hover:!bg-feedback-success/90"
-                                  : "!bg-surface-scrim-strong/70 hover:!bg-surface-scrim-strong/80",
-                              )}
-                              onClick={(e) =>
-                                void handleSetCoverAsset(
-                                  e,
-                                  entry.asset!,
-                                  "desktop",
-                                )
-                              }
-                            >
-                              <MonitorPlay />
-                            </GlassIconButton>
-                            <GlassIconButton
-                              size="md"
-                              variant={isPhoneCover ? "success" : "glass"}
-                              active={isPhoneCover}
-                              label={
-                                isPhoneCover
-                                  ? `${entry.asset.filename} is the phone cover`
-                                  : `Set ${entry.asset.filename} as phone cover`
-                              }
-                              className={cn(
-                                "!text-text-media shadow-elevation-1 ring-2 ring-surface-raised/60 hover:!text-text-media",
-                                isPhoneCover
-                                  ? "!bg-feedback-success hover:!bg-feedback-success/90"
-                                  : "!bg-surface-scrim-strong/70 hover:!bg-surface-scrim-strong/80",
-                              )}
-                              onClick={(e) =>
-                                void handleSetCoverAsset(
-                                  e,
-                                  entry.asset!,
-                                  "phone",
-                                )
-                              }
-                            >
-                              <Smartphone />
-                            </GlassIconButton>
-                          </div>
-                        )}
-                        {!bulkMode && entry.asset && !isProcessing && (
-                          <div
-                            className="absolute bottom-2 right-2 z-10 flex items-center gap-1.5"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <GlassIconButton
-                              size="md"
-                              variant={
-                                copiedAssetId === entry.asset.id
-                                  ? "success"
-                                  : "accent"
-                              }
-                              label={
-                                copiedAssetId === entry.asset.id
-                                  ? `${entry.asset.filename} link copied`
-                                  : `Share ${entry.asset.filename}`
-                              }
-                              className={cn(
-                                "!text-text-media shadow-elevation-1 ring-2 ring-surface-raised/60 hover:!text-text-media",
-                                copiedAssetId === entry.asset.id
-                                  ? "!bg-feedback-success hover:!bg-feedback-success/90"
-                                  : "!bg-accent-primary hover:!bg-accent-primary/90",
+                                "!bg-surface-scrim-strong/75 !text-text-media shadow-elevation-1 ring-2 ring-surface-raised/60 hover:!bg-surface-scrim-strong/85 hover:!text-text-media",
+                                assetActionMenuOpen &&
+                                  "!bg-accent-primary hover:!bg-accent-primary/90",
                               )}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                void handleShareAsset(e, entry.asset!.id);
+                                setOpenAssetActionMenuId((current) =>
+                                  current === entry.asset!.id
+                                    ? null
+                                    : entry.asset!.id,
+                                );
                               }}
                             >
-                              <Share />
+                              <EllipsisVertical className="h-5 w-5" />
                             </GlassIconButton>
-                            <GlassIconButton
-                              size="md"
-                              variant="danger"
-                              label={`Delete ${entry.asset.filename}`}
-                              className="!bg-feedback-error !text-text-media shadow-elevation-1 ring-2 ring-surface-raised/60 hover:!bg-feedback-error/90 hover:!text-text-media"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeleteConfirm({
-                                  assetId: entry.asset!.id,
-                                  filename:
-                                    entry.asset!.filename || "this photo",
-                                });
-                              }}
-                            >
-                              <Trash />
-                            </GlassIconButton>
+                            {assetActionMenuOpen && (
+                              <>
+                                <div
+                                  className="fixed inset-0 z-20 cursor-default"
+                                  aria-hidden="true"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenAssetActionMenuId(null);
+                                  }}
+                                />
+                                <div
+                                  role="menu"
+                                  className="absolute bottom-14 right-0 z-30 grid w-56 max-w-[calc(100vw-2rem)] grid-cols-2 gap-1 overflow-hidden rounded-2xl border border-border-default bg-surface-elevated/95 p-1 text-xs font-semibold text-text-primary shadow-elevation-2 glass-blur-medium sm:w-60"
+                                >
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="flex min-h-12 w-full flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-center leading-tight transition-colors hover:bg-surface-container-low"
+                                    onClick={(e) => {
+                                      setOpenAssetActionMenuId(null);
+                                      void handleSetCoverAsset(
+                                        e,
+                                        entry.asset!,
+                                        "desktop",
+                                      );
+                                    }}
+                                  >
+                                    <MonitorPlay
+                                      className={cn(
+                                        "h-5 w-5 shrink-0",
+                                        isDesktopCover &&
+                                          "text-feedback-success",
+                                      )}
+                                    />
+                                    <span>
+                                      {isDesktopCover
+                                        ? "Desktop cover set"
+                                        : "Set desktop cover"}
+                                    </span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="flex min-h-12 w-full flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-center leading-tight transition-colors hover:bg-surface-container-low"
+                                    onClick={(e) => {
+                                      setOpenAssetActionMenuId(null);
+                                      void handleSetCoverAsset(
+                                        e,
+                                        entry.asset!,
+                                        "phone",
+                                      );
+                                    }}
+                                  >
+                                    <Smartphone
+                                      className={cn(
+                                        "h-5 w-5 shrink-0",
+                                        isPhoneCover &&
+                                          "text-feedback-success",
+                                      )}
+                                    />
+                                    <span>
+                                      {isPhoneCover
+                                        ? "Phone cover set"
+                                        : "Set phone cover"}
+                                    </span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="flex min-h-12 w-full flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-center leading-tight transition-colors hover:bg-surface-container-low"
+                                    onClick={(e) => {
+                                      setOpenAssetActionMenuId(null);
+                                      void handleShareAsset(e, entry.asset!.id);
+                                    }}
+                                  >
+                                    <Share
+                                      className={cn(
+                                        "h-5 w-5 shrink-0",
+                                        copiedAssetId === entry.asset!.id &&
+                                          "text-feedback-success",
+                                      )}
+                                    />
+                                    <span>
+                                      {copiedAssetId === entry.asset!.id
+                                        ? "Link copied"
+                                        : "Share photo"}
+                                    </span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="flex min-h-12 w-full flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-center leading-tight text-feedback-error transition-colors hover:bg-feedback-error/10"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenAssetActionMenuId(null);
+                                      setDeleteConfirm({
+                                        assetId: entry.asset!.id,
+                                        filename:
+                                          entry.asset!.filename ||
+                                          "this photo",
+                                      });
+                                    }}
+                                  >
+                                    <Trash className="h-5 w-5 shrink-0" />
+                                    <span>Delete photo</span>
+                                  </button>
+                                </div>
+                              </>
+                            )}
                           </div>
                         )}
                       </div>
