@@ -13,6 +13,21 @@ describe("visibleUploadWarnings", () => {
     ])).toEqual([]);
   });
 
+  it("hides benign camera-authored trailer findings from the upload row", () => {
+    expect(visibleUploadWarnings([
+      {
+        category: "appended_payload",
+        severity: "low",
+        message: "2897141 bytes of camera-authored trailer data after the primary JPEG image (allowed)",
+      },
+      {
+        category: "appended_payload",
+        severity: "low",
+        message: "479744 bytes of trailing data past JPEG EOI (no archive signature - allowed)",
+      },
+    ])).toEqual([]);
+  });
+
   it("keeps actionable low-severity warnings visible", () => {
     expect(visibleUploadWarnings([
       {

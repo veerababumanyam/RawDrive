@@ -1501,7 +1501,7 @@ func (h *ChunkedUploadHandler) verifyManifestAtFinalize(
 	if !strings.EqualFold(computedHashHex, manifest.SHA256) {
 		return service.ErrScanHashMismatch
 	}
-	if err := service.VerifyHeaderTrailerBytes(head, tail, manifest.DetectedFormat); err != nil {
+	if err := service.VerifyHeaderTrailerBytesWithManifest(head, tail, manifest); err != nil {
 		return err
 	}
 	return nil

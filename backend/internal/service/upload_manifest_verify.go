@@ -231,6 +231,61 @@ func VerifyHeaderTrailerBytes(head, tail []byte, detectedFormat string) error {
 	return nil
 }
 
+// VerifyHeaderTrailerBytesWithManifest runs the normal cheap spot-check, with
+// one manifest-aware exception for camera-authored JPEG trailers. Some cameras
+// append vendor trailer data well after the primary JPEG EOI marker. The
+// browser scanner already classifies those exact trailers as low-risk allowed
+// findings and hashes the full byte stream. At finalize we still require a
+// JPEG SOI and a matching manifest hash, but we do not reject solely because
+// the last 64 bytes are camera trailer bytes instead of the primary EOI.
+func VerifyHeaderTrailerBytesWithManifest(head, tail []byte, manifest *UploadScanManifest) error {
+	if manifest == nil {
+		return nil
+	}
+	format := NormalizeImageFormat(manifest.DetectedFormat)
+	if format != "jpeg" {
+		return VerifyHeaderTrailerBytes(head, tail, manifest.DetectedFormat)
+	}
+	if !hasJpegSignature(head) {
+		return ErrScanHashMismatch
+	}
+	if hasJpegEnd(tail) {
+		return nil
+	}
+	if hasAllowedJpegTrailerFinding(manifest) {
+		return nil
+	}
+	return ErrScanHashMismatch
+}
+
+func hasAllowedJpegTrailerFinding(manifest *UploadScanManifest) bool {
+	if manifest == nil || strings.ToLower(strings.TrimSpace(manifest.Decision)) != "pass" {
+		return false
+	}
+	for _, finding := range manifest.Findings {
+		if strings.EqualFold(strings.TrimSpace(finding.Severity), "high") {
+			return false
+		}
+	}
+	for _, finding := range manifest.Findings {
+		if isAllowedJpegTrailerFinding(finding) {
+			return true
+		}
+	}
+	return false
+}
+
+func isAllowedJpegTrailerFinding(finding UploadScanFinding) bool {
+	if !strings.EqualFold(strings.TrimSpace(finding.Category), "appended_payload") ||
+		!strings.EqualFold(strings.TrimSpace(finding.Severity), "low") {
+		return false
+	}
+	message := strings.ToLower(finding.Message)
+	return strings.Contains(message, "camera-authored jpeg preview/mpf data after the primary jpeg image") ||
+		strings.Contains(message, "camera-authored trailer data after the primary jpeg image") ||
+		(strings.Contains(message, "trailing data past jpeg eoi") && strings.Contains(message, "allowed"))
+}
+
 func isServerVerifiedContainerFormat(format string, head []byte) bool {
 	if !IsServerDecodableFormat(format) {
 		return false

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -151,6 +152,50 @@ func TestVerifyHeaderTrailer_Jpeg_MissingEOI(t *testing.T) {
 	err := VerifyHeaderTrailer(path, "jpeg")
 	if !errors.Is(err, ErrScanHashMismatch) {
 		t.Fatalf("missing EOI should fail spot-check, got %v", err)
+	}
+}
+
+func TestVerifyHeaderTrailerBytesWithManifest_JpegAllowsBenignCameraTrailer(t *testing.T) {
+	jpegWithTrailer := append([]byte{
+		0xFF, 0xD8,
+		0xFF, 0xE0, 0x00, 0x10, 'J', 'F', 'I', 'F', 0x00,
+		0xFF, 0xD9,
+	}, bytes.Repeat([]byte{0x42}, 128)...)
+	head := jpegWithTrailer[:64]
+	tail := jpegWithTrailer[len(jpegWithTrailer)-64:]
+	manifest := &UploadScanManifest{
+		DetectedFormat: "jpeg",
+		Decision:       "pass",
+		Findings: []UploadScanFinding{
+			{
+				Category: "appended_payload",
+				Severity: "low",
+				Message:  "2897141 bytes of camera-authored trailer data after the primary JPEG image (allowed)",
+			},
+		},
+	}
+
+	if err := VerifyHeaderTrailerBytesWithManifest(head, tail, manifest); err != nil {
+		t.Fatalf("benign camera-authored JPEG trailer should pass manifest-aware spot-check, got %v", err)
+	}
+}
+
+func TestVerifyHeaderTrailerBytesWithManifest_JpegTrailerWithoutAllowedFindingRejected(t *testing.T) {
+	jpegWithTrailer := append([]byte{
+		0xFF, 0xD8,
+		0xFF, 0xE0, 0x00, 0x10, 'J', 'F', 'I', 'F', 0x00,
+		0xFF, 0xD9,
+	}, bytes.Repeat([]byte{0x42}, 128)...)
+	head := jpegWithTrailer[:64]
+	tail := jpegWithTrailer[len(jpegWithTrailer)-64:]
+	manifest := &UploadScanManifest{
+		DetectedFormat: "jpeg",
+		Decision:       "pass",
+	}
+
+	err := VerifyHeaderTrailerBytesWithManifest(head, tail, manifest)
+	if !errors.Is(err, ErrScanHashMismatch) {
+		t.Fatalf("unexpected JPEG trailer without allowed finding should fail, got %v", err)
 	}
 }
 

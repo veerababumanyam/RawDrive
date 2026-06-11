@@ -3,6 +3,8 @@ package handler_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"testing"
 
@@ -113,6 +115,31 @@ func TestVerifyManifestAtFinalize_FormatSpotCheckDetectsCorruption(t *testing.T)
 	require.Error(t, err, "corrupt JPEG must fail the header/trailer spot-check")
 	assert.ErrorIs(t, err, service.ErrScanHashMismatch,
 		"spot-check failure currently surfaces as ErrScanHashMismatch by design")
+}
+
+func TestVerifyManifestAtFinalize_AllowsBenignJpegCameraTrailer(t *testing.T) {
+	h := newHandlerWithValidator(t)
+	fileBytes := append([]byte{
+		0xFF, 0xD8,
+		0xFF, 0xE0, 0x00, 0x10, 'J', 'F', 'I', 'F', 0x00,
+		0xFF, 0xD9,
+	}, bytes.Repeat([]byte{0x42}, 128)...)
+	sum := sha256.Sum256(fileBytes)
+	manifest := &service.UploadScanManifest{
+		SHA256:         hex.EncodeToString(sum[:]),
+		DetectedFormat: "jpeg",
+		Decision:       "pass",
+		Findings: []service.UploadScanFinding{
+			{
+				Category: "appended_payload",
+				Severity: "low",
+				Message:  "2897141 bytes of camera-authored trailer data after the primary JPEG image (allowed)",
+			},
+		},
+	}
+
+	err := handler.VerifyManifestAtFinalizeForTest(h, context.Background(), fileBytes, manifest)
+	assert.NoError(t, err, "allowed camera-authored JPEG trailer must not turn final chunk into 422")
 }
 
 // ─── FMT-1 / H5: HEIC/RAW accepted at finalize; polyglots still rejected ──────
