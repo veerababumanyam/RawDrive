@@ -63,8 +63,9 @@ describe("gallery cover page design-system contracts", () => {
     expect(source).toContain("readEmbeddedVideos(gallery?.settings)");
     expect(source).toContain('className="cover-videos-panel"');
     expect(source).toContain('className="cover-preview-primary-actions"');
-    expect(source).toContain('className="cover-preview-secondary-actions"');
-    expect(source).toContain(
+    expect(source).toContain('className={`${COVER_FIELD_CLASS} cover-folder-select`}');
+    expect(source).toContain('aria-label="Gallery folders"');
+    expect(source).not.toContain(
       'aria-label="Copy desktop cover settings to phone"',
     );
     expect(source).not.toContain('className="cover-save-dock"');
@@ -145,7 +146,6 @@ describe("gallery cover page design-system contracts", () => {
     expect(css).toContain(".cover-inspector-pane");
     expect(css).toContain("--cover-workbench-height");
     expect(css).toContain(".cover-preview-primary-actions");
-    expect(css).toContain(".cover-preview-secondary-actions");
     expect(css).not.toContain(".cover-save-dock");
     expect(css).toContain(".cover-videos-panel");
     expect(css).toContain(".embedded-videos-grid");
@@ -182,6 +182,8 @@ describe("gallery cover page design-system contracts", () => {
     expect(css).toContain(".cover-color-input");
     expect(css).toContain(".cover-option-grid");
     expect(css).toContain(".cover-grid-preview-surface");
+    expect(css).toContain(".cover-folder-grid-stage");
+    expect(css).toContain(".cover-grid-preview-surface--stage");
     expect(css).toContain(".cover-photo-tile__fallback");
     expect(css).toContain(".cover-preview-fallback");
     expect(css).toContain(".cover-preview-status");

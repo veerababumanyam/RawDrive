@@ -8,6 +8,7 @@ import {
   readPublicCoverProfileThumbnails,
   readPublicCoverThumbnails,
   readPublicDesignConfig,
+  readPublicDesignConfigForAlbum,
   resolveCoverDeviceProfile,
 } from "../gallery-design-config";
 
@@ -200,6 +201,71 @@ describe("readPublicDesignConfig", () => {
       watermarkText: "Asha Ravi Studio",
       watermarkOpacity: 45,
     });
+  });
+
+  it("prefers a selected album design config and falls back to the gallery config", () => {
+    const settings = {
+      design_config: {
+        cover: {
+          assetId: "gallery-cover",
+          title: "Gallery cover",
+          aspectRatio: "16/9",
+        },
+        grid: { layout: "grid", columns: 4, gap: 12, showInfo: true },
+      },
+      design_config_by_album: {
+        "album-1": {
+          cover: {
+            assetId: "album-cover",
+            title: "Folder cover",
+            aspectRatio: "4/5",
+          },
+        },
+        "album-2": {
+          grid: { layout: "justified", columns: 2, gap: 8, showInfo: false },
+        },
+        "album-3": {
+          grid: { layout: "grid", columns: 4, gap: 12, showInfo: true },
+        },
+        "album-4": {
+          gridScope: "folder",
+          grid: { layout: "grid", columns: 4, gap: 12, showInfo: true },
+        },
+      },
+    };
+
+    expect(
+      resolveCoverDeviceProfile(
+        readPublicDesignConfigForAlbum(settings, "album-1"),
+        "desktop",
+      ).cover.assetId,
+    ).toBe("album-cover");
+    expect(
+      resolveCoverDeviceProfile(
+        readPublicDesignConfigForAlbum(settings, "missing-album"),
+        "desktop",
+      ).cover.assetId,
+    ).toBe("gallery-cover");
+    expect(readPublicDesignConfigForAlbum(settings, null)?.grid).toBeUndefined();
+    expect(
+      readPublicDesignConfigForAlbum(settings, "missing-album")?.grid?.columns,
+    ).toBeUndefined();
+
+    const gridOnlyAlbumConfig = readPublicDesignConfigForAlbum(
+      settings,
+      "album-2",
+    );
+    expect(
+      resolveCoverDeviceProfile(gridOnlyAlbumConfig, "desktop").cover.assetId,
+    ).toBe("gallery-cover");
+    expect(gridOnlyAlbumConfig?.grid?.layout).toBe("justified");
+    expect(gridOnlyAlbumConfig?.grid?.columns).toBe(2);
+    expect(
+      readPublicDesignConfigForAlbum(settings, "album-3")?.grid?.columns,
+    ).toBeUndefined();
+    expect(
+      readPublicDesignConfigForAlbum(settings, "album-4")?.grid?.columns,
+    ).toBe(4);
   });
 
   it("rejects unknown layout values", () => {

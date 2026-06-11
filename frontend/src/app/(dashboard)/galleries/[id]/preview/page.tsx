@@ -15,7 +15,7 @@ import {
 } from "@/lib/api/galleries";
 import type { GalleryBanner, GalleryProduct } from "@/lib/api/commerce";
 import {
-  readPublicDesignConfig,
+  readPublicDesignConfigForAlbum,
   readPublicCoverThumbnails,
   readPublicCoverProfileThumbnails,
   resolveCoverDeviceProfile,
@@ -117,8 +117,11 @@ export default function GalleryPreviewPage({
   const gallery = payload?.gallery ?? null;
   const assets = useMemo(() => payload?.assets ?? [], [payload]);
   const designConfig = useMemo(
-    () => (gallery ? readPublicDesignConfig(gallery.settings) : null),
-    [gallery],
+    () =>
+      gallery
+        ? readPublicDesignConfigForAlbum(gallery.settings, albumId)
+        : null,
+    [albumId, gallery],
   );
   const designCoverThumbnails = useMemo(
     () => (gallery ? readPublicCoverThumbnails(gallery.settings) : null),

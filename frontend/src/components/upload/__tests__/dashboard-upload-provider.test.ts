@@ -95,7 +95,7 @@ afterEach(() => {
 });
 
 describe("DashboardUploadProvider", () => {
-  it("keeps the dashboard upload bar visible without registering a leave-site prompt", () => {
+  it("keeps the dashboard upload overlay visible without registering a leave-site prompt", () => {
     const source = readProviderSource();
     const statusBarStart = source.indexOf("function DashboardUploadStatusBar");
     const providerStart = source.indexOf(
@@ -107,10 +107,14 @@ describe("DashboardUploadProvider", () => {
     expect(providerStart).toBeGreaterThan(statusBarStart);
     expect(statusBarSource).toContain('data-testid="dashboard-upload-status"');
     expect(statusBarSource).toContain(
-      "Upload continues while you use RawDrive",
+      "RawDrive is locked until uploads finish",
     );
-    expect(statusBarSource).toContain("Messages");
-    expect(statusBarSource).toContain("Settings");
+    expect(statusBarSource).toContain(
+      'role={summary.activeCount > 0 ? "dialog" : "status"}',
+    );
+    expect(statusBarSource).toContain(
+      "aria-modal={summary.activeCount > 0 ? true : undefined}",
+    );
     expect(statusBarSource).toContain("Open gallery");
     expect(statusBarSource).toContain("Retry failed");
     expect(statusBarSource).toContain("upload.retryAll");
@@ -405,7 +409,7 @@ describe("DashboardUploadProvider", () => {
     expect(onFilesSelected).toHaveBeenCalledWith([file]);
   });
 
-  it("locks the routed-away status bar while the folder picker is open", () => {
+  it("locks the routed-away status overlay while the folder picker is open", () => {
     const click = vi
       .spyOn(HTMLInputElement.prototype, "click")
       .mockImplementation(() => undefined);
@@ -618,7 +622,7 @@ describe("DashboardUploadProvider", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("hides the routed-away status bar when every upload is complete", () => {
+  it("hides the routed-away status overlay when every upload is complete", () => {
     uploadState.useUpload.mockReturnValue(
       mockUpload({
         items: [
@@ -648,7 +652,7 @@ describe("DashboardUploadProvider", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("hides the routed-away status bar when every upload has failed", () => {
+  it("hides the routed-away status overlay when every upload has failed", () => {
     uploadState.useUpload.mockReturnValue(
       mockUpload({
         items: [
@@ -678,7 +682,7 @@ describe("DashboardUploadProvider", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("hides the routed-away status bar after cancellation clears the queue", () => {
+  it("hides the routed-away status overlay after cancellation clears the queue", () => {
     uploadState.useUpload.mockReturnValue(mockUpload({ items: [] }));
 
     render(

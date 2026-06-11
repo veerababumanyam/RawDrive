@@ -45,15 +45,20 @@ import {
   useEffect,
   useMemo,
   useDeferredValue,
+  type ChangeEvent,
 } from "react";
-import { useParams } from "next/navigation";
+import Link from "next/link";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { getStoredAccessToken } from "@/lib/auth";
 import { getApiBaseUrl } from "@/lib/api/base-url";
 import {
   getGallery,
+  listAlbumAssets,
+  listGalleryAlbums,
   listGalleryAssets,
   updateGalleryDesign,
   type Gallery,
+  type GalleryAlbum,
 } from "@/lib/api/galleries";
 import {
   getWorkspaceProfile,
@@ -135,6 +140,11 @@ const EDITOR_TABS: Array<{
   { id: "grid", label: "Grid", mobileLabel: "Grid" },
   { id: "photos", label: "Photos", mobileLabel: "Photos" },
 ];
+const ROOT_EDITOR_TABS = EDITOR_TABS.filter(
+  (tab) => !["media", "videos", "grid"].includes(tab.id),
+);
+const FOLDER_EDITOR_TABS = EDITOR_TABS.filter((tab) => tab.id === "grid");
+const FOLDER_GRID_AUTOSAVE_DELAY_MS = 600;
 
 type CoverPresetId =
   | "classic-wedding"
@@ -1400,14 +1410,6 @@ function updateSharedCoverProfiles(
   return next;
 }
 
-function copyDesktopToPhoneProfile(config: DesignConfig): DesignConfig {
-  return setProfileForDevice(
-    config,
-    "phone",
-    profileFromConfig(config, "desktop"),
-  );
-}
-
 function textPositionForDevice(
   config: DesignConfig,
   target: "title" | "subtitle",
@@ -1749,9 +1751,82 @@ function applyCoverTemplate(
 // Pull a partial design_config out of `gallery.settings` and merge into our
 // strict DesignConfig shape. Anything missing keeps its default so users
 // who never opened the page get sensible starting state.
+function recordFromUnknown(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function rootConfigForFolder(
+  raw: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+  if (!raw) return null;
+  const next = { ...raw };
+  delete next.grid;
+  return next;
+}
+
+function gridSettingsMatch(left: unknown, right: unknown): boolean {
+  const leftGrid = recordFromUnknown(left);
+  const rightGrid = recordFromUnknown(right);
+  if (!leftGrid || !rightGrid) return false;
+  return (
+    leftGrid.layout === rightGrid.layout &&
+    leftGrid.columns === rightGrid.columns &&
+    leftGrid.gap === rightGrid.gap &&
+    leftGrid.showInfo === rightGrid.showInfo
+  );
+}
+
+function albumConfigForFolder(
+  rootConfig: Record<string, unknown> | null,
+  albumConfig: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+  if (!albumConfig) return null;
+  const next = { ...albumConfig };
+  if (
+    next.gridScope !== "folder" &&
+    gridSettingsMatch(next.grid, rootConfig?.grid)
+  ) {
+    delete next.grid;
+  }
+  return next;
+}
+
 function configFromGallery(gallery: Gallery): DesignConfig {
   const settings = (gallery.settings ?? {}) as Record<string, unknown>;
-  const raw = settings["design_config"] as Record<string, unknown> | undefined;
+  return configFromDesignSettings(
+    settings,
+    rootConfigForFolder(recordFromUnknown(settings["design_config"])),
+    gallery,
+  );
+}
+
+function configFromGalleryForAlbum(
+  gallery: Gallery,
+  albumId?: string | null,
+): DesignConfig {
+  if (!albumId) return configFromGallery(gallery);
+  const settings = (gallery.settings ?? {}) as Record<string, unknown>;
+  const rawRootConfig = recordFromUnknown(settings["design_config"]);
+  const rootConfig = rootConfigForFolder(rawRootConfig);
+  const byAlbum = recordFromUnknown(settings["design_config_by_album"]);
+  const albumConfig = albumConfigForFolder(
+    rawRootConfig,
+    recordFromUnknown(byAlbum?.[albumId]),
+  );
+  return configFromDesignSettings(
+    settings,
+    albumConfig ? { ...(rootConfig ?? {}), ...albumConfig } : rootConfig,
+    gallery,
+  );
+}
+
+function configFromDesignSettings(
+  settings: Record<string, unknown>,
+  raw: Record<string, unknown> | null | undefined,
+  gallery: Gallery,
+): DesignConfig {
   const legacyCoverStyle = settings["cover_style"] as
     | { focal_point?: FocalPoint; aspect_ratio?: string }
     | undefined;
@@ -2073,6 +2148,37 @@ function prepareDesignConfigForSave(config: DesignConfig): DesignConfig {
   return payload;
 }
 
+function prepareDesignConfigForFolderSave(
+  config: DesignConfig,
+): Record<string, unknown> {
+  const payload = prepareDesignConfigForSave(config);
+  return {
+    grid: payload.grid,
+    gridScope: "folder",
+    version: payload.version,
+  };
+}
+
+function prepareDesignConfigForRootSave(
+  config: DesignConfig,
+): Record<string, unknown> {
+  const payload = prepareDesignConfigForSave(config) as unknown as Record<
+    string,
+    unknown
+  >;
+  delete payload.grid;
+  delete payload.gridScope;
+  return payload;
+}
+
+function prepareDesignConfigForEditorSave(
+  config: DesignConfig,
+  folderGridOnly: boolean,
+): Record<string, unknown> {
+  if (folderGridOnly) return prepareDesignConfigForFolderSave(config);
+  return prepareDesignConfigForRootSave(config);
+}
+
 function coverScrimStyle(
   style: ScrimStyle,
   variant: ThemeVariant,
@@ -2144,6 +2250,26 @@ function clampTextSizeInput(value: string | number, lo: number, hi: number) {
   return Number.isFinite(next) ? clamp(Math.round(next), lo, hi) : lo;
 }
 
+function aspectRatioNumber(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const [rawWidth, rawHeight] = value.split("/");
+  if (!rawHeight) {
+    const parsed = Number(rawWidth);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+  const width = Number(rawWidth);
+  const height = Number(rawHeight);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || height <= 0) {
+    return null;
+  }
+  return width / height;
+}
+
+function portraitPhoneAspectRatio(value: string | null | undefined): string {
+  const ratio = aspectRatioNumber(value);
+  return ratio && ratio < 1 ? (value as string) : "4/5";
+}
+
 const loadedFontHrefs = new Set<string>();
 function ensureFontsLoaded(href: string | null) {
   if (!href) return;
@@ -2157,7 +2283,7 @@ function ensureFontsLoaded(href: string | null) {
 
 async function hydrateGalleryAssets(
   token: string,
-  rows: Awaited<ReturnType<typeof listGalleryAssets>>,
+  rows: Array<{ asset_id: string; asset?: Asset | null }>,
 ): Promise<Asset[]> {
   if (rows.every((entry) => entry.asset !== undefined)) {
     return rows
@@ -2193,10 +2319,16 @@ type DragKind = "focal" | "title" | "subtitle" | null;
 export default function CoverDesignPage() {
   const params = useParams();
   const galleryId = params.id as string;
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const selectedAlbumId = searchParams.get("album") || "";
+  const folderGridOnly = selectedAlbumId !== "";
   const stageRef = useRef<HTMLDivElement>(null);
   const dragKindRef = useRef<DragKind>(null);
 
   const [gallery, setGallery] = useState<Gallery | null>(null);
+  const [selectedAlbum, setSelectedAlbum] = useState<GalleryAlbum | null>(null);
+  const [albums, setAlbums] = useState<GalleryAlbum[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [config, setConfig] = useState<DesignConfig>(DEFAULT_CONFIG);
   const [workspaceProfile, setWorkspaceProfile] =
@@ -2220,8 +2352,10 @@ export default function CoverDesignPage() {
   // worked" moment.
   const [justSaved, setJustSaved] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [termsModalOpen, setTermsModalOpen] = useState(false);
   const completedCoverUploadKeyRef = useRef("");
+  const autoSaveSeqRef = useRef(0);
 
   const token = useMemo(() => getStoredAccessToken(), []);
   const apiUrl = useMemo(() => getApiBaseUrl(), []);
@@ -2236,7 +2370,7 @@ export default function CoverDesignPage() {
   );
   const upload = useUpload(apiUrl, token, {
     encryption: uploadEncryption,
-    destination: { galleryId },
+    destination: { galleryId, albumId: selectedAlbumId || null },
     onTermsRequired: () => setTermsModalOpen(true),
   });
 
@@ -2249,6 +2383,20 @@ export default function CoverDesignPage() {
       );
     }, []);
 
+  const handleFolderChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      const nextAlbumId = event.target.value;
+      const nextHref =
+        nextAlbumId === "root"
+          ? `/galleries/${galleryId}/cover`
+          : `/galleries/${galleryId}/cover?album=${encodeURIComponent(
+              nextAlbumId,
+            )}`;
+      router.push(nextHref);
+    },
+    [galleryId, router],
+  );
+
   // Mount: fetch gallery + assets, hydrate config from gallery.settings.
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -2256,26 +2404,45 @@ export default function CoverDesignPage() {
     let cancelled = false;
     (async () => {
       try {
-        const [g, galleryAssets, profile] = await Promise.all([
+        const [g, profile, galleryAlbums] = await Promise.all([
           getGallery(token, galleryId),
+          getWorkspaceProfile(token).catch(() => null),
+          listGalleryAlbums(token, galleryId, { includeAssetIds: true }),
+        ]);
+        let activeAlbum: GalleryAlbum | null = null;
+        let mediaRows: Array<{ asset_id: string; asset?: Asset | null }>;
+
+        if (selectedAlbumId) {
+          activeAlbum =
+            galleryAlbums.find((album) => album.id === selectedAlbumId) ?? null;
+          if (!activeAlbum) {
+            throw new Error("Selected folder not found or no longer exists.");
+          }
+          mediaRows = await listAlbumAssets(token, selectedAlbumId, {
+            includeAssets: true,
+          });
+        } else {
           // PERF-23: ask the server to embed each asset in one bulk query so we
           // skip the per-asset getAsset() fan-out (the gallery detail page does
           // the same). The loop below remains the fallback for an older server
           // or a degraded include response.
-          listGalleryAssets(token, galleryId, { includeAssets: true }),
-          getWorkspaceProfile(token).catch(() => null),
-        ]);
+          mediaRows = await listGalleryAssets(token, galleryId, {
+            includeAssets: true,
+          });
+        }
         if (cancelled) return;
         setGallery(g);
+        setSelectedAlbum(activeAlbum);
+        setAlbums(galleryAlbums);
         setWorkspaceProfile(profile);
 
-        const realAssets = await hydrateGalleryAssets(token, galleryAssets);
+        const realAssets = await hydrateGalleryAssets(token, mediaRows);
         if (cancelled) return;
         setAssets(realAssets);
 
-        const initial = configFromGallery(g);
+        const initial = configFromGalleryForAlbum(g, selectedAlbumId || null);
         const persistedSnapshot = JSON.stringify(
-          prepareDesignConfigForSave(initial),
+          prepareDesignConfigForEditorSave(initial, folderGridOnly),
         );
         if (!initial.cover.assetId) {
           initial.cover.assetId = realAssets[0]?.id || null;
@@ -2287,16 +2454,27 @@ export default function CoverDesignPage() {
         // If no photographer-set cover exists yet, keep the first asset visible
         // as the working default while the saved snapshot stays at the persisted
         // state. Saving then makes that default durable through Design Studio.
-        setSavedSnapshot((prev) => (prev ? prev : persistedSnapshot));
+        setSavedSnapshot(persistedSnapshot);
         setLoaded(true);
       } catch (err) {
-        console.error("Failed to load Cover & Design data:", err);
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : "";
+        const isMissingGallery = message.includes("404");
+        setLoadError(
+          isMissingGallery
+            ? "Gallery not found or you no longer have access."
+            : message || "Failed to load Cover & Design.",
+        );
+        setLoaded(true);
+        if (!isMissingGallery) {
+          console.error("Failed to load Cover & Design data:", err);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [galleryId]);
+  }, [folderGridOnly, galleryId, selectedAlbumId]);
 
   const completedCoverUploadKey = useMemo(
     () =>
@@ -2326,9 +2504,13 @@ export default function CoverDesignPage() {
 
     (async () => {
       try {
-        const rows = await listGalleryAssets(token, galleryId, {
-          includeAssets: true,
-        });
+        const rows = selectedAlbumId
+          ? await listAlbumAssets(token, selectedAlbumId, {
+              includeAssets: true,
+            })
+          : await listGalleryAssets(token, galleryId, {
+              includeAssets: true,
+            });
         const nextAssets = await hydrateGalleryAssets(token, rows);
         if (cancelled) return;
         setAssets(nextAssets);
@@ -2366,6 +2548,7 @@ export default function CoverDesignPage() {
   }, [
     completedCoverUploadKey,
     galleryId,
+    selectedAlbumId,
     activeCoverSlot,
     previewDevice,
     token,
@@ -2408,7 +2591,17 @@ export default function CoverDesignPage() {
     config.typography.subtitleLanguage,
   ]);
 
-  const activeCoverProfile = profileFromConfig(config, previewDevice);
+  const rootCoverEditing = !folderGridOnly;
+  const editorPreviewDevice: PreviewDevice = rootCoverEditing
+    ? previewDevice
+    : "desktop";
+  const editorTabs = folderGridOnly ? FOLDER_EDITOR_TABS : ROOT_EDITOR_TABS;
+  const activeEditorTab: TabId =
+    editorTabs.find((editorTab) => editorTab.id === tab)?.id ??
+    editorTabs[0]?.id ??
+    "cover";
+
+  const activeCoverProfile = profileFromConfig(config, editorPreviewDevice);
   const activeTemplate = getCoverTemplate(
     activeCoverProfile.styleId || config.cover.styleId,
   );
@@ -2418,7 +2611,9 @@ export default function CoverDesignPage() {
   );
   const hasCoverPreview = coverTemplateSlotIndices(activeTemplate).some(
     (slotIndex) =>
-      Boolean(coverAssetForSlot(config, assets, slotIndex, previewDevice)),
+      Boolean(
+        coverAssetForSlot(config, assets, slotIndex, editorPreviewDevice),
+      ),
   );
 
   // ───────────── Drag handlers ─────────────
@@ -2465,7 +2660,7 @@ export default function CoverDesignPage() {
           return setCoverSlotFocalPoint(
             c,
             activeCoverSlotIndex,
-            previewDevice,
+            editorPreviewDevice,
             {
               x,
               y,
@@ -2473,10 +2668,13 @@ export default function CoverDesignPage() {
           );
         }
         if (kind === "title") {
-          return setTextPositionForDevice(c, "title", previewDevice, { x, y });
+          return setTextPositionForDevice(c, "title", editorPreviewDevice, {
+            x,
+            y,
+          });
         }
         if (kind === "subtitle") {
-          return setTextPositionForDevice(c, "subtitle", previewDevice, {
+          return setTextPositionForDevice(c, "subtitle", editorPreviewDevice, {
             x,
             y,
           });
@@ -2484,7 +2682,7 @@ export default function CoverDesignPage() {
         return c;
       });
     },
-    [activeCoverSlotIndex, previewDevice],
+    [activeCoverSlotIndex, editorPreviewDevice],
   );
 
   const onStagePointerUp = useCallback(
@@ -2509,7 +2707,7 @@ export default function CoverDesignPage() {
       setSaveError("Your session expired. Please log in again.");
       return;
     }
-    if (!config.cover.assetId) {
+    if (!folderGridOnly && !config.cover.assetId) {
       setSaveError("Pick a cover photo before saving.");
       return;
     }
@@ -2518,17 +2716,22 @@ export default function CoverDesignPage() {
     setSaveMessage("");
     setJustSaved(false);
     try {
-      const payload = prepareDesignConfigForSave(config);
+      const payload = prepareDesignConfigForEditorSave(config, folderGridOnly);
       await updateGalleryDesign(
         token,
         galleryId,
-        payload as unknown as Record<string, unknown>,
+        payload,
+        { albumId: selectedAlbumId || null },
       );
       // Capture the snapshot of what we just sent so the dirty-dot logic
       // recognises this state as "clean". Use JSON.stringify of the same
       // serialisation we sent over the wire so the comparison is exact.
       setSavedSnapshot(JSON.stringify(payload));
-      setSaveMessage("Cover & Design saved.");
+      setSaveMessage(
+        selectedAlbum
+          ? `Cover & Design saved for ${selectedAlbum.name}.`
+          : "Cover & Design saved.",
+      );
       setJustSaved(true);
     } catch (err) {
       setSaveError(
@@ -2554,9 +2757,90 @@ export default function CoverDesignPage() {
     };
   }, [justSaved]);
 
-  const isDirty =
-    savedSnapshot !== "" &&
-    savedSnapshot !== JSON.stringify(prepareDesignConfigForSave(config));
+  const serializedEditorConfig = JSON.stringify(
+    prepareDesignConfigForEditorSave(config, folderGridOnly),
+  );
+  const isDirty = savedSnapshot !== "" && savedSnapshot !== serializedEditorConfig;
+
+  useEffect(() => {
+    if (
+      !folderGridOnly ||
+      !loaded ||
+      !token ||
+      !gallery ||
+      !selectedAlbumId ||
+      !isDirty
+    ) {
+      return;
+    }
+
+    const seq = ++autoSaveSeqRef.current;
+    const payload = JSON.parse(serializedEditorConfig) as Record<
+      string,
+      unknown
+    >;
+    const timer = window.setTimeout(async () => {
+      setSaving(true);
+      setSaveError("");
+      setSaveMessage("");
+      setJustSaved(false);
+      try {
+        await updateGalleryDesign(token, galleryId, payload, {
+          albumId: selectedAlbumId,
+        });
+        if (autoSaveSeqRef.current !== seq) return;
+        setSavedSnapshot(JSON.stringify(payload));
+        setSaveMessage(
+          selectedAlbum
+            ? `Grid settings saved for ${selectedAlbum.name}.`
+            : "Grid settings saved.",
+        );
+        setJustSaved(true);
+      } catch (err) {
+        if (autoSaveSeqRef.current !== seq) return;
+        setSaveError(
+          err instanceof Error ? err.message : "Failed to save grid settings.",
+        );
+      } finally {
+        if (autoSaveSeqRef.current === seq) {
+          setSaving(false);
+        }
+      }
+    }, FOLDER_GRID_AUTOSAVE_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [
+    folderGridOnly,
+    gallery,
+    galleryId,
+    isDirty,
+    loaded,
+    selectedAlbum,
+    selectedAlbumId,
+    serializedEditorConfig,
+    token,
+  ]);
+
+  if (loaded && loadError && !gallery) {
+    return (
+      <GalleryPageShell galleryId={galleryId} width="full" mode="workbench">
+        <div className="surface-panel mx-auto mt-8 max-w-2xl space-y-4 p-6 text-center">
+          <h1 className="text-lg font-semibold text-text-primary">
+            Can&apos;t open Cover & Design
+          </h1>
+          <p className="text-sm text-text-secondary">{loadError}</p>
+          <Link
+            href="/galleries"
+            className="btn-tertiary inline-block px-4 py-2 text-sm"
+          >
+            Back to galleries
+          </Link>
+        </div>
+      </GalleryPageShell>
+    );
+  }
 
   // ───────────── Derived preview state ─────────────
 
@@ -2587,18 +2871,22 @@ export default function CoverDesignPage() {
   const previewTitlePosition = textPositionForDevice(
     config,
     "title",
-    previewDevice,
+    editorPreviewDevice,
   );
   const previewSubtitlePosition = textPositionForDevice(
     config,
     "subtitle",
-    previewDevice,
+    editorPreviewDevice,
   );
-  const previewTitleSize = textSizeForDevice(config, "title", previewDevice);
+  const previewTitleSize = textSizeForDevice(
+    config,
+    "title",
+    editorPreviewDevice,
+  );
   const previewSubtitleSize = textSizeForDevice(
     config,
     "subtitle",
-    previewDevice,
+    editorPreviewDevice,
   );
   const activeTypographyProfile =
     activeCoverProfile.typography ||
@@ -2622,8 +2910,15 @@ export default function CoverDesignPage() {
         <GalleryPageHeader title="Cover & Design" />
       </div>
 
-      {(saveMessage || saveError) && (
-        <div role="status" aria-live="polite">
+      {(selectedAlbum || saveMessage || saveError) && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mb-3 flex flex-wrap gap-2"
+        >
+          {selectedAlbum && (
+            <Badge variant="info">Folder: {selectedAlbum.name}</Badge>
+          )}
           {saveMessage && (
             <Badge variant="success">
               <Check aria-hidden />
@@ -2649,32 +2944,36 @@ export default function CoverDesignPage() {
         <section className="cover-preview-section cover-preview-pane">
           <div className="cover-preview-toolbar">
             <div className="cover-preview-primary-actions">
-              <div
-                className="glass-segmented cover-device-toggle"
-                role="group"
-                aria-label="Preview device"
-              >
-                {(["desktop", "phone"] as PreviewDevice[]).map((device) => (
-                  <button
-                    key={device}
-                    type="button"
-                    onClick={() => setPreviewDevice(device)}
-                    aria-pressed={previewDevice === device}
-                    aria-label={
-                      device === "desktop"
-                        ? "Desktop preview"
-                        : "Phone preview"
-                    }
-                    className="glass-segmented-option"
-                  >
-                    {device === "desktop" ? "Desktop" : "Phone"}
-                  </button>
-                ))}
-              </div>
+              {rootCoverEditing ? (
+                <div
+                  className="glass-segmented cover-device-toggle"
+                  role="group"
+                  aria-label="Preview device"
+                >
+                  {(["desktop", "phone"] as PreviewDevice[]).map((device) => (
+                    <button
+                      key={device}
+                      type="button"
+                      onClick={() => setPreviewDevice(device)}
+                      aria-pressed={previewDevice === device}
+                      aria-label={
+                        device === "desktop"
+                          ? "Desktop preview"
+                          : "Phone preview"
+                      }
+                      className="glass-segmented-option"
+                    >
+                      {device === "desktop" ? "Desktop" : "Phone"}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <Badge variant="neutral">Folder settings: Grid only</Badge>
+              )}
               <GlassButton
                 type="button"
                 onClick={handleSave}
-                disabled={saving || !config.cover.assetId}
+                disabled={saving || (!folderGridOnly && !config.cover.assetId)}
                 aria-label={
                   saving
                     ? "Saving cover and design"
@@ -2703,78 +3002,70 @@ export default function CoverDesignPage() {
                 )}
               </GlassButton>
             </div>
-            <div className="cover-preview-secondary-actions">
-              <p className="sr-only" aria-live="polite">
-                {previewDevice === "phone"
-                  ? "Phone profile is active for cover edits."
-                  : "Desktop profile is active for cover edits."}
-              </p>
-              <GlassButton
-                type="button"
-                variant="surface"
-                size="sm"
-                aria-label="Copy desktop cover settings to phone"
-                onClick={() =>
-                  updateConfig((current) => copyDesktopToPhoneProfile(current))
-                }
-              >
-                Copy to phone
-              </GlassButton>
-            </div>
+            <p className="sr-only" aria-live="polite">
+              {!rootCoverEditing
+                ? "Folder design edits are limited to grid settings."
+                : editorPreviewDevice === "phone"
+                ? "Phone profile is active for cover edits."
+                : "Desktop profile is active for cover edits."}
+            </p>
           </div>
-          <div
-            ref={stageRef}
-            onPointerDown={hasCoverPreview ? onStagePointerDown : undefined}
-            onPointerMove={onStagePointerMove}
-            onPointerUp={onStagePointerUp}
-            onPointerCancel={onStagePointerUp}
-            className={`cover-editor-stage cover-editor-stage--${previewDevice} relative w-full select-none overflow-hidden ${
-              hasCoverPreview
-                ? dragKind
-                  ? "cursor-grabbing"
-                  : "cursor-grab"
-                : "cursor-default"
-            } ${previewDevice === "phone" ? "mx-auto max-w-sm" : ""}`}
-            style={{
-              aspectRatio:
-                activeCoverProfile.aspectRatio ||
-                (previewDevice === "phone"
-                  ? config.cover.mobileAspectRatio
-                  : config.cover.aspectRatio),
-              touchAction: "none",
-            }}
-            aria-label="Cover preview — drag photo to pan, use photo zoom to resize, drag title/subtitle to position"
-          >
-            <CoverTemplateStage
-              template={activeTemplate}
-              config={config}
-              assets={assets}
-              token={token}
-              previewDevice={previewDevice}
-              activeSlot={activeCoverSlotIndex}
-              onSelectSlot={(slotIndex) => {
-                setActiveCoverSlot(slotIndex);
-                setTab("photos");
+          {rootCoverEditing ? (
+            <div
+              ref={stageRef}
+              onPointerDown={
+                hasCoverPreview ? onStagePointerDown : undefined
+              }
+              onPointerMove={onStagePointerMove}
+              onPointerUp={onStagePointerUp}
+              onPointerCancel={onStagePointerUp}
+              className={`cover-editor-stage cover-editor-stage--${editorPreviewDevice} relative w-full select-none overflow-hidden ${
+                hasCoverPreview
+                  ? dragKind
+                    ? "cursor-grabbing"
+                    : "cursor-grab"
+                  : "cursor-default"
+              } ${editorPreviewDevice === "phone" ? "mx-auto max-w-sm" : ""}`}
+              style={{
+                aspectRatio:
+                  editorPreviewDevice === "phone"
+                    ? portraitPhoneAspectRatio(config.cover.mobileAspectRatio)
+                    : activeCoverProfile.aspectRatio ||
+                      config.cover.aspectRatio,
+                touchAction: "none",
               }}
-            />
-
-            {activeScrim && (
-              <div
-                className="pointer-events-none absolute inset-0"
-                style={{ background: activeScrim }}
+              aria-label="Cover preview — drag photo to pan, use photo zoom to resize, drag title/subtitle to position"
+            >
+              <CoverTemplateStage
+                template={activeTemplate}
+                config={config}
+                assets={assets}
+                token={token}
+                previewDevice={editorPreviewDevice}
+                activeSlot={activeCoverSlotIndex}
+                onSelectSlot={(slotIndex) => {
+                  setActiveCoverSlot(slotIndex);
+                  setTab("photos");
+                }}
               />
-            )}
 
-            {previewDevice === "phone" && (
-              <div
-                className="cover-preview-safe-zone pointer-events-none absolute inset-x-7 inset-y-12 z-10 rounded-xl"
-                aria-label="Mobile safe zone"
-              >
-                <span className="cover-preview-safe-zone-label absolute left-3 top-3">
-                  Safe zone
-                </span>
-              </div>
-            )}
+              {activeScrim && (
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  style={{ background: activeScrim }}
+                />
+              )}
+
+              {editorPreviewDevice === "phone" && (
+                <div
+                  className="cover-preview-safe-zone pointer-events-none absolute left-1/2 top-1/2 z-10 h-[78%] w-[68%] max-w-[calc(100%-3rem)] -translate-x-1/2 -translate-y-1/2 rounded-[1.75rem]"
+                  aria-label="Mobile safe zone"
+                >
+                  <span className="cover-preview-safe-zone-label absolute left-3 top-3">
+                    Safe zone
+                  </span>
+                </div>
+              )}
 
             {/* Title overlay — draggable. whitespace: pre prevents the
                 browser from soft-wrapping single-line titles when they get
@@ -2796,7 +3087,7 @@ export default function CoverDesignPage() {
                   getCoverLanguage(activeTypographyProfile.titleLanguage).dir
                 }
                 className={`absolute touch-none font-semibold tracking-tight transition-shadow ${
-                  activeText === "title" && tab === "text"
+                  activeText === "title" && activeEditorTab === "text"
                     ? "ring-2 ring-primary ring-offset-2 ring-offset-surface-scrim-strong/30"
                     : ""
                 }`}
@@ -2834,6 +3125,7 @@ export default function CoverDesignPage() {
                   ...activeTextBackdropStyle,
                 }}
                 onClick={() => {
+                  if (!rootCoverEditing) return;
                   setActiveText("title");
                   setTab("text");
                 }}
@@ -2856,7 +3148,7 @@ export default function CoverDesignPage() {
                       .dir
                   }
                   className={`absolute touch-none transition-shadow ${
-                    activeText === "subtitle" && tab === "text"
+                    activeText === "subtitle" && activeEditorTab === "text"
                       ? "ring-2 ring-primary ring-offset-2 ring-offset-surface-scrim-strong/30"
                       : ""
                   }`}
@@ -2894,6 +3186,7 @@ export default function CoverDesignPage() {
                     ...activeTextBackdropStyle,
                   }}
                   onClick={() => {
+                    if (!rootCoverEditing) return;
                     setActiveText("subtitle");
                     setTab("text");
                   }}
@@ -2903,9 +3196,9 @@ export default function CoverDesignPage() {
               )}
 
             {/* Drag-hint pill */}
-            {hasCoverPreview && !dragKind && (
+            {rootCoverEditing && hasCoverPreview && !dragKind && (
               <div className="cover-preview-drag-hint pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2">
-                {tab === "text"
+                {activeEditorTab === "text"
                   ? "Drag title / subtitle to position"
                   : activeTemplate.slotCount > 1
                     ? `Drag photo ${activeCoverSlotIndex + 1} to pan; use zoom below`
@@ -2956,7 +3249,15 @@ export default function CoverDesignPage() {
                   : watermarkLabel}
               </div>
             )}
-          </div>
+            </div>
+          ) : (
+            <FolderGridStagePreview
+              grid={config.grid}
+              assets={assets}
+              token={token}
+              folderName={selectedAlbum?.name || "Selected folder"}
+            />
+          )}
         </section>
 
         <section
@@ -2964,17 +3265,40 @@ export default function CoverDesignPage() {
           aria-label="Cover design controls"
         >
           <div className="cover-control-card">
+            <label htmlFor="cover-gallery-folder" className="form-label">
+              Gallery folders
+            </label>
+            <select
+              id="cover-gallery-folder"
+              className={`${COVER_FIELD_CLASS} cover-folder-select`}
+              value={selectedAlbumId || "root"}
+              aria-label="Gallery folders"
+              onChange={handleFolderChange}
+            >
+              <option value="root">Gallery root</option>
+              {albums.map((album) => {
+                const count = album.asset_ids?.length ?? album.asset_count ?? 0;
+                return (
+                  <option key={album.id} value={album.id}>
+                    {album.name} · {count} {count === 1 ? "photo" : "photos"}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          <div className="cover-control-card">
             <label htmlFor="cover-editor-section" className="form-label">
               Edit section
             </label>
             <select
               id="cover-editor-section"
               className={`${COVER_FIELD_CLASS} cover-section-select`}
-              value={tab}
+              value={activeEditorTab}
               aria-label="Cover editor section"
               onChange={(event) => setTab(event.target.value as TabId)}
             >
-              {EDITOR_TABS.map((editorTab) => (
+              {editorTabs.map((editorTab) => (
                 <option key={editorTab.id} value={editorTab.id}>
                   {editorTab.label}
                 </option>
@@ -2986,7 +3310,7 @@ export default function CoverDesignPage() {
           <section>
             {/* The panel body renders the active section selected from the
               dedicated task tabs above. */}
-            {tab === "videos" ? (
+            {activeEditorTab === "videos" ? (
               <EmbeddedVideosPanel
                 galleryId={galleryId}
                 initialVideos={readEmbeddedVideos(gallery?.settings)}
@@ -3007,22 +3331,22 @@ export default function CoverDesignPage() {
               />
             ) : (
               <Card variant="panel" padding="md" className="cover-editor-panel">
-                {tab === "cover" && (
+                {activeEditorTab === "cover" && (
                   <PanelCover
                     assets={assets}
                     config={config}
                     setConfig={updateConfig}
-                    previewDevice={previewDevice}
+                    previewDevice={editorPreviewDevice}
                     setActiveCoverSlot={setActiveCoverSlot}
                   />
                 )}
-                {tab === "photos" && (
+                {activeEditorTab === "photos" && (
                   <PanelGalleryPhotos
                     assets={assets}
                     token={token}
                     config={config}
                     setConfig={updateConfig}
-                    previewDevice={previewDevice}
+                    previewDevice={editorPreviewDevice}
                     activeCoverSlot={activeCoverSlotIndex}
                     setActiveCoverSlot={setActiveCoverSlot}
                     onFilesAccepted={upload.addFiles}
@@ -3032,30 +3356,30 @@ export default function CoverDesignPage() {
                     onRetryUpload={upload.retry}
                   />
                 )}
-                {tab === "text" && (
+                {activeEditorTab === "text" && (
                   <PanelText
                     config={config}
                     setConfig={updateConfig}
                     albumTitle={gallery?.title || ""}
                     albumSubtitle={gallery?.description || ""}
-                    previewDevice={previewDevice}
+                    previewDevice={editorPreviewDevice}
                     activeText={activeText}
                     setActiveText={setActiveText}
                     setTab={setTab}
                   />
                 )}
-                {tab === "media" && (
+                {activeEditorTab === "media" && (
                   <PanelMedia
                     config={config}
                     setConfig={updateConfig}
                     assets={assets}
-                    previewDevice={previewDevice}
+                    previewDevice={editorPreviewDevice}
                   />
                 )}
-                {tab === "brand" && (
+                {activeEditorTab === "brand" && (
                   <PanelBrand config={config} setConfig={updateConfig} />
                 )}
-                {tab === "grid" && (
+                {activeEditorTab === "grid" && (
                   <PanelGrid
                     config={config}
                     setConfig={updateConfig}
@@ -3663,6 +3987,45 @@ function PanelCover({
   );
 }
 
+function FolderGridStagePreview({
+  grid,
+  assets,
+  token,
+  folderName,
+}: {
+  grid: DesignConfig["grid"];
+  assets: Asset[];
+  token: string | null;
+  folderName: string;
+}) {
+  return (
+    <div
+      className="cover-editor-stage cover-editor-stage--grid-preview cover-folder-grid-stage relative w-full overflow-hidden"
+      style={{ aspectRatio: "16/9" }}
+      aria-label="Folder grid preview"
+    >
+      <div className="cover-folder-grid-stage__header">
+        <div>
+          <span className="cover-folder-grid-stage__eyebrow">
+            Folder grid preview
+          </span>
+          <h2 className="cover-folder-grid-stage__title">{folderName}</h2>
+        </div>
+        <Badge variant="accent" className="uppercase">
+          {grid.layout} · {grid.columns} col
+        </Badge>
+      </div>
+      <GridLivePreview
+        grid={grid}
+        assets={assets}
+        token={token}
+        surfaceClassName="cover-grid-preview-surface--stage"
+        tileLimit={18}
+      />
+    </div>
+  );
+}
+
 function PanelGalleryPhotos({
   assets,
   token,
@@ -4030,18 +4393,24 @@ function PanelGalleryPhotos({
           icon={<RefreshCw aria-hidden />}
           onClick={() =>
             setConfig((c) =>
-              updateProfileForDevice(c, previewDevice, {
-                focalPoint: { x: 50, y: 50 },
-                zoom: 1,
-                slotFocalPoints: [],
-                slotZooms: [],
-              }),
+              setCoverSlotZoom(
+                setCoverSlotFocalPoint(
+                  c,
+                  activeCoverSlotIndex,
+                  previewDevice,
+                  COVER_SLOT_DEFAULT_FOCAL_POINT,
+                ),
+                activeCoverSlotIndex,
+                previewDevice,
+                COVER_SLOT_DEFAULT_ZOOM,
+              ),
             )
           }
           className="cover-panel-reset-button"
         >
-          Reset {previewDevice} crops ({activeFocalPoint.x}%,{" "}
-          {activeFocalPoint.y}%, {Math.round(activeZoom * 100)}%)
+          Reset photo {activeCoverSlotIndex + 1} {previewDevice} crop (
+          {activeFocalPoint.x}%, {activeFocalPoint.y}%,{" "}
+          {Math.round(activeZoom * 100)}%)
         </GlassButton>
       </div>
     </div>
@@ -5293,6 +5662,22 @@ function PanelGrid({
         />
       </div>
 
+      {/* Live grid preview — renders the user's actual gallery assets in
+          the chosen layout so they see exactly how the published page
+          will arrange photos. Mirrors the rules in public-gallery-grid:
+          grid uses N square cells, justified uses varied-width flex rows.
+          (Masonry/carousel branches retained inside GridLivePreview for
+          legacy galleries that have those saved.) */}
+      <div className="cover-panel-divider cover-field-stack">
+        <div className="flex items-baseline justify-between">
+          <h3 className="text-sm font-semibold">Preview</h3>
+          <span className="text-2xs text-on-surface-variant/70">
+            {config.grid.layout} · {config.grid.columns} col
+          </span>
+        </div>
+        <GridLivePreview grid={deferredGrid} assets={assets} token={token} />
+      </div>
+
       <div className="cover-panel-divider cover-toggle-row">
         <span className="cover-toggle-row__copy">
           <span className="cover-scene-card__title">Filename captions</span>
@@ -5313,22 +5698,6 @@ function PanelGrid({
           }
         />
       </div>
-
-      {/* Live grid preview — renders the user's actual gallery assets in
-          the chosen layout so they see exactly how the published page
-          will arrange photos. Mirrors the rules in public-gallery-grid:
-          grid uses N square cells, justified uses varied-width flex rows.
-          (Masonry/carousel branches retained inside GridLivePreview for
-          legacy galleries that have those saved.) */}
-      <div className="cover-panel-divider cover-field-stack">
-        <div className="flex items-baseline justify-between">
-          <h3 className="text-sm font-semibold">Preview</h3>
-          <span className="text-2xs text-on-surface-variant/70">
-            {config.grid.layout} · {config.grid.columns} col
-          </span>
-        </div>
-        <GridLivePreview grid={deferredGrid} assets={assets} token={token} />
-      </div>
     </div>
   );
 }
@@ -5337,24 +5706,38 @@ function GridLivePreview({
   grid,
   assets,
   token,
+  surfaceClassName = "",
+  tileLimit = 12,
 }: {
   grid: DesignConfig["grid"];
   assets: Asset[];
   token: string | null;
+  surfaceClassName?: string;
+  tileLimit?: number;
 }) {
   // Cap the preview at 12 tiles so it stays compact even for big galleries.
   // Empty-state handled below — if the gallery has no assets yet, show a
   // placeholder grid using surface tiles so users can still preview the
   // layout choice before uploading.
-  const sample = assets.slice(0, 12);
+  const sample = assets.slice(0, tileLimit);
   const empty = sample.length === 0;
   const placeholderCount = empty ? Math.max(6, grid.columns * 2) : 0;
   const gap = grid.gap;
   const cols = grid.columns;
+  const surfaceClass = ["cover-grid-preview-surface", surfaceClassName]
+    .filter(Boolean)
+    .join(" ");
+  const scrollSurfaceClass = [
+    "cover-grid-preview-surface",
+    "cover-grid-preview-surface--scroll",
+    surfaceClassName,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   if (grid.layout === "carousel") {
     return (
-      <div className="cover-grid-preview-surface cover-grid-preview-surface--scroll">
+      <div className={scrollSurfaceClass}>
         <div className="cover-grid-preview-carousel" style={{ gap }}>
           {(empty ? Array.from({ length: placeholderCount }) : sample).map(
             (a, i) => {
@@ -5400,7 +5783,7 @@ function GridLivePreview({
     ];
     return (
       <div
-        className="cover-grid-preview-surface"
+        className={surfaceClass}
         style={{ columnCount: cols, columnGap: gap }}
       >
         {(empty ? Array.from({ length: placeholderCount }) : sample).map(
@@ -5439,7 +5822,7 @@ function GridLivePreview({
     const widthWeights = [1.5, 1, 2, 1, 1.7, 1.2, 1, 1.8, 1.3, 1.4, 1, 1.6];
     return (
       <div
-        className="cover-grid-preview-surface"
+        className={surfaceClass}
         style={{ display: "flex", flexWrap: "wrap", gap }}
       >
         {(empty ? Array.from({ length: placeholderCount }) : sample).map(
@@ -5470,7 +5853,7 @@ function GridLivePreview({
   // grid (default) — uniform square cells in N columns.
   return (
     <div
-      className="cover-grid-preview-surface"
+      className={surfaceClass}
       style={{
         display: "grid",
         gridTemplateColumns: `repeat(${cols}, 1fr)`,

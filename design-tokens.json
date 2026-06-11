@@ -797,62 +797,62 @@
     },
     "scale": {
       "2xs": {
-        "value": "0.625rem",
-        "lineHeight": "0.875rem",
+        "value": "0.75rem",
+        "lineHeight": "1.05rem",
         "usage": "Micro labels: badges, safe-zone chips, counters"
       },
       "xs": {
-        "value": "0.75rem",
-        "lineHeight": "1rem",
+        "value": "0.9rem",
+        "lineHeight": "1.2rem",
         "usage": "Caption, metadata, badges"
       },
       "sm": {
-        "value": "0.875rem",
-        "lineHeight": "1.25rem",
+        "value": "1.05rem",
+        "lineHeight": "1.5rem",
         "usage": "Secondary text, form labels"
       },
       "base": {
-        "value": "1rem",
-        "lineHeight": "1.5rem",
+        "value": "1.2rem",
+        "lineHeight": "1.8rem",
         "usage": "Body text, paragraphs"
       },
       "lg": {
-        "value": "1.125rem",
-        "lineHeight": "1.75rem",
+        "value": "1.35rem",
+        "lineHeight": "2.1rem",
         "usage": "Card titles, emphasized body"
       },
       "xl": {
-        "value": "1.25rem",
-        "lineHeight": "1.75rem",
+        "value": "1.5rem",
+        "lineHeight": "2.1rem",
         "usage": "Section subheadings"
       },
       "2xl": {
-        "value": "1.5rem",
-        "lineHeight": "2rem",
+        "value": "1.8rem",
+        "lineHeight": "2.4rem",
         "usage": "Section headings (h2)"
       },
       "3xl": {
-        "value": "1.875rem",
-        "lineHeight": "2.25rem",
+        "value": "2.25rem",
+        "lineHeight": "2.7rem",
         "usage": "Page titles (h1)"
       },
       "4xl": {
-        "value": "clamp(2.25rem, 2rem + 1.1vw, 2.75rem)",
+        "value": "clamp(2.7rem, 2.4rem + 1.32vw, 3.3rem)",
         "lineHeight": "1.12",
         "usage": "Hero headings — fluid; minimum equals previous fixed 2.25rem"
       },
       "5xl": {
-        "value": "clamp(3rem, 2.55rem + 2vw, 3.75rem)",
+        "value": "clamp(3.6rem, 3.06rem + 2.4vw, 4.5rem)",
         "lineHeight": "1.08",
         "usage": "Landing page hero — fluid; minimum equals previous fixed 3rem"
       },
       "6xl": {
-        "value": "clamp(3.5rem, 2.8rem + 3vw, 4.75rem)",
+        "value": "clamp(4.2rem, 3.36rem + 3.6vw, 5.7rem)",
         "lineHeight": "1.05",
         "usage": "Display headlines on large marketing surfaces"
       },
       "7xl": {
-        "value": "clamp(4rem, 3rem + 4.5vw, 6rem)",
+        "value": "clamp(4.8rem, 3.6rem + 5.4vw, 7.2rem)",
         "lineHeight": "1.02",
         "usage": "Maximum display size — hero statements only"
       }

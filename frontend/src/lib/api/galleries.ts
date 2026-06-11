@@ -923,8 +923,11 @@ export async function updateGalleryDesign(
   _token: string | null,
   id: string,
   data: Record<string, unknown>,
+  options?: { albumId?: string | null },
 ): Promise<void> {
-  const res = await authFetch(`/api/v1/galleries/${id}/design`, {
+  const albumId = options?.albumId;
+  const qs = albumId ? `?album=${encodeURIComponent(albumId)}` : "";
+  const res = await authFetch(`/api/v1/galleries/${id}/design${qs}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),

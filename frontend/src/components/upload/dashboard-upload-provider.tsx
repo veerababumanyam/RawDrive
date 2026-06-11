@@ -159,88 +159,90 @@ function DashboardUploadStatusBar({
   return (
     <div
       data-testid="dashboard-upload-status"
-      className="fixed inset-x-0 bottom-0 z-[90] border-t border-border-default bg-surface-elevated/95 px-3 py-3 shadow-elevation-1 glass-blur-medium sm:px-6"
-      role="status"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-surface-scrim/75 p-3 glass-blur-medium sm:p-6"
+      role={summary.activeCount > 0 ? "dialog" : "status"}
+      aria-modal={summary.activeCount > 0 ? true : undefined}
+      aria-label={headline}
       aria-live="polite"
     >
-      <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-accent">
+      <div className="w-full max-w-2xl rounded-2xl border border-border-default bg-surface-elevated p-4 shadow-elevation-1 sm:p-5">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-accent">
             <UploadCloud className="h-5 w-5" aria-hidden="true" />
           </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <p className="truncate text-sm font-semibold text-text-primary">
-                {headline}
-              </p>
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="truncate text-base font-semibold text-text-primary">
+                  {headline}
+                </p>
+                <p className="text-xs text-text-tertiary">
+                  {summary.activeCount > 0
+                    ? "RawDrive is locked until uploads finish. Keep this browser tab open."
+                    : "Choose a folder to continue."}
+                </p>
+              </div>
               {summary.bytesTotal > 0 && (
-                <span className="text-xs font-medium text-text-secondary">
+                <span className="shrink-0 text-xs font-medium text-text-secondary">
                   {formatUploadBytes(summary.bytesUploaded)} /{" "}
                   {formatUploadBytes(summary.bytesTotal)} · {summary.percent}%
                 </span>
               )}
             </div>
             {summary.bytesTotal > 0 && (
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-sunken">
+              <div className="h-2 overflow-hidden rounded-full bg-surface-sunken">
                 <div
                   className="h-full rounded-full bg-accent transition-all duration-300"
                   style={{ width: `${summary.percent}%` }}
                 />
               </div>
             )}
-            {summary.activeCount > 0 && (
-              <p className="mt-1 text-xs text-text-tertiary">
-                Upload continues while you use RawDrive. Open Dashboard,
-                Messages, Settings, or this gallery; keep this browser tab open
-                until uploads finish.
-              </p>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              {summary.sourceGalleryId && (
+                <Link
+                  href={`/galleries/${summary.sourceGalleryId}`}
+                  className="btn-tertiary px-3 py-1.5 text-xs"
+                >
+                  Open gallery
+                </Link>
+              )}
+              {summary.retryableFailedCount > 0 && (
+                <button
+                  type="button"
+                  onClick={upload.retryAll}
+                  className="btn-tertiary px-3 py-1.5 text-xs"
+                >
+                  Retry failed
+                </button>
+              )}
+              {summary.activeCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        cancelUploadsConfirmationMessage(summary.activeCount),
+                      )
+                    ) {
+                      upload.cancelAll();
+                    }
+                  }}
+                  className="btn-tertiary px-3 py-1.5 text-xs"
+                >
+                  Cancel uploads
+                </button>
+              )}
+              {summary.activeCount === 0 && summary.completedCount > 0 && (
+                <button
+                  type="button"
+                  onClick={upload.clearFinished}
+                  className="btn-tertiary px-3 py-1.5 text-xs"
+                >
+                  Dismiss
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-          {summary.sourceGalleryId && (
-            <Link
-              href={`/galleries/${summary.sourceGalleryId}`}
-              className="btn-tertiary px-3 py-1.5 text-xs"
-            >
-              Open gallery
-            </Link>
-          )}
-          {summary.retryableFailedCount > 0 && (
-            <button
-              type="button"
-              onClick={upload.retryAll}
-              className="btn-tertiary px-3 py-1.5 text-xs"
-            >
-              Retry failed
-            </button>
-          )}
-          {summary.activeCount > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    cancelUploadsConfirmationMessage(summary.activeCount),
-                  )
-                ) {
-                  upload.cancelAll();
-                }
-              }}
-              className="btn-tertiary px-3 py-1.5 text-xs"
-            >
-              Cancel uploads
-            </button>
-          )}
-          {summary.activeCount === 0 && summary.completedCount > 0 && (
-            <button
-              type="button"
-              onClick={upload.clearFinished}
-              className="btn-tertiary px-3 py-1.5 text-xs"
-            >
-              Dismiss
-            </button>
-          )}
         </div>
       </div>
     </div>

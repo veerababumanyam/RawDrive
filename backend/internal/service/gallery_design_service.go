@@ -205,7 +205,7 @@ func (s *GalleryDesignService) UpdateDesignConfig(ctx context.Context, galleryID
 // HTTP handler 2026-05-18 onward — preserves every field the frontend
 // sends, including ones the typed struct doesn't know about yet.
 // Increments `version` in-place so callers don't have to.
-func (s *GalleryDesignService) UpdateDesignConfigRaw(ctx context.Context, galleryID uuid.UUID, raw map[string]interface{}) error {
+func (s *GalleryDesignService) UpdateDesignConfigRaw(ctx context.Context, galleryID uuid.UUID, raw map[string]interface{}, albumID *uuid.UUID) error {
 	gallery, err := s.galleryRepo.GetByID(ctx, galleryID)
 	if err != nil || gallery == nil {
 		return fmt.Errorf("design: gallery not found")
@@ -229,6 +229,13 @@ func (s *GalleryDesignService) UpdateDesignConfigRaw(ctx context.Context, galler
 	if gallery.Settings == nil {
 		gallery.Settings = map[string]interface{}{}
 	}
+	if albumID != nil && *albumID != uuid.Nil {
+		byAlbum := designConfigByAlbumMap(gallery.Settings["design_config_by_album"])
+		byAlbum[albumID.String()] = raw
+		gallery.Settings["design_config_by_album"] = byAlbum
+		return s.galleryRepo.Update(ctx, gallery)
+	}
+
 	gallery.Settings["design_config"] = raw
 
 	// 2026-05-20: mirror the chosen cover asset back onto the canonical
@@ -259,6 +266,18 @@ func (s *GalleryDesignService) UpdateDesignConfigRaw(ctx context.Context, galler
 	}
 
 	return s.galleryRepo.Update(ctx, gallery)
+}
+
+func designConfigByAlbumMap(raw interface{}) map[string]interface{} {
+	existing, ok := raw.(map[string]interface{})
+	if !ok || existing == nil {
+		return map[string]interface{}{}
+	}
+	next := make(map[string]interface{}, len(existing))
+	for key, value := range existing {
+		next[key] = value
+	}
+	return next
 }
 
 func collectRawDesignCoverAssetIDs(raw map[string]interface{}) ([]uuid.UUID, error) {

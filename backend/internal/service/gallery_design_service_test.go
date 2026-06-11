@@ -146,7 +146,7 @@ func TestUpdateDesignConfigRawRejectsCoverAssetOutsideGallery(t *testing.T) {
 			"assetId":    allowedID.String(),
 			"assetSlots": []interface{}{allowedID.String(), foreignID.String()},
 		},
-	})
+	}, nil)
 
 	require.ErrorIs(t, err, ErrDesignCoverAssetNotInGallery)
 	assert.False(t, repo.updated)
@@ -181,7 +181,7 @@ func TestUpdateDesignConfigRawRejectsDeviceProfileCoverAssetOutsideGallery(t *te
 				},
 			},
 		},
-	})
+	}, nil)
 
 	require.ErrorIs(t, err, ErrDesignCoverAssetNotInGallery)
 	assert.False(t, repo.updated)
@@ -211,7 +211,7 @@ func TestUpdateDesignConfigRawPersistsGalleryCoverSlots(t *testing.T) {
 			"assetId":    coverID.String(),
 			"assetSlots": []interface{}{coverID.String(), secondID.String()},
 		},
-	})
+	}, nil)
 
 	require.NoError(t, err)
 	require.True(t, repo.updated)
@@ -219,6 +219,97 @@ func TestUpdateDesignConfigRawPersistsGalleryCoverSlots(t *testing.T) {
 	assert.Equal(t, coverID, *repo.gallery.CoverAssetID)
 	saved := repo.gallery.Settings["design_config"].(map[string]interface{})
 	assert.Equal(t, float64(3), saved["version"])
+}
+
+func TestUpdateDesignConfigRawPersistsAlbumCoverWithoutReplacingGalleryCover(t *testing.T) {
+	ctx := context.Background()
+	galleryID := uuid.New()
+	albumID := uuid.New()
+	coverID := uuid.New()
+	secondID := uuid.New()
+	repo := &fakeGalleryDesignRepo{
+		gallery: &repository.Gallery{ID: galleryID, Settings: map[string]interface{}{}},
+	}
+	svc := &GalleryDesignService{
+		galleryRepo: repo,
+		galleryAssetRepo: fakeGalleryDesignAssetLister{
+			items: []repository.GalleryAsset{
+				{GalleryID: galleryID, AssetID: coverID},
+				{GalleryID: galleryID, AssetID: secondID},
+			},
+		},
+	}
+
+	err := svc.UpdateDesignConfigRaw(ctx, galleryID, map[string]interface{}{
+		"version": float64(2),
+		"cover": map[string]interface{}{
+			"assetId":    coverID.String(),
+			"assetSlots": []interface{}{coverID.String(), secondID.String()},
+		},
+	}, &albumID)
+
+	require.NoError(t, err)
+	require.True(t, repo.updated)
+	assert.Nil(t, repo.gallery.CoverAssetID)
+	assert.Nil(t, repo.gallery.Settings["design_config"])
+	byAlbum := repo.gallery.Settings["design_config_by_album"].(map[string]interface{})
+	saved := byAlbum[albumID.String()].(map[string]interface{})
+	assert.Equal(t, float64(3), saved["version"])
+}
+
+func TestUpdateDesignConfigRawPersistsAlbumGridLayoutsIndependently(t *testing.T) {
+	ctx := context.Background()
+	galleryID := uuid.New()
+	firstAlbumID := uuid.New()
+	secondAlbumID := uuid.New()
+	repo := &fakeGalleryDesignRepo{
+		gallery: &repository.Gallery{
+			ID: galleryID,
+			Settings: map[string]interface{}{
+				"design_config": map[string]interface{}{
+					"cover": map[string]interface{}{"title": "Root cover"},
+				},
+			},
+		},
+	}
+	svc := &GalleryDesignService{galleryRepo: repo}
+
+	err := svc.UpdateDesignConfigRaw(ctx, galleryID, map[string]interface{}{
+		"version":   float64(0),
+		"gridScope": "folder",
+		"grid": map[string]interface{}{
+			"layout":   "grid",
+			"columns":  float64(2),
+			"gap":      float64(8),
+			"showInfo": false,
+		},
+	}, &firstAlbumID)
+	require.NoError(t, err)
+
+	err = svc.UpdateDesignConfigRaw(ctx, galleryID, map[string]interface{}{
+		"version":   float64(4),
+		"gridScope": "folder",
+		"grid": map[string]interface{}{
+			"layout":   "justified",
+			"columns":  float64(5),
+			"gap":      float64(12),
+			"showInfo": true,
+		},
+	}, &secondAlbumID)
+	require.NoError(t, err)
+
+	byAlbum := repo.gallery.Settings["design_config_by_album"].(map[string]interface{})
+	first := byAlbum[firstAlbumID.String()].(map[string]interface{})
+	second := byAlbum[secondAlbumID.String()].(map[string]interface{})
+	firstGrid := first["grid"].(map[string]interface{})
+	secondGrid := second["grid"].(map[string]interface{})
+	assert.Equal(t, "grid", firstGrid["layout"])
+	assert.Equal(t, float64(2), firstGrid["columns"])
+	assert.Equal(t, float64(1), first["version"])
+	assert.Equal(t, "justified", secondGrid["layout"])
+	assert.Equal(t, float64(5), secondGrid["columns"])
+	assert.Equal(t, float64(5), second["version"])
+	assert.Equal(t, "Root cover", repo.gallery.Settings["design_config"].(map[string]interface{})["cover"].(map[string]interface{})["title"])
 }
 
 func TestUpdateDesignConfigRawFailsClosedWhenCoverValidationUnavailable(t *testing.T) {
@@ -232,7 +323,7 @@ func TestUpdateDesignConfigRawFailsClosedWhenCoverValidationUnavailable(t *testi
 
 	err := svc.UpdateDesignConfigRaw(ctx, galleryID, map[string]interface{}{
 		"cover": map[string]interface{}{"assetId": coverID.String()},
-	})
+	}, nil)
 
 	require.ErrorIs(t, err, ErrDesignCoverValidationUnavailable)
 	assert.False(t, repo.updated)

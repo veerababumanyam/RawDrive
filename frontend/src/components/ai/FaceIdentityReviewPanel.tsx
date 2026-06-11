@@ -13,7 +13,14 @@ import {
   type FaceIndexStatus,
   type FaceReviewRow,
 } from "@/lib/api/ai";
-import { listGalleryAssets } from "@/lib/api/galleries";
+import {
+  listAlbumAssets,
+  listGalleryAlbums,
+  listGalleryAssets,
+  type AlbumAsset,
+  type GalleryAlbum,
+  type GalleryAsset,
+} from "@/lib/api/galleries";
 import type { Asset } from "@/lib/api/assets";
 import { listContacts, type Contact } from "@/lib/api/crm";
 import { GRID_VARIANTS } from "@/lib/media-encryption/asset-media";
@@ -92,6 +99,53 @@ function uniqueFacesById(faces: FaceReviewRow[]): FaceReviewRow[] {
     unique.push(face);
   }
   return unique;
+}
+
+function uniqueAssetsById(assets: Asset[]): Asset[] {
+  const seen = new Set<string>();
+  const unique: Asset[] = [];
+  for (const asset of assets) {
+    if (seen.has(asset.id)) continue;
+    seen.add(asset.id);
+    unique.push(asset);
+  }
+  return unique;
+}
+
+function albumIsManualFolder(album: GalleryAlbum): boolean {
+  return !album.smart_filter || Object.keys(album.smart_filter).length === 0;
+}
+
+function collectEmbeddedAssets(
+  entries: Array<GalleryAsset | AlbumAsset>,
+): Asset[] {
+  return entries
+    .map((entry) => entry.asset)
+    .filter((asset): asset is Asset => Boolean(asset));
+}
+
+async function listFaceIndexAssetsAcrossGalleryFolders(
+  token: string,
+  galleryId: string,
+): Promise<Asset[]> {
+  const [galleryEntries, albums] = await Promise.all([
+    listGalleryAssets(token, galleryId, { includeAssets: true }),
+    listGalleryAlbums(token, galleryId, { includeAssetIds: true }).catch(
+      () => [],
+    ),
+  ]);
+  const manualAlbums = albums.filter(albumIsManualFolder);
+  const albumEntryGroups = await Promise.all(
+    manualAlbums.map((album) =>
+      listAlbumAssets(token, album.id, { includeAssets: true }).catch(
+        () => [],
+      ),
+    ),
+  );
+  return uniqueAssetsById([
+    ...collectEmbeddedAssets(galleryEntries),
+    ...collectEmbeddedAssets(albumEntryGroups.flat()),
+  ]);
 }
 
 function FaceTile({
@@ -256,12 +310,12 @@ export function FaceIdentityReviewPanel({
 
   useEffect(() => {
     let ignore = false;
-    listGalleryAssets(token ?? "", galleryId, { includeAssets: true })
-      .then((entries) => {
+    listFaceIndexAssetsAcrossGalleryFolders(token ?? "", galleryId)
+      .then((assets) => {
         if (ignore) return;
         const next = new Map<string, Asset>();
-        for (const entry of entries) {
-          if (entry.asset) next.set(entry.asset_id, entry.asset);
+        for (const asset of assets) {
+          next.set(asset.id, asset);
         }
         setAssetsById(next);
       })
@@ -530,10 +584,15 @@ export function FaceIdentityReviewPanel({
     token,
   ]);
 
-  const uploadedPhotoCount = indexStatus?.uploaded_photos ?? assetsById.size;
+  const uploadedPhotoCount = Math.max(
+    indexStatus?.uploaded_photos ?? 0,
+    assetsById.size,
+  );
   const syncablePhotoCount = indexableAssets.length;
-  const indexablePhotoTarget =
-    indexStatus?.indexable_photos ?? syncablePhotoCount;
+  const indexablePhotoTarget = Math.max(
+    indexStatus?.indexable_photos ?? 0,
+    syncablePhotoCount,
+  );
   const indexedPhotoCount = indexStatus?.indexed_photos ?? 0;
   const clusterStats = useMemo(
     () => ({

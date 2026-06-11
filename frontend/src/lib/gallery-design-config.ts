@@ -231,6 +231,46 @@ function asObject(v: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
+function gridSettingsMatch(left: unknown, right: unknown): boolean {
+  const leftGrid = asObject(left);
+  const rightGrid = asObject(right);
+  if (!leftGrid || !rightGrid) return false;
+  return (
+    leftGrid.layout === rightGrid.layout &&
+    leftGrid.columns === rightGrid.columns &&
+    leftGrid.gap === rightGrid.gap &&
+    leftGrid.showInfo === rightGrid.showInfo
+  );
+}
+
+function albumConfigWithOwnGrid(
+  rootConfig: Record<string, unknown> | undefined,
+  albumConfig: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!albumConfig) return undefined;
+  const next = { ...albumConfig };
+  if (
+    next.gridScope !== "folder" &&
+    gridSettingsMatch(next.grid, rootConfig?.grid)
+  ) {
+    delete next.grid;
+  }
+  return next;
+}
+
+function settingsWithoutRootGrid(
+  settings: Record<string, unknown>,
+  rootConfig: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (!rootConfig) return settings;
+  const rootConfigWithoutGrid = { ...rootConfig };
+  delete rootConfigWithoutGrid.grid;
+  return {
+    ...settings,
+    design_config: rootConfigWithoutGrid,
+  };
+}
+
 export function normalizeSlideshowIntervalMs(value: unknown): number {
   const rawValue = typeof value === "string" ? Number(value) : asNumber(value);
   if (rawValue === undefined || !Number.isFinite(rawValue)) {
@@ -763,6 +803,33 @@ function legacyPhoneProfile(
         typography?.mobileSubtitleSize || desktop.typography?.subtitleSize,
     },
   };
+}
+
+export function readPublicDesignConfigForAlbum(
+  settings: Record<string, unknown> | undefined | null,
+  albumId?: string | null,
+): PublicDesignConfig | null {
+  if (!settings) return readPublicDesignConfig(settings);
+  const rootConfig = asObject(settings["design_config"]);
+  if (!albumId) {
+    return readPublicDesignConfig(settingsWithoutRootGrid(settings, rootConfig));
+  }
+  const byAlbum = asObject(settings["design_config_by_album"]);
+  const albumConfig = albumConfigWithOwnGrid(
+    rootConfig,
+    byAlbum ? asObject(byAlbum[albumId]) : undefined,
+  );
+  const rootConfigForAlbum = settingsWithoutRootGrid(
+    settings,
+    rootConfig,
+  ).design_config;
+  return readPublicDesignConfig({
+    ...settings,
+    design_config: {
+      ...(asObject(rootConfigForAlbum) ?? {}),
+      ...(albumConfig ?? {}),
+    },
+  });
 }
 
 export function resolveCoverDeviceProfile(

@@ -101,7 +101,7 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("setVisibleLimit((current) =>");
   });
 
-  it("allows owner mouse reordering and persists upload batches by clip-number order", () => {
+  it("allows owner mouse reordering and only auto-sorts uploads while the gallery is still clip-ascending", () => {
     const source = readDetailPage();
 
     expect(source).toContain("reorderGalleryAssets");
@@ -109,6 +109,9 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("ASSET_ALBUM_DRAG_TYPE");
     expect(source).toContain("galleryAssetClipNumberComparator");
     expect(source).toContain("orderGalleryAssetEntriesByClipNumber");
+    expect(source).toContain("isGalleryAssetClipAscending");
+    expect(source).toContain("currentAssetsAreClipAscending");
+    expect(source).toContain("if (!currentAssetsAreClipAscending)");
     expect(source).toContain("moveGalleryAssetEntry");
     expect(source).toContain("galleryAssetReorderPayload");
     expect(source).toContain("persistGalleryAssetsByClipNumber");
@@ -122,6 +125,21 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("Photo order update failed.");
     expect(source).toContain("await reorderGalleryAssets(");
     expect(source).toContain("galleryAssetReorderPayload(nextAssets)");
+  });
+
+  it("shows gallery folders in the workflow panel and scopes shortcuts to the selected folder", () => {
+    const source = readDetailPage();
+
+    expect(source).toContain("Gallery folders");
+    expect(source).toContain("activeAlbumQuery");
+    expect(source).toContain("coverWorkflowHref");
+    expect(source).toContain("faceIdWorkflowHref");
+    expect(source).toContain("settingsWorkflowHref");
+    expect(source).toContain("deliveryWorkflowHref");
+    expect(source).not.toContain(">Selected folder</dt>");
+    expect(source).not.toContain(">Client hearts</dt>");
+    expect(source).toContain("setActiveAlbum(album.id)");
+    expect(source).toContain("setActiveAlbum(null)");
   });
 
   // F-046: the grid must render a bounded window of the filtered assets with
@@ -369,8 +387,11 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).not.toContain("beforeunload");
     expect(source).not.toContain("Closing or reloading this browser tab");
     expect(source).toContain(
-      "This upload dashboard stays centered until uploads finish.",
+      "this upload dashboard closes automatically when every upload completes.",
     );
+    expect(source).toContain("UPLOAD_DIALOG_AUTO_CLOSE_MS");
+    expect(source).toContain("UPLOAD_FINISHED_CLEAR_MS");
+    expect(source).toContain("uploadDialogAutoCloseTimerRef");
     expect(source).toContain("if (activeUploadCount > 0) {");
     expect(source).toContain("uploadDialogRef.current?.focus();");
     expect(source).toContain("return;");
@@ -421,7 +442,7 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(backgroundBar).toContain("upload.retryAll");
     expect(backgroundBar).toContain("activeUploadStatusHint");
     expect(source).toContain(
-      "Upload continues while you use Dashboard, Messages, Settings, or this gallery.",
+      "RawDrive stays locked until uploads finish.",
     );
     expect(backgroundBar).not.toContain("upload.pauseAll");
     expect(backgroundBar).not.toContain("upload.resumeAll");
@@ -442,8 +463,11 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("showGalleryActionStatus");
     expect(source).toContain('data-testid="gallery-action-inline-status"');
     expect(source).toContain('data-testid="gallery-action-status"');
+    expect(source).toContain("deleteConfirmDeleting");
+    expect(source).toContain('aria-busy={deleteConfirmDeleting}');
+    expect(source).toContain('{deleteConfirmDeleting ? "Deleting..." : "Delete"}');
     expect(source).toContain(
-      "Upload continues in background while you use RawDrive. Keep this browser tab open until uploads finish.",
+      "Upload is in progress. RawDrive stays locked until uploads finish.",
     );
     expect(source).toContain("Deleting selected photos...");
     expect(source).toContain("Selected photos deleted.");
@@ -652,17 +676,20 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(gateWindow).not.toContain("{gallery.slug && (");
   });
 
-  it("defaults an opened gallery to Highlights without a set-state effect", () => {
+  it("defaults an opened gallery to all photos so manual reordering works immediately", () => {
     const source = readDetailPage();
 
-    expect(source).toContain("string | null | undefined");
+    expect(source).toContain("useState<string | null>(null)");
     expect(source).toContain("const activeAlbumId =");
-    expect(source).toContain(
-      "activeAlbum === undefined ? (highlightsAlbum?.id ?? null) : activeAlbum",
-    );
+    expect(source).toContain("const activeAlbumId = activeAlbum;");
     expect(source).toContain('value={activeAlbumId ?? ""}');
+    expect(source).toContain("All photos");
+    expect(source).toContain("manual photo ordering is immediately available");
     expect(source).not.toContain("defaultHighlightsAlbumAppliedRef");
     expect(source).not.toContain("setActiveAlbum(highlightsAlbum.id)");
+    expect(source).not.toContain(
+      "activeAlbum === undefined ? (highlightsAlbum?.id ?? null) : activeAlbum",
+    );
   });
 
   it("omits the sub-gallery management toggle while keeping delete actions reachable", () => {

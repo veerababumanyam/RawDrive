@@ -19,7 +19,7 @@ import {
   resolveGalleryAccent,
 } from "@/lib/gallery-accent";
 import {
-  readPublicDesignConfig,
+  readPublicDesignConfigForAlbum,
   readPublicCoverThumbnails,
   readPublicCoverProfileThumbnails,
   resolveCoverDeviceProfile,
@@ -277,7 +277,10 @@ export default async function PublicGalleryPage({
   // backend/internal/handler/public_gallery_handler.go::GetBySlug) so the
   // saved cover image renders even when an album filter (?album=X) would
   // otherwise hide it from the asset list.
-  const designConfig = readPublicDesignConfig(gallery.settings);
+  const designConfig = readPublicDesignConfigForAlbum(
+    gallery.settings,
+    albumId,
+  );
   const designCoverThumbnails = readPublicCoverThumbnails(gallery.settings);
   const designCoverProfileThumbnails = readPublicCoverProfileThumbnails(
     gallery.settings,

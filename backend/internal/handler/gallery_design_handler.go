@@ -104,7 +104,17 @@ func (h *GalleryDesignHandler) UpdateDesign(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := h.designSvc.UpdateDesignConfigRaw(r.Context(), id, raw); err != nil {
+	var albumID *uuid.UUID
+	if rawAlbumID := r.URL.Query().Get("album"); rawAlbumID != "" {
+		parsed, parseErr := uuid.Parse(rawAlbumID)
+		if parseErr != nil {
+			http.Error(w, `{"error":"invalid album id"}`, http.StatusBadRequest)
+			return
+		}
+		albumID = &parsed
+	}
+
+	if err := h.designSvc.UpdateDesignConfigRaw(r.Context(), id, raw, albumID); err != nil {
 		if errors.Is(err, service.ErrDesignCoverAssetNotInGallery) || errors.Is(err, service.ErrDesignCoverValidationUnavailable) {
 			http.Error(w, `{"error":"cover assets must belong to this gallery"}`, http.StatusBadRequest)
 			return

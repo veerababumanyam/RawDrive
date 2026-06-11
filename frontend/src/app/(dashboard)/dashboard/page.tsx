@@ -10,7 +10,6 @@ import {
 import Link from "next/link";
 import {
   Cloud,
-  FileText,
   Plus,
   Sparkles,
   UserPlus,
@@ -135,7 +134,7 @@ function DashboardGalleryCover({
       <img
         src={media.src}
         alt=""
-        className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+        className="absolute inset-0 h-full w-full object-contain"
         loading="lazy"
         decoding="async"
         onError={() => setFailedSrc(media.src)}
@@ -482,7 +481,7 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      <div className="dashboard-content-grid">
+      <div className="dashboard-content-grid dashboard-content-grid--single">
         <section>
           <div className="dashboard-section-header">
             <div>
@@ -607,46 +606,6 @@ export default function DashboardPage() {
           )}
         </section>
 
-        <aside>
-          <section className="surface-panel dashboard-activity-panel">
-            <div className="dashboard-activity-panel__header">
-              <h3 className="dashboard-activity-panel__title font-headline">
-                Recent activity
-              </h3>
-              <FileText className="h-4 w-4 text-text-tertiary" />
-            </div>
-
-            {galleries.length === 0 ? (
-              <p className="text-sm text-text-secondary">
-                Activity will show up here once you start uploading photos and
-                working with clients.
-              </p>
-            ) : (
-              <div className="dashboard-activity-list">
-                {galleries.slice(0, 4).map((gallery) => (
-                  <div key={gallery.id} className="dashboard-activity-item">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-accent">
-                      <Sparkles className="h-5 w-5" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm leading-tight text-text-primary">
-                        gallery{" "}
-                        <span className="font-semibold">{gallery.title}</span>{" "}
-                        {gallery.is_published ? "published" : "created"}
-                      </p>
-                      <p className="mt-1 text-xs text-text-secondary">
-                        {new Date(gallery.updated_at).toLocaleDateString(
-                          "en-IN",
-                          { day: "numeric", month: "short" },
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        </aside>
       </div>
     </div>
   );

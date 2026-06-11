@@ -13,4 +13,17 @@ describe("RootLayout font loading", () => {
     expect(globals).not.toContain("--font-inter");
     expect(globals).not.toContain("--font-manrope");
   });
+
+  it("keeps the app-wide text scale larger through Tailwind token mappings", () => {
+    const globals = readFileSync(join(appRoot, "globals.css"), "utf8");
+
+    expect(globals).toContain("--type-xs: 0.9rem;");
+    expect(globals).toContain("--type-sm: 1.05rem;");
+    expect(globals).toContain("--type-base: 1.2rem;");
+    expect(globals).toContain("--type-lg: 1.35rem;");
+    expect(globals).toContain("--text-base: var(--type-base);");
+    expect(globals).toContain(
+      "--text-base--line-height: var(--leading-base);",
+    );
+  });
 });

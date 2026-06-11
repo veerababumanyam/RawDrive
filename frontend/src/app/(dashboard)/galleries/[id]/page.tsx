@@ -235,6 +235,9 @@ const SHARE_UNAVAILABLE_MESSAGE =
 const HIGHLIGHTS_ALBUM_NAME = "HIGHLIGHTS";
 type ShareLinkChannel = "copy" | "email" | "whatsapp";
 const ASSET_SETTLE_REFRESH_DELAYS_MS = [1200, 4000] as const;
+const UPLOAD_DIALOG_AUTO_CLOSE_MS = 900;
+const UPLOAD_FINISHED_CLEAR_MS =
+  Math.max(...ASSET_SETTLE_REFRESH_DELAYS_MS) + 1500;
 const FACE_INDEX_REINDEX_CONCURRENCY = 3;
 const ASSET_ALBUM_DRAG_TYPE = "application/x-rawdrive-asset-ids";
 const ASSET_REORDER_DRAG_TYPE = "application/x-rawdrive-reorder-asset-id";
@@ -320,6 +323,14 @@ function orderGalleryAssetEntriesByClipNumber<T extends GalleryAsset>(
 ): T[] {
   return withSequentialSortOrder(
     [...entries].sort(galleryAssetClipNumberComparator),
+  );
+}
+
+function isGalleryAssetClipAscending(entries: GalleryAsset[]): boolean {
+  if (entries.length < 2) return true;
+  const ordered = [...entries].sort(galleryAssetClipNumberComparator);
+  return ordered.every(
+    (entry, index) => entry.asset_id === entries[index]?.asset_id,
   );
 }
 
@@ -781,9 +792,7 @@ export default function GalleryDetailPage({
   const [albumAssetIdsByAlbum, setAlbumAssetIdsByAlbum] = useState<
     Record<string, string[]>
   >({});
-  const [activeAlbum, setActiveAlbum] = useState<string | null | undefined>(
-    undefined,
-  );
+  const [activeAlbum, setActiveAlbum] = useState<string | null>(null);
   const highlightsAlbum = useMemo(
     () =>
       albums.find(
@@ -791,8 +800,7 @@ export default function GalleryDetailPage({
       ) ?? null,
     [albums],
   );
-  const activeAlbumId =
-    activeAlbum === undefined ? (highlightsAlbum?.id ?? null) : activeAlbum;
+  const activeAlbumId = activeAlbum;
   const [newAlbumName, setNewAlbumName] = useState("");
   const [showAlbumCreate, setShowAlbumCreate] = useState(false);
   const [creatingAlbum, setCreatingAlbum] = useState(false);
@@ -807,6 +815,7 @@ export default function GalleryDetailPage({
     filename: string;
     isBulk?: boolean;
   } | null>(null);
+  const [deleteConfirmDeleting, setDeleteConfirmDeleting] = useState(false);
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [tetheredEnabled, setTetheredEnabled] = useState(false);
   const [tetheredFolderName, setTetheredFolderName] = useState<string | null>(
@@ -831,6 +840,9 @@ export default function GalleryDetailPage({
   const photoFileInputRef = useRef<HTMLInputElement | null>(null);
   const photoFolderInputRef = useRef<HTMLInputElement | null>(null);
   const uploadDialogRef = useRef<HTMLElement | null>(null);
+  const uploadDialogHadActiveRef = useRef(false);
+  const uploadDialogAutoCloseTimerRef = useRef<number | null>(null);
+  const uploadFinishedClearTimerRef = useRef<number | null>(null);
   const tetheredDirectoryRef = useRef<TetheredDirectoryEntry | null>(null);
   const tetheredSeenFilesRef = useRef<Map<string, TetheredSeenFile>>(new Map());
   const tetheredPollTimerRef = useRef<number | null>(null);
@@ -1060,6 +1072,11 @@ export default function GalleryDetailPage({
       entries: GalleryAssetRecord[] | null,
     ): Promise<GalleryAssetRecord[] | null> => {
       if (!entries || entries.length < 2) return entries;
+      const currentAssetsAreClipAscending =
+        assets.length < 2 || isGalleryAssetClipAscending(assets);
+      if (!currentAssetsAreClipAscending) {
+        return entries;
+      }
 
       const orderedAssets = orderGalleryAssetEntriesByClipNumber(entries);
       if (assetRowsSignature(orderedAssets) === assetRowsSignature(entries)) {
@@ -1068,7 +1085,7 @@ export default function GalleryDetailPage({
 
       return persistGalleryAssetOrder(orderedAssets, entries);
     },
-    [persistGalleryAssetOrder],
+    [assets, persistGalleryAssetOrder],
   );
 
   const refreshAlbums = useCallback(async () => {
@@ -1700,11 +1717,34 @@ export default function GalleryDetailPage({
         : null,
     [activeAlbumId, albums],
   );
+  const activeAlbumQuery = useMemo(
+    () => (activeAlbumId ? `?album=${encodeURIComponent(activeAlbumId)}` : ""),
+    [activeAlbumId],
+  );
   const previewHref = useMemo(() => {
     const baseHref = `/galleries/${id}/preview`;
+    if (activeAlbumId) {
+      return `${baseHref}?album=${encodeURIComponent(activeAlbumId)}`;
+    }
     if (!highlightsAlbum) return baseHref;
     return `${baseHref}?album=${encodeURIComponent(highlightsAlbum.id)}`;
-  }, [highlightsAlbum, id]);
+  }, [activeAlbumId, highlightsAlbum, id]);
+  const coverWorkflowHref = useMemo(
+    () => `/galleries/${id}/cover${activeAlbumQuery}`,
+    [activeAlbumQuery, id],
+  );
+  const faceIdWorkflowHref = useMemo(
+    () => `/galleries/${id}/photo-search${activeAlbumQuery}`,
+    [activeAlbumQuery, id],
+  );
+  const settingsWorkflowHref = useMemo(
+    () => `/galleries/${id}/settings${activeAlbumQuery}`,
+    [activeAlbumQuery, id],
+  );
+  const deliveryWorkflowHref = useMemo(
+    () => `/galleries/${id}/delivery${activeAlbumQuery}`,
+    [activeAlbumQuery, id],
+  );
   const activeLightboxAsset =
     lightboxIndex !== null ? (assets[lightboxIndex]?.asset ?? null) : null;
   const activeLightboxAssetId = activeLightboxAsset?.id;
@@ -2162,7 +2202,7 @@ export default function GalleryDetailPage({
       ? `Paused ${activeUploadCount} ${activeUploadCount === 1 ? "upload" : "uploads"}`
       : uploadStatusHeadline;
   const activeUploadStatusHint =
-    "Upload continues while you use Dashboard, Messages, Settings, or this gallery. This upload dashboard stays centered until uploads finish.";
+    "RawDrive stays locked until uploads finish. Keep this browser tab open; this upload dashboard closes automatically when every upload completes.";
   const galleryActionToneClass =
     galleryActionStatus?.tone === "error"
       ? "text-error"
@@ -2171,7 +2211,7 @@ export default function GalleryDetailPage({
         : "text-text-secondary";
   const galleryActionWarning =
     activeUploadCount > 0
-      ? "Upload continues in background while you use RawDrive. Keep this browser tab open until uploads finish."
+      ? "Upload is in progress. RawDrive stays locked until uploads finish."
       : "";
   const handleUploadDialogBack = () => {
     if (activeUploadCount > 0) {
@@ -2181,6 +2221,17 @@ export default function GalleryDetailPage({
     upload.clearFinished();
     setShowUploadDialog(false);
   };
+
+  const clearUploadDialogTimers = useCallback(() => {
+    if (uploadDialogAutoCloseTimerRef.current !== null) {
+      window.clearTimeout(uploadDialogAutoCloseTimerRef.current);
+      uploadDialogAutoCloseTimerRef.current = null;
+    }
+    if (uploadFinishedClearTimerRef.current !== null) {
+      window.clearTimeout(uploadFinishedClearTimerRef.current);
+      uploadFinishedClearTimerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (!uploadDialogOpen) return;
@@ -2193,6 +2244,45 @@ export default function GalleryDetailPage({
     document.addEventListener("keydown", closeOnEscape);
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [uploadDialogOpen, uploadDialogCanClose]);
+
+  useEffect(() => () => clearUploadDialogTimers(), [clearUploadDialogTimers]);
+
+  useEffect(() => {
+    if (activeUploadCount > 0) {
+      uploadDialogHadActiveRef.current = true;
+      clearUploadDialogTimers();
+      return;
+    }
+
+    if (!uploadDialogHadActiveRef.current) return;
+
+    if (failedUploadCount > 0 || blockedUploadCount > 0) {
+      uploadDialogHadActiveRef.current = false;
+      clearUploadDialogTimers();
+      return;
+    }
+
+    if (completedUploadCount === 0) return;
+
+    clearUploadDialogTimers();
+    uploadDialogAutoCloseTimerRef.current = window.setTimeout(() => {
+      setShowUploadDialog(false);
+      uploadDialogAutoCloseTimerRef.current = null;
+    }, UPLOAD_DIALOG_AUTO_CLOSE_MS);
+    uploadFinishedClearTimerRef.current = window.setTimeout(() => {
+      upload.clearFinished();
+      uploadDialogHadActiveRef.current = false;
+      uploadFinishedClearTimerRef.current = null;
+    }, UPLOAD_FINISHED_CLEAR_MS);
+  }, [
+    activeUploadCount,
+    blockedUploadCount,
+    clearUploadDialogTimers,
+    completedUploadCount,
+    failedUploadCount,
+    upload,
+  ]);
+
   const prevActiveUploadCountRef = useRef(0);
   const [uploadToast, setUploadToast] = useState<{
     visible: boolean;
@@ -3303,7 +3393,7 @@ export default function GalleryDetailPage({
                 here and re-add the · separator. */}
             <div className="mt-3 flex items-center gap-3">
               <Link
-                href={`/galleries/${gallery.id}/cover`}
+                href={coverWorkflowHref}
                 className="text-xs text-accent-primary hover:underline"
               >
                 Cover & Design
@@ -3602,9 +3692,8 @@ export default function GalleryDetailPage({
               )}
 
               {/* Mobile (<sm): collapse real sub-galleries into a single
-                  dropdown + Share/QR action buttons. Highlights is the initial
-                  default when present; the gallery root is reachable from the
-                  folder breadcrumb. */}
+                  dropdown + Share/QR action buttons. The gallery root remains
+                  the default so manual photo ordering is immediately available. */}
               {albums.length > 0 && (
                 <div className="flex items-center gap-2 sm:hidden">
                   <select
@@ -3613,8 +3702,8 @@ export default function GalleryDetailPage({
                     className="min-w-0 flex-1 rounded-xl border border-border-default bg-surface-container px-3 py-2 text-sm font-semibold text-text-primary transition-colors focus:border-accent-primary focus:outline-none focus:ring-2 focus:ring-accent-primary/30"
                     aria-label="Select gallery view"
                   >
-                    <option value="" disabled>
-                      Sub-galleries
+                    <option value="">
+                      All photos
                     </option>
                     {albums.map((album) => (
                       <option key={album.id} value={album.id}>
@@ -4349,56 +4438,81 @@ export default function GalleryDetailPage({
               Workflow
             </p>
             <h2 className="text-sm font-semibold text-text-primary">
-              Gallery status
+              {activeAlbumId ? "Folder workflow" : "Gallery workflow"}
             </h2>
           </div>
-          <dl className="mt-4 grid grid-cols-2 gap-3 text-sm lg:grid-cols-1">
-            <div className="rounded-xl border border-border-subtle bg-surface-sunken px-3 py-2">
-              <dt className="text-xs text-text-secondary">Photos</dt>
-              <dd className="mt-1 font-semibold text-text-primary">
-                {assets.length}
-              </dd>
+          <div className="mt-4 space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-widest text-text-tertiary">
+              Gallery folders
+            </p>
+            <div className="grid max-h-64 gap-2 overflow-y-auto pr-1">
+              <button
+                type="button"
+                onClick={() => setActiveAlbum(null)}
+                className={cn(
+                  "rounded-xl border px-3 py-2 text-left transition-colors",
+                  !activeAlbumId
+                    ? "border-accent-primary bg-accent-subtle text-text-primary"
+                    : "border-border-subtle bg-surface-sunken text-text-secondary hover:border-accent-primary hover:text-text-primary",
+                )}
+              >
+                <span className="block truncate text-sm font-semibold">
+                  Gallery root
+                </span>
+                <span className="mt-0.5 block text-xs text-text-tertiary">
+                  {assets.length} {assets.length === 1 ? "photo" : "photos"}
+                </span>
+              </button>
+              {albums.map((album) => {
+                const photoCount =
+                  albumAssetIdsByAlbum[album.id]?.length ??
+                  album.asset_count ??
+                  0;
+                const isActive = activeAlbumId === album.id;
+                return (
+                  <button
+                    key={album.id}
+                    type="button"
+                    onClick={() => setActiveAlbum(album.id)}
+                    className={cn(
+                      "rounded-xl border px-3 py-2 text-left transition-colors",
+                      isActive
+                        ? "border-accent-primary bg-accent-subtle text-text-primary"
+                        : "border-border-subtle bg-surface-sunken text-text-secondary hover:border-accent-primary hover:text-text-primary",
+                    )}
+                  >
+                    <span className="block truncate text-sm font-semibold">
+                      {album.name}
+                    </span>
+                    <span className="mt-0.5 block text-xs text-text-tertiary">
+                      {photoCount} {photoCount === 1 ? "photo" : "photos"}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-            <div className="rounded-xl border border-border-subtle bg-surface-sunken px-3 py-2">
-              <dt className="text-xs text-text-secondary">Sub-galleries</dt>
-              <dd className="mt-1 font-semibold text-text-primary">
-                {albums.length}
-              </dd>
-            </div>
-            <div className="rounded-xl border border-border-subtle bg-surface-sunken px-3 py-2">
-              <dt className="text-xs text-text-secondary">Proofing picks</dt>
-              <dd className="mt-1 font-semibold text-text-primary">
-                {selections.length}
-              </dd>
-            </div>
-            <div className="rounded-xl border border-border-subtle bg-surface-sunken px-3 py-2">
-              <dt className="text-xs text-text-secondary">Client hearts</dt>
-              <dd className="mt-1 font-semibold text-text-primary">
-                {favoritesSummary?.total_favorites ?? 0}
-              </dd>
-            </div>
-          </dl>
+          </div>
           <div className="mt-4 grid gap-2">
             <Link
-              href={`/galleries/${gallery.id}/cover`}
+              href={coverWorkflowHref}
               className="btn-tertiary justify-center px-4 py-2 text-sm"
             >
               Edit cover
             </Link>
             <Link
-              href={`/galleries/${gallery.id}/photo-search`}
+              href={faceIdWorkflowHref}
               className="btn-tertiary justify-center px-4 py-2 text-sm"
             >
               Review FaceID
             </Link>
             <Link
-              href={`/galleries/${gallery.id}/settings`}
+              href={settingsWorkflowHref}
               className="btn-tertiary justify-center px-4 py-2 text-sm"
             >
               Gallery settings
             </Link>
             <Link
-              href={`/galleries/${gallery.id}/delivery`}
+              href={deliveryWorkflowHref}
               className="btn-tertiary justify-center px-4 py-2 text-sm"
             >
               Delivery tools
@@ -5060,9 +5174,12 @@ export default function GalleryDetailPage({
       {deleteConfirm && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-surface-scrim-strong/50 glass-blur-subtle"
-          onClick={() => setDeleteConfirm(null)}
+          onClick={() => {
+            if (!deleteConfirmDeleting) setDeleteConfirm(null);
+          }}
         >
           <div
+            aria-busy={deleteConfirmDeleting}
             className="mx-4 w-full max-w-sm rounded-2xl border border-text-media/10 bg-surface-container-high p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
@@ -5079,19 +5196,24 @@ export default function GalleryDetailPage({
             <div className="mt-6 flex justify-end gap-3">
               <button
                 className="rounded-xl px-4 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-overlay/10"
+                disabled={deleteConfirmDeleting}
                 onClick={() => setDeleteConfirm(null)}
               >
                 Cancel
               </button>
               <button
                 className="btn-danger px-4 py-2 text-sm"
+                disabled={deleteConfirmDeleting}
                 onClick={() => {
                   const target = deleteConfirm;
-                  setDeleteConfirm(null);
+                  setDeleteConfirmDeleting(true);
                   if (target.isBulk) {
                     void (async () => {
                       const t = getStoredAccessToken();
-                      if (!t) return;
+                      if (!t) {
+                        setDeleteConfirmDeleting(false);
+                        return;
+                      }
                       try {
                         showGalleryActionStatus("Deleting selected photos...");
                         await bulkAssetAction(
@@ -5107,6 +5229,7 @@ export default function GalleryDetailPage({
                           "success",
                           5000,
                         );
+                        setDeleteConfirm(null);
                       } catch (err) {
                         showGalleryActionStatus(
                           "Selected photo delete failed.",
@@ -5118,14 +5241,20 @@ export default function GalleryDetailPage({
                             ? err.message
                             : "Bulk delete failed",
                         );
+                      } finally {
+                        setDeleteConfirmDeleting(false);
                       }
                     })();
                   } else {
-                    void handleDeleteAsset(target.assetId);
+                    void (async () => {
+                      await handleDeleteAsset(target.assetId);
+                      setDeleteConfirm(null);
+                      setDeleteConfirmDeleting(false);
+                    })();
                   }
                 }}
               >
-                Delete
+                {deleteConfirmDeleting ? "Deleting..." : "Delete"}
               </button>
             </div>
           </div>

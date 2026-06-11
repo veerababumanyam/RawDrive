@@ -60,10 +60,11 @@ describe("dashboard affordances (UAT 2026-06-04)", () => {
     expect(source).toContain('className="dashboard-page"');
     expect(source).toContain("Quick actions");
     expect(source).toContain("Recent galleries");
-    expect(source).toContain("Recent activity");
+    expect(source).not.toContain("Recent activity");
     expect(source).not.toContain("Quick Actions");
     expect(source).not.toContain("Recent Galleries");
     expect(source).not.toContain("Recent Activity");
+    expect(globals).not.toContain("dashboard-activity");
     expect(source).toContain('className="dashboard-overview-grid"');
     expect(source).toContain('className="dashboard-stats-grid"');
     expect(source).toContain(
@@ -73,13 +74,21 @@ describe("dashboard affordances (UAT 2026-06-04)", () => {
     expect(source).toContain(
       'className="surface-panel dashboard-quick-panel"',
     );
-    expect(source).toContain('className="dashboard-content-grid"');
+    expect(source).toContain(
+      'className="dashboard-content-grid dashboard-content-grid--single"',
+    );
+    expect(source).toContain("object-contain");
     expect(source).not.toContain(
       'className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4"',
     );
     expect(source).not.toContain("font-bold uppercase tracking-[0.22em]");
     expect(globals).toContain(".dashboard-page");
     expect(globals).toContain(".dashboard-stats-grid");
+    expect(globals).toContain("repeat(\n    auto-fit,");
+    expect(globals).toContain(
+      "minmax(min(100%, calc(var(--space-20) * 3.25)), calc(var(--space-20) * 5.5))",
+    );
+    expect(globals).toContain("justify-content: start;");
     expect(globals).toContain("align-items: start;");
     expect(globals).toContain("grid-template-areas:");
     expect(globals).toContain("min-height: var(--touch-target-min);");

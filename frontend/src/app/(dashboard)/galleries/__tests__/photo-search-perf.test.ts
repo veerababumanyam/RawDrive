@@ -73,11 +73,18 @@ describe("gallery photo-search — batch hydration (PERF-23)", () => {
     expect(source).not.toContain("return next[0]?.cluster_label");
   });
 
-  it("offers browser FaceID sync from the batched gallery asset list", () => {
+  it("offers browser FaceID sync from all manual gallery folders", () => {
     const source = read(faceReviewPanelPath);
     expect(source).toContain("indexAssetFacesFromBrowser");
     expect(source).toContain("getGalleryFaceIndexStatus");
     expect(source).toContain("includeAssets: true");
+    expect(source).toContain("listFaceIndexAssetsAcrossGalleryFolders");
+    expect(source).toContain("listGalleryAlbums(token, galleryId");
+    expect(source).toContain("listAlbumAssets(token, album.id");
+    expect(source).toContain("albumIsManualFolder");
+    expect(source).toContain("function uniqueAssetsById(assets: Asset[])");
+    expect(source).toContain("uniqueAssetsById([");
+    expect(source).toContain("Math.max(");
     expect(source).toContain("Sync now");
     expect(source).toContain("FACE_INDEX_CONCURRENCY");
     expect(source).not.toContain("getAsset(");
@@ -111,7 +118,8 @@ describe("gallery photo-search — batch hydration (PERF-23)", () => {
 
   it("uses a portrait camera focus reticle for face capture", () => {
     const source = read(photoSearchPath);
-    expect(source).toContain("h-4/5 w-2/5 rounded-full");
+    expect(source).toContain("h-[88%] w-[56%] rounded-full");
+    expect(source).not.toContain("h-4/5 w-2/5 rounded-full");
     expect(source).not.toContain("h-2/3 w-2/3 rounded-full");
   });
 });
