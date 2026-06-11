@@ -277,27 +277,35 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain('data-testid="upload-dialog-back"');
     expect(source).toContain("Back to gallery");
     expect(source).toContain("Back to gallery; uploads continue");
-    expect(source).toContain("const uploadDialogCanClose = true;");
+    expect(source).toContain(
+      "const uploadDialogLocked = activeUploadCount > 0;",
+    );
+    expect(source).toContain(
+      "const uploadDialogOpen = showUploadDialog || uploadDialogLocked;",
+    );
+    expect(source).toContain(
+      "const uploadDialogCanClose = !uploadDialogLocked;",
+    );
     expect(source).not.toContain(
       "activeUploadCount === 0 &&\n    failedUploadCount === 0 &&\n    blockedUploadCount === 0",
     );
-    expect(source).not.toContain("disabled={activeUploadCount > 0}");
+    expect(source).toContain("disabled={uploadDialogLocked}");
     const uploadBackStart = source.indexOf('data-testid="upload-dialog-back"');
     const uploadBackEnd = source.indexOf("<ChevronLeft />", uploadBackStart);
     const uploadBackButton = source.slice(uploadBackStart, uploadBackEnd);
-    expect(uploadBackButton).not.toContain(
-      "disabled:cursor-not-allowed disabled:opacity-50",
-    );
+    expect(uploadBackButton).toContain("cursor-not-allowed opacity-60");
     expect(source).toContain("upload.clearFinished()");
     expect(source).toContain('role="dialog"');
-    expect(source).not.toContain('aria-modal="true"');
+    expect(source).toContain(
+      "aria-modal={uploadDialogLocked ? true : undefined}",
+    );
     expect(source).toContain('data-testid="gallery-upload-dialog-shell"');
-    expect(source).toContain("pointer-events-none fixed inset-x-0 bottom-24");
+    expect(source).toContain("pointer-events-auto inset-0 items-center");
+    expect(source).toContain("bg-surface-scrim/75");
+    expect(source).toContain("pointer-events-none inset-x-0 bottom-24");
     expect(source).toContain("sm:bottom-28");
     expect(source).toContain("pointer-events-auto flex");
-    expect(source).not.toContain(
-      "fixed inset-0 z-[70] flex items-center justify-center bg-surface-scrim",
-    );
+    expect(source).toContain("max-h-[min(90dvh,56rem)] max-w-6xl");
     expect(source).toContain("Upload photos to gallery");
     expect(source).toContain("Camera JPEG/JFIF");
     expect(source).toContain("HEIC/HEIF, AVIF");
@@ -334,7 +342,7 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).not.toContain('document.createElement("input")');
     expect(source).toContain("backgroundUploadBarVisible");
     expect(source).toContain(
-      "const backgroundUploadBarVisible = uploadPanelOpen;",
+      "const backgroundUploadBarVisible = uploadPanelOpen && !uploadDialogOpen;",
     );
     expect(source).toContain('data-testid="background-upload-status"');
     const panelOpenStart = source.indexOf("const uploadPanelOpen =");
@@ -351,18 +359,11 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).not.toContain("beforeunload");
     expect(source).not.toContain("Closing or reloading this browser tab");
     expect(source).toContain(
-      "Upload continues while you use Dashboard, Messages, Settings, or this gallery.",
+      "This upload dashboard stays centered until uploads finish.",
     );
-    expect(source).toContain("const uploadAutoMinimizedRef = useRef(false)");
-    expect(source).toContain("if (activeUploadCount === 0) {");
-    expect(source).toContain("uploadAutoMinimizedRef.current = false;");
-    expect(source).toContain(
-      "if (uploadAutoMinimizedRef.current || !showUploadDialog) return;",
-    );
-    expect(source).toContain("uploadAutoMinimizedRef.current = true;");
     expect(source).toContain("if (activeUploadCount > 0) {");
+    expect(source).toContain("uploadDialogRef.current?.focus();");
     expect(source).toContain("return;");
-    expect(source).toContain("setShowUploadDialog(false)");
     const acceptedUploadStart = source.indexOf("if (accepted.length > 0) {");
     const acceptedUploadEnd = source.indexOf(
       "upload.addFiles(accepted);",
@@ -374,8 +375,9 @@ describe("gallery detail page — perf & a11y contracts", () => {
     );
     expect(acceptedUploadStart).toBeGreaterThan(-1);
     expect(acceptedUploadEnd).toBeGreaterThan(acceptedUploadStart);
-    expect(acceptedUploadBlock).toContain("setShowUploadDialog(false);");
-    expect(acceptedUploadBlock).not.toContain("setShowUploadDialog(true);");
+    expect(acceptedUploadBlock).toContain(
+      'setShowUploadDialog(options?.source !== "tethered");',
+    );
     expect(source).not.toContain("Gallery stays usable during upload");
     expect(source).not.toContain("Only uploads locked until complete");
     expect(source).toContain("z-[80]");

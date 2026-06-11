@@ -2123,9 +2123,10 @@ export default function GalleryDetailPage({
   };
   const uploadPanelOpen =
     activeUploadCount > 0 || failedUploadCount > 0 || blockedUploadCount > 0;
-  const uploadDialogOpen = showUploadDialog;
-  const backgroundUploadBarVisible = uploadPanelOpen;
-  const uploadDialogCanClose = true;
+  const uploadDialogLocked = activeUploadCount > 0;
+  const uploadDialogOpen = showUploadDialog || uploadDialogLocked;
+  const backgroundUploadBarVisible = uploadPanelOpen && !uploadDialogOpen;
+  const uploadDialogCanClose = !uploadDialogLocked;
   const uploadStage: "details" | "processing" | "visibility" =
     activeUploadCount > 0
       ? "processing"
@@ -2158,7 +2159,7 @@ export default function GalleryDetailPage({
       ? `Paused ${activeUploadCount} ${activeUploadCount === 1 ? "upload" : "uploads"}`
       : uploadStatusHeadline;
   const activeUploadStatusHint =
-    "Upload continues while you use Dashboard, Messages, Settings, or this gallery. Keep this browser tab open until uploads finish.";
+    "Upload continues while you use Dashboard, Messages, Settings, or this gallery. This upload dashboard stays centered until uploads finish.";
   const galleryActionToneClass =
     galleryActionStatus?.tone === "error"
       ? "text-error"
@@ -2171,7 +2172,7 @@ export default function GalleryDetailPage({
       : "";
   const handleUploadDialogBack = () => {
     if (activeUploadCount > 0) {
-      setShowUploadDialog(false);
+      uploadDialogRef.current?.focus();
       return;
     }
     upload.clearFinished();
@@ -2189,16 +2190,6 @@ export default function GalleryDetailPage({
     document.addEventListener("keydown", closeOnEscape);
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [uploadDialogOpen, uploadDialogCanClose]);
-  const uploadAutoMinimizedRef = useRef(false);
-  useEffect(() => {
-    if (activeUploadCount === 0) {
-      uploadAutoMinimizedRef.current = false;
-      return;
-    }
-    if (uploadAutoMinimizedRef.current || !showUploadDialog) return;
-    uploadAutoMinimizedRef.current = true;
-    setShowUploadDialog(false);
-  }, [activeUploadCount, showUploadDialog]);
   const prevActiveUploadCountRef = useRef(0);
   const [uploadToast, setUploadToast] = useState<{
     visible: boolean;
@@ -2580,7 +2571,7 @@ export default function GalleryDetailPage({
             tetheredUploadSignaturesRef.current.add(uploadFileSignature(file));
           }
         }
-        setShowUploadDialog(false);
+        setShowUploadDialog(options?.source !== "tethered");
         upload.addFiles(accepted);
       }
     },
@@ -4538,16 +4529,27 @@ export default function GalleryDetailPage({
       {uploadDialogOpen && (
         <div
           data-testid="gallery-upload-dialog-shell"
-          className="pointer-events-none fixed inset-x-0 bottom-24 z-[70] flex items-end justify-center p-2 sm:inset-x-auto sm:right-4 sm:bottom-28 sm:w-[48rem] sm:max-w-[calc(100vw-2rem)] sm:p-0"
+          className={cn(
+            "fixed z-[90] flex justify-center",
+            uploadDialogLocked
+              ? "pointer-events-auto inset-0 items-center bg-surface-scrim/75 p-3 glass-blur-medium sm:p-6"
+              : "pointer-events-none inset-x-0 bottom-24 items-end p-2 sm:inset-x-auto sm:right-4 sm:bottom-28 sm:w-[48rem] sm:max-w-[calc(100vw-2rem)] sm:p-0",
+          )}
         >
           <section
             ref={uploadDialogRef}
             data-testid="gallery-upload-dialog"
             role="dialog"
+            aria-modal={uploadDialogLocked ? true : undefined}
             aria-label="Upload photos to gallery"
             aria-describedby="gallery-upload-dialog-description"
             tabIndex={-1}
-            className="pointer-events-auto flex max-h-[min(82dvh,44rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border-default bg-surface-elevated shadow-elevation-1"
+            className={cn(
+              "pointer-events-auto flex w-full flex-col overflow-hidden rounded-2xl border border-border-default bg-surface-elevated shadow-elevation-1",
+              uploadDialogLocked
+                ? "max-h-[min(90dvh,56rem)] max-w-6xl"
+                : "max-h-[min(82dvh,44rem)] max-w-5xl",
+            )}
           >
             <div className="flex items-start justify-between gap-3 border-b border-border-subtle px-4 py-3 sm:px-6 sm:py-4">
               <div className="flex min-w-0 items-start gap-3">
@@ -4561,7 +4563,12 @@ export default function GalleryDetailPage({
                       : "Back to gallery"
                   }
                   data-testid="upload-dialog-back"
-                  className="shrink-0 text-text-secondary hover:text-text-primary"
+                  disabled={uploadDialogLocked}
+                  className={cn(
+                    "shrink-0 text-text-secondary hover:text-text-primary",
+                    uploadDialogLocked &&
+                      "cursor-not-allowed opacity-60 hover:text-text-secondary",
+                  )}
                   onClick={handleUploadDialogBack}
                 >
                   <ChevronLeft />
