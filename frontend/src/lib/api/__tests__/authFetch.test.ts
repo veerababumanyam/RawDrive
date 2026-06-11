@@ -54,6 +54,58 @@ describe("authFetch", () => {
     expect(locationAssignMock).not.toHaveBeenCalled();
   });
 
+  it("refreshes before the first request when auth is required and no token is cached", async () => {
+    getStoredAccessTokenMock.mockReturnValue("");
+    refreshAuthSessionResultMock.mockResolvedValueOnce({
+      ok: true,
+      accessToken: "fresh-token",
+    });
+
+    const fetcher = vi.fn(async () =>
+      ({ status: 200, ok: true, headers: new Headers() }) as unknown as Response,
+    );
+    vi.stubGlobal("fetch", fetcher);
+
+    const res = await authFetch("/api/v1/uploads", {
+      method: "POST",
+      requireAuth: true,
+    });
+
+    expect(res.status).toBe(200);
+    expect(refreshAuthSessionResultMock).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const uploadCall = fetcher.mock.calls[0] as unknown as [
+      unknown,
+      RequestInit,
+    ];
+    expect(new Headers(uploadCall[1].headers).get("Authorization")).toBe(
+      "Bearer fresh-token",
+    );
+    expect(locationAssignMock).not.toHaveBeenCalled();
+  });
+
+  it("returns a 401 response without hitting the endpoint when required auth cannot refresh", async () => {
+    getStoredAccessTokenMock.mockReturnValue("");
+    refreshAuthSessionResultMock.mockResolvedValueOnce({
+      ok: false,
+      reason: "no_session",
+    });
+
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+
+    const res = await authFetch("/api/v1/uploads", {
+      method: "POST",
+      requireAuth: true,
+    });
+
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: "no_session" });
+    expect(refreshAuthSessionResultMock).toHaveBeenCalledTimes(1);
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(locationAssignMock).not.toHaveBeenCalled();
+  });
+
   it("attempts refresh and retries on 401 when a token was attached", async () => {
     getStoredAccessTokenMock.mockReturnValueOnce("stale-token");
     refreshAuthSessionResultMock.mockResolvedValueOnce({ ok: true, accessToken: "new-token" });

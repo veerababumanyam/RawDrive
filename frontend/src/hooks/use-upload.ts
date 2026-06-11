@@ -154,6 +154,7 @@ async function uploadEncryptedDerivative(
         method: "POST",
         body: form,
         signal,
+        requireAuth: true,
       }),
     signal,
   );
@@ -310,7 +311,12 @@ async function fetchUploadOffset(
   signal: AbortSignal,
 ): Promise<number | null> {
   const res = await retryUploadRequest(
-    () => authFetch(`/api/v1/uploads/${uploadId}`, { method: "HEAD", signal }),
+    () =>
+      authFetch(`/api/v1/uploads/${uploadId}`, {
+        method: "HEAD",
+        signal,
+        requireAuth: true,
+      }),
     signal,
   );
   if (!res.ok) return null;
@@ -338,6 +344,7 @@ async function uploadChunkWithResume(params: {
         },
         body: chunk,
         signal,
+        requireAuth: true,
       });
     } catch (err) {
       if (isAbortError(err)) throw err;
@@ -383,6 +390,7 @@ async function cancelUploadSession(uploadId: string): Promise<void> {
     await authFetch(`/api/v1/uploads/${encodeURIComponent(uploadId)}`, {
       method: "DELETE",
       keepalive: true,
+      requireAuth: true,
     });
   } catch (err) {
     console.warn("Upload session cleanup failed", { uploadId, error: err });
@@ -596,6 +604,7 @@ export function useUpload(
               },
               body: JSON.stringify(createBody),
               signal: controller.signal,
+              requireAuth: true,
             }),
           controller.signal,
         );

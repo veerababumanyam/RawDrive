@@ -31,20 +31,47 @@ function sharedRefresh(): ReturnType<typeof refreshAuthSessionResult> {
   return inflightRefresh;
 }
 
+type AuthFetchInit = RequestInit & {
+  /**
+   * Force an access-token refresh before the first request when no token is in
+   * memory. This is for mutating authenticated calls such as uploads: after a
+   * page reload the refresh cookie can still be valid even though the in-memory
+   * access token cache is empty.
+   */
+  requireAuth?: boolean;
+};
+
 /**
  * Authenticated fetch with automatic token refresh on 401.
  * Drop-in replacement for fetch() in authenticated contexts.
  */
 export async function authFetch(
   input: string,
-  init: RequestInit = {},
+  init: AuthFetchInit = {},
 ): Promise<Response> {
+  const { requireAuth = false, ...requestInit } = init;
   const url = resolveUrl(input);
-  const token = getStoredAccessToken();
-  const headers = new Headers(init.headers);
+  let token = getStoredAccessToken();
+
+  if (!token && requireAuth) {
+    const refreshResult = await sharedRefresh();
+    if (!refreshResult.ok) {
+      return new Response(JSON.stringify({ error: refreshResult.reason }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    token = refreshResult.accessToken;
+  }
+
+  const headers = new Headers(requestInit.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const response = await fetch(url, { ...init, headers, credentials: "include" });
+  const response = await fetch(url, {
+    ...requestInit,
+    headers,
+    credentials: "include",
+  });
   if (response.status !== 401) return response;
 
   // Only treat a 401 as "session expired" when we actually attached an
@@ -69,7 +96,11 @@ export async function authFetch(
     return response;
   }
 
-  const retryHeaders = new Headers(init.headers);
+  const retryHeaders = new Headers(requestInit.headers);
   retryHeaders.set("Authorization", `Bearer ${refreshResult.accessToken}`);
-  return fetch(url, { ...init, headers: retryHeaders, credentials: "include" });
+  return fetch(url, {
+    ...requestInit,
+    headers: retryHeaders,
+    credentials: "include",
+  });
 }

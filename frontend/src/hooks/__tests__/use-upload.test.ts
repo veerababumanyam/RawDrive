@@ -84,6 +84,25 @@ describe("useUpload", () => {
     expect(createSessionBlock).toContain("controller.signal");
   });
 
+  it("requires authenticated upload requests so missing in-memory tokens refresh before upload", async () => {
+    const source = await readFile(
+      join(process.cwd(), "src/hooks/use-upload.ts"),
+      "utf8",
+    );
+
+    for (const marker of [
+      'authFetch("/api/v1/uploads"',
+      "authFetch(`/api/v1/uploads/${uploadId}`",
+      "authFetch(`/api/v1/uploads/${encodeURIComponent(uploadId)}`",
+      "authFetch(`/api/v1/assets/${assetId}/derivatives`",
+    ]) {
+      const start = source.indexOf(marker);
+      const block = source.slice(start, start + 520);
+      expect(start).toBeGreaterThan(-1);
+      expect(block).toContain("requireAuth: true");
+    }
+  });
+
   it("requires confirmation before bulk-cancelling uploads", async () => {
     const { cancelUploadsConfirmationMessage } = await import("../use-upload");
 
