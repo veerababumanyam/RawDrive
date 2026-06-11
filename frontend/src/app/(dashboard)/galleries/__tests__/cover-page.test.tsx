@@ -164,21 +164,34 @@ async function renderPage() {
   });
 }
 
+const COVER_EDITOR_TAB_VALUE_BY_LABEL: Record<string, string> = {
+  Cover: "cover",
+  Text: "text",
+  Media: "media",
+  Videos: "videos",
+  Brand: "brand",
+  Grid: "grid",
+  Photos: "photos",
+};
+
 async function openCoverEditorTab(name: string) {
-  const tabs = await screen.findByRole("group", {
-    name: "Cover editor sections",
+  const select = await screen.findByRole("combobox", {
+    name: "Cover editor section",
   });
-  fireEvent.click(within(tabs).getByRole("button", { name }));
-  return tabs;
+  fireEvent.change(select, {
+    target: {
+      value: COVER_EDITOR_TAB_VALUE_BY_LABEL[name] ?? name.toLowerCase(),
+    },
+  });
+  return select;
 }
 
 async function expectCoverEditorTabSelected(name: string) {
-  const tabs = await screen.findByRole("group", {
-    name: "Cover editor sections",
+  const select = await screen.findByRole("combobox", {
+    name: "Cover editor section",
   });
-  expect(within(tabs).getByRole("button", { name })).toHaveAttribute(
-    "aria-pressed",
-    "true",
+  expect(select).toHaveValue(
+    COVER_EDITOR_TAB_VALUE_BY_LABEL[name] ?? name.toLowerCase(),
   );
 }
 
@@ -275,63 +288,56 @@ describe("CoverDesignPage", () => {
     expect(savedConfig.sceneHeaders).toEqual([]);
   }, 10000);
 
-  it("offers a compact mobile section rail for cover editing", async () => {
+  it("offers a section dropdown for cover editing", async () => {
     await renderPage();
 
-    const mobileRail = await screen.findByRole("group", {
-      name: "Mobile cover editor sections",
+    const sectionSelect = await screen.findByRole("combobox", {
+      name: "Cover editor section",
     });
 
-    expect(
-      within(mobileRail).getByRole("button", { name: "Cover" }),
-    ).toHaveAttribute("aria-pressed", "true");
-    expect(
-      within(mobileRail).queryByRole("button", { name: "Scenes" }),
-    ).not.toBeInTheDocument();
+    expect(sectionSelect).toHaveValue("cover");
     expect(screen.queryByLabelText("Editor section")).not.toBeInTheDocument();
+    expect(within(sectionSelect).getByRole("option", { name: "Cover" })).toHaveValue(
+      "cover",
+    );
     expect(
-      within(mobileRail).getByRole("button", { name: "Brand" }),
+      within(sectionSelect).queryByRole("option", { name: "Scenes" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(sectionSelect).getByRole("option", { name: "Brand" }),
     ).toBeInTheDocument();
     expect(
-      within(mobileRail).getByRole("button", { name: "Videos" }),
+      within(sectionSelect).getByRole("option", { name: "Videos" }),
     ).toBeInTheDocument();
     expect(
-      within(mobileRail).getByRole("button", { name: "Photos" }),
+      within(sectionSelect).getByRole("option", { name: "Photos" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: /brand defaults/i }),
     ).not.toBeInTheDocument();
 
-    fireEvent.click(within(mobileRail).getByRole("button", { name: "Text" }));
+    await openCoverEditorTab("Text");
 
-    expect(
-      within(mobileRail).getByRole("button", { name: "Text" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    await expectCoverEditorTabSelected("Text");
     expect(
       await screen.findByPlaceholderText("Your gallery title"),
     ).toBeInTheDocument();
 
-    fireEvent.click(within(mobileRail).getByRole("button", { name: "Grid" }));
+    await openCoverEditorTab("Grid");
 
-    expect(
-      within(mobileRail).getByRole("button", { name: "Grid" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    await expectCoverEditorTabSelected("Grid");
     expect(await screen.findByText("Filename captions")).toBeInTheDocument();
 
-    fireEvent.click(within(mobileRail).getByRole("button", { name: "Videos" }));
+    await openCoverEditorTab("Videos");
 
-    expect(
-      within(mobileRail).getByRole("button", { name: "Videos" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    await expectCoverEditorTabSelected("Videos");
     expect(
       await screen.findByRole("heading", { name: "Videos & Reels" }),
     ).toBeInTheDocument();
 
-    fireEvent.click(within(mobileRail).getByRole("button", { name: "Photos" }));
+    await openCoverEditorTab("Photos");
 
-    expect(
-      within(mobileRail).getByRole("button", { name: "Photos" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    await expectCoverEditorTabSelected("Photos");
     expect(await screen.findByText("Choose from gallery")).toBeInTheDocument();
   });
 
@@ -364,8 +370,8 @@ describe("CoverDesignPage", () => {
       screen.queryByRole("link", { name: /brand defaults/i }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("group", { name: "Cover editor sections" }),
-    ).toHaveClass("cover-inspector-tabs");
+      screen.getByRole("combobox", { name: "Cover editor section" }),
+    ).toHaveClass("cover-section-select");
     expect(
       screen.getByRole("region", { name: "Cover design controls" }),
     ).toHaveClass("cover-inspector-pane");
@@ -939,12 +945,11 @@ describe("CoverDesignPage", () => {
     });
 
     await waitFor(() => {
-      const tabs = screen.getByRole("group", {
-        name: "Cover editor sections",
-      });
       expect(
-        within(tabs).getByRole("button", { name: "Text" }),
-      ).toHaveAttribute("aria-pressed", "true");
+        screen.getByRole("combobox", {
+          name: "Cover editor section",
+        }),
+      ).toHaveValue("text");
     });
     expect(screen.getByPlaceholderText("Your gallery title")).toBeVisible();
 
@@ -1045,6 +1050,60 @@ describe("CoverDesignPage", () => {
     expect(savedCover.slotFocalPoints?.[1]).toEqual({ x: 64, y: 31 });
     expect(savedCover.slotZooms?.[1]).toBe(1.45);
     expect(savedCover.deviceProfiles?.desktop?.slotZooms?.[1]).toBe(1.45);
+  });
+
+  it("recenters and resets zoom when changing a template slot photo", async () => {
+    await renderPage();
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /use proofing first design/i,
+      }),
+    );
+    await openGalleryPhotosPanel();
+
+    const slotHeading = screen.getByRole("heading", {
+      name: "Gallery photos",
+    });
+    const slotSection = slotHeading.closest("section");
+    expect(slotSection).not.toBeNull();
+
+    fireEvent.click(
+      within(slotSection as HTMLElement).getByRole("button", {
+        name: "Photo 2",
+      }),
+    );
+    fireEvent.change(screen.getByLabelText("Move left/right"), {
+      target: { value: "64" },
+    });
+    fireEvent.change(screen.getByLabelText("Move up/down"), {
+      target: { value: "31" },
+    });
+    fireEvent.change(screen.getByLabelText("Photo zoom"), {
+      target: { value: "145" },
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /use Wedding \(44\)\.jpg as template photo 2/i,
+      }),
+    );
+
+    expect(screen.getByLabelText("Move left/right")).toHaveValue("50");
+    expect(screen.getByLabelText("Move up/down")).toHaveValue("50");
+    expect(screen.getByLabelText("Photo zoom")).toHaveValue("100");
+
+    const stage = screen.getByLabelText(/Cover preview/i);
+    const secondTemplateSlot = within(stage).getByRole("button", {
+      name: "Cover template photo 2",
+    });
+    expect(
+      within(secondTemplateSlot).getByAltText("Wedding (44).jpg"),
+    ).toHaveStyle({
+      objectPosition: "50% 50%",
+      transform: "scale(1)",
+      transformOrigin: "50% 50%",
+    });
   });
 
   it("pushes the selected gallery photo into the active cover template slot preview", async () => {

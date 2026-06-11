@@ -1366,7 +1366,8 @@ export default function GalleriesPage() {
                 className={cn(
                   "group relative rounded-xl border border-border-default bg-surface-raised",
                   "hover:border-accent/30 hover:shadow-elevation-1 transition-all duration-200",
-                  viewMode === "list" && "flex items-center gap-4",
+                  viewMode === "list" &&
+                    "flex flex-wrap items-center gap-3 sm:flex-nowrap sm:gap-4",
                 )}
               >
                 {/* Cover thumbnail (grid view) */}
@@ -1405,7 +1406,7 @@ export default function GalleriesPage() {
                   className={
                     viewMode === "grid"
                       ? "p-4 space-y-3"
-                      : "flex-1 min-w-0 py-4"
+                      : "min-w-[9rem] flex-1 py-4 pr-4 sm:min-w-0 sm:pr-0"
                   }
                 >
                   {viewMode === "grid" ? (
@@ -1497,7 +1498,9 @@ export default function GalleriesPage() {
                 <div
                   className={cn(
                     "flex items-center gap-2",
-                    viewMode === "grid" ? "px-4 pb-4" : "pr-4",
+                    viewMode === "grid"
+                      ? "px-4 pb-4"
+                      : "w-full justify-between border-t border-border-subtle px-4 pb-4 pt-0 sm:w-auto sm:justify-end sm:border-t-0 sm:px-0 sm:pb-0 sm:pr-4 sm:pt-0",
                   )}
                 >
                   <span className="text-xs text-text-tertiary">

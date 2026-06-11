@@ -3749,7 +3749,7 @@ body[data-chrome="marketing"] {
 }
 
 .cover-template-slot__image {
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .cover-template-slot__fallback {

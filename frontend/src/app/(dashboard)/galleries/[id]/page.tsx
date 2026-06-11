@@ -439,7 +439,10 @@ function GalleryAssetTileImage({
       <img
         src={media.src}
         alt={asset?.filename || "Gallery asset preview"}
-        className={cn("w-full object-cover", aspectClass)}
+        className={cn(
+          "h-full w-full bg-surface-sunken object-contain",
+          aspectClass,
+        )}
         style={aspectStyle}
         loading="lazy"
         decoding="async"

@@ -45,8 +45,11 @@ describe("gallery cover page design-system contracts", () => {
     );
     expect(source).toContain('label: "Videos"');
     expect(source).toContain('label: "Photos"');
-    expect(source).toContain("data-cover-editor-tab");
-    expect(source).not.toContain("cover-tab-select");
+    expect(source).toContain('className={`${COVER_FIELD_CLASS} cover-section-select`}');
+    expect(source).toContain('aria-label="Cover editor section"');
+    expect(source).not.toContain("cover-inspector-tabs");
+    expect(source).not.toContain("cover-mobile-task-tabs");
+    expect(source).not.toContain("cover-mobile-task-tab");
     expect(source).not.toContain("cover-header-select");
     expect(source).not.toContain('className="cover-header-action"');
     expect(source).not.toContain("selectLabel");
@@ -125,7 +128,8 @@ describe("gallery cover page design-system contracts", () => {
     expect(source).not.toContain("cover-photo-rail");
     expect(source).toContain("cover-preview-pane");
     expect(source).toContain("cover-inspector-pane");
-    expect(source).toContain("cover-inspector-tabs");
+    expect(source).toContain("cover-section-select");
+    expect(source).not.toContain("cover-inspector-tabs");
     expect(source).toContain("cover-preview-toolbar");
     expect(source).toContain("cover-preview-primary-actions");
     expect(source).not.toContain("cover-save-dock");
@@ -164,6 +168,14 @@ describe("gallery cover page design-system contracts", () => {
     expect(css).toContain(".cover-design-grid");
     expect(css).toContain(".cover-template-mini");
     expect(css).toContain(".cover-slot-controls");
+    const templateImageStart = css.indexOf(".cover-template-slot__image {");
+    const templateImageEnd = css.indexOf(
+      ".cover-template-slot__fallback",
+      templateImageStart,
+    );
+    expect(css.slice(templateImageStart, templateImageEnd)).toContain(
+      "object-fit: contain",
+    );
     expect(css).toContain(".cover-photo-picker");
     expect(css).toContain(".cover-upload-stack");
     expect(css).toContain(".cover-range-input");

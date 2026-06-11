@@ -291,6 +291,8 @@ const LOGO_SIZE_MIN = 28;
 const LOGO_SIZE_MAX = 96;
 const COVER_SLOT_ZOOM_MIN = 1;
 const COVER_SLOT_ZOOM_MAX = 3;
+const COVER_SLOT_DEFAULT_FOCAL_POINT: FocalPoint = { x: 50, y: 50 };
+const COVER_SLOT_DEFAULT_ZOOM = COVER_SLOT_ZOOM_MIN;
 
 // Editor-offered grid layouts. The schema's `layout` field still
 // accepts masonry/carousel (the public viewer can render them) — they
@@ -1554,10 +1556,31 @@ function setCoverSlotAsset(
 ): DesignConfig {
   const profile = profileFromConfig(config, previewDevice);
   const assetSlots = [...(profile.assetSlots || [])];
+  const previousAssetId =
+    slotIndex === 0
+      ? profile.assetId || profile.assetSlots?.[0] || null
+      : profile.assetSlots?.[slotIndex] || null;
+  const assetChanged = previousAssetId !== assetId;
   assetSlots[slotIndex] = assetId;
-  return updateProfileForDevice(config, previewDevice, {
+  const updates: Partial<CoverDeviceProfile> = {
     assetId: slotIndex === 0 ? assetId : profile.assetId,
     assetSlots,
+  };
+  if (assetChanged) {
+    if (slotIndex === 0) {
+      updates.focalPoint = COVER_SLOT_DEFAULT_FOCAL_POINT;
+      updates.zoom = COVER_SLOT_DEFAULT_ZOOM;
+    } else {
+      const slotFocalPoints = [...(profile.slotFocalPoints || [])];
+      const slotZooms = [...(profile.slotZooms || [])];
+      slotFocalPoints[slotIndex] = COVER_SLOT_DEFAULT_FOCAL_POINT;
+      slotZooms[slotIndex] = COVER_SLOT_DEFAULT_ZOOM;
+      updates.slotFocalPoints = slotFocalPoints;
+      updates.slotZooms = slotZooms;
+    }
+  }
+  return updateProfileForDevice(config, previewDevice, {
+    ...updates,
   });
 }
 
@@ -2940,43 +2963,23 @@ export default function CoverDesignPage() {
           className="cover-inspector-pane"
           aria-label="Cover design controls"
         >
-          <div
-            className="cover-inspector-tabs glass-segmented"
-            role="group"
-            aria-label="Cover editor sections"
-          >
-            {EDITOR_TABS.map((editorTab) => (
-              <button
-                key={editorTab.id}
-                type="button"
-                className="glass-segmented-option"
-                data-cover-editor-tab={editorTab.id}
-                aria-pressed={tab === editorTab.id}
-                onClick={() => setTab(editorTab.id)}
-              >
-                {editorTab.label}
-              </button>
-            ))}
-          </div>
-
-          <div
-            className="cover-mobile-task-tabs"
-            role="group"
-            aria-label="Mobile cover editor sections"
-          >
-            {EDITOR_TABS.map((editorTab) => (
-              <button
-                key={editorTab.id}
-                type="button"
-                className="cover-mobile-task-tab"
-                data-cover-editor-tab={editorTab.id}
-                data-state={tab === editorTab.id ? "active" : "idle"}
-                aria-pressed={tab === editorTab.id}
-                onClick={() => setTab(editorTab.id)}
-              >
-                {editorTab.mobileLabel}
-              </button>
-            ))}
+          <div className="cover-control-card">
+            <label htmlFor="cover-editor-section" className="form-label">
+              Edit section
+            </label>
+            <select
+              id="cover-editor-section"
+              className={`${COVER_FIELD_CLASS} cover-section-select`}
+              value={tab}
+              aria-label="Cover editor section"
+              onChange={(event) => setTab(event.target.value as TabId)}
+            >
+              {EDITOR_TABS.map((editorTab) => (
+                <option key={editorTab.id} value={editorTab.id}>
+                  {editorTab.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* ───────── EDITOR PANEL ───────── */}

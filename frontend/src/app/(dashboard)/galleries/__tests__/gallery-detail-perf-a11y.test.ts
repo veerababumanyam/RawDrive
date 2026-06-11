@@ -205,6 +205,16 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("is the phone cover");
   });
 
+  it("fits gallery tile photos inside the preview frame without cropping them", () => {
+    const source = readDetailPage();
+
+    expect(source).toContain("object-contain");
+    expect(source).toContain("bg-surface-sunken");
+    expect(source).not.toContain(
+      'className={cn("w-full object-cover", aspectClass)}',
+    );
+  });
+
   it("generates email and WhatsApp share text with the studio name", () => {
     const source = readDetailPage();
 
