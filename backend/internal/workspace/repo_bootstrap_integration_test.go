@@ -3,6 +3,7 @@ package workspace_test
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/google/uuid"
@@ -20,6 +21,31 @@ import (
 // transactional rollback semantics are the whole point and cannot be mocked),
 // so they boot the shared pgvector testcontainer and skip cleanly when Docker
 // is unavailable.
+
+func TestMain(m *testing.M) {
+	code := m.Run()
+	testsupport.Shutdown()
+	os.Exit(code)
+}
+
+func workspaceBootstrapPool(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		resolved, err := testsupport.EnsureDSN()
+		if err != nil {
+			t.Skipf("workspace_test: DATABASE_URL unset and testcontainers unavailable: %v", err)
+		}
+		dsn = resolved
+	}
+
+	pool, err := pgxpool.New(context.Background(), dsn)
+	require.NoError(t, err, "opening pgxpool for workspace bootstrap test")
+	t.Cleanup(pool.Close)
+
+	return pool
+}
 
 // seedOwner inserts a throwaway user and returns its UUID. The workspaces +
 // workspace_members rows both FK to users(id), so the owner must exist first.
@@ -50,7 +76,7 @@ func firstStateID(t *testing.T, pool *pgxpool.Pool) int {
 }
 
 func TestPgRepo_CreateWithBootstrap_CoCreatesAllThreeRows(t *testing.T) {
-	pool := testsupport.PgvectorPool(t)
+	pool := workspaceBootstrapPool(t)
 	ctx := context.Background()
 
 	owner := seedOwner(t, pool)
@@ -99,7 +125,7 @@ func TestPgRepo_CreateWithBootstrap_CoCreatesAllThreeRows(t *testing.T) {
 // core AREA-CUSTOMER-3 guarantee: a workspace can never exist without its
 // storage + membership rows.
 func TestPgRepo_CreateWithBootstrap_RollsBackOnStorageFailure(t *testing.T) {
-	pool := testsupport.PgvectorPool(t)
+	pool := workspaceBootstrapPool(t)
 	ctx := context.Background()
 
 	owner := seedOwner(t, pool)

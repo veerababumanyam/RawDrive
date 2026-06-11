@@ -40,6 +40,13 @@ GitHub-hosted runner availability. The local `npm run deploy:prod` command
 remains the manual break-glass release path and uses the same guarded rolling
 deploy engine.
 
+The CI workflows read the repository variable `RAWDRIVE_ACTIONS_RUNNER` as a
+JSON runner-label array. In the current private-repo setup it is set to
+`["self-hosted","rawdrive-prod"]` so PR and main-push checks do not fail before
+runner assignment when GitHub-hosted Actions billing is unavailable. Delete the
+variable, or set it to `["ubuntu-24.04"]`, to move checks back to GitHub-hosted
+runners.
+
 ---
 
 ## Daily workflow (the only two commands you need)
@@ -149,7 +156,7 @@ If hooks ever seem inactive: `node scripts/install-git-hooks.mjs`.
 
 Every PR must pass: `backend` (go test + govulncheck), `backend-lint`
 (golangci-lint), `frontend` (audit/lint/test/build), `openapi` (redocly),
-`security` (semgrep advisory · gitleaks **blocking** · trivy **blocking**),
+`security` (semgrep advisory · gitleaks **blocks new leaks** · trivy **blocking**),
 `images` (docker build), plus `pr-title` (Conventional-Commit PR title) and the
 `known-hosts-guard`.
 
@@ -202,6 +209,21 @@ The automatic production path requires:
 Automatic deploys trigger directly from `push` to `main` and run on the
 self-hosted `rawdrive-prod` runner. Manual deploys and rollbacks are still
 available from Actions → `cd-production` → Run workflow.
+
+### Shared CI runner variable
+
+The repo variable `RAWDRIVE_ACTIONS_RUNNER` controls every non-CD workflow that
+used to request `ubuntu-24.04` directly:
+
+```json
+["self-hosted","rawdrive-prod"]
+```
+
+This keeps `production-gates`, `pr-hygiene`, `build-images`, AI review,
+release, and branch hygiene off GitHub-hosted runners while the hosted runner
+pool is unavailable. The workflow files fall back to `["ubuntu-24.04"]` when
+the variable is absent, so rollback is a repository variable change, not a code
+change.
 
 ---
 

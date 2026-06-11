@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.RAWDRIVE_ACTIONS_RUNNER || '["ubuntu-24.04"]') }}
     steps:
       - uses: actions/checkout@v6.0.3
         with:

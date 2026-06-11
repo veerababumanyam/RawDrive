@@ -12,6 +12,17 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+function blobResponse(body: BlobPart[], type: string): Response {
+  const blob = new Blob(body, { type });
+  return {
+    ok: true,
+    status: 200,
+    statusText: "OK",
+    headers: new Headers({ "content-type": type }),
+    blob: () => Promise.resolve(blob),
+  } as Response;
+}
+
 describe("indexAssetFacesFromBrowser", () => {
   beforeEach(() => {
     mockFetch.mockReset();
@@ -24,9 +35,7 @@ describe("indexAssetFacesFromBrowser", () => {
 
   it("fetches owner-protected media and POSTs the image to the face index endpoint", async () => {
     mockFetch
-      .mockResolvedValueOnce(
-        new Response(new Blob(["webp"], { type: "image/webp" })),
-      )
+      .mockResolvedValueOnce(blobResponse(["webp"], "image/webp"))
       .mockResolvedValueOnce(jsonResponse({ stored: 2 }));
 
     const result = await indexAssetFacesFromBrowser(
@@ -67,15 +76,11 @@ describe("indexAssetFacesFromBrowser", () => {
 
   it("retries a smaller derivative when the display frame is too large", async () => {
     mockFetch
-      .mockResolvedValueOnce(
-        new Response(new Blob(["large"], { type: "image/webp" })),
-      )
+      .mockResolvedValueOnce(blobResponse(["large"], "image/webp"))
       .mockResolvedValueOnce(
         new Response(`{"error":"image file too large"}`, { status: 413 }),
       )
-      .mockResolvedValueOnce(
-        new Response(new Blob(["small"], { type: "image/webp" })),
-      )
+      .mockResolvedValueOnce(blobResponse(["small"], "image/webp"))
       .mockResolvedValueOnce(jsonResponse({ stored: 1 }));
 
     const result = await indexAssetFacesFromBrowser(
@@ -103,15 +108,11 @@ describe("indexAssetFacesFromBrowser", () => {
     // retryable and fall through to the smaller stored derivative instead of
     // aborting with no downscale.
     mockFetch
-      .mockResolvedValueOnce(
-        new Response(new Blob(["large"], { type: "image/webp" })),
-      )
+      .mockResolvedValueOnce(blobResponse(["large"], "image/webp"))
       .mockResolvedValueOnce(
         new Response(`{"error":"failed to index faces"}`, { status: 502 }),
       )
-      .mockResolvedValueOnce(
-        new Response(new Blob(["small"], { type: "image/webp" })),
-      )
+      .mockResolvedValueOnce(blobResponse(["small"], "image/webp"))
       .mockResolvedValueOnce(jsonResponse({ stored: 1 }));
 
     const result = await indexAssetFacesFromBrowser(
@@ -138,13 +139,9 @@ describe("indexAssetFacesFromBrowser", () => {
 
   it("tries the original image when a display derivative stores zero faces", async () => {
     mockFetch
-      .mockResolvedValueOnce(
-        new Response(new Blob(["display"], { type: "image/webp" })),
-      )
+      .mockResolvedValueOnce(blobResponse(["display"], "image/webp"))
       .mockResolvedValueOnce(jsonResponse({ stored: 0 }))
-      .mockResolvedValueOnce(
-        new Response(new Blob(["original"], { type: "image/jpeg" })),
-      )
+      .mockResolvedValueOnce(blobResponse(["original"], "image/jpeg"))
       .mockResolvedValueOnce(jsonResponse({ stored: 2 }));
 
     const result = await indexAssetFacesFromBrowser(
@@ -172,9 +169,7 @@ describe("indexAssetFacesFromBrowser", () => {
   it("falls back to the encrypted original when derivative objects are missing", async () => {
     mockFetch
       .mockResolvedValueOnce(new Response("missing", { status: 404 }))
-      .mockResolvedValueOnce(
-        new Response(new Blob(["original"], { type: "image/jpeg" })),
-      )
+      .mockResolvedValueOnce(blobResponse(["original"], "image/jpeg"))
       .mockResolvedValueOnce(jsonResponse({ stored: 3 }));
 
     const result = await indexAssetFacesFromBrowser(

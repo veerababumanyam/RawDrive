@@ -30,7 +30,7 @@ jobs:
   # actually needed — reducing cost and noise.
   # ────────────────────────────────────────────────────────────────────────
   detect-changes:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.RAWDRIVE_ACTIONS_RUNNER || '["ubuntu-24.04"]') }}
     outputs:
       security_sensitive: ${{ steps.filter.outputs.security }}
     steps:
@@ -54,7 +54,7 @@ jobs:
   # ────────────────────────────────────────────────────────────────────────
   code-review:
     name: Code Review (Sonnet 4.6)
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.RAWDRIVE_ACTIONS_RUNNER || '["ubuntu-24.04"]') }}
     steps:
       - uses: actions/checkout@v6.0.3
         with:
@@ -88,6 +88,11 @@ jobs:
             exit 0
           fi
 
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "::notice::ANTHROPIC_API_KEY is not configured; skipping advisory AI review."
+            exit 0
+          fi
+
           # Build the request body via jq to handle escaping correctly.
           jq -n \
             --arg diff "$DIFF" \
@@ -101,20 +106,27 @@ jobs:
               }]
             }' > /tmp/review-request.json
 
-          RESPONSE=$(curl -sf https://api.anthropic.com/v1/messages \
+          if ! RESPONSE=$(curl -sf https://api.anthropic.com/v1/messages \
             -H "x-api-key: ${ANTHROPIC_API_KEY}" \
             -H "anthropic-version: 2023-06-01" \
             -H "content-type: application/json" \
-            --data-binary @/tmp/review-request.json)
+            --data-binary @/tmp/review-request.json); then
+            echo "::warning::Claude Sonnet review request failed; advisory review skipped."
+            exit 0
+          fi
 
           REVIEW=$(echo "$RESPONSE" | jq -r '.content[0].text // "Review generation failed — check API key and quota."')
 
-          gh pr comment "$PR_NUMBER" --body "## Claude Code Review (Sonnet 4.6)
+          {
+            echo "## Claude Code Review (Sonnet 4.6)"
+            echo
+            printf '%s\n' "$REVIEW"
+            echo
+            echo "---"
+            echo "*Automated review · advisory only · [Claude Sonnet 4.6](https://www.anthropic.com/claude)*"
+          } > /tmp/claude-review-comment.md
 
-${REVIEW}
-
----
-*Automated review · advisory only · [Claude Sonnet 4.6](https://www.anthropic.com/claude)*"
+          gh pr comment "$PR_NUMBER" --body-file /tmp/claude-review-comment.md
 
   # ────────────────────────────────────────────────────────────────────────
   # security-review: deep security analysis when auth / storage paths change.
@@ -126,7 +138,7 @@ ${REVIEW}
     name: Security Review (Opus 4.8)
     needs: detect-changes
     if: needs.detect-changes.outputs.security_sensitive == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.RAWDRIVE_ACTIONS_RUNNER || '["ubuntu-24.04"]') }}
     steps:
       - uses: actions/checkout@v6.0.3
         with:
@@ -154,6 +166,11 @@ ${REVIEW}
             exit 0
           fi
 
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "::notice::ANTHROPIC_API_KEY is not configured; skipping advisory security review."
+            exit 0
+          fi
+
           jq -n \
             --arg diff "$DIFF" \
             '{
@@ -166,19 +183,26 @@ ${REVIEW}
               }]
             }' > /tmp/sec-review-request.json
 
-          RESPONSE=$(curl -sf https://api.anthropic.com/v1/messages \
+          if ! RESPONSE=$(curl -sf https://api.anthropic.com/v1/messages \
             -H "x-api-key: ${ANTHROPIC_API_KEY}" \
             -H "anthropic-version: 2023-06-01" \
             -H "content-type: application/json" \
-            --data-binary @/tmp/sec-review-request.json)
+            --data-binary @/tmp/sec-review-request.json); then
+            echo "::warning::Claude Opus security review request failed; advisory security review skipped."
+            exit 0
+          fi
 
           REVIEW=$(echo "$RESPONSE" | jq -r '.content[0].text // "Security review generation failed — check API key and quota."')
 
-          gh pr comment "$PR_NUMBER" --body "## Claude Security Review (Opus 4.8)
+          {
+            echo "## Claude Security Review (Opus 4.8)"
+            echo
+            echo "> This PR touches security-sensitive paths (auth / middleware / storage). Opus 4.8 was used for deeper analysis."
+            echo
+            printf '%s\n' "$REVIEW"
+            echo
+            echo "---"
+            echo "*Automated security review · advisory only · [Claude Opus 4.8](https://www.anthropic.com/claude) · OWASP ASVS V3/V4*"
+          } > /tmp/claude-security-review-comment.md
 
-> This PR touches security-sensitive paths (auth / middleware / storage). Opus 4.8 was used for deeper analysis.
-
-${REVIEW}
-
----
-*Automated security review · advisory only · [Claude Opus 4.8](https://www.anthropic.com/claude) · OWASP ASVS V3/V4*"
+          gh pr comment "$PR_NUMBER" --body-file /tmp/claude-security-review-comment.md

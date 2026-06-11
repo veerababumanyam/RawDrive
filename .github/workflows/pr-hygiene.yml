@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   pr-title:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.RAWDRIVE_ACTIONS_RUNNER || '["ubuntu-24.04"]') }}
     steps:
       - name: Title must be a Conventional Commit
         # SECURITY: the PR title is untrusted input. It is passed through an
