@@ -25,7 +25,26 @@ describe("public gallery metadata", () => {
     expect(source).toContain("pickSharePreviewCoverKey(coverManifest)");
     expect(source).toContain("getStorageBackedUrl(ogKey)");
     expect(source).toContain("summary_large_image");
-    expect(source).toContain("images: [ogImageUrl]");
+    expect(source).toContain("images: [shareImageUrl]");
+  });
+
+  it("falls back to the studio logo when the cover is encrypted/absent", () => {
+    // E2EE galleries (the default) have .enc covers a crawler can't fetch, so
+    // the share preview must fall back to the public studio branding logo.
+    expect(source).toContain("const logoPath = branding?.can_customize");
+    expect(source).toContain("const logoImageUrl =");
+    // .enc logos are skipped just like covers.
+    expect(source).toContain('.endsWith(".enc")');
+    // Crawlers need an absolute URL — resolve the relative branding-logo path
+    // against the BROWSER (public) API base, never the internal SSR base.
+    expect(source).toContain("getBrowserApiBaseUrl()");
+    // Cover is preferred; logo is the fallback.
+    expect(source).toContain("const shareImageUrl = ogImageUrl ?? logoImageUrl");
+    expect(source).toContain("const shareImageIsCover = Boolean(ogImageUrl)");
+    // The card type + fixed dimensions track which image actually shipped.
+    expect(source).toContain(
+      'shareImageIsCover ? "summary_large_image" : "summary"',
+    );
   });
 
   it("includes the studio name in crawler-visible share previews", () => {

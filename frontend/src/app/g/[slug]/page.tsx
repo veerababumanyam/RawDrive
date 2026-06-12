@@ -26,6 +26,7 @@ import {
 } from "@/lib/gallery-design-config";
 import { readEmbeddedVideos } from "@/lib/embedded-videos";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
+import { getBrowserApiBaseUrl } from "@/lib/api/base-url";
 import { Clock, Photo } from "@/components/icons";
 import { buildPublicGalleryJsonLd, serializeJsonLd, SITE_URL } from "@/lib/seo";
 import { OfflineCacher } from "@/components/offline/offline-cacher";
@@ -465,6 +466,28 @@ export async function generateMetadata({ params, searchParams }: Props) {
       ogKey && !ogKey.toLowerCase().split("?", 1)[0].endsWith(".enc")
         ? getStorageBackedUrl(ogKey)
         : undefined;
+    // Studio-logo fallback: client-E2EE galleries (the default) have encrypted
+    // covers whose bytes a crawler cannot fetch, so ogImageUrl is undefined and
+    // the share preview would have no image at all. The studio's branding logo
+    // is public (served by GetBrandingLogo, not E2EE), so use it as the share
+    // image when there is no crawlable cover. branding.logo_url is the relative
+    // path `/api/v1/public/galleries/{slug}/branding/logo`; crawlers need an
+    // absolute URL, so resolve it against the browser-facing API base (never the
+    // internal SSR base — that would point a crawler at localhost). Gated on
+    // can_customize so only branded studios surface their logo; default
+    // workspaces keep the text-only "RawDrive" preview.
+    const logoPath = branding?.can_customize ? branding.logo_url : undefined;
+    const logoImageUrl =
+      logoPath && !logoPath.toLowerCase().split("?", 1)[0].endsWith(".enc")
+        ? logoPath.startsWith("http://") || logoPath.startsWith("https://")
+          ? logoPath
+          : `${getBrowserApiBaseUrl()}${logoPath.startsWith("/") ? "" : "/"}${logoPath}`
+        : undefined;
+    // Prefer the cover (wide, summary_large_image card); fall back to the logo
+    // (square-ish, summary card). shareImageIsCover keeps the card type and the
+    // fixed 1200x630 dimensions correct for whichever image we actually emit.
+    const shareImageUrl = ogImageUrl ?? logoImageUrl;
+    const shareImageIsCover = Boolean(ogImageUrl);
     const canonicalPath = `/g/${slug}`;
     const canonicalUrl = `${SITE_URL}${canonicalPath}`;
     return {
@@ -477,24 +500,26 @@ export async function generateMetadata({ params, searchParams }: Props) {
         type: "website",
         url: canonicalUrl,
         siteName: studioName,
-        ...(ogImageUrl
+        ...(shareImageUrl
           ? {
               images: [
-                {
-                  url: ogImageUrl,
-                  width: 1200,
-                  height: 630,
-                  alt: gallery.title,
-                },
+                shareImageIsCover
+                  ? {
+                      url: shareImageUrl,
+                      width: 1200,
+                      height: 630,
+                      alt: gallery.title,
+                    }
+                  : { url: shareImageUrl, alt: `${studioName} logo` },
               ],
             }
           : {}),
       },
       twitter: {
-        card: ogImageUrl ? "summary_large_image" : "summary",
+        card: shareImageIsCover ? "summary_large_image" : "summary",
         title: shareTitle,
         description,
-        ...(ogImageUrl ? { images: [ogImageUrl] } : {}),
+        ...(shareImageUrl ? { images: [shareImageUrl] } : {}),
       },
     };
   } catch {
