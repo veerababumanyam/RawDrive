@@ -199,6 +199,49 @@ func TestVerifyHeaderTrailerBytesWithManifest_JpegTrailerWithoutAllowedFindingRe
 	}
 }
 
+func gifWithAppendedTrailer() []byte {
+	return append([]byte{
+		'G', 'I', 'F', '8', '9', 'a', // GIF89a signature
+		0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, // logical screen descriptor
+		0x3B,                              // GIF trailer
+	}, bytes.Repeat([]byte{0x42}, 128)...) // benign bytes appended past the trailer
+}
+
+func TestVerifyHeaderTrailerBytesWithManifest_GifAllowsBenignTrailer(t *testing.T) {
+	gif := gifWithAppendedTrailer()
+	head := gif[:64]
+	tail := gif[len(gif)-64:]
+	manifest := &UploadScanManifest{
+		DetectedFormat: "gif",
+		Decision:       "pass",
+		Findings: []UploadScanFinding{
+			{
+				Category: "appended_payload",
+				Severity: "low",
+				Message:  "128 bytes of trailing data past GIF trailer (no archive signature — allowed)",
+			},
+		},
+	}
+
+	if err := VerifyHeaderTrailerBytesWithManifest(head, tail, manifest); err != nil {
+		t.Fatalf("benign GIF trailer should pass manifest-aware spot-check, got %v", err)
+	}
+}
+
+func TestVerifyHeaderTrailerBytesWithManifest_GifTrailerWithoutAllowedFindingRejected(t *testing.T) {
+	gif := gifWithAppendedTrailer()
+	head := gif[:64]
+	tail := gif[len(gif)-64:]
+	manifest := &UploadScanManifest{
+		DetectedFormat: "gif",
+		Decision:       "pass",
+	}
+
+	if err := VerifyHeaderTrailerBytesWithManifest(head, tail, manifest); !errors.Is(err, ErrScanHashMismatch) {
+		t.Fatalf("GIF trailer without an allowed finding should fail, got %v", err)
+	}
+}
+
 func TestVerifyHeaderTrailer_Png_Valid(t *testing.T) {
 	// PNG signature + minimal IHDR-ish body + IEND chunk.
 	png := []byte{

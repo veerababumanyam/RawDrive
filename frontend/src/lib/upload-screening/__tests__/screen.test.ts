@@ -254,6 +254,40 @@ describe("screen() format dispatcher", () => {
     expect(result.decision).toBe("pass");
   });
 
+  it("allows benign data appended past the GIF trailer (no archive signature)", () => {
+    const gif = makeMinimalGif();
+    const trailing = new Uint8Array([0x00, 0x11, 0x22, 0x33, 0x44, 0x55]);
+    const bytes = new Uint8Array(gif.length + trailing.length);
+    bytes.set(gif, 0);
+    bytes.set(trailing, gif.length);
+    const result = screen(bytes, { declaredType: "image/gif" });
+    expect(result.detectedFormat).toBe("gif");
+    expect(result.decision).toBe("pass");
+    const appended = result.findings.find(
+      (f) => f.category === "appended_payload",
+    );
+    expect(appended?.severity).toBe("low");
+    expect(appended?.message).toContain("trailing data past GIF trailer");
+    expect(appended?.message).toContain("allowed");
+  });
+
+  it("blocks a GIF with an archive (ZIP) payload appended past the trailer", () => {
+    const gif = makeMinimalGif();
+    // PK\x03\x04 — a ZIP local-file-header signature → genuine polyglot.
+    const zip = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00]);
+    const bytes = new Uint8Array(gif.length + zip.length);
+    bytes.set(gif, 0);
+    bytes.set(zip, gif.length);
+    const result = screen(bytes, { declaredType: "image/gif" });
+    expect(result.detectedFormat).toBe("gif");
+    expect(result.decision).toBe("block");
+    expect(
+      result.findings.some(
+        (f) => f.category === "appended_payload" && f.severity === "high",
+      ),
+    ).toBe(true);
+  });
+
   it("blocks an unknown binary format", () => {
     const result = screen(new Uint8Array([0xde, 0xad, 0xbe, 0xef]), {
       declaredType: "application/octet-stream",

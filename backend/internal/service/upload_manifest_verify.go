@@ -243,6 +243,23 @@ func VerifyHeaderTrailerBytesWithManifest(head, tail []byte, manifest *UploadSca
 		return nil
 	}
 	format := NormalizeImageFormat(manifest.DetectedFormat)
+	if format == "gif" {
+		// Same exception for GIFs: tools/apps append benign metadata or padding
+		// after the 0x3B trailer, so the last byte is no longer 0x3B. We still
+		// require a GIF signature and a matching manifest hash, but allow the
+		// non-0x3B tail when the browser scanner classified the trailer as a
+		// low-severity, archive-free (allowed) appended payload.
+		if !hasGifSignature(head) {
+			return ErrScanHashMismatch
+		}
+		if hasGifEnd(tail) {
+			return nil
+		}
+		if hasAllowedGifTrailerFinding(manifest) {
+			return nil
+		}
+		return ErrScanHashMismatch
+	}
 	if format != "jpeg" {
 		return VerifyHeaderTrailerBytes(head, tail, manifest.DetectedFormat)
 	}
@@ -284,6 +301,37 @@ func isAllowedJpegTrailerFinding(finding UploadScanFinding) bool {
 	return strings.Contains(message, "camera-authored jpeg preview/mpf data after the primary jpeg image") ||
 		strings.Contains(message, "camera-authored trailer data after the primary jpeg image") ||
 		(strings.Contains(message, "trailing data past jpeg eoi") && strings.Contains(message, "allowed"))
+}
+
+// hasAllowedGifTrailerFinding mirrors hasAllowedJpegTrailerFinding for GIFs: the
+// manifest must have passed with no high-severity finding and carry the
+// low-severity, archive-free "trailing data past GIF trailer … (allowed)"
+// finding the browser scanner emits for benign appended bytes.
+func hasAllowedGifTrailerFinding(manifest *UploadScanManifest) bool {
+	if manifest == nil || strings.ToLower(strings.TrimSpace(manifest.Decision)) != "pass" {
+		return false
+	}
+	for _, finding := range manifest.Findings {
+		if strings.EqualFold(strings.TrimSpace(finding.Severity), "high") {
+			return false
+		}
+	}
+	for _, finding := range manifest.Findings {
+		if isAllowedGifTrailerFinding(finding) {
+			return true
+		}
+	}
+	return false
+}
+
+func isAllowedGifTrailerFinding(finding UploadScanFinding) bool {
+	if !strings.EqualFold(strings.TrimSpace(finding.Category), "appended_payload") ||
+		!strings.EqualFold(strings.TrimSpace(finding.Severity), "low") {
+		return false
+	}
+	message := strings.ToLower(finding.Message)
+	return strings.Contains(message, "trailing data past gif trailer") &&
+		strings.Contains(message, "allowed")
 }
 
 func isServerVerifiedContainerFormat(format string, head []byte) bool {

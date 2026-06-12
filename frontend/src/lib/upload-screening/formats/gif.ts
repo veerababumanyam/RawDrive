@@ -56,15 +56,34 @@ export function screenGif(bytes: Uint8Array, cfg: GifConfig): ScanResult {
       return block("gif", cfg.declaredType, findings);
     }
     const trailing = bytes.byteLength - trailerOffset - 1;
-    findings.push({
-      category: "appended_payload",
-      severity: "high",
-      offset: trailerOffset + 1,
-      message: `${trailing} bytes of appended payload past GIF trailer`,
-    });
-    findings.push(
-      ...scanForArchiveSignatures(bytes, trailerOffset + 1, bytes.byteLength)
+    // The real threat past the GIF trailer is a POLYGLOT — an archive or
+    // executable appended after the 0x3B trailer — which scanForArchiveSignatures
+    // detects. BENIGN trailers (tool/app metadata, padding) must NOT block, the
+    // same policy the JPEG-EOI path adopted in #370: only block when an archive
+    // signature is present; otherwise record a low-severity, never-blocking
+    // warning. The Tier-D backend gate still re-screens the manifest + final
+    // byte hash server-side.
+    const archiveFindings = scanForArchiveSignatures(
+      bytes,
+      trailerOffset + 1,
+      bytes.byteLength,
     );
+    if (archiveFindings.length > 0) {
+      findings.push({
+        category: "appended_payload",
+        severity: "high",
+        offset: trailerOffset + 1,
+        message: `${trailing} bytes of appended payload past GIF trailer containing archive signature(s)`,
+      });
+      findings.push(...archiveFindings);
+    } else {
+      findings.push({
+        category: "appended_payload",
+        severity: "low",
+        offset: trailerOffset + 1,
+        message: `${trailing} bytes of trailing data past GIF trailer (no archive signature — allowed)`,
+      });
+    }
   }
 
   // GIFs do not have a dedicated metadata budget — the comment extension
