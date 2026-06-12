@@ -795,3 +795,16 @@ export function readGalleryCoverAssetId(
   ).cover.assetId;
   return designAssetId || fallbackAssetId || undefined;
 }
+
+export function readGalleryCoverAssetIds(
+  settings: Record<string, unknown> | undefined | null,
+  fallbackAssetId?: string | null,
+): string[] {
+  const design = readPublicDesignConfig(settings);
+  const ids = [
+    resolveCoverDeviceProfile(design, "desktop").cover.assetId,
+    resolveCoverDeviceProfile(design, "phone").cover.assetId,
+    fallbackAssetId,
+  ].filter((id): id is string => Boolean(id));
+  return Array.from(new Set(ids));
+}

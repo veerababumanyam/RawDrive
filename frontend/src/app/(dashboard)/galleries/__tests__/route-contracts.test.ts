@@ -113,9 +113,10 @@ describe("gallery route contracts", () => {
       "Publish this gallery before sharing client links.",
     );
     expect(source).toContain("mediaKeyIdsForAsset");
-    expect(source).toMatch(
-      /appendStoredGalleryKeyFragment\(\s*base,\s*gallery\.id,\s*mediaKeyIdsForAsset\(coverAsset \?\? gallery\.cover_asset\),\s*\)/,
-    );
+    expect(source).toContain("readGalleryCoverAssetIds");
+    expect(source).toContain("[gallery.cover_asset, ...coverAssets]");
+    expect(source).toContain("shareCoverAssets.flatMap((asset)");
+    expect(source).toContain("shareCoverAssets");
     expect(source).toContain("gallery.cover_asset ??");
     expect(source).toContain("coverAssets[coverAssetId]");
   });

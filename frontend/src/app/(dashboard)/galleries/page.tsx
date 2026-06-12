@@ -34,7 +34,10 @@ import {
   setUrlSearchParamBeforeFragment,
 } from "@/lib/media-encryption/share-url";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
-import { readGalleryCoverAssetId } from "@/lib/gallery-design-config";
+import {
+  readGalleryCoverAssetId,
+  readGalleryCoverAssetIds,
+} from "@/lib/gallery-design-config";
 import { galleryShareExpiryDays } from "@/lib/gallery-share-expiry";
 import { LockedMediaFallback } from "@/components/gallery/media-key-recovery";
 import { GlassIconButton } from "@/components/ui/glass-icon-button";
@@ -195,15 +198,15 @@ function GalleryPublishSwitch({
 function buildGalleryCardShareUrl(
   gallery: Gallery,
   workspaceProfile: WorkspaceProfile | null,
-  coverAsset?: EncryptedAssetLike | null,
+  coverAssets: Array<EncryptedAssetLike | null | undefined> = [],
 ): string {
   if (!gallery.slug) return "";
   const base = galleryPublicUrl(gallery, workspaceProfile);
-  return appendStoredGalleryKeyFragment(
-    base,
-    gallery.id,
-    mediaKeyIdsForAsset(coverAsset ?? gallery.cover_asset),
+  const shareCoverAssets = [gallery.cover_asset, ...coverAssets];
+  const shareKeyIds = Array.from(
+    new Set(shareCoverAssets.flatMap((asset) => mediaKeyIdsForAsset(asset))),
   );
+  return appendStoredGalleryKeyFragment(base, gallery.id, shareKeyIds);
 }
 
 function buildGalleryShareText(gallery: Gallery, url: string): string {
@@ -665,17 +668,13 @@ export default function GalleriesPage() {
     return Array.from(
       new Set(
         visibleGalleries
-          .map((g) => {
+          .flatMap((g) => {
             if (g.cover_asset) return "";
-            const coverAssetId = readGalleryCoverAssetId(
+            const coverAssetIds = readGalleryCoverAssetIds(
               g.settings,
               g.cover_asset_id,
             );
-            if (!coverAssetId || coverAssets[coverAssetId]) return "";
-            // `g.cover_asset` is already falsy here (guarded above), so the
-            // former `g.cover_asset?.id === coverAssetId` check was dead and
-            // narrowed cover_asset to `never`, breaking the type-check.
-            return coverAssetId;
+            return coverAssetIds.filter((id) => id && !coverAssets[id]);
           })
           .filter((id): id is string => Boolean(id && !coverAssets[id])),
       ),
@@ -703,18 +702,19 @@ export default function GalleriesPage() {
       throw new Error("Publish this gallery before sharing client links.");
     }
 
-    const coverAssetId = readGalleryCoverAssetId(
+    const coverAssetIds = readGalleryCoverAssetIds(
       gallery.settings,
       gallery.cover_asset_id,
     );
+    const coverAssetId = coverAssetIds[0];
     const coverAsset =
       gallery.cover_asset ??
       (coverAssetId ? coverAssets[coverAssetId] : undefined);
-    const baseUrl = buildGalleryCardShareUrl(
-      gallery,
-      workspaceProfile,
+    const shareCoverAssets = coverAssetIds.map((id) => coverAssets[id]);
+    const baseUrl = buildGalleryCardShareUrl(gallery, workspaceProfile, [
       coverAsset,
-    );
+      ...shareCoverAssets,
+    ]);
     if (!baseUrl) {
       throw new Error("Share link unavailable: gallery URL is missing.");
     }
@@ -1352,11 +1352,14 @@ export default function GalleriesPage() {
             const coverAsset =
               g.cover_asset ??
               (coverAssetId ? coverAssets[coverAssetId] : undefined);
-            const shareUrl = buildGalleryCardShareUrl(
-              g,
-              workspaceProfile,
+            const shareCoverAssets = readGalleryCoverAssetIds(
+              g.settings,
+              g.cover_asset_id,
+            ).map((id) => coverAssets[id]);
+            const shareUrl = buildGalleryCardShareUrl(g, workspaceProfile, [
               coverAsset,
-            );
+              ...shareCoverAssets,
+            ]);
 
             const galleryHref = `/galleries/${g.id}`;
 

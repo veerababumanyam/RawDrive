@@ -3,6 +3,7 @@ import {
   buildGalleryCoverDeviceDesignConfig,
   normalizeSlideshowIntervalMs,
   readGalleryCoverAssetId,
+  readGalleryCoverAssetIds,
   readGallerySlideshowIntervalMs,
   readPublicCoverProfileThumbnails,
   readPublicCoverThumbnails,
@@ -450,6 +451,44 @@ describe("readGalleryCoverAssetId", () => {
   it("falls back to cover_asset_id when no design cover is saved", () => {
     expect(readGalleryCoverAssetId({}, "legacy-cover")).toBe("legacy-cover");
     expect(readGalleryCoverAssetId(null, "legacy-cover")).toBe("legacy-cover");
+  });
+});
+
+describe("readGalleryCoverAssetIds", () => {
+  it("returns both desktop and phone profile cover assets for share links", () => {
+    expect(
+      readGalleryCoverAssetIds(
+        {
+          design_config: {
+            cover: {
+              assetId: "legacy-design-cover",
+              deviceProfiles: {
+                desktop: { assetId: "desktop-cover" },
+                phone: { assetId: "phone-cover" },
+              },
+            },
+          },
+        },
+        "legacy-cover",
+      ),
+    ).toEqual(["desktop-cover", "phone-cover", "legacy-cover"]);
+  });
+
+  it("dedupes phone fallback to desktop cover", () => {
+    expect(
+      readGalleryCoverAssetIds(
+        {
+          design_config: {
+            cover: {
+              deviceProfiles: {
+                desktop: { assetId: "desktop-cover" },
+              },
+            },
+          },
+        },
+        "desktop-cover",
+      ),
+    ).toEqual(["desktop-cover"]);
   });
 });
 

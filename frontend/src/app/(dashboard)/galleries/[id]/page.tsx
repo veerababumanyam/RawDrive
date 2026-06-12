@@ -713,15 +713,31 @@ export default function GalleryDetailPage({
       desktopCoverAssetId,
     [desktopCoverAssetId, galleryDesignConfig],
   );
-  const shareMediaKeyIds = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          galleryMediaAssets.flatMap((asset) => mediaKeyIdsForAsset(asset)),
+  const shareMediaKeyIds = useMemo(() => {
+    const presentGalleryMediaAssets = galleryMediaAssets.filter(
+      (asset): asset is Asset => Boolean(asset),
+    );
+    const assetsById = new Map(
+      presentGalleryMediaAssets.map((asset) => [asset.id, asset]),
+    );
+    const coverAssets = [
+      gallery?.cover_asset,
+      desktopCoverAssetId ? assetsById.get(desktopCoverAssetId) : null,
+      phoneCoverAssetId ? assetsById.get(phoneCoverAssetId) : null,
+    ];
+    return Array.from(
+      new Set(
+        [...presentGalleryMediaAssets, ...coverAssets].flatMap((asset) =>
+          mediaKeyIdsForAsset(asset),
         ),
       ),
-    [galleryMediaAssets],
-  );
+    );
+  }, [
+    desktopCoverAssetId,
+    gallery?.cover_asset,
+    galleryMediaAssets,
+    phoneCoverAssetId,
+  ]);
   const lockedMediaRecoverySummary = useLockedMediaRecoverySummary(
     galleryMediaAssets,
     id,

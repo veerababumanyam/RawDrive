@@ -225,6 +225,12 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("handleSetCoverAsset");
     expect(source).toContain("desktopCoverAssetId");
     expect(source).toContain("phoneCoverAssetId");
+    expect(source).toContain("const coverAssets = [");
+    expect(source).toContain(
+      "phoneCoverAssetId ? assetsById.get(phoneCoverAssetId) : null",
+    );
+    expect(source).toContain("presentGalleryMediaAssets");
+    expect(source).toContain("[...presentGalleryMediaAssets, ...coverAssets]");
     expect(source).toContain(
       'resolveCoverDeviceProfile(galleryDesignConfig, "desktop")',
     );
