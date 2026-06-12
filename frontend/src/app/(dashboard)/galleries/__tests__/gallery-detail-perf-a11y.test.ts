@@ -138,6 +138,19 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("deliveryWorkflowHref");
     expect(source).not.toContain(">Selected folder</dt>");
     expect(source).not.toContain(">Client hearts</dt>");
+    const workflowFoldersStart = source.indexOf("Gallery folders");
+    const workflowAlbumMapStart = source.indexOf(
+      "{albums.map((album) => {",
+      workflowFoldersStart,
+    );
+    expect(workflowFoldersStart).toBeGreaterThanOrEqual(0);
+    expect(workflowAlbumMapStart).toBeGreaterThan(workflowFoldersStart);
+    const workflowFoldersIntro = source.slice(
+      workflowFoldersStart,
+      workflowAlbumMapStart,
+    );
+    expect(workflowFoldersIntro).not.toContain("Gallery root");
+    expect(workflowFoldersIntro).not.toContain("setActiveAlbum(null)");
     expect(source).toContain("setActiveAlbum(album.id)");
     expect(source).toContain("setActiveAlbum(null)");
   });
@@ -200,9 +213,7 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("void handleShareAsset(e, entry.asset!.id)");
     expect(source).toContain("setDeleteConfirm({");
     expect(source).toContain("assetId: entry.asset!.id");
-    expect(source).toContain(
-      'className="absolute bottom-2 right-2 z-30"',
-    );
+    expect(source).toContain('className="absolute bottom-2 right-2 z-30"');
     expect(source).toContain("if (e.currentTarget !== e.target) return;");
   });
 
@@ -252,13 +263,13 @@ describe("gallery detail page — perf & a11y contracts", () => {
     );
   });
 
-  it("scopes upload duplicate checks to the active folder", () => {
+  it("scopes upload duplicate checks to the target upload folder", () => {
     const source = readDetailPage();
 
     expect(source).toContain("function uploadDuplicateScope(item: UploadItem)");
     expect(source).toContain("function uploadDuplicateFileKey(file: File)");
     expect(source).toContain(
-      "const uploadScopeAlbumId = activeAlbumId ?? null",
+      "const uploadTargetAlbumId = activeAlbumId ?? highlightsAlbum?.id ?? null",
     );
     expect(source).toContain("albumAssetIdsByAlbum[uploadScopeAlbumId]");
     expect(source).toContain("const subGalleryAssetIds = uploadScopeAlbumId");
@@ -272,6 +283,7 @@ describe("gallery detail page — perf & a11y contracts", () => {
       "queuedFilenames.add(uploadDuplicateFileKey(item.file))",
     );
     expect(source).toContain("const fileKey = uploadDuplicateFileKey(file)");
+    expect(source).toContain("dedupeIncomingFiles(files, targetAlbumId)");
     expect(source).toContain("Already in this folder:");
     expect(source).not.toContain("Already in this gallery:");
   });
@@ -400,9 +412,13 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain("if (activeUploadCount > 0) {");
     expect(source).toContain("uploadDialogRef.current?.focus();");
     expect(source).toContain("return;");
+    expect(source).toContain(
+      "const uploadTargetAlbumId = activeAlbumId ?? highlightsAlbum?.id ?? null;",
+    );
+    expect(source).toContain("ensureUploadDestinationAlbumId");
     const acceptedUploadStart = source.indexOf("if (accepted.length > 0) {");
     const acceptedUploadEnd = source.indexOf(
-      "upload.addFiles(accepted);",
+      "upload.addFiles(accepted, {",
       acceptedUploadStart,
     );
     const acceptedUploadBlock = source.slice(
@@ -413,6 +429,9 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(acceptedUploadEnd).toBeGreaterThan(acceptedUploadStart);
     expect(acceptedUploadBlock).toContain(
       'setShowUploadDialog(options?.source !== "tethered");',
+    );
+    expect(source).toContain(
+      "destination: { galleryId: id, albumId: targetAlbumId },",
     );
     expect(source).not.toContain("Gallery stays usable during upload");
     expect(source).not.toContain("Only uploads locked until complete");
@@ -446,9 +465,7 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(backgroundBar).toContain("Retry all");
     expect(backgroundBar).toContain("upload.retryAll");
     expect(backgroundBar).toContain("activeUploadStatusHint");
-    expect(source).toContain(
-      "RawDrive stays locked until uploads finish.",
-    );
+    expect(source).toContain("RawDrive stays locked until uploads finish.");
     expect(backgroundBar).not.toContain("upload.pauseAll");
     expect(backgroundBar).not.toContain("upload.resumeAll");
     expect(backgroundBar).not.toContain("upload.cancelAll");
@@ -469,8 +486,10 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain('data-testid="gallery-action-inline-status"');
     expect(source).toContain('data-testid="gallery-action-status"');
     expect(source).toContain("deleteConfirmDeleting");
-    expect(source).toContain('aria-busy={deleteConfirmDeleting}');
-    expect(source).toContain('{deleteConfirmDeleting ? "Deleting..." : "Delete"}');
+    expect(source).toContain("aria-busy={deleteConfirmDeleting}");
+    expect(source).toContain(
+      '{deleteConfirmDeleting ? "Deleting..." : "Delete"}',
+    );
     expect(source).toContain(
       "Upload is in progress. RawDrive stays locked until uploads finish.",
     );
@@ -629,6 +648,11 @@ describe("gallery detail page — perf & a11y contracts", () => {
     expect(source).toContain('checkedLabel="Published"');
     expect(source).toContain('uncheckedLabel="Unpublished"');
     expect(source).toContain("data-mutation");
+    expect(source).toContain("const nextPublished = !gallery.is_published;");
+    expect(source).toContain("is_published: nextPublished");
+    expect(source).toContain(
+      '...(nextPublished ? { access_mode: "public" } : {})',
+    );
     expect(source.indexOf('title="Click to edit title"')).toBeLessThan(
       source.indexOf('label="Gallery publish state"'),
     );

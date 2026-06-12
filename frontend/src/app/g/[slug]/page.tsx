@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import {
   getPublicGallery,
   getPublicGalleryAlbums,
-  getPublicGalleryAssets,
+  getPublicGalleryAssetsPage,
   getPublicGalleryBranding,
   getPublicGalleryWithSession,
   PublicGalleryFetchError,
@@ -43,6 +43,8 @@ interface Props {
 }
 
 export const dynamic = "force-dynamic";
+
+const PUBLIC_GALLERY_INITIAL_ASSET_LIMIT = 120;
 
 function pickSharePreviewCoverKey(
   manifest: Record<string, string> | null | undefined,
@@ -226,14 +228,44 @@ export default async function PublicGalleryPage({
     );
   }
 
-  let assets;
+  // Folder-only galleries: a bare /g/{slug} link (no ?album=) must NOT show the
+  // ungrouped gallery root. Resolve the album list first and default to the
+  // first folder (HIGHLIGHTS, else lowest position) so clients always land
+  // inside a folder. Galleries with no folders fall back to the root grid.
+  const albums = await getPublicGalleryAlbums(
+    slug,
+    ws,
+    effectiveSessionToken,
+    followupShareToken,
+  );
+  const defaultFolderId = (() => {
+    if (albumId || !albums || albums.length === 0) return undefined;
+    // Only default INTO a folder that actually has photos. Galleries created
+    // before the HIGHLIGHTS upload-routing keep their photos in the gallery
+    // root with an EMPTY HIGHLIGHTS folder — defaulting into that empty folder
+    // would render a blank grid ("hide root" appearing broken). When no folder
+    // has assets, fall back to the root so the viewer always sees the photos.
+    const nonEmpty = albums.filter((album) => (album.asset_count ?? 0) > 0);
+    if (nonEmpty.length === 0) return undefined;
+    const highlights = nonEmpty.find(
+      (album) => album.name?.trim().toUpperCase() === "HIGHLIGHTS",
+    );
+    const firstByPosition = [...nonEmpty].sort(
+      (a, b) => (a.position ?? 0) - (b.position ?? 0),
+    )[0];
+    return (highlights ?? firstByPosition)?.id;
+  })();
+  const effectiveAlbumId = albumId ?? defaultFolderId;
+
+  let assetPage;
   try {
-    assets = await getPublicGalleryAssets(
+    assetPage = await getPublicGalleryAssetsPage(
       slug,
-      albumId,
+      effectiveAlbumId,
       ws,
       effectiveSessionToken,
       followupShareToken,
+      { limit: PUBLIC_GALLERY_INITIAL_ASSET_LIMIT, offset: 0 },
     );
   } catch (err) {
     if (hasPassword) {
@@ -254,12 +286,13 @@ export default async function PublicGalleryPage({
     }
     throw err;
   }
+  const assets = assetPage.assets;
 
   // Fetch products, banners, branding, and the public album list in
   // parallel. Albums are best-effort — getPublicGalleryAlbums swallows
   // errors and returns [] so an album-service outage doesn't blow up
   // the whole public page; the chip strip simply hides itself.
-  const [products, banners, branding, albums] = await Promise.all([
+  const [products, banners, branding] = await Promise.all([
     listPublicProducts(slug, ws, followupShareToken, effectiveSessionToken),
     listPublicBanners(slug, ws, followupShareToken, effectiveSessionToken),
     getPublicGalleryBranding(
@@ -268,7 +301,6 @@ export default async function PublicGalleryPage({
       followupShareToken,
       effectiveSessionToken,
     ).catch(() => null),
-    getPublicGalleryAlbums(slug, ws, effectiveSessionToken, followupShareToken),
   ]);
 
   // Design config saved by the Gallery Design Studio. The public viewer
@@ -280,7 +312,7 @@ export default async function PublicGalleryPage({
   // otherwise hide it from the asset list.
   const designConfig = readPublicDesignConfigForAlbum(
     gallery.settings,
-    albumId,
+    effectiveAlbumId,
   );
   const designCoverThumbnails = readPublicCoverThumbnails(gallery.settings);
   const designCoverProfileThumbnails = readPublicCoverProfileThumbnails(
@@ -377,6 +409,7 @@ export default async function PublicGalleryPage({
       <OfflineCacher
         gallery={gallery}
         assets={assets}
+        totalAssetCount={assetPage.total}
         ws={ws ?? null}
         assetAccessToken={assetAccessToken}
       />
@@ -389,7 +422,11 @@ export default async function PublicGalleryPage({
         designCoverThumbnails={designCoverThumbnails}
         designCoverProfileThumbnails={designCoverProfileThumbnails}
         albums={albums}
-        activeAlbumId={albumId}
+        activeAlbumId={effectiveAlbumId}
+        initialAssetTotal={assetPage.total}
+        initialAssetsHasMore={assetPage.has_more}
+        initialAssetNextOffset={assetPage.offset + assetPage.limit}
+        assetPageLimit={PUBLIC_GALLERY_INITIAL_ASSET_LIMIT}
         products={products}
         banners={banners}
         embeddedVideos={embeddedVideos}
@@ -444,7 +481,9 @@ export async function generateMetadata({ params, searchParams }: Props) {
       ? branding.brand_name
       : "RawDrive";
     const studioName =
-      branding?.studio_name?.trim() || branding?.brand_name?.trim() || brandName;
+      branding?.studio_name?.trim() ||
+      branding?.brand_name?.trim() ||
+      brandName;
     const shareTitle = gallery.title;
     const description =
       gallery.description || `Photo collection by ${studioName}`;

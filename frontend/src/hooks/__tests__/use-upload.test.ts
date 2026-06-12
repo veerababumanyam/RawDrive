@@ -30,7 +30,9 @@ describe("useUpload", () => {
     expect(source).toContain(
       "const currentDestination = destinationRef.current",
     );
-    expect(source).toContain("uploadDestination: currentDestination");
+    expect(source).toContain(
+      "uploadDestination: options?.destination ?? currentDestination",
+    );
     expect(source).toContain("const dest = itemDestination");
     expect(source).toContain("galleryId: itemDestination?.galleryId");
   });

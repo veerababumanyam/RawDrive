@@ -847,8 +847,10 @@ export default function GalleriesPage() {
     setPublishingGalleryId(gallery.id);
     setError(null);
     try {
+      const nextPublished = !gallery.is_published;
       const updated = await updateGallery(token, gallery.id, {
-        is_published: !gallery.is_published,
+        is_published: nextPublished,
+        ...(nextPublished ? { access_mode: "public" } : {}),
       });
       setGalleries((prev) =>
         prev.map((item) =>
@@ -1243,9 +1245,7 @@ export default function GalleriesPage() {
                 }
                 className="input-base mt-1 w-full"
               >
-                <option value="proofing">
-                  Album pics proofing
-                </option>
+                <option value="proofing">Album pics proofing</option>
                 <option value="delivery">Client pics delivery</option>
               </select>
             </div>

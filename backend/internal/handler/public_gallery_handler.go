@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1055,6 +1056,86 @@ type publicAssetResponse struct {
 	SortOrder       int                    `json:"sort_order"`
 }
 
+const publicAssetPageMaxLimit = 240
+const publicAssetPageDefaultLimit = 180
+
+type publicAssetPageRequest struct {
+	Enabled bool
+	Limit   int
+	Offset  int
+}
+
+type publicAssetPageResponse struct {
+	Assets  []publicAssetResponse `json:"assets"`
+	Total   int                   `json:"total"`
+	HasMore bool                  `json:"has_more"`
+	Limit   int                   `json:"limit"`
+	Offset  int                   `json:"offset"`
+}
+
+func parsePublicAssetPageRequest(r *http.Request) publicAssetPageRequest {
+	query := r.URL.Query()
+	_, hasLimit := query["limit"]
+	_, hasOffset := query["offset"]
+	if !hasLimit && !hasOffset {
+		return publicAssetPageRequest{}
+	}
+
+	limit := publicAssetPageDefaultLimit
+	if raw := strings.TrimSpace(query.Get("limit")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if limit > publicAssetPageMaxLimit {
+		limit = publicAssetPageMaxLimit
+	}
+
+	offset := 0
+	if raw := strings.TrimSpace(query.Get("offset")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			offset = parsed
+		}
+	}
+
+	return publicAssetPageRequest{Enabled: true, Limit: limit, Offset: offset}
+}
+
+func pageGalleryAssets[T any](items []T, page publicAssetPageRequest) ([]T, int, bool) {
+	total := len(items)
+	if !page.Enabled {
+		return items, total, false
+	}
+	if page.Offset >= total {
+		return items[:0], total, false
+	}
+	end := page.Offset + page.Limit
+	if end > total {
+		end = total
+	}
+	return items[page.Offset:end], total, end < total
+}
+
+func respondPublicAssetList(
+	w http.ResponseWriter,
+	page publicAssetPageRequest,
+	assets []publicAssetResponse,
+	total int,
+	hasMore bool,
+) {
+	if !page.Enabled {
+		respondJSON(w, http.StatusOK, assets)
+		return
+	}
+	respondJSON(w, http.StatusOK, publicAssetPageResponse{
+		Assets:  assets,
+		Total:   total,
+		HasMore: hasMore,
+		Limit:   page.Limit,
+		Offset:  page.Offset,
+	})
+}
+
 // resolveAssetsByID bulk-fetches the given asset IDs and returns an O(1)
 // lookup map keyed by asset ID (F-029). When a batch source is wired it issues
 // a single `id = ANY($1::uuid[])` query, collapsing the previous
@@ -1161,37 +1242,28 @@ func (h *PublicGalleryHandler) ListAssets(w http.ResponseWriter, r *http.Request
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
+	page := parsePublicAssetPageRequest(r)
+	pageItems, total, hasMore := pageGalleryAssets(galleryAssets, page)
 
 	// Enrich gallery assets with full asset details. F-029: fetch every asset
 	// in one query and index by ID instead of issuing a GetByID per junction
 	// row (which scaled the public hot path linearly with photo count).
-	ids := make([]uuid.UUID, 0, len(galleryAssets))
-	for _, ga := range galleryAssets {
+	ids := make([]uuid.UUID, 0, len(pageItems))
+	for _, ga := range pageItems {
 		ids = append(ids, ga.AssetID)
 	}
 	assetsByID := h.resolveAssetsByID(r.Context(), ids)
 
-	var result []publicAssetResponse
-	for _, ga := range galleryAssets {
+	result := make([]publicAssetResponse, 0, len(pageItems))
+	for _, ga := range pageItems {
 		asset, ok := assetsByID[ga.AssetID]
 		if !ok {
 			continue // skip missing assets
 		}
-		result = append(result, publicAssetResponse{
-			ID:              asset.ID.String(),
-			Filename:        asset.Filename,
-			ContentType:     asset.ContentType,
-			Width:           asset.Width,
-			Height:          asset.Height,
-			Blurhash:        asset.Blurhash,
-			ThumbnailURLs:   h.deliverThumbnailURLs(asset.ThumbnailURLs),
-			IsEncrypted:     asset.IsEncrypted,
-			MediaEncryption: asset.MediaEncryption,
-			SortOrder:       ga.SortOrder,
-		})
+		result = append(result, h.assetToPublicResponse(asset, ga.SortOrder))
 	}
 
-	respondJSON(w, http.StatusOK, result)
+	respondPublicAssetList(w, page, result, total, hasMore)
 }
 
 // publicAlbumResponse is the shape returned by GET .../albums for the
@@ -1298,36 +1370,27 @@ func (h *PublicGalleryHandler) ListAlbumAssets(w http.ResponseWriter, r *http.Re
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
+	page := parsePublicAssetPageRequest(r)
+	pageItems, total, hasMore := pageGalleryAssets(albumAssets, page)
 
 	// F-029: same single-query enrichment as ListAssets — one bulk fetch keyed
 	// by ID rather than a GetByID per album-asset junction row.
-	ids := make([]uuid.UUID, 0, len(albumAssets))
-	for _, aa := range albumAssets {
+	ids := make([]uuid.UUID, 0, len(pageItems))
+	for _, aa := range pageItems {
 		ids = append(ids, aa.AssetID)
 	}
 	assetsByID := h.resolveAssetsByID(r.Context(), ids)
 
-	result := make([]publicAssetResponse, 0, len(albumAssets))
-	for _, aa := range albumAssets {
+	result := make([]publicAssetResponse, 0, len(pageItems))
+	for _, aa := range pageItems {
 		asset, ok := assetsByID[aa.AssetID]
 		if !ok {
 			continue
 		}
-		result = append(result, publicAssetResponse{
-			ID:              asset.ID.String(),
-			Filename:        asset.Filename,
-			ContentType:     asset.ContentType,
-			Width:           asset.Width,
-			Height:          asset.Height,
-			Blurhash:        asset.Blurhash,
-			ThumbnailURLs:   h.deliverThumbnailURLs(asset.ThumbnailURLs),
-			IsEncrypted:     asset.IsEncrypted,
-			MediaEncryption: asset.MediaEncryption,
-			SortOrder:       aa.Position,
-		})
+		result = append(result, h.assetToPublicResponse(asset, aa.Position))
 	}
 
-	respondJSON(w, http.StatusOK, result)
+	respondPublicAssetList(w, page, result, total, hasMore)
 }
 
 // VerifyPIN handles POST /api/v1/public/galleries/{slug}/verify-pin

@@ -596,8 +596,7 @@ export async function listGalleryAccountShares(
   galleryId: string,
 ): Promise<GalleryAccountShare[]> {
   const res = await authFetch(`/api/v1/galleries/${galleryId}/account-shares`);
-  if (!res.ok)
-    throw new Error(`Failed to list account shares: ${res.status}`);
+  if (!res.ok) throw new Error(`Failed to list account shares: ${res.status}`);
   const body = await res.json();
   if (Array.isArray(body)) return body;
   if (body && Array.isArray(body.shares)) return body.shares;
@@ -615,7 +614,9 @@ export async function createGalleryAccountShare(
     body: JSON.stringify(data),
   });
   if (!res.ok)
-    throw new Error(await galleryApiErrorMessage(res, "Failed to share gallery"));
+    throw new Error(
+      await galleryApiErrorMessage(res, "Failed to share gallery"),
+    );
   return res.json();
 }
 
@@ -629,7 +630,9 @@ export async function revokeGalleryAccountShare(
     { method: "DELETE" },
   );
   if (!res.ok)
-    throw new Error(await galleryApiErrorMessage(res, "Failed to remove share"));
+    throw new Error(
+      await galleryApiErrorMessage(res, "Failed to remove share"),
+    );
 }
 
 export interface CreateGalleryShareLinkInput {
@@ -1181,6 +1184,19 @@ export interface PublicAsset {
   sort_order: number;
 }
 
+export interface PublicAssetPage {
+  assets: PublicAsset[];
+  total: number;
+  has_more: boolean;
+  limit: number;
+  offset: number;
+}
+
+export interface PublicAssetPageOptions {
+  limit?: number;
+  offset?: number;
+}
+
 export interface GalleryClientPreview {
   gallery: Gallery;
   assets: PublicAsset[];
@@ -1326,18 +1342,68 @@ export async function getPublicGalleryAssets(
   ws?: string | null,
   sessionToken?: string | null,
   shareToken?: string | null,
+  page?: PublicAssetPageOptions,
 ): Promise<PublicAsset[]> {
-  const path = albumId
+  const assetPage = await getPublicGalleryAssetsPage(
+    slug,
+    albumId,
+    ws,
+    sessionToken,
+    shareToken,
+    page,
+  );
+  return assetPage.assets;
+}
+
+export async function getPublicGalleryAssetsPage(
+  slug: string,
+  albumId?: string,
+  ws?: string | null,
+  sessionToken?: string | null,
+  shareToken?: string | null,
+  page?: PublicAssetPageOptions,
+): Promise<PublicAssetPage> {
+  let path = albumId
     ? `/api/v1/public/galleries/${slug}/albums/${albumId}/assets`
     : `/api/v1/public/galleries/${slug}/assets`;
+  if (page?.limit) path = appendQueryParam(path, "limit", String(page.limit));
+  if (typeof page?.offset === "number") {
+    path = appendQueryParam(path, "offset", String(page.offset));
+  }
+  const buildUrl = typeof window === "undefined" ? apiUrl : browserApiUrl;
   const res = await fetchWithGallerySession(
-    apiUrl(withPublicGalleryScope(path, ws, shareToken)),
+    buildUrl(withPublicGalleryScope(path, ws, shareToken)),
     sessionToken,
     { cache: "no-store" },
   );
   if (!res.ok) throw new Error(`Failed to list public assets: ${res.status}`);
   const body = await res.json();
-  if (Array.isArray(body)) return body;
-  if (body && Array.isArray(body.publicassets)) return body.publicassets;
-  return [];
+  if (Array.isArray(body)) {
+    return {
+      assets: body,
+      total: body.length,
+      has_more: false,
+      limit: body.length,
+      offset: 0,
+    };
+  }
+  if (body && Array.isArray(body.assets)) {
+    return {
+      assets: body.assets,
+      total: Number.isFinite(body.total) ? body.total : body.assets.length,
+      has_more: body.has_more === true,
+      limit: Number.isFinite(body.limit) ? body.limit : body.assets.length,
+      offset: Number.isFinite(body.offset) ? body.offset : 0,
+    };
+  }
+  if (body && Array.isArray(body.publicassets)) {
+    return {
+      assets: body.publicassets,
+      total: body.publicassets.length,
+      has_more: false,
+      limit: body.publicassets.length,
+      offset: 0,
+    };
+  }
+  return { assets: [], total: 0, has_more: false, limit: 0, offset: 0 };
 }

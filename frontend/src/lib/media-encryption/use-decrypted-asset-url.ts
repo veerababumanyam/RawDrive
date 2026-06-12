@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import {
   decryptBlobWithAvailableMediaKeys,
@@ -18,6 +18,7 @@ import {
   mediaKeyIdsForAsset,
   pickAssetMediaCandidates,
   type EncryptedAssetLike,
+  type PickedAssetMedia,
 } from "./asset-media";
 import { normalizeGalleryCacheKey } from "@/lib/offline/cache-keys";
 
@@ -108,22 +109,55 @@ function encryptedStorageKeyFallbacks(key: string): string[] {
   return Array.from(new Set(candidates));
 }
 
+function useResolvedAssetState() {
+  return useState<DecryptedAssetUrlState>({
+    src: "",
+    loading: false,
+    error: null,
+  });
+}
+
 export function useDecryptedAssetUrl(
   asset: EncryptedAssetLike | null | undefined,
   variants: readonly string[],
   token?: string | null,
   assetAccessToken?: string | null,
 ): DecryptedAssetUrlState {
-  const candidates = useMemo(
-    () => pickAssetMediaCandidates(asset, variants),
-    [asset, variants],
+  const variantsSignature = variants.join("\0");
+  const variantKeys = useMemo(
+    () => (variantsSignature ? variantsSignature.split("\0") : []),
+    [variantsSignature],
   );
-  const assetKeyIds = useMemo(() => mediaKeyIdsForAsset(asset), [asset]);
-  const [state, setState] = useState<DecryptedAssetUrlState>({
-    src: "",
-    loading: false,
-    error: null,
-  });
+  const candidateSignature = useMemo(
+    () => JSON.stringify(pickAssetMediaCandidates(asset, variantKeys)),
+    [asset, variantKeys],
+  );
+  const candidates = useMemo(
+    () => JSON.parse(candidateSignature) as PickedAssetMedia[],
+    [candidateSignature],
+  );
+  const assetKeyIdsSignature = useMemo(
+    () => mediaKeyIdsForAsset(asset).join("\0"),
+    [asset],
+  );
+  const assetKeyIds = useMemo(
+    () => (assetKeyIdsSignature ? assetKeyIdsSignature.split("\0") : []),
+    [assetKeyIdsSignature],
+  );
+  const usesClientMediaEncryption = assetUsesClientMediaEncryption(asset);
+  const [state, setState] = useResolvedAssetState();
+  const publishState = useCallback(
+    (nextState: DecryptedAssetUrlState) => {
+      setState((current) =>
+        current.src === nextState.src &&
+        current.loading === nextState.loading &&
+        current.error === nextState.error
+          ? current
+          : nextState,
+      );
+    },
+    [setState],
+  );
   const [keyStoreVersion, setKeyStoreVersion] = useState(0);
 
   useEffect(
@@ -147,11 +181,11 @@ export function useDecryptedAssetUrl(
         if (
           !shouldFetchStorageWithBearer(storageUrl, token, assetAccessToken)
         ) {
-          setState({ src: storageUrl, loading: false, error: null });
+          publishState({ src: storageUrl, loading: false, error: null });
           return;
         }
 
-        setState({ src: "", loading: true, error: null });
+        publishState({ src: "", loading: true, error: null });
         try {
           const res = await fetch(storageUrl, {
             credentials: "include",
@@ -162,11 +196,11 @@ export function useDecryptedAssetUrl(
           }
           objectUrl = URL.createObjectURL(await res.blob());
           if (!cancelled) {
-            setState({ src: objectUrl, loading: false, error: null });
+            publishState({ src: objectUrl, loading: false, error: null });
           }
         } catch (err) {
           if (!cancelled) {
-            setState({
+            publishState({
               src: "",
               loading: false,
               error: err instanceof Error ? err.message : "Media fetch failed",
@@ -176,11 +210,11 @@ export function useDecryptedAssetUrl(
       }
 
       if (candidates.length === 0) {
-        setState({ src: "", loading: false, error: null });
+        publishState({ src: "", loading: false, error: null });
         return;
       }
 
-      if (!assetUsesClientMediaEncryption(asset)) {
+      if (!usesClientMediaEncryption) {
         const storageUrl = getStorageBackedUrl(
           candidates[0].key,
           token,
@@ -210,7 +244,7 @@ export function useDecryptedAssetUrl(
               const blob = await hit.blob();
               if (cancelled) return;
               objectUrl = URL.createObjectURL(blob);
-              setState({ src: objectUrl, loading: false, error: null });
+              publishState({ src: objectUrl, loading: false, error: null });
             } catch {
               // Corrupt / quota-exhausted cache entry — keep the painted URL.
             }
@@ -219,7 +253,7 @@ export function useDecryptedAssetUrl(
         return;
       }
 
-      setState({ src: "", loading: true, error: null });
+      publishState({ src: "", loading: true, error: null });
       let lastError = "Encrypted media decrypt failed";
       try {
         for (const picked of candidates) {
@@ -282,7 +316,7 @@ export function useDecryptedAssetUrl(
             // always paired with a revokeObjectURL in the cleanup.
             if (!cancelled) {
               objectUrl = URL.createObjectURL(plaintext);
-              setState({ src: objectUrl, loading: false, error: null });
+              publishState({ src: objectUrl, loading: false, error: null });
             }
             void syncStoredGalleryMediaKeyForKeyId(
               picked.manifest.key_id,
@@ -305,11 +339,11 @@ export function useDecryptedAssetUrl(
           return;
         }
         if (!cancelled) {
-          setState({ src: "", loading: false, error: lastError });
+          publishState({ src: "", loading: false, error: lastError });
         }
       } catch (err) {
         if (!cancelled) {
-          setState({
+          publishState({
             src: "",
             loading: false,
             error:
@@ -327,12 +361,13 @@ export function useDecryptedAssetUrl(
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [
-    asset,
     candidates,
     assetKeyIds,
+    usesClientMediaEncryption,
     token,
     assetAccessToken,
     keyStoreVersion,
+    publishState,
   ]);
 
   return state;

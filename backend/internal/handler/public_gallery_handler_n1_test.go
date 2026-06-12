@@ -2,9 +2,13 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"github.com/rawdrive/backend/internal/repository"
@@ -168,6 +172,88 @@ func TestF029_ResolveAssetsByID_BulkErrorDoesNotEmptyGallery(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Fatalf("with bulk error and no fallback svc, expected empty map, got %d", len(got))
+	}
+}
+
+type pagedPublicGalleryResolver struct {
+	gallery *repository.Gallery
+	assets  []repository.GalleryAsset
+}
+
+func (p *pagedPublicGalleryResolver) GetByID(context.Context, uuid.UUID) (*repository.Gallery, error) {
+	return p.gallery, nil
+}
+
+func (p *pagedPublicGalleryResolver) GetBySlug(context.Context, string) (*repository.Gallery, error) {
+	return p.gallery, nil
+}
+
+func (p *pagedPublicGalleryResolver) GetByBusinessSubdomainAndSlug(context.Context, string, string) (*repository.Gallery, error) {
+	return p.gallery, nil
+}
+
+func (p *pagedPublicGalleryResolver) ListAssets(context.Context, uuid.UUID) ([]repository.GalleryAsset, error) {
+	return p.assets, nil
+}
+
+func publicAssetListRequest(path, slug string) *http.Request {
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	routeCtx := chi.NewRouteContext()
+	routeCtx.URLParams.Add("slug", slug)
+	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeCtx))
+}
+
+func TestPublicGalleryListAssets_PagedRequestEnrichesOnlyRequestedSlice(t *testing.T) {
+	gallery := publishedPublicGallery()
+	gallery.ID = uuid.New()
+	const totalAssets = 5
+	store := make(map[uuid.UUID]*repository.Asset, totalAssets)
+	junctions := make([]repository.GalleryAsset, 0, totalAssets)
+	for i := 0; i < totalAssets; i++ {
+		id := uuid.New()
+		store[id] = newAsset(id, "photo")
+		junctions = append(junctions, repository.GalleryAsset{
+			GalleryID: gallery.ID,
+			AssetID:   id,
+			SortOrder: i + 1,
+		})
+	}
+
+	batch := &countingAssetBatchSource{store: store}
+	h := NewPublicGalleryHandler(
+		&pagedPublicGalleryResolver{gallery: gallery, assets: junctions},
+		nil,
+		nil,
+	).WithAssetBatchSource(batch)
+
+	rec := httptest.NewRecorder()
+	h.ListAssets(rec, publicAssetListRequest("/api/v1/public/galleries/wedding/assets?limit=2&offset=2", "wedding"))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var body publicAssetPageResponse
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.Total != totalAssets {
+		t.Fatalf("expected total %d, got %d", totalAssets, body.Total)
+	}
+	if !body.HasMore {
+		t.Fatalf("expected has_more=true for middle page")
+	}
+	if body.Limit != 2 || body.Offset != 2 {
+		t.Fatalf("expected limit=2 offset=2, got limit=%d offset=%d", body.Limit, body.Offset)
+	}
+	if len(body.Assets) != 2 {
+		t.Fatalf("expected 2 assets in page, got %d", len(body.Assets))
+	}
+	if body.Assets[0].SortOrder != 3 || body.Assets[1].SortOrder != 4 {
+		t.Fatalf("expected requested slice sort orders 3,4 got %d,%d", body.Assets[0].SortOrder, body.Assets[1].SortOrder)
+	}
+	if batch.calls != 1 || batch.totalIDs != 2 {
+		t.Fatalf("expected one enrichment query for two paged ids, got calls=%d totalIDs=%d", batch.calls, batch.totalIDs)
 	}
 }
 

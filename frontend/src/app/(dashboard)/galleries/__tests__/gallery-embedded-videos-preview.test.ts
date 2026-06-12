@@ -43,7 +43,7 @@ describe("gallery embedded videos in client preview", () => {
 
     const bodySource = read(publicGalleryBodyPath);
     expect(bodySource).toContain(
-      "(assets.length > 0 || embeddedVideos.length === 0) &&",
+      "(loadedAssets.length > 0 || embeddedVideos.length === 0) &&",
     );
     expect(bodySource).toContain("<PublicGalleryGrid");
   });

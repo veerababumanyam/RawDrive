@@ -203,7 +203,7 @@ describe("readPublicDesignConfig", () => {
     });
   });
 
-  it("prefers a selected album design config and falls back to the gallery config", () => {
+  it("ignores legacy album design config and uses the gallery config for every folder", () => {
     const settings = {
       design_config: {
         cover: {
@@ -239,17 +239,31 @@ describe("readPublicDesignConfig", () => {
         readPublicDesignConfigForAlbum(settings, "album-1"),
         "desktop",
       ).cover.assetId,
-    ).toBe("album-cover");
+    ).toBe("gallery-cover");
     expect(
       resolveCoverDeviceProfile(
         readPublicDesignConfigForAlbum(settings, "missing-album"),
         "desktop",
       ).cover.assetId,
     ).toBe("gallery-cover");
-    expect(readPublicDesignConfigForAlbum(settings, null)?.grid).toBeUndefined();
+    expect(readPublicDesignConfigForAlbum(settings, null)?.grid?.columns).toBe(
+      4,
+    );
+    expect(readPublicDesignConfigForAlbum(settings, "album-1")?.grid).toEqual({
+      layout: "grid",
+      columns: 4,
+      gap: 12,
+      showInfo: true,
+    });
+    expect(readPublicDesignConfigForAlbum(settings, "album-2")?.grid).toEqual({
+      layout: "grid",
+      columns: 4,
+      gap: 12,
+      showInfo: true,
+    });
     expect(
       readPublicDesignConfigForAlbum(settings, "missing-album")?.grid?.columns,
-    ).toBeUndefined();
+    ).toBe(4);
 
     const gridOnlyAlbumConfig = readPublicDesignConfigForAlbum(
       settings,
@@ -258,14 +272,8 @@ describe("readPublicDesignConfig", () => {
     expect(
       resolveCoverDeviceProfile(gridOnlyAlbumConfig, "desktop").cover.assetId,
     ).toBe("gallery-cover");
-    expect(gridOnlyAlbumConfig?.grid?.layout).toBe("justified");
-    expect(gridOnlyAlbumConfig?.grid?.columns).toBe(2);
-    expect(
-      readPublicDesignConfigForAlbum(settings, "album-3")?.grid?.columns,
-    ).toBeUndefined();
-    expect(
-      readPublicDesignConfigForAlbum(settings, "album-4")?.grid?.columns,
-    ).toBe(4);
+    expect(gridOnlyAlbumConfig?.grid?.layout).toBe("grid");
+    expect(gridOnlyAlbumConfig?.grid?.columns).toBe(4);
   });
 
   it("rejects unknown layout values", () => {

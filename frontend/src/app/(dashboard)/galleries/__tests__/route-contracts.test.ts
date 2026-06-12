@@ -77,6 +77,11 @@ describe("gallery route contracts", () => {
     expect(source).toContain('role="switch"');
     expect(source).toContain("aria-checked={gallery.is_published}");
     expect(source).toContain("publish-state-toggle");
+    expect(source).toContain("const nextPublished = !gallery.is_published;");
+    expect(source).toContain("is_published: nextPublished");
+    expect(source).toContain(
+      '...(nextPublished ? { access_mode: "public" } : {})',
+    );
   });
 
   it("does not expose create-time tethering controls from the gallery list toolbar", () => {

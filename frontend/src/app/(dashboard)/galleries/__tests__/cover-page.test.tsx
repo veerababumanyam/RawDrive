@@ -146,6 +146,14 @@ vi.mock("@/lib/api/galleries", () => ({
     })),
   ),
   listGalleryAlbums: vi.fn(async () => []),
+  createGalleryAlbum: vi.fn(async () => ({
+    id: "album-highlights",
+    gallery_id: "gallery-1",
+    name: "HIGHLIGHTS",
+    position: 0,
+    asset_count: 0,
+    asset_ids: [],
+  })),
   listAlbumAssets: vi.fn(async () => []),
   updateGalleryDesign: mocks.updateGalleryDesign,
 }));
@@ -314,12 +322,12 @@ describe("CoverDesignPage", () => {
       },
     });
     expect(savedConfig).not.toHaveProperty("branding");
-    expect(savedConfig).not.toHaveProperty("grid");
+    expect(savedConfig).toHaveProperty("grid");
     expect(savedConfig).not.toHaveProperty("gridScope");
     expect(savedConfig.sceneHeaders).toEqual([]);
   }, 10000);
 
-  it("loads and saves Cover & Design for a selected gallery folder", async () => {
+  it("uses the selected folder for preview assets while saving shared Cover & Design", async () => {
     mocks.searchParams = new URLSearchParams("album=album-1");
     vi.mocked(getGallery).mockResolvedValueOnce({
       id: "gallery-1",
@@ -336,6 +344,10 @@ describe("CoverDesignPage", () => {
       updated_at: "2026-04-01T00:00:00Z",
       settings: {
         design_config: {
+          cover: {
+            assetId: "asset-cover",
+            assetSlots: ["asset-cover"],
+          },
           grid: {
             layout: "grid",
             columns: 5,
@@ -383,17 +395,38 @@ describe("CoverDesignPage", () => {
       name: "Cover editor section",
     });
     expect(
-      screen.getByText("Folder settings: Grid only"),
+      screen.queryByText("Folder settings: Grid only"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("group", { name: "Preview device" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("group", { name: "Preview device" }),
-    ).not.toBeInTheDocument();
-    expect(within(sectionSelect).getAllByRole("option")).toHaveLength(1);
+      within(sectionSelect).getByRole("option", { name: "Cover" }),
+    ).toHaveValue("cover");
+    expect(
+      within(sectionSelect).getByRole("option", { name: "Text" }),
+    ).toHaveValue("text");
+    expect(
+      within(sectionSelect).getByRole("option", { name: "Brand" }),
+    ).toHaveValue("brand");
     expect(
       within(sectionSelect).getByRole("option", { name: "Grid" }),
     ).toHaveValue("grid");
     expect(
-      screen.getByLabelText("Folder grid preview"),
+      within(sectionSelect).getByRole("option", { name: "Photos" }),
+    ).toHaveValue("photos");
+    expect(
+      within(sectionSelect).queryByRole("option", { name: "Media" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(sectionSelect).queryByRole("option", { name: "Videos" }),
+    ).not.toBeInTheDocument();
+    expect(listAlbumAssets).toHaveBeenCalledWith("token-1", "album-1", {
+      includeAssets: true,
+    });
+    await openCoverEditorTab("Grid");
+    expect(
+      await screen.findByLabelText("Folder grid preview"),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "HIGHLIGHTS" }),
@@ -404,9 +437,6 @@ describe("CoverDesignPage", () => {
     expect(
       screen.queryByRole("heading", { name: "Cover designs" }),
     ).not.toBeInTheDocument();
-    expect(listAlbumAssets).toHaveBeenCalledWith("token-1", "album-1", {
-      includeAssets: true,
-    });
 
     fireEvent.click(
       screen.getByRole("button", { name: /save cover and design/i }),
@@ -417,26 +447,26 @@ describe("CoverDesignPage", () => {
         "token-1",
         "gallery-1",
         expect.any(Object),
-        { albumId: "album-1" },
+        { albumId: null },
       );
     });
     const savedConfig = vi.mocked(updateGalleryDesign).mock
       .calls[0]?.[2] as Record<string, unknown>;
     expect(savedConfig).toHaveProperty("grid");
     expect(savedConfig.grid).toEqual({
-      layout: "justified",
-      columns: 2,
-      gap: 12,
-      showInfo: true,
+      layout: "grid",
+      columns: 5,
+      gap: 28,
+      showInfo: false,
     });
-    expect(savedConfig).toHaveProperty("gridScope", "folder");
+    expect(savedConfig).not.toHaveProperty("gridScope");
     expect(savedConfig).toHaveProperty("version");
-    expect(savedConfig).not.toHaveProperty("cover");
-    expect(savedConfig).not.toHaveProperty("typography");
-    expect(savedConfig).not.toHaveProperty("sceneHeaders");
+    expect(savedConfig).toHaveProperty("cover");
+    expect(savedConfig).toHaveProperty("typography");
+    expect(savedConfig).toHaveProperty("sceneHeaders");
   });
 
-  it("saves selected folder grid settings without requiring a cover photo", async () => {
+  it("saves shared grid settings without requiring a cover photo", async () => {
     mocks.searchParams = new URLSearchParams("album=album-empty");
     vi.mocked(getGallery).mockResolvedValueOnce({
       id: "gallery-1",
@@ -457,17 +487,11 @@ describe("CoverDesignPage", () => {
             assetId: null,
             assetSlots: [],
           },
-        },
-        design_config_by_album: {
-          "album-empty": {
-            grid: {
-              layout: "grid",
-              columns: 4,
-              gap: 10,
-              showInfo: false,
-            },
-            gridScope: "folder",
-            version: 3,
+          grid: {
+            layout: "grid",
+            columns: 4,
+            gap: 10,
+            showInfo: false,
           },
         },
       },
@@ -500,24 +524,24 @@ describe("CoverDesignPage", () => {
         "token-1",
         "gallery-1",
         expect.any(Object),
-        { albumId: "album-empty" },
+        { albumId: null },
       );
     });
     const savedConfig = vi.mocked(updateGalleryDesign).mock
       .calls[0]?.[2] as Record<string, unknown>;
-    expect(savedConfig).toEqual({
+    expect(savedConfig).toMatchObject({
       grid: {
         layout: "grid",
         columns: 4,
         gap: 10,
         showInfo: false,
       },
-      gridScope: "folder",
       version: expect.any(Number),
     });
+    expect(savedConfig).not.toHaveProperty("gridScope");
   });
 
-  it("auto-saves selected folder grid columns after slider edits", async () => {
+  it("saves shared grid columns after slider edits", async () => {
     mocks.searchParams = new URLSearchParams("album=album-auto");
     vi.mocked(getGallery).mockResolvedValueOnce({
       id: "gallery-1",
@@ -533,16 +557,16 @@ describe("CoverDesignPage", () => {
       created_at: "2026-04-01T00:00:00Z",
       updated_at: "2026-04-01T00:00:00Z",
       settings: {
-        design_config_by_album: {
-          "album-auto": {
-            grid: {
-              layout: "grid",
-              columns: 3,
-              gap: 8,
-              showInfo: false,
-            },
-            gridScope: "folder",
-            version: 4,
+        design_config: {
+          cover: {
+            assetId: "asset-cover",
+            assetSlots: ["asset-cover"],
+          },
+          grid: {
+            layout: "grid",
+            columns: 3,
+            gap: 8,
+            showInfo: false,
           },
         },
       },
@@ -570,11 +594,16 @@ describe("CoverDesignPage", () => {
     await renderPage();
 
     expect(await screen.findByText("Folder: HIGHLIGHTS")).toBeInTheDocument();
+    await openCoverEditorTab("Grid");
     vi.mocked(updateGalleryDesign).mockClear();
 
     fireEvent.change(screen.getByLabelText("Columns"), {
       target: { value: "5" },
     });
+    expect(updateGalleryDesign).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole("button", { name: /save cover and design/i }),
+    );
 
     await waitFor(
       () => {
@@ -582,7 +611,7 @@ describe("CoverDesignPage", () => {
           "token-1",
           "gallery-1",
           expect.any(Object),
-          { albumId: "album-auto" },
+          { albumId: null },
         );
       },
       { timeout: 2000 },
@@ -596,13 +625,13 @@ describe("CoverDesignPage", () => {
         gap: 8,
         showInfo: false,
       },
-      gridScope: "folder",
     });
-    expect(savedConfig).not.toHaveProperty("cover");
-    expect(savedConfig).not.toHaveProperty("typography");
+    expect(savedConfig).not.toHaveProperty("gridScope");
+    expect(savedConfig).toHaveProperty("cover");
+    expect(savedConfig).toHaveProperty("typography");
   });
 
-  it("starts an unsaved gallery folder with its own default grid instead of the root grid", async () => {
+  it("uses the shared gallery grid for unsaved folders", async () => {
     mocks.searchParams = new URLSearchParams("album=album-2");
     vi.mocked(getGallery).mockResolvedValueOnce({
       id: "gallery-1",
@@ -651,6 +680,7 @@ describe("CoverDesignPage", () => {
     await renderPage();
 
     expect(await screen.findByText("Folder: CEREMONY")).toBeInTheDocument();
+    await openCoverEditorTab("Grid");
     fireEvent.click(
       screen.getByRole("button", { name: /save cover and design/i }),
     );
@@ -660,21 +690,21 @@ describe("CoverDesignPage", () => {
         "token-1",
         "gallery-1",
         expect.any(Object),
-        { albumId: "album-2" },
+        { albumId: null },
       );
     });
     const savedConfig = vi.mocked(updateGalleryDesign).mock
       .calls[0]?.[2] as Record<string, unknown>;
     expect(savedConfig.grid).toEqual({
       layout: "grid",
-      columns: 3,
-      gap: 8,
-      showInfo: false,
+      columns: 5,
+      gap: 28,
+      showInfo: true,
     });
-    expect(savedConfig).toHaveProperty("gridScope", "folder");
+    expect(savedConfig).not.toHaveProperty("gridScope");
   });
 
-  it("ignores legacy folder grid settings that were copied from the root grid", async () => {
+  it("ignores legacy folder grid settings when saving shared design", async () => {
     mocks.searchParams = new URLSearchParams("album=album-3");
     vi.mocked(getGallery).mockResolvedValueOnce({
       id: "gallery-1",
@@ -734,6 +764,7 @@ describe("CoverDesignPage", () => {
     await renderPage();
 
     expect(await screen.findByText("Folder: RECEPTION")).toBeInTheDocument();
+    await openCoverEditorTab("Grid");
     fireEvent.click(
       screen.getByRole("button", { name: /save cover and design/i }),
     );
@@ -743,18 +774,18 @@ describe("CoverDesignPage", () => {
         "token-1",
         "gallery-1",
         expect.any(Object),
-        { albumId: "album-3" },
+        { albumId: null },
       );
     });
     const savedConfig = vi.mocked(updateGalleryDesign).mock
       .calls[0]?.[2] as Record<string, unknown>;
     expect(savedConfig.grid).toEqual({
       layout: "grid",
-      columns: 3,
-      gap: 8,
-      showInfo: false,
+      columns: 5,
+      gap: 28,
+      showInfo: true,
     });
-    expect(savedConfig).toHaveProperty("gridScope", "folder");
+    expect(savedConfig).not.toHaveProperty("gridScope");
   });
 
   it("offers a section dropdown for cover editing", async () => {
@@ -766,9 +797,9 @@ describe("CoverDesignPage", () => {
 
     expect(sectionSelect).toHaveValue("cover");
     expect(screen.queryByLabelText("Editor section")).not.toBeInTheDocument();
-    expect(within(sectionSelect).getByRole("option", { name: "Cover" })).toHaveValue(
-      "cover",
-    );
+    expect(
+      within(sectionSelect).getByRole("option", { name: "Cover" }),
+    ).toHaveValue("cover");
     expect(
       within(sectionSelect).queryByRole("option", { name: "Scenes" }),
     ).not.toBeInTheDocument();
@@ -782,8 +813,8 @@ describe("CoverDesignPage", () => {
       within(sectionSelect).queryByRole("option", { name: "Videos" }),
     ).not.toBeInTheDocument();
     expect(
-      within(sectionSelect).queryByRole("option", { name: "Grid" }),
-    ).not.toBeInTheDocument();
+      within(sectionSelect).getByRole("option", { name: "Grid" }),
+    ).toBeInTheDocument();
     expect(
       within(sectionSelect).getByRole("option", { name: "Photos" }),
     ).toBeInTheDocument();
@@ -820,9 +851,10 @@ describe("CoverDesignPage", () => {
         name: "Copy desktop cover settings to phone",
       }),
     ).not.toBeInTheDocument();
+    // The gallery-folder selector was removed from Cover & Design.
     expect(
-      screen.getByRole("combobox", { name: "Gallery folders" }),
-    ).toHaveClass("cover-folder-select");
+      screen.queryByRole("combobox", { name: "Gallery folders" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /^undo/i }),
     ).not.toBeInTheDocument();
@@ -846,7 +878,7 @@ describe("CoverDesignPage", () => {
     ).toHaveClass("cover-preview-pane");
   });
 
-  it("does not expose media, video, or grid sections for gallery root editing", async () => {
+  it("does not expose media or video sections for gallery root editing", async () => {
     vi.mocked(getGallery).mockResolvedValueOnce({
       id: "gallery-1",
       workspace_id: "workspace-1",
@@ -893,8 +925,8 @@ describe("CoverDesignPage", () => {
       within(sectionSelect).queryByRole("option", { name: "Videos" }),
     ).not.toBeInTheDocument();
     expect(
-      within(sectionSelect).queryByRole("option", { name: "Grid" }),
-    ).not.toBeInTheDocument();
+      within(sectionSelect).getByRole("option", { name: "Grid" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: "Videos & Reels" }),
     ).not.toBeInTheDocument();
@@ -1168,7 +1200,9 @@ describe("CoverDesignPage", () => {
     });
 
     await waitFor(() =>
-      expect(mocks.uploadAddFiles).toHaveBeenCalledWith([file]),
+      expect(mocks.uploadAddFiles).toHaveBeenCalledWith([file], {
+        destination: { galleryId: "gallery-1", albumId: "album-highlights" },
+      }),
     );
   });
 

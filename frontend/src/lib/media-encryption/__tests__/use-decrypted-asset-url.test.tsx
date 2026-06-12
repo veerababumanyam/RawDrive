@@ -558,9 +558,7 @@ describe("useDecryptedAssetUrl", () => {
       await new Promise((resolve) => window.setTimeout(resolve, 0));
     });
 
-    expect(screen.getByTestId("src")).toHaveTextContent(
-      "blob:decrypted-webp",
-    );
+    expect(screen.getByTestId("src")).toHaveTextContent("blob:decrypted-webp");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(URL.revokeObjectURL).not.toHaveBeenCalled();
   });
@@ -801,5 +799,34 @@ describe("useDecryptedAssetUrl — non-encrypted sync paint + offline upgrade", 
     expect(screen.getByTestId("loading")).toHaveTextContent("false");
     expect(screen.getByTestId("src")).toHaveTextContent(expectedUrl);
     expect(screen.getByTestId("error")).toBeEmptyDOMElement();
+  });
+
+  it("does not re-fetch when callers recreate equivalent asset and variant inputs", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(new Blob(["plain-bytes"], { type: "image/webp" }), {
+        status: 200,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:plain-webp");
+
+    const buildAsset = (): EncryptedAssetLike => ({
+      ...PLAIN_ASSET,
+      thumbnail_urls: { ...PLAIN_ASSET.thumbnail_urls },
+    });
+
+    const { rerender, result } = renderHook(() =>
+      useDecryptedAssetUrl(buildAsset(), ["thumb_md_webp"], "jwt-token"),
+    );
+
+    await waitFor(() => expect(result.current.src).toBe("blob:plain-webp"));
+    const settledFetches = fetchMock.mock.calls.length;
+
+    rerender();
+    rerender();
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fetchMock).toHaveBeenCalledTimes(settledFetches);
+    expect(result.current.src).toBe("blob:plain-webp");
   });
 });

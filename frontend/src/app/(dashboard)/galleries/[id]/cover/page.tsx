@@ -45,14 +45,14 @@ import {
   useEffect,
   useMemo,
   useDeferredValue,
-  type ChangeEvent,
 } from "react";
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { getStoredAccessToken } from "@/lib/auth";
 import { getApiBaseUrl } from "@/lib/api/base-url";
 import {
   getGallery,
+  createGalleryAlbum,
   listAlbumAssets,
   listGalleryAlbums,
   listGalleryAssets,
@@ -140,11 +140,10 @@ const EDITOR_TABS: Array<{
   { id: "grid", label: "Grid", mobileLabel: "Grid" },
   { id: "photos", label: "Photos", mobileLabel: "Photos" },
 ];
-const ROOT_EDITOR_TABS = EDITOR_TABS.filter(
-  (tab) => !["media", "videos", "grid"].includes(tab.id),
+const GLOBAL_EDITOR_TABS = EDITOR_TABS.filter(
+  (tab) => !["media", "videos"].includes(tab.id),
 );
-const FOLDER_EDITOR_TABS = EDITOR_TABS.filter((tab) => tab.id === "grid");
-const FOLDER_GRID_AUTOSAVE_DELAY_MS = 600;
+const HIGHLIGHTS_ALBUM_NAME = "HIGHLIGHTS";
 
 type CoverPresetId =
   | "classic-wedding"
@@ -1757,69 +1756,20 @@ function recordFromUnknown(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function rootConfigForFolder(
-  raw: Record<string, unknown> | null,
-): Record<string, unknown> | null {
-  if (!raw) return null;
-  const next = { ...raw };
-  delete next.grid;
-  return next;
-}
-
-function gridSettingsMatch(left: unknown, right: unknown): boolean {
-  const leftGrid = recordFromUnknown(left);
-  const rightGrid = recordFromUnknown(right);
-  if (!leftGrid || !rightGrid) return false;
-  return (
-    leftGrid.layout === rightGrid.layout &&
-    leftGrid.columns === rightGrid.columns &&
-    leftGrid.gap === rightGrid.gap &&
-    leftGrid.showInfo === rightGrid.showInfo
-  );
-}
-
-function albumConfigForFolder(
-  rootConfig: Record<string, unknown> | null,
-  albumConfig: Record<string, unknown> | null,
-): Record<string, unknown> | null {
-  if (!albumConfig) return null;
-  const next = { ...albumConfig };
-  if (
-    next.gridScope !== "folder" &&
-    gridSettingsMatch(next.grid, rootConfig?.grid)
-  ) {
-    delete next.grid;
-  }
-  return next;
-}
-
 function configFromGallery(gallery: Gallery): DesignConfig {
   const settings = (gallery.settings ?? {}) as Record<string, unknown>;
   return configFromDesignSettings(
     settings,
-    rootConfigForFolder(recordFromUnknown(settings["design_config"])),
+    recordFromUnknown(settings["design_config"]),
     gallery,
   );
 }
 
 function configFromGalleryForAlbum(
   gallery: Gallery,
-  albumId?: string | null,
+  _albumId?: string | null,
 ): DesignConfig {
-  if (!albumId) return configFromGallery(gallery);
-  const settings = (gallery.settings ?? {}) as Record<string, unknown>;
-  const rawRootConfig = recordFromUnknown(settings["design_config"]);
-  const rootConfig = rootConfigForFolder(rawRootConfig);
-  const byAlbum = recordFromUnknown(settings["design_config_by_album"]);
-  const albumConfig = albumConfigForFolder(
-    rawRootConfig,
-    recordFromUnknown(byAlbum?.[albumId]),
-  );
-  return configFromDesignSettings(
-    settings,
-    albumConfig ? { ...(rootConfig ?? {}), ...albumConfig } : rootConfig,
-    gallery,
-  );
+  return configFromGallery(gallery);
 }
 
 function configFromDesignSettings(
@@ -2148,17 +2098,6 @@ function prepareDesignConfigForSave(config: DesignConfig): DesignConfig {
   return payload;
 }
 
-function prepareDesignConfigForFolderSave(
-  config: DesignConfig,
-): Record<string, unknown> {
-  const payload = prepareDesignConfigForSave(config);
-  return {
-    grid: payload.grid,
-    gridScope: "folder",
-    version: payload.version,
-  };
-}
-
 function prepareDesignConfigForRootSave(
   config: DesignConfig,
 ): Record<string, unknown> {
@@ -2166,16 +2105,13 @@ function prepareDesignConfigForRootSave(
     string,
     unknown
   >;
-  delete payload.grid;
   delete payload.gridScope;
   return payload;
 }
 
 function prepareDesignConfigForEditorSave(
   config: DesignConfig,
-  folderGridOnly: boolean,
 ): Record<string, unknown> {
-  if (folderGridOnly) return prepareDesignConfigForFolderSave(config);
   return prepareDesignConfigForRootSave(config);
 }
 
@@ -2319,16 +2255,20 @@ type DragKind = "focal" | "title" | "subtitle" | null;
 export default function CoverDesignPage() {
   const params = useParams();
   const galleryId = params.id as string;
-  const router = useRouter();
   const searchParams = useSearchParams();
   const selectedAlbumId = searchParams.get("album") || "";
-  const folderGridOnly = selectedAlbumId !== "";
   const stageRef = useRef<HTMLDivElement>(null);
   const dragKindRef = useRef<DragKind>(null);
 
   const [gallery, setGallery] = useState<Gallery | null>(null);
   const [selectedAlbum, setSelectedAlbum] = useState<GalleryAlbum | null>(null);
   const [albums, setAlbums] = useState<GalleryAlbum[]>([]);
+  const coverUploadTargetAlbumId =
+    selectedAlbumId ||
+    albums.find(
+      (album) => album.name.trim().toUpperCase() === HIGHLIGHTS_ALBUM_NAME,
+    )?.id ||
+    null;
   const [assets, setAssets] = useState<Asset[]>([]);
   const [config, setConfig] = useState<DesignConfig>(DEFAULT_CONFIG);
   const [workspaceProfile, setWorkspaceProfile] =
@@ -2355,7 +2295,6 @@ export default function CoverDesignPage() {
   const [loadError, setLoadError] = useState("");
   const [termsModalOpen, setTermsModalOpen] = useState(false);
   const completedCoverUploadKeyRef = useRef("");
-  const autoSaveSeqRef = useRef(0);
 
   const token = useMemo(() => getStoredAccessToken(), []);
   const apiUrl = useMemo(() => getApiBaseUrl(), []);
@@ -2370,9 +2309,46 @@ export default function CoverDesignPage() {
   );
   const upload = useUpload(apiUrl, token, {
     encryption: uploadEncryption,
-    destination: { galleryId, albumId: selectedAlbumId || null },
+    destination: { galleryId, albumId: coverUploadTargetAlbumId },
     onTermsRequired: () => setTermsModalOpen(true),
   });
+
+  const ensureCoverUploadTargetAlbumId = useCallback(async () => {
+    if (coverUploadTargetAlbumId) return coverUploadTargetAlbumId;
+    if (!token) return null;
+    try {
+      const created = await createGalleryAlbum(token, galleryId, {
+        name: HIGHLIGHTS_ALBUM_NAME,
+      });
+      setAlbums((current) => {
+        if (current.some((album) => album.id === created.id)) return current;
+        return [...current, created];
+      });
+      return created.id;
+    } catch (err) {
+      console.warn("Failed to prepare HIGHLIGHTS cover upload folder:", err);
+      return null;
+    }
+  }, [coverUploadTargetAlbumId, galleryId, token]);
+
+  const handleCoverFilesAccepted = useCallback(
+    (files: File[]) => {
+      if (files.length === 0) return;
+      void (async () => {
+        const targetAlbumId = await ensureCoverUploadTargetAlbumId();
+        if (!targetAlbumId) {
+          setSaveError(
+            "Upload did not start because the HIGHLIGHTS folder could not be prepared.",
+          );
+          return;
+        }
+        upload.addFiles(files, {
+          destination: { galleryId, albumId: targetAlbumId },
+        });
+      })();
+    },
+    [ensureCoverUploadTargetAlbumId, galleryId, upload],
+  );
 
   const updateConfig: React.Dispatch<React.SetStateAction<DesignConfig>> =
     useCallback((action) => {
@@ -2382,20 +2358,6 @@ export default function CoverDesignPage() {
           : action,
       );
     }, []);
-
-  const handleFolderChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) => {
-      const nextAlbumId = event.target.value;
-      const nextHref =
-        nextAlbumId === "root"
-          ? `/galleries/${galleryId}/cover`
-          : `/galleries/${galleryId}/cover?album=${encodeURIComponent(
-              nextAlbumId,
-            )}`;
-      router.push(nextHref);
-    },
-    [galleryId, router],
-  );
 
   // Mount: fetch gallery + assets, hydrate config from gallery.settings.
   useEffect(() => {
@@ -2442,7 +2404,7 @@ export default function CoverDesignPage() {
 
         const initial = configFromGalleryForAlbum(g, selectedAlbumId || null);
         const persistedSnapshot = JSON.stringify(
-          prepareDesignConfigForEditorSave(initial, folderGridOnly),
+          prepareDesignConfigForEditorSave(initial),
         );
         if (!initial.cover.assetId) {
           initial.cover.assetId = realAssets[0]?.id || null;
@@ -2474,7 +2436,7 @@ export default function CoverDesignPage() {
     return () => {
       cancelled = true;
     };
-  }, [folderGridOnly, galleryId, selectedAlbumId]);
+  }, [galleryId, selectedAlbumId]);
 
   const completedCoverUploadKey = useMemo(
     () =>
@@ -2591,11 +2553,8 @@ export default function CoverDesignPage() {
     config.typography.subtitleLanguage,
   ]);
 
-  const rootCoverEditing = !folderGridOnly;
-  const editorPreviewDevice: PreviewDevice = rootCoverEditing
-    ? previewDevice
-    : "desktop";
-  const editorTabs = folderGridOnly ? FOLDER_EDITOR_TABS : ROOT_EDITOR_TABS;
+  const editorPreviewDevice: PreviewDevice = previewDevice;
+  const editorTabs = GLOBAL_EDITOR_TABS;
   const activeEditorTab: TabId =
     editorTabs.find((editorTab) => editorTab.id === tab)?.id ??
     editorTabs[0]?.id ??
@@ -2707,31 +2666,18 @@ export default function CoverDesignPage() {
       setSaveError("Your session expired. Please log in again.");
       return;
     }
-    if (!folderGridOnly && !config.cover.assetId) {
-      setSaveError("Pick a cover photo before saving.");
-      return;
-    }
     setSaving(true);
     setSaveError("");
     setSaveMessage("");
     setJustSaved(false);
     try {
-      const payload = prepareDesignConfigForEditorSave(config, folderGridOnly);
-      await updateGalleryDesign(
-        token,
-        galleryId,
-        payload,
-        { albumId: selectedAlbumId || null },
-      );
+      const payload = prepareDesignConfigForEditorSave(config);
+      await updateGalleryDesign(token, galleryId, payload, { albumId: null });
       // Capture the snapshot of what we just sent so the dirty-dot logic
       // recognises this state as "clean". Use JSON.stringify of the same
       // serialisation we sent over the wire so the comparison is exact.
       setSavedSnapshot(JSON.stringify(payload));
-      setSaveMessage(
-        selectedAlbum
-          ? `Cover & Design saved for ${selectedAlbum.name}.`
-          : "Cover & Design saved.",
-      );
+      setSaveMessage("Cover & Design saved for all folders.");
       setJustSaved(true);
     } catch (err) {
       setSaveError(
@@ -2758,70 +2704,10 @@ export default function CoverDesignPage() {
   }, [justSaved]);
 
   const serializedEditorConfig = JSON.stringify(
-    prepareDesignConfigForEditorSave(config, folderGridOnly),
+    prepareDesignConfigForEditorSave(config),
   );
-  const isDirty = savedSnapshot !== "" && savedSnapshot !== serializedEditorConfig;
-
-  useEffect(() => {
-    if (
-      !folderGridOnly ||
-      !loaded ||
-      !token ||
-      !gallery ||
-      !selectedAlbumId ||
-      !isDirty
-    ) {
-      return;
-    }
-
-    const seq = ++autoSaveSeqRef.current;
-    const payload = JSON.parse(serializedEditorConfig) as Record<
-      string,
-      unknown
-    >;
-    const timer = window.setTimeout(async () => {
-      setSaving(true);
-      setSaveError("");
-      setSaveMessage("");
-      setJustSaved(false);
-      try {
-        await updateGalleryDesign(token, galleryId, payload, {
-          albumId: selectedAlbumId,
-        });
-        if (autoSaveSeqRef.current !== seq) return;
-        setSavedSnapshot(JSON.stringify(payload));
-        setSaveMessage(
-          selectedAlbum
-            ? `Grid settings saved for ${selectedAlbum.name}.`
-            : "Grid settings saved.",
-        );
-        setJustSaved(true);
-      } catch (err) {
-        if (autoSaveSeqRef.current !== seq) return;
-        setSaveError(
-          err instanceof Error ? err.message : "Failed to save grid settings.",
-        );
-      } finally {
-        if (autoSaveSeqRef.current === seq) {
-          setSaving(false);
-        }
-      }
-    }, FOLDER_GRID_AUTOSAVE_DELAY_MS);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [
-    folderGridOnly,
-    gallery,
-    galleryId,
-    isDirty,
-    loaded,
-    selectedAlbum,
-    selectedAlbumId,
-    serializedEditorConfig,
-    token,
-  ]);
+  const isDirty =
+    savedSnapshot !== "" && savedSnapshot !== serializedEditorConfig;
 
   if (loaded && loadError && !gallery) {
     return (
@@ -2896,6 +2782,7 @@ export default function CoverDesignPage() {
     : workspaceProfileBranding(workspaceProfile);
   const watermarkLabel =
     effectiveBranding.watermarkText.trim() || effectiveBranding.monogram;
+  const showingGridPreview = activeEditorTab === "grid";
 
   // ───────────── Render ─────────────
 
@@ -2944,36 +2831,30 @@ export default function CoverDesignPage() {
         <section className="cover-preview-section cover-preview-pane">
           <div className="cover-preview-toolbar">
             <div className="cover-preview-primary-actions">
-              {rootCoverEditing ? (
-                <div
-                  className="glass-segmented cover-device-toggle"
-                  role="group"
-                  aria-label="Preview device"
-                >
-                  {(["desktop", "phone"] as PreviewDevice[]).map((device) => (
-                    <button
-                      key={device}
-                      type="button"
-                      onClick={() => setPreviewDevice(device)}
-                      aria-pressed={previewDevice === device}
-                      aria-label={
-                        device === "desktop"
-                          ? "Desktop preview"
-                          : "Phone preview"
-                      }
-                      className="glass-segmented-option"
-                    >
-                      {device === "desktop" ? "Desktop" : "Phone"}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <Badge variant="neutral">Folder settings: Grid only</Badge>
-              )}
+              <div
+                className="glass-segmented cover-device-toggle"
+                role="group"
+                aria-label="Preview device"
+              >
+                {(["desktop", "phone"] as PreviewDevice[]).map((device) => (
+                  <button
+                    key={device}
+                    type="button"
+                    onClick={() => setPreviewDevice(device)}
+                    aria-pressed={previewDevice === device}
+                    aria-label={
+                      device === "desktop" ? "Desktop preview" : "Phone preview"
+                    }
+                    className="glass-segmented-option"
+                  >
+                    {device === "desktop" ? "Desktop" : "Phone"}
+                  </button>
+                ))}
+              </div>
               <GlassButton
                 type="button"
                 onClick={handleSave}
-                disabled={saving || (!folderGridOnly && !config.cover.assetId)}
+                disabled={saving}
                 aria-label={
                   saving
                     ? "Saving cover and design"
@@ -3003,19 +2884,24 @@ export default function CoverDesignPage() {
               </GlassButton>
             </div>
             <p className="sr-only" aria-live="polite">
-              {!rootCoverEditing
-                ? "Folder design edits are limited to grid settings."
+              {showingGridPreview
+                ? "Grid preview is active for the selected folder."
                 : editorPreviewDevice === "phone"
-                ? "Phone profile is active for cover edits."
-                : "Desktop profile is active for cover edits."}
+                  ? "Phone profile is active for cover edits."
+                  : "Desktop profile is active for cover edits."}
             </p>
           </div>
-          {rootCoverEditing ? (
+          {showingGridPreview ? (
+            <FolderGridStagePreview
+              grid={config.grid}
+              assets={assets}
+              token={token}
+              folderName={selectedAlbum?.name || "Gallery root"}
+            />
+          ) : (
             <div
               ref={stageRef}
-              onPointerDown={
-                hasCoverPreview ? onStagePointerDown : undefined
-              }
+              onPointerDown={hasCoverPreview ? onStagePointerDown : undefined}
               onPointerMove={onStagePointerMove}
               onPointerUp={onStagePointerUp}
               onPointerCancel={onStagePointerUp}
@@ -3067,7 +2953,7 @@ export default function CoverDesignPage() {
                 </div>
               )}
 
-            {/* Title overlay — draggable. whitespace: pre prevents the
+              {/* Title overlay — draggable. whitespace: pre prevents the
                 browser from soft-wrapping single-line titles when they get
                 close to the canvas edge during a drag. Earlier behavior
                 used whitespace-pre-wrap + maxWidth:80%, so "Ram Wedding"
@@ -3076,102 +2962,41 @@ export default function CoverDesignPage() {
                 width — felt like the title was fighting back against the
                 user. Multi-line titles work by typing an explicit newline,
                 which `pre` preserves. */}
-            {activeCoverProfile.titleVisible !== false && previewTitle && (
-              <h2
-                data-handle="title"
-                lang={
-                  getCoverLanguage(activeTypographyProfile.titleLanguage)
-                    .htmlLang
-                }
-                dir={
-                  getCoverLanguage(activeTypographyProfile.titleLanguage).dir
-                }
-                className={`absolute touch-none font-semibold tracking-tight transition-shadow ${
-                  activeText === "title" && activeEditorTab === "text"
-                    ? "ring-2 ring-primary ring-offset-2 ring-offset-surface-scrim-strong/30"
-                    : ""
-                }`}
-                style={{
-                  left: `${previewTitlePosition.x}%`,
-                  top: `${previewTitlePosition.y}%`,
-                  transform: "translate(-50%, -50%)",
-                  fontFamily: fontFamilyForCoverText(
-                    activeTypographyProfile.headingFont,
-                    activeTypographyProfile.titleLanguage,
-                  ),
-                  fontSize: `${previewTitleSize}px`,
-                  fontWeight: activeTypographyProfile.titleWeight,
-                  fontStyle: activeTypographyProfile.titleItalic
-                    ? "italic"
-                    : "normal",
-                  direction: getCoverLanguage(
-                    activeTypographyProfile.titleLanguage,
-                  ).dir,
-                  color:
-                    activeCoverProfile.titleColor ||
-                    activeCoverProfile.textColor ||
-                    config.cover.titleColor ||
-                    config.cover.textColor,
-                  textShadow: textShadowStyle,
-                  textAlign:
-                    (activeCoverProfile.textAlign as TextAlign) ||
-                    config.cover.textAlign,
-                  cursor: "grab",
-                  padding: "var(--space-1) var(--space-2)",
-                  borderRadius: "var(--radius-sm)",
-                  lineHeight: 1.1,
-                  userSelect: "none",
-                  whiteSpace: "pre",
-                  ...activeTextBackdropStyle,
-                }}
-                onClick={() => {
-                  if (!rootCoverEditing) return;
-                  setActiveText("title");
-                  setTab("text");
-                }}
-              >
-                {previewTitle}
-              </h2>
-            )}
-
-            {/* Subtitle overlay — draggable. Same wrap rules as title. */}
-            {activeCoverProfile.subtitleVisible !== false &&
-              previewSubtitle && (
-                <p
-                  data-handle="subtitle"
+              {activeCoverProfile.titleVisible !== false && previewTitle && (
+                <h2
+                  data-handle="title"
                   lang={
-                    getCoverLanguage(activeTypographyProfile.subtitleLanguage)
+                    getCoverLanguage(activeTypographyProfile.titleLanguage)
                       .htmlLang
                   }
                   dir={
-                    getCoverLanguage(activeTypographyProfile.subtitleLanguage)
-                      .dir
+                    getCoverLanguage(activeTypographyProfile.titleLanguage).dir
                   }
-                  className={`absolute touch-none transition-shadow ${
-                    activeText === "subtitle" && activeEditorTab === "text"
+                  className={`absolute touch-none font-semibold tracking-tight transition-shadow ${
+                    activeText === "title" && activeEditorTab === "text"
                       ? "ring-2 ring-primary ring-offset-2 ring-offset-surface-scrim-strong/30"
                       : ""
                   }`}
                   style={{
-                    left: `${previewSubtitlePosition.x}%`,
-                    top: `${previewSubtitlePosition.y}%`,
+                    left: `${previewTitlePosition.x}%`,
+                    top: `${previewTitlePosition.y}%`,
                     transform: "translate(-50%, -50%)",
                     fontFamily: fontFamilyForCoverText(
-                      activeTypographyProfile.bodyFont,
-                      activeTypographyProfile.subtitleLanguage,
+                      activeTypographyProfile.headingFont,
+                      activeTypographyProfile.titleLanguage,
                     ),
-                    fontSize: `${previewSubtitleSize}px`,
-                    fontWeight: activeTypographyProfile.subtitleWeight,
-                    fontStyle: activeTypographyProfile.subtitleItalic
+                    fontSize: `${previewTitleSize}px`,
+                    fontWeight: activeTypographyProfile.titleWeight,
+                    fontStyle: activeTypographyProfile.titleItalic
                       ? "italic"
                       : "normal",
                     direction: getCoverLanguage(
-                      activeTypographyProfile.subtitleLanguage,
+                      activeTypographyProfile.titleLanguage,
                     ).dir,
                     color:
-                      activeCoverProfile.subtitleColor ||
+                      activeCoverProfile.titleColor ||
                       activeCoverProfile.textColor ||
-                      config.cover.subtitleColor ||
+                      config.cover.titleColor ||
                       config.cover.textColor,
                     textShadow: textShadowStyle,
                     textAlign:
@@ -3180,83 +3005,136 @@ export default function CoverDesignPage() {
                     cursor: "grab",
                     padding: "var(--space-1) var(--space-2)",
                     borderRadius: "var(--radius-sm)",
-                    lineHeight: 1.3,
+                    lineHeight: 1.1,
                     userSelect: "none",
                     whiteSpace: "pre",
                     ...activeTextBackdropStyle,
                   }}
                   onClick={() => {
-                    if (!rootCoverEditing) return;
-                    setActiveText("subtitle");
+                    setActiveText("title");
                     setTab("text");
                   }}
                 >
-                  {previewSubtitle}
-                </p>
+                  {previewTitle}
+                </h2>
               )}
 
-            {/* Drag-hint pill */}
-            {rootCoverEditing && hasCoverPreview && !dragKind && (
-              <div className="cover-preview-drag-hint pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2">
-                {activeEditorTab === "text"
-                  ? "Drag title / subtitle to position"
-                  : activeTemplate.slotCount > 1
-                    ? `Drag photo ${activeCoverSlotIndex + 1} to pan; use zoom below`
-                    : "Drag photo to pan; use zoom below"}
-              </div>
-            )}
+              {/* Subtitle overlay — draggable. Same wrap rules as title. */}
+              {activeCoverProfile.subtitleVisible !== false &&
+                previewSubtitle && (
+                  <p
+                    data-handle="subtitle"
+                    lang={
+                      getCoverLanguage(activeTypographyProfile.subtitleLanguage)
+                        .htmlLang
+                    }
+                    dir={
+                      getCoverLanguage(activeTypographyProfile.subtitleLanguage)
+                        .dir
+                    }
+                    className={`absolute touch-none transition-shadow ${
+                      activeText === "subtitle" && activeEditorTab === "text"
+                        ? "ring-2 ring-primary ring-offset-2 ring-offset-surface-scrim-strong/30"
+                        : ""
+                    }`}
+                    style={{
+                      left: `${previewSubtitlePosition.x}%`,
+                      top: `${previewSubtitlePosition.y}%`,
+                      transform: "translate(-50%, -50%)",
+                      fontFamily: fontFamilyForCoverText(
+                        activeTypographyProfile.bodyFont,
+                        activeTypographyProfile.subtitleLanguage,
+                      ),
+                      fontSize: `${previewSubtitleSize}px`,
+                      fontWeight: activeTypographyProfile.subtitleWeight,
+                      fontStyle: activeTypographyProfile.subtitleItalic
+                        ? "italic"
+                        : "normal",
+                      direction: getCoverLanguage(
+                        activeTypographyProfile.subtitleLanguage,
+                      ).dir,
+                      color:
+                        activeCoverProfile.subtitleColor ||
+                        activeCoverProfile.textColor ||
+                        config.cover.subtitleColor ||
+                        config.cover.textColor,
+                      textShadow: textShadowStyle,
+                      textAlign:
+                        (activeCoverProfile.textAlign as TextAlign) ||
+                        config.cover.textAlign,
+                      cursor: "grab",
+                      padding: "var(--space-1) var(--space-2)",
+                      borderRadius: "var(--radius-sm)",
+                      lineHeight: 1.3,
+                      userSelect: "none",
+                      whiteSpace: "pre",
+                      ...activeTextBackdropStyle,
+                    }}
+                    onClick={() => {
+                      setActiveText("subtitle");
+                      setTab("text");
+                    }}
+                  >
+                    {previewSubtitle}
+                  </p>
+                )}
 
-            {effectiveBranding.logoPlacement !== "hidden" &&
-              effectiveBranding.monogram && (
-                <div
-                  className={`cover-brand-mark pointer-events-none absolute z-20 inline-flex h-10 min-w-10 items-center justify-center rounded-full px-2 text-sm font-semibold ${
-                    effectiveBranding.logoPlacement === "top-right"
-                      ? "right-4 top-4"
-                      : effectiveBranding.logoPlacement === "bottom-left"
-                        ? "bottom-4 left-4"
-                        : effectiveBranding.logoPlacement === "bottom-right"
-                          ? "bottom-4 right-4"
-                          : "left-4 top-4"
-                  }`}
-                  style={{
-                    color: effectiveBranding.brandColor || undefined,
-                    borderColor: effectiveBranding.brandColor || undefined,
-                    width: `${effectiveBranding.logoSize}px`,
-                    minWidth: `${effectiveBranding.logoSize}px`,
-                    height: `${effectiveBranding.logoSize}px`,
-                    opacity: effectiveBranding.logoOpacity / 100,
-                  }}
-                >
-                  {effectiveBranding.monogram}
+              {/* Drag-hint pill */}
+              {hasCoverPreview && !dragKind && (
+                <div className="cover-preview-drag-hint pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2">
+                  {activeEditorTab === "text"
+                    ? "Drag title / subtitle to position"
+                    : activeTemplate.slotCount > 1
+                      ? `Drag photo ${activeCoverSlotIndex + 1} to pan; use zoom below`
+                      : "Drag photo to pan; use zoom below"}
                 </div>
               )}
-            {effectiveBranding.watermarkStyle !== "none" && watermarkLabel && (
-              <div
-                className={`cover-watermark-preview cover-watermark-preview--${effectiveBranding.watermarkStyle}`}
-                style={{
-                  color:
-                    effectiveBranding.brandColor ||
-                    config.cover.textColor ||
-                    undefined,
-                  opacity: effectiveBranding.watermarkOpacity / 100,
-                }}
-                aria-hidden
-              >
-                {effectiveBranding.watermarkStyle === "tiled"
-                  ? Array.from({ length: 6 }, (_, index) => (
-                      <span key={index}>{watermarkLabel}</span>
-                    ))
-                  : watermarkLabel}
-              </div>
-            )}
+
+              {effectiveBranding.logoPlacement !== "hidden" &&
+                effectiveBranding.monogram && (
+                  <div
+                    className={`cover-brand-mark pointer-events-none absolute z-20 inline-flex h-10 min-w-10 items-center justify-center rounded-full px-2 text-sm font-semibold ${
+                      effectiveBranding.logoPlacement === "top-right"
+                        ? "right-4 top-4"
+                        : effectiveBranding.logoPlacement === "bottom-left"
+                          ? "bottom-4 left-4"
+                          : effectiveBranding.logoPlacement === "bottom-right"
+                            ? "bottom-4 right-4"
+                            : "left-4 top-4"
+                    }`}
+                    style={{
+                      color: effectiveBranding.brandColor || undefined,
+                      borderColor: effectiveBranding.brandColor || undefined,
+                      width: `${effectiveBranding.logoSize}px`,
+                      minWidth: `${effectiveBranding.logoSize}px`,
+                      height: `${effectiveBranding.logoSize}px`,
+                      opacity: effectiveBranding.logoOpacity / 100,
+                    }}
+                  >
+                    {effectiveBranding.monogram}
+                  </div>
+                )}
+              {effectiveBranding.watermarkStyle !== "none" &&
+                watermarkLabel && (
+                  <div
+                    className={`cover-watermark-preview cover-watermark-preview--${effectiveBranding.watermarkStyle}`}
+                    style={{
+                      color:
+                        effectiveBranding.brandColor ||
+                        config.cover.textColor ||
+                        undefined,
+                      opacity: effectiveBranding.watermarkOpacity / 100,
+                    }}
+                    aria-hidden
+                  >
+                    {effectiveBranding.watermarkStyle === "tiled"
+                      ? Array.from({ length: 6 }, (_, index) => (
+                          <span key={index}>{watermarkLabel}</span>
+                        ))
+                      : watermarkLabel}
+                  </div>
+                )}
             </div>
-          ) : (
-            <FolderGridStagePreview
-              grid={config.grid}
-              assets={assets}
-              token={token}
-              folderName={selectedAlbum?.name || "Selected folder"}
-            />
           )}
         </section>
 
@@ -3264,29 +3142,6 @@ export default function CoverDesignPage() {
           className="cover-inspector-pane"
           aria-label="Cover design controls"
         >
-          <div className="cover-control-card">
-            <label htmlFor="cover-gallery-folder" className="form-label">
-              Gallery folders
-            </label>
-            <select
-              id="cover-gallery-folder"
-              className={`${COVER_FIELD_CLASS} cover-folder-select`}
-              value={selectedAlbumId || "root"}
-              aria-label="Gallery folders"
-              onChange={handleFolderChange}
-            >
-              <option value="root">Gallery root</option>
-              {albums.map((album) => {
-                const count = album.asset_ids?.length ?? album.asset_count ?? 0;
-                return (
-                  <option key={album.id} value={album.id}>
-                    {album.name} · {count} {count === 1 ? "photo" : "photos"}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-
           <div className="cover-control-card">
             <label htmlFor="cover-editor-section" className="form-label">
               Edit section
@@ -3349,7 +3204,7 @@ export default function CoverDesignPage() {
                     previewDevice={editorPreviewDevice}
                     activeCoverSlot={activeCoverSlotIndex}
                     setActiveCoverSlot={setActiveCoverSlot}
-                    onFilesAccepted={upload.addFiles}
+                    onFilesAccepted={handleCoverFilesAccepted}
                     uploadItems={upload.items}
                     uploadPaused={upload.isPaused}
                     onCancelUpload={upload.cancel}
@@ -3390,7 +3245,6 @@ export default function CoverDesignPage() {
               </Card>
             )}
           </section>
-
         </section>
       </ResizableWorkspaceSplit>
       <TermsAcceptanceModal

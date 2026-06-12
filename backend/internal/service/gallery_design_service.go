@@ -229,12 +229,11 @@ func (s *GalleryDesignService) UpdateDesignConfigRaw(ctx context.Context, galler
 	if gallery.Settings == nil {
 		gallery.Settings = map[string]interface{}{}
 	}
-	if albumID != nil && *albumID != uuid.Nil {
-		byAlbum := designConfigByAlbumMap(gallery.Settings["design_config_by_album"])
-		byAlbum[albumID.String()] = raw
-		gallery.Settings["design_config_by_album"] = byAlbum
-		return s.galleryRepo.Update(ctx, gallery)
-	}
+
+	// Cover & Design is gallery-global. Older clients may still send an album
+	// query parameter, but folder selection now only changes which assets are
+	// previewed; it must not fork cover or grid settings per folder.
+	_ = albumID
 
 	gallery.Settings["design_config"] = raw
 
@@ -266,18 +265,6 @@ func (s *GalleryDesignService) UpdateDesignConfigRaw(ctx context.Context, galler
 	}
 
 	return s.galleryRepo.Update(ctx, gallery)
-}
-
-func designConfigByAlbumMap(raw interface{}) map[string]interface{} {
-	existing, ok := raw.(map[string]interface{})
-	if !ok || existing == nil {
-		return map[string]interface{}{}
-	}
-	next := make(map[string]interface{}, len(existing))
-	for key, value := range existing {
-		next[key] = value
-	}
-	return next
 }
 
 func collectRawDesignCoverAssetIDs(raw map[string]interface{}) ([]uuid.UUID, error) {

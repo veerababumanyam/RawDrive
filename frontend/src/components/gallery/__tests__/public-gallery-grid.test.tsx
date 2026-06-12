@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -748,6 +749,57 @@ describe("PublicGalleryGrid", () => {
         }),
       ).toBeInTheDocument();
     });
+  });
+
+  it("loads another public asset page when the remote sentinel enters view", async () => {
+    const originalIntersectionObserver = globalThis.IntersectionObserver;
+    let callback: IntersectionObserverCallback | null = null;
+    class MockIntersectionObserver implements IntersectionObserver {
+      readonly root = null;
+      readonly rootMargin = "0px";
+      readonly thresholds = [];
+      constructor(cb: IntersectionObserverCallback) {
+        callback = cb;
+      }
+      disconnect = vi.fn();
+      observe = vi.fn();
+      takeRecords = vi.fn(() => []);
+      unobserve = vi.fn();
+    }
+    Object.defineProperty(globalThis, "IntersectionObserver", {
+      configurable: true,
+      value: MockIntersectionObserver,
+    });
+    const loadMore = vi.fn();
+
+    try {
+      render(
+        <PublicGalleryGrid
+          slug="wedding-gallery"
+          assets={[galleryAsset()]}
+          totalAssetCount={2}
+          hasMoreAssets
+          onLoadMoreAssets={loadMore}
+        />,
+      );
+
+      expect(screen.getByText("1 of 2 photos")).toBeInTheDocument();
+      await waitFor(() => expect(callback).not.toBeNull());
+
+      await act(async () => {
+        callback?.(
+          [{ isIntersecting: true } as IntersectionObserverEntry],
+          {} as IntersectionObserver,
+        );
+      });
+
+      expect(loadMore).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(globalThis, "IntersectionObserver", {
+        configurable: true,
+        value: originalIntersectionObserver,
+      });
+    }
   });
 });
 

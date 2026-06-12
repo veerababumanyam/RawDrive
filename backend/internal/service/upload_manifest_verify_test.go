@@ -203,7 +203,7 @@ func gifWithAppendedTrailer() []byte {
 	return append([]byte{
 		'G', 'I', 'F', '8', '9', 'a', // GIF89a signature
 		0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, // logical screen descriptor
-		0x3B,                              // GIF trailer
+		0x3B, // GIF trailer
 	}, bytes.Repeat([]byte{0x42}, 128)...) // benign bytes appended past the trailer
 }
 

@@ -62,6 +62,10 @@ export type UseUploadOptions = {
   onTermsRequired?: () => void;
 };
 
+export type AddUploadFilesOptions = {
+  destination?: UploadDestination;
+};
+
 type UploadEncryption = NonNullable<UseUploadOptions["encryption"]>;
 
 type QueuedUploadItem = UploadItem & {
@@ -496,7 +500,7 @@ export function useUpload(
 ) {
   const encryption = options?.encryption;
   const destination = options?.destination;
-  const [items, setItems] = useState<UploadItem[]>([]);
+  const [items, setItems] = useState<QueuedUploadItem[]>([]);
   const [isPaused, setIsPaused] = useState(false);
   const abortControllers = useRef<Map<string, AbortController>>(new Map());
   const uploadSessionIds = useRef<Map<string, string>>(new Map());
@@ -528,11 +532,14 @@ export function useUpload(
     onTermsRequiredRef.current = options?.onTermsRequired;
   });
 
-  const updateItem = useCallback((id: string, updates: Partial<UploadItem>) => {
-    setItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...updates } : item)),
-    );
-  }, []);
+  const updateItem = useCallback(
+    (id: string, updates: Partial<QueuedUploadItem>) => {
+      setItems((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, ...updates } : item)),
+      );
+    },
+    [],
+  );
 
   const chunkedUpload = useCallback(
     async (item: QueuedUploadItem) => {
@@ -977,7 +984,7 @@ export function useUpload(
   }, []);
 
   const addFiles = useCallback(
-    (files: File[]) => {
+    (files: File[], options?: AddUploadFilesOptions) => {
       const currentDestination = destinationRef.current
         ? { ...destinationRef.current }
         : undefined;
@@ -988,7 +995,7 @@ export function useUpload(
         file,
         progress: 0,
         status: "pending" as const,
-        uploadDestination: currentDestination,
+        uploadDestination: options?.destination ?? currentDestination,
         uploadEncryption: currentEncryption,
         uploadOnTermsRequired: currentOnTermsRequired,
       }));

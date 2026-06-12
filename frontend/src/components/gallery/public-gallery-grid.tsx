@@ -803,6 +803,11 @@ interface Props {
   // Public proofing, favorites, and downloads must preserve it so every
   // follow-up API call targets the same workspace-scoped gallery as the page.
   workspaceScope?: string | null;
+  totalAssetCount?: number;
+  hasMoreAssets?: boolean;
+  loadingMoreAssets?: boolean;
+  assetLoadError?: string;
+  onLoadMoreAssets?: () => void | Promise<void>;
   // Owner "View as client" preview only. The authenticated photographer's
   // access token (getStoredAccessToken), threaded into useDecryptedAssetUrl as
   // its bearer `token` so protected/encrypted /storage byte fetches carry
@@ -1092,6 +1097,11 @@ export function PublicGalleryGrid({
   gallerySessionToken = null,
   assetAccessToken = null,
   workspaceScope = null,
+  totalAssetCount,
+  hasMoreAssets = false,
+  loadingMoreAssets = false,
+  assetLoadError = "",
+  onLoadMoreAssets,
   viewerToken = null,
 }: Props) {
   // Memoize the resolved watermark display state. Returns null when
@@ -1243,7 +1253,8 @@ export function PublicGalleryGrid({
   const toggleFullscreen = useCallback(() => {
     if (getFullscreenElement(document)) {
       const request = exitFullscreenDocument(document);
-      if (request && typeof request.catch === "function") request.catch(() => {});
+      if (request && typeof request.catch === "function")
+        request.catch(() => {});
       return;
     }
 
@@ -1308,7 +1319,8 @@ export function PublicGalleryGrid({
   useEffect(() => {
     if (lightboxIdx === null && getFullscreenElement(document)) {
       const request = exitFullscreenDocument(document);
-      if (request && typeof request.catch === "function") request.catch(() => {});
+      if (request && typeof request.catch === "function")
+        request.catch(() => {});
     }
   }, [lightboxIdx]);
 
@@ -1418,14 +1430,31 @@ export function PublicGalleryGrid({
   // grid never momentarily renders the old visibleCount against new content.
   const [lastVisibleSetKey, setLastVisibleSetKey] = useState<{
     faceFilterIds: Set<string> | null;
-    assets: typeof assets;
-  }>({ faceFilterIds, assets });
+    firstAssetId: string | null;
+    assetCount: number;
+  }>({
+    faceFilterIds,
+    firstAssetId: assets[0]?.id ?? null,
+    assetCount: assets.length,
+  });
+  const nextVisibleSetKey = {
+    faceFilterIds,
+    firstAssetId: assets[0]?.id ?? null,
+    assetCount: assets.length,
+  };
   if (
-    lastVisibleSetKey.faceFilterIds !== faceFilterIds ||
-    lastVisibleSetKey.assets !== assets
+    lastVisibleSetKey.faceFilterIds !== nextVisibleSetKey.faceFilterIds ||
+    lastVisibleSetKey.firstAssetId !== nextVisibleSetKey.firstAssetId ||
+    lastVisibleSetKey.assetCount !== nextVisibleSetKey.assetCount
   ) {
-    setLastVisibleSetKey({ faceFilterIds, assets });
-    setVisibleCount(INITIAL_GRID_RENDER_COUNT);
+    const shouldResetVisibleCount =
+      lastVisibleSetKey.faceFilterIds !== nextVisibleSetKey.faceFilterIds ||
+      lastVisibleSetKey.firstAssetId !== nextVisibleSetKey.firstAssetId ||
+      nextVisibleSetKey.assetCount < lastVisibleSetKey.assetCount;
+    setLastVisibleSetKey(nextVisibleSetKey);
+    if (shouldResetVisibleCount) {
+      setVisibleCount(INITIAL_GRID_RENDER_COUNT);
+    }
   }
 
   // IntersectionObserver is supported in every browser this public viewer
@@ -1450,7 +1479,9 @@ export function PublicGalleryGrid({
     [visibleAssets, effectiveVisibleCount],
   );
 
-  const hasMoreToRender = effectiveVisibleCount < visibleAssets.length;
+  const hasMoreLocalAssetsToRender =
+    effectiveVisibleCount < visibleAssets.length;
+  const hasMoreToRender = hasMoreLocalAssetsToRender || hasMoreAssets;
 
   // Grow the render window as the sentinel scrolls into view. When
   // IntersectionObserver is unavailable, effectiveVisibleCount already equals
@@ -1458,21 +1489,36 @@ export function PublicGalleryGrid({
   // the full set is mounted up front (see hasIntersectionObserver above).
   useEffect(() => {
     if (!hasMoreToRender) return;
+    if (!hasIntersectionObserver) return;
     const node = loadMoreRef.current;
     if (!node) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) {
-          setVisibleCount((c) =>
-            Math.min(c + GRID_RENDER_BATCH, visibleAssets.length),
-          );
+          if (hasMoreLocalAssetsToRender) {
+            setVisibleCount((c) =>
+              Math.min(c + GRID_RENDER_BATCH, visibleAssets.length),
+            );
+            return;
+          }
+          if (hasMoreAssets && !loadingMoreAssets) {
+            void onLoadMoreAssets?.();
+          }
         }
       },
       { rootMargin: getPrefetchRootMargin() },
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [hasMoreToRender, visibleAssets.length]);
+  }, [
+    hasMoreAssets,
+    hasIntersectionObserver,
+    hasMoreLocalAssetsToRender,
+    hasMoreToRender,
+    loadingMoreAssets,
+    onLoadMoreAssets,
+    visibleAssets.length,
+  ]);
 
   // Deep-link auto-open. Pairs with the Share button's clipboard URL
   // (?asset=<id>). When a recipient lands on the share link, find the
@@ -1913,12 +1959,46 @@ export function PublicGalleryGrid({
         />
       )}
 
+      {hasMoreAssets && !hasIntersectionObserver && (
+        <div className="mt-8 text-center">
+          <button
+            type="button"
+            className="glass-button glass-button--surface glass-button--md"
+            disabled={loadingMoreAssets}
+            onClick={() => void onLoadMoreAssets?.()}
+          >
+            {loadingMoreAssets ? "Loading photos..." : "Load more photos"}
+          </button>
+        </div>
+      )}
+
+      {loadingMoreAssets && (
+        <p
+          role="status"
+          aria-live="polite"
+          className="mt-6 text-center text-sm text-text-secondary"
+        >
+          Loading more photos...
+        </p>
+      )}
+
+      {assetLoadError && (
+        <p
+          role="alert"
+          className="mt-6 rounded-xl border border-feedback-warning/30 bg-feedback-warning/10 px-4 py-3 text-sm text-feedback-warning"
+        >
+          {assetLoadError}
+        </p>
+      )}
+
       {/* End-of-gallery indicator */}
       <div className="mt-12 text-center pb-8">
         <div className="inline-block h-px w-16 bg-border-subtle" />
         <p className="mt-3 text-xs text-text-tertiary">
-          {visibleAssets.length}{" "}
-          {visibleAssets.length === 1 ? "photo" : "photos"}
+          {totalAssetCount && totalAssetCount > visibleAssets.length
+            ? `${visibleAssets.length} of ${totalAssetCount}`
+            : visibleAssets.length}{" "}
+          {(totalAssetCount ?? visibleAssets.length) === 1 ? "photo" : "photos"}
         </p>
       </div>
 

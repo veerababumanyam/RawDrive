@@ -63,8 +63,11 @@ describe("gallery cover page design-system contracts", () => {
     expect(source).toContain("readEmbeddedVideos(gallery?.settings)");
     expect(source).toContain('className="cover-videos-panel"');
     expect(source).toContain('className="cover-preview-primary-actions"');
-    expect(source).toContain('className={`${COVER_FIELD_CLASS} cover-folder-select`}');
-    expect(source).toContain('aria-label="Gallery folders"');
+    // The gallery-folder selector was removed from Cover & Design — the folder
+    // is chosen by navigating from the gallery page (?album=), not via a
+    // redundant in-editor switcher.
+    expect(source).not.toContain("cover-folder-select");
+    expect(source).not.toContain('aria-label="Gallery folders"');
     expect(source).not.toContain(
       'aria-label="Copy desktop cover settings to phone"',
     );

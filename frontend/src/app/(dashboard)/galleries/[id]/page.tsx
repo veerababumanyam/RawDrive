@@ -802,6 +802,7 @@ export default function GalleryDetailPage({
     [albums],
   );
   const activeAlbumId = activeAlbum;
+  const uploadTargetAlbumId = activeAlbumId ?? highlightsAlbum?.id ?? null;
   const [newAlbumName, setNewAlbumName] = useState("");
   const [showAlbumCreate, setShowAlbumCreate] = useState(false);
   const [creatingAlbum, setCreatingAlbum] = useState(false);
@@ -1360,8 +1361,10 @@ export default function GalleryDetailPage({
         : "Publishing gallery...",
     );
     try {
+      const nextPublished = !gallery.is_published;
       const updated = await updateGallery(t, id, {
-        is_published: !gallery.is_published,
+        is_published: nextPublished,
+        ...(nextPublished ? { access_mode: "public" } : {}),
       });
       setGallery(updated);
       const message = updated.is_published
@@ -1977,7 +1980,7 @@ export default function GalleryDetailPage({
   // route changes do not break or unbind pending uploads.
   const localUpload = useUpload(apiUrl, token, {
     encryption: uploadEncryption,
-    destination: { galleryId: id, albumId: activeAlbumId },
+    destination: { galleryId: id, albumId: uploadTargetAlbumId },
     onTermsRequired: openTermsModal,
   });
   const upload = dashboardUpload ?? localUpload;
@@ -1986,18 +1989,18 @@ export default function GalleryDetailPage({
     if (!configureGalleryUpload || !clearGalleryUpload) return;
     configureGalleryUpload(uploadOwnerKey, {
       encryption: uploadEncryption,
-      destination: { galleryId: id, albumId: activeAlbumId },
+      destination: { galleryId: id, albumId: uploadTargetAlbumId },
       onTermsRequired: openTermsModal,
     });
     return () => clearGalleryUpload(uploadOwnerKey);
   }, [
-    activeAlbumId,
     clearGalleryUpload,
     configureGalleryUpload,
     id,
     openTermsModal,
     uploadEncryption,
     uploadOwnerKey,
+    uploadTargetAlbumId,
   ]);
   const linkedAssetIdsRef = useRef<Set<string>>(new Set());
   const uploadPreviewBackendAsset = useMemo(() => {
@@ -2337,8 +2340,8 @@ export default function GalleryDetailPage({
   // the studio almost never wants two photos that differ only in
   // upper/lower-case. The gate compares only within the current upload folder:
   // root uploads ignore assets that are already only in sub-galleries, while
-  // active sub-gallery uploads compare only against that sub-gallery and queued
-  // uploads targeting it. Folder uploads also keep each browser-provided
+  // HIGHLIGHTS/default uploads compare against that folder and queued uploads
+  // targeting it. Folder uploads also keep each browser-provided
   // relative path separate so two different subfolders can both contain
   // IMG_0001.JPG.
   const [duplicateWarning, setDuplicateWarning] = useState<{
@@ -2371,8 +2374,7 @@ export default function GalleryDetailPage({
   // surface a slide-in warning with up to a handful of names + a
   // "+N more" tail so the toast doesn't grow unbounded.
   const dedupeIncomingFiles = useCallback(
-    (incoming: File[]) => {
-      const uploadScopeAlbumId = activeAlbumId ?? null;
+    (incoming: File[], uploadScopeAlbumId: string | null) => {
       const activeAlbumAssetIds = uploadScopeAlbumId
         ? new Set(albumAssetIdsByAlbum[uploadScopeAlbumId] || [])
         : null;
@@ -2428,7 +2430,7 @@ export default function GalleryDetailPage({
       }
       return { accepted, duplicatesInGallery, duplicatesInBatch };
     },
-    [activeAlbumId, albumAssetIdsByAlbum, assets, upload.items],
+    [albumAssetIdsByAlbum, assets, upload.items],
   );
 
   // Assets whose thumbnails the background worker has not finished
@@ -2510,18 +2512,6 @@ export default function GalleryDetailPage({
     return () => window.clearInterval(interval);
   }, [pendingAssetIds, handleAssetReady]);
 
-  // The active sub-album is read by the upload-link effect to decide
-  // whether a newly-completed asset should also be added to that album.
-  // Using a ref instead of an effect-dep lets us read the *current*
-  // selected album at completion time without re-triggering the linker
-  // every time the user toggles a chip. linkedAssetIdsRef still guards
-  // against double-linking the same asset to the gallery, and the new
-  // albumLinkedAssetIdsRef tracks which (asset, album) pairs we've
-  // already pushed so the per-album add is also idempotent.
-  const activeAlbumRef = useRef<string | null>(null);
-  useEffect(() => {
-    activeAlbumRef.current = activeAlbumId;
-  }, [activeAlbumId]);
   const albumLinkedAssetIdsRef = useRef<Set<string>>(new Set());
 
   // S3-G4 / S3-G5: the gallery link is now performed SERVER-SIDE at finalize
@@ -2546,12 +2536,9 @@ export default function GalleryDetailPage({
     if (toLink.length === 0) return;
 
     (async () => {
-      // Capture the active album once per batch run rather than on each
-      // iteration so all assets from one upload batch land together
-      // even if the user clicks a different chip mid-flight.
-      const targetAlbumId = activeAlbumRef.current;
       const newlyAddedAssetIds: string[] = [];
       const newlyAddedTetheredAssetIds: string[] = [];
+      const newlyAddedAssetIdsByAlbum = new Map<string, string[]>();
 
       for (const item of toLink) {
         if (!item.assetId) continue;
@@ -2573,25 +2560,29 @@ export default function GalleryDetailPage({
         // and queue it for album membership + the post-batch reload below.
         linkedAssetIdsRef.current.add(item.assetId);
         newlyAddedAssetIds.push(item.assetId);
+        const targetAlbumId = uploadDuplicateScope(item);
+        if (targetAlbumId) {
+          const bucket = newlyAddedAssetIdsByAlbum.get(targetAlbumId) ?? [];
+          bucket.push(item.assetId);
+          newlyAddedAssetIdsByAlbum.set(targetAlbumId, bucket);
+        }
       }
 
-      // Push the just-linked assets into the active sub-album. Skipped
-      // when activeAlbum is null (gallery root view) — those uploads
-      // are gallery-scope-only by design. The pair-key dedup means a
-      // re-fire of this effect won't double-attach.
-      if (targetAlbumId && newlyAddedAssetIds.length > 0) {
-        const fresh = newlyAddedAssetIds.filter((assetId) => {
+      // Push just-linked assets into the folder captured on each queued item.
+      // This keeps uploads started from the root/all-photos view landing in
+      // HIGHLIGHTS without changing the visible filter while the queue runs.
+      for (const [targetAlbumId, assetIds] of newlyAddedAssetIdsByAlbum) {
+        const fresh = assetIds.filter((assetId) => {
           const key = `${targetAlbumId}:${assetId}`;
           if (albumLinkedAssetIdsRef.current.has(key)) return false;
           albumLinkedAssetIdsRef.current.add(key);
           return true;
         });
-        if (fresh.length > 0) {
-          try {
-            await addAlbumAssets(t, targetAlbumId, fresh);
-          } catch (err) {
-            console.warn("Failed to add uploads to sub-album:", err);
-          }
+        if (fresh.length === 0) continue;
+        try {
+          await addAlbumAssets(t, targetAlbumId, fresh);
+        } catch (err) {
+          console.warn("Failed to add uploads to sub-album:", err);
         }
       }
 
@@ -2624,7 +2615,7 @@ export default function GalleryDetailPage({
       // Refresh album memberships so the sub-gallery chip count
       // increments immediately. Without this the chip stays at its
       // pre-upload count until the next manual refresh.
-      if (targetAlbumId) {
+      if (newlyAddedAssetIdsByAlbum.size > 0) {
         await refreshAlbums();
       }
     })();
@@ -2641,8 +2632,38 @@ export default function GalleryDetailPage({
   // submitFiles runs the dedupe gate then enqueues. Both the drop and
   // the file-picker handlers route through here so the duplicate
   // policy fires consistently from either entry point.
+  const ensureUploadDestinationAlbumId = useCallback(async () => {
+    if (activeAlbumId) return activeAlbumId;
+    if (highlightsAlbum?.id) return highlightsAlbum.id;
+    const t = getStoredAccessToken();
+    if (!t) return null;
+    try {
+      const nextAlbums = await listGalleryAlbums(t, id, {
+        includeAssetIds: true,
+      });
+      const existingHighlights = nextAlbums.find(isHighlightsAlbum);
+      if (existingHighlights) {
+        setAlbums(nextAlbums);
+        setAlbumAssetIdsByAlbum(
+          Object.fromEntries(
+            nextAlbums.map((album) => [album.id, album.asset_ids ?? []]),
+          ),
+        );
+        return existingHighlights.id;
+      }
+      const created = await createGalleryAlbum(t, id, {
+        name: HIGHLIGHTS_ALBUM_NAME,
+      });
+      await refreshAlbums();
+      return created.id;
+    } catch (err) {
+      console.warn("Failed to prepare HIGHLIGHTS upload folder:", err);
+      return null;
+    }
+  }, [activeAlbumId, highlightsAlbum, id, refreshAlbums]);
+
   const submitFiles = useCallback(
-    (files: File[], options?: { source?: "manual" | "tethered" }) => {
+    async (files: File[], options?: { source?: "manual" | "tethered" }) => {
       if (files.length === 0) return;
       // Terms gate (pre-check). Block the upload before it starts when the user
       // has not accepted the active Terms; stash the batch and open the modal so
@@ -2653,8 +2674,17 @@ export default function GalleryDetailPage({
         setTermsModalOpen(true);
         return;
       }
+      const targetAlbumId = await ensureUploadDestinationAlbumId();
+      if (!targetAlbumId) {
+        showGalleryActionStatus(
+          "Upload did not start because the HIGHLIGHTS folder could not be prepared. Try again before selecting files.",
+          "error",
+          6000,
+        );
+        return;
+      }
       const { accepted, duplicatesInGallery, duplicatesInBatch } =
-        dedupeIncomingFiles(files);
+        dedupeIncomingFiles(files, targetAlbumId);
       if (duplicatesInGallery.length > 0 || duplicatesInBatch.length > 0) {
         setDuplicateWarning({
           visible: true,
@@ -2669,7 +2699,9 @@ export default function GalleryDetailPage({
           }
         }
         setShowUploadDialog(options?.source !== "tethered");
-        upload.addFiles(accepted);
+        upload.addFiles(accepted, {
+          destination: { galleryId: id, albumId: targetAlbumId },
+        });
       }
     },
     // The React Compiler infers the setState setters as dependencies of this
@@ -2677,6 +2709,9 @@ export default function GalleryDetailPage({
     // are stable identities, so runtime behavior is unchanged.
     [
       dedupeIncomingFiles,
+      ensureUploadDestinationAlbumId,
+      id,
+      showGalleryActionStatus,
       upload,
       setDuplicateWarning,
       setShowUploadDialog,
@@ -2694,7 +2729,7 @@ export default function GalleryDetailPage({
     const pending = pendingUploadRef.current;
     pendingUploadRef.current = null;
     if (pending && pending.files.length > 0) {
-      submitFiles(pending.files, pending.options);
+      void submitFiles(pending.files, pending.options);
     } else if (
       upload.items.some(
         (item) =>
@@ -2773,7 +2808,7 @@ export default function GalleryDetailPage({
             setTetheredSessionNewCount((count) => count + files.length);
             playTetheredDing();
           }
-          submitFiles(files, { source: "tethered" });
+          void submitFiles(files, { source: "tethered" });
         }
         setTetheredStatus("watching");
       } catch (err) {
@@ -2906,14 +2941,14 @@ export default function GalleryDetailPage({
         });
       if (hasDirectory) {
         collectFilesFromDataTransfer(items).then((all) => {
-          submitFiles(all.filter(isAcceptedStillImageFile));
+          void submitFiles(all.filter(isAcceptedStillImageFile));
         });
         return;
       }
       const files = Array.from(e.dataTransfer.files).filter(
         isAcceptedStillImageFile,
       );
-      submitFiles(files);
+      void submitFiles(files);
     },
     [submitFiles],
   );
@@ -2923,7 +2958,7 @@ export default function GalleryDetailPage({
       openDashboardFilePicker({
         accept: FILE_PICKER_STILL_IMAGE_ACCEPT,
         onFilesSelected: (files) =>
-          submitFiles(files.filter(isAcceptedStillImageFile)),
+          void submitFiles(files.filter(isAcceptedStillImageFile)),
       });
       return;
     }
@@ -2940,7 +2975,7 @@ export default function GalleryDetailPage({
       openDashboardFolderPicker({
         accept: FILE_PICKER_STILL_IMAGE_ACCEPT,
         onFilesSelected: (files) =>
-          submitFiles(files.filter(isAcceptedStillImageFile)),
+          void submitFiles(files.filter(isAcceptedStillImageFile)),
       });
       return;
     }
@@ -3549,7 +3584,7 @@ export default function GalleryDetailPage({
                     multiple
                     accept={FILE_PICKER_STILL_IMAGE_ACCEPT}
                     onChange={(event) => {
-                      submitFiles(
+                      void submitFiles(
                         Array.from(event.currentTarget.files ?? []).filter(
                           isAcceptedStillImageFile,
                         ),
@@ -3572,7 +3607,7 @@ export default function GalleryDetailPage({
                       string
                     >)}
                     onChange={(event) => {
-                      submitFiles(
+                      void submitFiles(
                         Array.from(event.currentTarget.files ?? []).filter(
                           isAcceptedStillImageFile,
                         ),
@@ -3706,9 +3741,7 @@ export default function GalleryDetailPage({
                     className="min-w-0 flex-1 rounded-xl border border-border-default bg-surface-container px-3 py-2 text-sm font-semibold text-text-primary transition-colors focus:border-accent-primary focus:outline-none focus:ring-2 focus:ring-accent-primary/30"
                     aria-label="Select gallery view"
                   >
-                    <option value="">
-                      All photos
-                    </option>
+                    <option value="">All photos</option>
                     {albums.map((album) => (
                       <option key={album.id} value={album.id}>
                         {album.name} (
@@ -4349,8 +4382,7 @@ export default function GalleryDetailPage({
                                     <Smartphone
                                       className={cn(
                                         "h-5 w-5 shrink-0",
-                                        isPhoneCover &&
-                                          "text-feedback-success",
+                                        isPhoneCover && "text-feedback-success",
                                       )}
                                     />
                                     <span>
@@ -4391,8 +4423,7 @@ export default function GalleryDetailPage({
                                       setDeleteConfirm({
                                         assetId: entry.asset!.id,
                                         filename:
-                                          entry.asset!.filename ||
-                                          "this photo",
+                                          entry.asset!.filename || "this photo",
                                       });
                                     }}
                                   >
@@ -4487,23 +4518,6 @@ export default function GalleryDetailPage({
               Gallery folders
             </p>
             <div className="grid max-h-64 gap-2 overflow-y-auto pr-1">
-              <button
-                type="button"
-                onClick={() => setActiveAlbum(null)}
-                className={cn(
-                  "rounded-xl border px-3 py-2 text-left transition-colors",
-                  !activeAlbumId
-                    ? "border-accent-primary bg-accent-subtle text-text-primary"
-                    : "border-border-subtle bg-surface-sunken text-text-secondary hover:border-accent-primary hover:text-text-primary",
-                )}
-              >
-                <span className="block truncate text-sm font-semibold">
-                  Gallery root
-                </span>
-                <span className="mt-0.5 block text-xs text-text-tertiary">
-                  {assets.length} {assets.length === 1 ? "photo" : "photos"}
-                </span>
-              </button>
               {albums.map((album) => {
                 const photoCount =
                   albumAssetIdsByAlbum[album.id]?.length ??
