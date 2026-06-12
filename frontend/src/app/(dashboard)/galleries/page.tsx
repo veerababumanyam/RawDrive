@@ -23,6 +23,7 @@ import {
 import { authFetch } from "@/lib/api/authFetch";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import {
   GRID_VARIANTS,
   mediaKeyIdsForAsset,
@@ -230,10 +231,15 @@ type ShareCopyFallback = {
 type ShareActionResult = "copied" | "manual" | void;
 
 async function writeClipboardText(text: string): Promise<boolean> {
-  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText)
-    return false;
+  // Delegate to the shared clipboard helper so the gallery LIST page gets the
+  // same robustness as every other share surface ([id] detail page, share
+  // center, share dialog): it tries the async Clipboard API first, then falls
+  // back to an execCommand text-selection copy. The previous navigator-only
+  // path returned false immediately in non-secure contexts (http://<LAN-IP>),
+  // surfacing the "browser is blocking clipboard access — copy manually"
+  // fallback even where the selection copy would have worked.
   try {
-    await navigator.clipboard.writeText(text);
+    await copyTextToClipboard(text);
     return true;
   } catch {
     return false;
