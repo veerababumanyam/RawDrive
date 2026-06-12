@@ -19,8 +19,8 @@ describe("uploadFinalizeErrorMessage", () => {
 
   it("translates the Tier-D hash-mismatch code into an actionable sentence", () => {
     const msg = uploadFinalizeErrorMessage(422, { error: "SCAN_HASH_MISMATCH" });
-    expect(msg).toMatch(/failed the security-scan integrity check/i);
-    expect(msg).toMatch(/re-select the file/i);
+    expect(msg).toMatch(/could not verify this upload/i);
+    expect(msg).toMatch(/retry will rescan/i);
     // Never leak the opaque status-only fallback for a known code.
     expect(msg).not.toMatch(/^Chunk upload failed/i);
   });
@@ -47,9 +47,8 @@ describe("uploadFinalizeErrorMessage", () => {
 });
 
 describe("finalize code classifiers", () => {
-  it("treats all content/scan rejections as non-retryable", () => {
+  it("treats permanent content/scan rejections as non-retryable", () => {
     for (const code of [
-      "SCAN_HASH_MISMATCH",
       "ENCRYPTED_MEDIA_HASH_MISMATCH",
       "SCAN_MANIFEST_INVALID",
       "SCAN_MANIFEST_REQUIRED",
@@ -63,10 +62,11 @@ describe("finalize code classifiers", () => {
   it("does not treat unknown / transient codes as non-retryable", () => {
     expect(isNonRetryableFinalizeCode(undefined)).toBe(false);
     expect(isNonRetryableFinalizeCode("RATE_LIMITED")).toBe(false);
+    expect(isNonRetryableFinalizeCode("SCAN_HASH_MISMATCH")).toBe(false);
   });
 
-  it("flags hash/manifest failures for re-selection but not type rejections", () => {
-    expect(finalizeErrorRequiresReselect("SCAN_HASH_MISMATCH")).toBe(true);
+  it("only flags unrecoverable manifest failures for re-selection", () => {
+    expect(finalizeErrorRequiresReselect("SCAN_HASH_MISMATCH")).toBe(false);
     expect(finalizeErrorRequiresReselect("ENCRYPTED_MEDIA_HASH_MISMATCH")).toBe(
       true,
     );
@@ -85,7 +85,7 @@ describe("ChunkUploadError", () => {
     expect(err.name).toBe("ChunkUploadError");
     expect(err.status).toBe(422);
     expect(err.code).toBe("SCAN_HASH_MISMATCH");
-    expect(err.message).toMatch(/security-scan integrity check/i);
+    expect(err.message).toMatch(/retry will rescan/i);
   });
 
   it("degrades to the bare status for an empty body (transport failure)", () => {

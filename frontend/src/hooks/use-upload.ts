@@ -111,12 +111,12 @@ export class ChunkUploadError extends Error {
 }
 
 // Codes that mean "these exact bytes will never pass" — the file finished
-// uploading but failed the integrity/scan verification, or was rejected as a
-// disallowed type. Retrying the same in-memory blob is pointless; the user
-// must re-select the source file. Mirrors the create-session SCAN_ handling so
-// finalize rejections are surfaced as a real, actionable sentence.
+// uploading but failed manifest validation, encrypted integrity, or was rejected
+// as a disallowed type. Plain SCAN_HASH_MISMATCH is deliberately retryable:
+// the retry path re-runs local screening, opens a fresh upload session, and
+// verifies the new byte stream again. That keeps the server integrity backstop
+// intact without trapping valid camera files behind a manual re-select.
 const NON_RETRYABLE_FINALIZE_CODES = new Set<string>([
-  "SCAN_HASH_MISMATCH",
   "ENCRYPTED_MEDIA_HASH_MISMATCH",
   "SCAN_MANIFEST_INVALID",
   "SCAN_MANIFEST_REQUIRED",
@@ -124,11 +124,9 @@ const NON_RETRYABLE_FINALIZE_CODES = new Set<string>([
   "UNSUPPORTED_UPLOAD_TYPE",
 ]);
 
-// Codes where re-reading the file from its source is the fix (the bytes on
-// disk no longer matched what the screener hashed, or the manifest could not
-// be verified). The user keeps the file but must re-select it.
+// Codes where re-reading the file from its source is the fix. These failures
+// cannot safely recover from the existing File object.
 const RESELECT_FINALIZE_CODES = new Set<string>([
-  "SCAN_HASH_MISMATCH",
   "ENCRYPTED_MEDIA_HASH_MISMATCH",
   "SCAN_MANIFEST_INVALID",
   "SCAN_MANIFEST_REQUIRED",
@@ -153,7 +151,7 @@ export function uploadFinalizeErrorMessage(
   if (errorBody.message) return errorBody.message;
   switch (errorBody.error) {
     case "SCAN_HASH_MISMATCH":
-      return "This file changed while it was uploading, so it failed the security-scan integrity check. Re-select the file from its original source and try again.";
+      return "RawDrive could not verify this upload against its security scan. Retry will rescan the same file and upload it again.";
     case "ENCRYPTED_MEDIA_HASH_MISMATCH":
       return "The encrypted upload failed its integrity check. Re-select the file and try again.";
     case "SCAN_MANIFEST_INVALID":
@@ -925,10 +923,9 @@ export function useUpload(
         }
         // A finalize/chunk rejection with a known server code (the Tier-D scan
         // codes or the still-image gate) is surfaced as a real reason. Content
-        // rejections are "blocked" (the same bytes will keep failing); hash /
-        // manifest failures additionally flag requiresReselect so the user
-        // re-reads the file from source. This mirrors the create-session SCAN_
-        // handling so finalize stops showing an opaque "Chunk upload failed".
+        // rejections are "blocked" (the same bytes will keep failing). Plain
+        // hash mismatches fall through to the retryable error path below so
+        // Retry can re-screen and start a fresh upload session.
         if (
           err instanceof ChunkUploadError &&
           isNonRetryableFinalizeCode(err.code)
