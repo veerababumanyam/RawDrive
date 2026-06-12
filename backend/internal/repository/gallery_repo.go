@@ -210,14 +210,26 @@ func galleryJSONBValue(value any) (string, error) {
 func generateSlug(title string) string {
 	slug := strings.ToLower(title)
 	slug = strings.ReplaceAll(slug, " ", "-")
-	// Remove non-alphanumeric except hyphens
+	// Keep only [a-z0-9-]; collapse runs of hyphens as we go so titles with
+	// leading spaces, punctuation, or non-Latin script (e.g. the Gujarati
+	// "શ્રીમદ ભાગવત …", whose multi-byte UTF-8 bytes are all dropped by this
+	// ASCII filter) don't produce slugs like "-----shreemad-…".
 	var result []byte
 	for _, c := range []byte(slug) {
-		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' {
+		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') {
 			result = append(result, c)
+		} else if c == '-' && len(result) > 0 && result[len(result)-1] != '-' {
+			result = append(result, '-')
 		}
 	}
-	slug = string(result)
+	// Trim a trailing hyphen left by the run-collapse above; the leading-hyphen
+	// case is already prevented (we never append '-' as the first byte).
+	slug = strings.Trim(string(result), "-")
+	// A fully non-Latin title collapses to an empty base — fall back so the
+	// public URL is "gallery-<suffix>" instead of a bare "-<suffix>".
+	if slug == "" {
+		slug = "gallery"
+	}
 	// Add random suffix for uniqueness
 	suffix := uuid.New().String()[:8]
 	return slug + "-" + suffix

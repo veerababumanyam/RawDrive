@@ -150,6 +150,30 @@ func TestGenerateSlug_Uniqueness(t *testing.T) {
 	assert.NotEqual(t, slug1, slug2, "slugs should be unique due to random suffix")
 }
 
+func TestGenerateSlug_TrimsLeadingAndCollapsesDashes(t *testing.T) {
+	// Real prod case: a Gujarati title whose multi-byte UTF-8 bytes are all
+	// dropped by the ASCII filter must NOT yield "-----shreemad-…".
+	slug := generateSlug(
+		"શ્રીમદ ભાગવત સપ્તાહ જ્ઞાનયજ્ઞ || SHREEMAD BHAGWAT GYANYAGNA SAPTAH",
+	)
+	assert.False(t, strings.HasPrefix(slug, "-"),
+		"slug must not start with a hyphen: %q", slug)
+	assert.NotContains(t, slug, "--",
+		"slug must not contain consecutive hyphens: %q", slug)
+	assert.Contains(t, slug, "shreemad-bhagwat-gyanyagna-saptah")
+
+	// Leading/trailing punctuation and spaces trimmed, runs collapsed.
+	s2 := generateSlug("   ## Hello   World ##  ")
+	assert.False(t, strings.HasPrefix(s2, "-"))
+	assert.NotContains(t, s2, "--")
+	assert.Contains(t, s2, "hello-world")
+
+	// A fully non-Latin title collapses to an empty base → "gallery-<suffix>".
+	s3 := generateSlug("શ્રીમદ")
+	assert.True(t, strings.HasPrefix(s3, "gallery-"),
+		"fully non-Latin title should fall back to gallery-<suffix>: %q", s3)
+}
+
 func TestGalleryJSONBValue(t *testing.T) {
 	encoded, err := galleryJSONBValue(map[string]interface{}{"theme": "dark"})
 	require.NoError(t, err)
