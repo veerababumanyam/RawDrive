@@ -345,9 +345,35 @@ reconcile_nginx_static_store() {
   local ip="$1"
   local label="$2"
   log "Reconciling nginx static-asset store on $label..."
-  $SSH "root@$ip" \
-    "cd $DEPLOY_DIR && docker compose -f $COMPOSE_FILE up -d --force-recreate --no-deps nginx" \
-    > /dev/null
+  reconcile_nginx_container "$ip" "$label" "static-asset store"
+}
+
+reconcile_nginx_container() {
+  local ip="$1"
+  local label="$2"
+  local reason="$3"
+  local attempt=1
+  local output=""
+
+  while [ "$attempt" -le 3 ]; do
+    if output="$($SSH "root@$ip" "cd $DEPLOY_DIR && docker compose -f $COMPOSE_FILE up -d --force-recreate --no-deps nginx" 2>&1)"; then
+      return 0
+    fi
+
+    log "WARNING: nginx reconcile attempt $attempt/3 failed on $label ($reason)."
+    printf '%s\n' "$output" | tail -n 5 >&2
+
+    if printf '%s\n' "$output" | grep -qi "No such container"; then
+      log "Retrying $label nginx reconcile after Docker stale-container race..."
+      sleep 3
+    else
+      break
+    fi
+
+    attempt=$((attempt + 1))
+  done
+
+  return 1
 }
 
 # wait_ready polls /health/ready (DB + cache reachable AND migrations at head).
@@ -547,9 +573,7 @@ deploy_node() {
   # restart is sub-second, backend traffic continues unaffected since the
   # rolling deploy already serves through the other node.
   log "Reconciling nginx (--force-recreate) on $label..."
-  $SSH "root@$ip" \
-    "cd $DEPLOY_DIR && docker compose -f $COMPOSE_FILE up -d --force-recreate --no-deps nginx" \
-    > /dev/null
+  reconcile_nginx_container "$ip" "$label" "post-node deploy"
 
   return 0
 }
