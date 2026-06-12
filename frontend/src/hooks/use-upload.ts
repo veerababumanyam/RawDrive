@@ -72,6 +72,11 @@ type QueuedUploadItem = UploadItem & {
   uploadDestination?: UploadDestination;
   uploadEncryption?: UploadEncryption | null;
   uploadOnTermsRequired?: UseUploadOptions["onTermsRequired"];
+  // How many times this item's finalize step has failed with a retryable
+  // hash-mismatch code. Preserved across retry()/retryAll() (they spread the
+  // item) so a genuinely-corrupt source eventually crosses the cap and is sent
+  // to a terminal re-select instead of retrying forever.
+  finalizeRetryCount?: number;
 };
 
 export function uploadCreateSessionErrorMessage(
@@ -111,26 +116,43 @@ export class ChunkUploadError extends Error {
 }
 
 // Codes that mean "these exact bytes will never pass" — the file finished
-// uploading but failed manifest validation, encrypted integrity, or was rejected
-// as a disallowed type. Plain SCAN_HASH_MISMATCH is deliberately retryable:
-// the retry path re-runs local screening, opens a fresh upload session, and
-// verifies the new byte stream again. That keeps the server integrity backstop
-// intact without trapping valid camera files behind a manual re-select.
+// uploading but failed manifest validation or was rejected as a disallowed
+// type. Both hash-mismatch codes are deliberately EXCLUDED here: they are
+// handled as retryable-with-a-cap (see RETRYABLE_HASH_MISMATCH_CODES). A
+// manifest/type rejection, by contrast, is permanent for the given bytes.
 const NON_RETRYABLE_FINALIZE_CODES = new Set<string>([
-  "ENCRYPTED_MEDIA_HASH_MISMATCH",
   "SCAN_MANIFEST_INVALID",
   "SCAN_MANIFEST_REQUIRED",
   "VIDEO_NOT_ALLOWED",
   "UNSUPPORTED_UPLOAD_TYPE",
 ]);
 
-// Codes where re-reading the file from its source is the fix. These failures
-// cannot safely recover from the existing File object.
+// Codes where re-reading the file from its source is the only fix and the
+// manifest could not be verified at all. Hash mismatches are NOT here — they
+// recover on retry (re-screen / re-encrypt) until the attempt cap.
 const RESELECT_FINALIZE_CODES = new Set<string>([
-  "ENCRYPTED_MEDIA_HASH_MISMATCH",
   "SCAN_MANIFEST_INVALID",
   "SCAN_MANIFEST_REQUIRED",
 ]);
+
+// Finalize codes that mean "the bytes the server received did not match the
+// hash the client declared." Both recover on retry because the retry path
+// re-reads the source File, re-screens it, and — for E2EE uploads — re-encrypts
+// to a FRESH ciphertext + fresh ciphertext hash before re-verifying server
+// side. SCAN_HASH_MISMATCH is the plaintext (non-E2EE) finalize verdict;
+// ENCRYPTED_MEDIA_HASH_MISMATCH is the one E2EE gallery uploads actually emit,
+// since gallery bytes are always ciphertext (see chunked_upload.go finalize
+// branch on mediaEncrypted). They are retried up to MAX_FINALIZE_HASH_RETRIES,
+// after which the source is treated as genuinely bad and the user re-selects.
+const RETRYABLE_HASH_MISMATCH_CODES = new Set<string>([
+  "SCAN_HASH_MISMATCH",
+  "ENCRYPTED_MEDIA_HASH_MISMATCH",
+]);
+
+// Total finalize attempts allowed for a retryable hash mismatch before the item
+// is forced to a terminal re-select. Three gives transient wire corruption two
+// free recoveries while still bounding a truly-corrupt source.
+export const MAX_FINALIZE_HASH_RETRIES = 3;
 
 export function isNonRetryableFinalizeCode(code?: string): boolean {
   return code != null && NON_RETRYABLE_FINALIZE_CODES.has(code);
@@ -138,6 +160,34 @@ export function isNonRetryableFinalizeCode(code?: string): boolean {
 
 export function finalizeErrorRequiresReselect(code?: string): boolean {
   return code != null && RESELECT_FINALIZE_CODES.has(code);
+}
+
+export function isRetryableHashMismatchCode(code?: string): boolean {
+  return code != null && RETRYABLE_HASH_MISMATCH_CODES.has(code);
+}
+
+// Decide what to do with a hash-mismatch finalize failure given how many times
+// this item's finalize has already failed. Below the cap the user is offered
+// Retry (which re-screens / re-encrypts fresh bytes); at the cap the item flips
+// to a terminal re-select so a permanently-bad source cannot loop forever.
+export function finalizeHashRetryDisposition(
+  code: string | undefined,
+  priorRetryCount: number,
+): { retryable: boolean; requiresReselect: boolean } {
+  if (!isRetryableHashMismatchCode(code)) {
+    return { retryable: false, requiresReselect: false };
+  }
+  const attempts = priorRetryCount + 1;
+  if (attempts >= MAX_FINALIZE_HASH_RETRIES) {
+    return { retryable: false, requiresReselect: true };
+  }
+  return { retryable: true, requiresReselect: false };
+}
+
+// User-facing sentence once a hash mismatch has exhausted its retries. Names the
+// file so a batch upload makes clear which one to re-select.
+export function finalizeRetryExhaustedMessage(fileName: string): string {
+  return `"${fileName}" still failed its integrity check after several attempts. Re-select the file from its original source and try again.`;
 }
 
 // Maps a finalize/chunk failure to a customer-readable sentence. The server
@@ -153,7 +203,7 @@ export function uploadFinalizeErrorMessage(
     case "SCAN_HASH_MISMATCH":
       return "RawDrive could not verify this upload against its security scan. Retry will rescan the same file and upload it again.";
     case "ENCRYPTED_MEDIA_HASH_MISMATCH":
-      return "The encrypted upload failed its integrity check. Re-select the file and try again.";
+      return "RawDrive could not verify this encrypted upload's integrity. Retry will re-encrypt and upload the file again.";
     case "SCAN_MANIFEST_INVALID":
     case "SCAN_MANIFEST_REQUIRED":
       return "RawDrive could not verify this file's security scan. Re-select the file and try again.";
@@ -923,9 +973,8 @@ export function useUpload(
         }
         // A finalize/chunk rejection with a known server code (the Tier-D scan
         // codes or the still-image gate) is surfaced as a real reason. Content
-        // rejections are "blocked" (the same bytes will keep failing). Plain
-        // hash mismatches fall through to the retryable error path below so
-        // Retry can re-screen and start a fresh upload session.
+        // and manifest rejections are "blocked" (the same bytes will keep
+        // failing).
         if (
           err instanceof ChunkUploadError &&
           isNonRetryableFinalizeCode(err.code)
@@ -935,6 +984,32 @@ export function useUpload(
             errorCode: err.code,
             requiresReselect: finalizeErrorRequiresReselect(err.code),
             error: err.message,
+          });
+          return;
+        }
+        // A hash-mismatch finalize verdict (plaintext SCAN_HASH_MISMATCH or the
+        // E2EE ENCRYPTED_MEDIA_HASH_MISMATCH) recovers on retry — Retry
+        // re-screens / re-encrypts fresh bytes and re-verifies server side. We
+        // count attempts so a genuinely-corrupt source crosses the cap and is
+        // sent to a terminal re-select instead of looping. finalizeRetryCount
+        // is preserved across retry()/retryAll() via item spread.
+        if (
+          err instanceof ChunkUploadError &&
+          isRetryableHashMismatchCode(err.code)
+        ) {
+          const nextRetryCount = (item.finalizeRetryCount ?? 0) + 1;
+          const { requiresReselect } = finalizeHashRetryDisposition(
+            err.code,
+            item.finalizeRetryCount ?? 0,
+          );
+          updateItem(item.id, {
+            status: "error",
+            errorCode: err.code,
+            finalizeRetryCount: nextRetryCount,
+            requiresReselect,
+            error: requiresReselect
+              ? finalizeRetryExhaustedMessage(item.file.name)
+              : err.message,
           });
           return;
         }
