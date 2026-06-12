@@ -82,6 +82,90 @@ export function uploadCreateSessionErrorMessage(
   return `Create session failed: ${status}`;
 }
 
+// A chunk PATCH (including the finalize that runs on the last chunk) failed
+// with a non-retryable status. Unlike a transient network error, the server
+// attached a machine-readable reason — the M16 Tier-D scan codes
+// (SCAN_HASH_MISMATCH / SCAN_MANIFEST_* / ENCRYPTED_MEDIA_HASH_MISMATCH) and
+// the still-image gate (VIDEO_NOT_ALLOWED / UNSUPPORTED_UPLOAD_TYPE) all come
+// back here as 422. Carry the parsed body so the caller can show the real
+// reason and pick the right item status instead of an opaque
+// "Chunk upload failed: 422".
+export class ChunkUploadError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly serverMessage?: string;
+  constructor(
+    status: number,
+    errorBody: { error?: string; message?: string } = {},
+  ) {
+    super(uploadFinalizeErrorMessage(status, errorBody));
+    this.name = "ChunkUploadError";
+    this.status = status;
+    this.code = errorBody.error;
+    this.serverMessage = errorBody.message;
+  }
+}
+
+// Codes that mean "these exact bytes will never pass" — the file finished
+// uploading but failed the integrity/scan verification, or was rejected as a
+// disallowed type. Retrying the same in-memory blob is pointless; the user
+// must re-select the source file. Mirrors the create-session SCAN_ handling so
+// finalize rejections are surfaced as a real, actionable sentence.
+const NON_RETRYABLE_FINALIZE_CODES = new Set<string>([
+  "SCAN_HASH_MISMATCH",
+  "ENCRYPTED_MEDIA_HASH_MISMATCH",
+  "SCAN_MANIFEST_INVALID",
+  "SCAN_MANIFEST_REQUIRED",
+  "VIDEO_NOT_ALLOWED",
+  "UNSUPPORTED_UPLOAD_TYPE",
+]);
+
+// Codes where re-reading the file from its source is the fix (the bytes on
+// disk no longer matched what the screener hashed, or the manifest could not
+// be verified). The user keeps the file but must re-select it.
+const RESELECT_FINALIZE_CODES = new Set<string>([
+  "SCAN_HASH_MISMATCH",
+  "ENCRYPTED_MEDIA_HASH_MISMATCH",
+  "SCAN_MANIFEST_INVALID",
+  "SCAN_MANIFEST_REQUIRED",
+]);
+
+export function isNonRetryableFinalizeCode(code?: string): boolean {
+  return code != null && NON_RETRYABLE_FINALIZE_CODES.has(code);
+}
+
+export function finalizeErrorRequiresReselect(code?: string): boolean {
+  return code != null && RESELECT_FINALIZE_CODES.has(code);
+}
+
+// Maps a finalize/chunk failure to a customer-readable sentence. The server
+// already returns a `message` for some codes; when it does not, translate the
+// machine `error` code so the photographer learns *why* the upload was
+// rejected instead of seeing "Chunk upload failed: 422".
+export function uploadFinalizeErrorMessage(
+  status: number,
+  errorBody: { error?: string; message?: string } = {},
+): string {
+  if (errorBody.message) return errorBody.message;
+  switch (errorBody.error) {
+    case "SCAN_HASH_MISMATCH":
+      return "This file changed while it was uploading, so it failed the security-scan integrity check. Re-select the file from its original source and try again.";
+    case "ENCRYPTED_MEDIA_HASH_MISMATCH":
+      return "The encrypted upload failed its integrity check. Re-select the file and try again.";
+    case "SCAN_MANIFEST_INVALID":
+    case "SCAN_MANIFEST_REQUIRED":
+      return "RawDrive could not verify this file's security scan. Re-select the file and try again.";
+    case "VIDEO_NOT_ALLOWED":
+      return "Video files are not supported in photo galleries.";
+    case "UNSUPPORTED_UPLOAD_TYPE":
+      return "Photo galleries accept still-image uploads only.";
+    default:
+      break;
+  }
+  if (errorBody.error) return `Upload failed validation: ${errorBody.error}`;
+  return `Chunk upload failed: ${status}`;
+}
+
 export function cancelUploadsConfirmationMessage(activeCount?: number): string {
   const countText =
     typeof activeCount === "number" && activeCount > 0
@@ -375,7 +459,15 @@ async function uploadChunkWithResume(params: {
       !isRetryableUploadStatus(res.status) ||
       attempt === MAX_CHUNK_UPLOAD_ATTEMPTS
     ) {
-      throw new Error(`Chunk upload failed: ${res.status}`);
+      // Preserve the server's machine-readable reason (e.g. the finalize
+      // Tier-D scan codes) so the caller can show why the upload failed
+      // instead of a bare status. The body may be absent/non-JSON for a
+      // genuine transport failure — ChunkUploadError degrades to the status.
+      const errorBody = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+      };
+      throw new ChunkUploadError(res.status, errorBody);
     }
     await sleepWithAbort(
       uploadRetryDelayMs(attempt, res.headers.get("Retry-After")),
@@ -823,6 +915,24 @@ export function useUpload(
         if (uploadIdForCleanup && !uploadSessionFinished) {
           uploadSessionIds.current.delete(item.id);
           await cancelUploadSession(uploadIdForCleanup);
+        }
+        // A finalize/chunk rejection with a known server code (the Tier-D scan
+        // codes or the still-image gate) is surfaced as a real reason. Content
+        // rejections are "blocked" (the same bytes will keep failing); hash /
+        // manifest failures additionally flag requiresReselect so the user
+        // re-reads the file from source. This mirrors the create-session SCAN_
+        // handling so finalize stops showing an opaque "Chunk upload failed".
+        if (
+          err instanceof ChunkUploadError &&
+          isNonRetryableFinalizeCode(err.code)
+        ) {
+          updateItem(item.id, {
+            status: "blocked",
+            errorCode: err.code,
+            requiresReselect: finalizeErrorRequiresReselect(err.code),
+            error: err.message,
+          });
+          return;
         }
         const fileReadPermissionError = isFileReadPermissionError(err);
         updateItem(item.id, {
