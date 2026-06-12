@@ -12,19 +12,6 @@ import {
   runScreeningWorker,
 } from "@/lib/upload-screening/worker-client";
 import { authFetch } from "@/lib/api/authFetch";
-import { encryptBlob } from "@/lib/media-encryption/media-crypto";
-import {
-  createEncryptedWebPDerivativeSet,
-  NeedsDesktopDecodeError,
-  type EncryptedDerivative,
-} from "@/lib/media-encryption/webp-derivatives";
-import type { GalleryMediaKey } from "@/lib/media-encryption/media-key-store";
-import { extractSourceImageMetadata } from "@/lib/media-encryption/source-metadata";
-import { getBrowserE2EEUploadBlockReason } from "@/lib/media-encryption/browser-upload-support";
-import {
-  uploadAssetFaceIndexImage,
-  isFaceIndexUnavailableError,
-} from "@/lib/api/ai";
 
 // Keep non-final multipart chunks above S3/B2's 5 MiB floor, but small enough
 // that the gallery queue reports progress before a whole camera JPEG finishes.
@@ -49,9 +36,6 @@ export interface UploadDestination {
 }
 
 export type UseUploadOptions = {
-  encryption?: {
-    getKey: () => Promise<GalleryMediaKey>;
-  };
   destination?: UploadDestination;
   /**
    * Called when CreateSession is rejected because the user has not accepted the
@@ -66,11 +50,8 @@ export type AddUploadFilesOptions = {
   destination?: UploadDestination;
 };
 
-type UploadEncryption = NonNullable<UseUploadOptions["encryption"]>;
-
 type QueuedUploadItem = UploadItem & {
   uploadDestination?: UploadDestination;
-  uploadEncryption?: UploadEncryption | null;
   uploadOnTermsRequired?: UseUploadOptions["onTermsRequired"];
   // How many times this item's finalize step has failed with a retryable
   // hash-mismatch code. Preserved across retry()/retryAll() (they spread the
@@ -129,21 +110,18 @@ const NON_RETRYABLE_FINALIZE_CODES = new Set<string>([
 
 // Codes where re-reading the file from its source is the only fix and the
 // manifest could not be verified at all. Hash mismatches are NOT here — they
-// recover on retry (re-screen / re-encrypt) until the attempt cap.
+// recover on retry (re-screen / re-read) until the attempt cap.
 const RESELECT_FINALIZE_CODES = new Set<string>([
   "SCAN_MANIFEST_INVALID",
   "SCAN_MANIFEST_REQUIRED",
 ]);
 
 // Finalize codes that mean "the bytes the server received did not match the
-// hash the client declared." Both recover on retry because the retry path
-// re-reads the source File, re-screens it, and — for E2EE uploads — re-encrypts
-// to a FRESH ciphertext + fresh ciphertext hash before re-verifying server
-// side. SCAN_HASH_MISMATCH is the plaintext (non-E2EE) finalize verdict;
-// ENCRYPTED_MEDIA_HASH_MISMATCH is the one E2EE gallery uploads actually emit,
-// since gallery bytes are always ciphertext (see chunked_upload.go finalize
-// branch on mediaEncrypted). They are retried up to MAX_FINALIZE_HASH_RETRIES,
-// after which the source is treated as genuinely bad and the user re-selects.
+// hash the client declared." SCAN_HASH_MISMATCH is the active plaintext upload
+// verdict. ENCRYPTED_MEDIA_HASH_MISMATCH remains recognized only so a stale
+// response from an old in-flight encrypted session is still classified cleanly.
+// They are retried up to MAX_FINALIZE_HASH_RETRIES, after which the source is
+// treated as genuinely bad and the user re-selects.
 const RETRYABLE_HASH_MISMATCH_CODES = new Set<string>([
   "SCAN_HASH_MISMATCH",
   "ENCRYPTED_MEDIA_HASH_MISMATCH",
@@ -168,7 +146,7 @@ export function isRetryableHashMismatchCode(code?: string): boolean {
 
 // Decide what to do with a hash-mismatch finalize failure given how many times
 // this item's finalize has already failed. Below the cap the user is offered
-// Retry (which re-screens / re-encrypts fresh bytes); at the cap the item flips
+// Retry (which re-screens / re-reads fresh bytes); at the cap the item flips
 // to a terminal re-select so a permanently-bad source cannot loop forever.
 export function finalizeHashRetryDisposition(
   code: string | undefined,
@@ -203,7 +181,7 @@ export function uploadFinalizeErrorMessage(
     case "SCAN_HASH_MISMATCH":
       return "RawDrive could not verify this upload against its security scan. Retry will rescan the same file and upload it again.";
     case "ENCRYPTED_MEDIA_HASH_MISMATCH":
-      return "RawDrive could not verify this encrypted upload's integrity. Retry will re-encrypt and upload the file again.";
+      return "RawDrive could not verify this upload's integrity. Retry will rescan and upload the file again.";
     case "SCAN_MANIFEST_INVALID":
     case "SCAN_MANIFEST_REQUIRED":
       return "RawDrive could not verify this file's security scan. Re-select the file and try again.";
@@ -272,32 +250,6 @@ export function fileReadPermissionRecoveryMessage(fileName?: string): string {
   return `${prefix}RawDrive could not read this file after it was selected. Re-select the files or folder from the original camera card, drive, Photos/WhatsApp export, or local folder, and keep that source connected until upload finishes.`;
 }
 
-async function uploadEncryptedDerivative(
-  assetId: string,
-  derivative: EncryptedDerivative,
-  signal: AbortSignal,
-): Promise<void> {
-  const form = new FormData();
-  form.set("variant", derivative.variant);
-  form.set("width", String(derivative.width));
-  form.set("height", String(derivative.height));
-  form.set("media_encryption", JSON.stringify(derivative.manifest));
-  form.set("file", derivative.ciphertext, `${derivative.variant}.webp.enc`);
-
-  const res = await retryUploadRequest(
-    () =>
-      authFetch(`/api/v1/assets/${assetId}/derivatives`, {
-        method: "POST",
-        body: form,
-        signal,
-        requireAuth: true,
-      }),
-    signal,
-  );
-  if (!res.ok)
-    throw new Error(`Encrypted derivative upload failed: ${res.status}`);
-}
-
 export function isActiveUploadStatus(status: UploadItem["status"]): boolean {
   return (
     status === "uploading" ||
@@ -316,21 +268,6 @@ export function isRetryableUploadStatus(status: number): boolean {
     status === 429 ||
     (status >= 500 && status <= 599)
   );
-}
-
-/**
- * 3e: decide how a post-upload face-index failure should surface. The asset is
- * already durably stored, so the upload row stays "complete" either way — but a
- * 503/unavailable from the FaceID sidecar means the photo went in with NO
- * embeddings, which previously vanished into a silent console.warn. This returns
- * `unavailable: true` for that case so the caller can flag the (still-complete)
- * row honestly instead of pretending Find-Me indexed the photo. Aborts are not a
- * face-index outcome and re-throw upstream.
- */
-export function classifyFaceIndexFailure(err: unknown): {
-  unavailable: boolean;
-} {
-  return { unavailable: isFaceIndexUnavailableError(err) };
 }
 
 export function uploadRetryDelayMs(
@@ -546,7 +483,6 @@ export function useUpload(
   token: string | null,
   options?: UseUploadOptions,
 ) {
-  const encryption = options?.encryption;
   const destination = options?.destination;
   const [items, setItems] = useState<QueuedUploadItem[]>([]);
   const [isPaused, setIsPaused] = useState(false);
@@ -557,7 +493,6 @@ export function useUpload(
   const activeUploads = useRef(0);
   const pumpQueue = useRef<() => void>(() => {});
   const pausedRef = useRef(false);
-  const encryptionRef = useRef<UseUploadOptions["encryption"]>(encryption);
 
   // Keep the latest destination in a ref so addFiles can snapshot the active
   // gallery/album onto every queued item without re-creating the queue when the
@@ -575,7 +510,6 @@ export function useUpload(
   // .current asynchronously at upload time (well after commit), so effect
   // timing preserves the existing behavior.
   useEffect(() => {
-    encryptionRef.current = encryption;
     destinationRef.current = destination;
     onTermsRequiredRef.current = options?.onTermsRequired;
   });
@@ -595,10 +529,6 @@ export function useUpload(
       abortControllers.current.set(item.id, controller);
       let uploadIdForCleanup: string | undefined;
       let uploadSessionFinished = false;
-      const itemEncryption =
-        item.uploadEncryption === null
-          ? undefined
-          : (item.uploadEncryption ?? encryptionRef.current);
       const itemDestination = item.uploadDestination ?? destinationRef.current;
       const itemOnTermsRequired =
         item.uploadOnTermsRequired ?? onTermsRequiredRef.current;
@@ -612,17 +542,6 @@ export function useUpload(
       void token; // kept in the signature for caller compatibility
 
       try {
-        if (itemEncryption) {
-          const blockReason = getBrowserE2EEUploadBlockReason(item.file);
-          if (blockReason) {
-            updateItem(item.id, {
-              status: "needs_desktop",
-              error: blockReason,
-            });
-            return;
-          }
-        }
-
         updateItem(item.id, { status: "screening" });
         let manifest: ScanManifest;
         try {
@@ -654,63 +573,10 @@ export function useUpload(
             status: "needs_desktop",
             error:
               manifest.findings[0]?.message ??
-              "this format requires RawDrive Desktop for source-side encryption",
+              "this format requires RawDrive Desktop for direct upload processing",
             scanManifest: manifest,
           });
           return;
-        }
-
-        let uploadBlob: Blob = item.file;
-        let mediaEncryption: Record<string, unknown> | undefined;
-        let sourceMetadata: Record<string, unknown> | undefined;
-        let encryptedDerivatives: EncryptedDerivative[] = [];
-        let faceIndexImage: Blob | undefined;
-
-        if (itemEncryption) {
-          updateItem(item.id, { status: "encrypting", scanManifest: manifest });
-          const mediaKey = await itemEncryption.getKey();
-          const encryptedOriginal = await encryptBlob(item.file, {
-            key: mediaKey.key,
-            keyId: mediaKey.keyId,
-            objectType: "original",
-            contentType: item.file.type || "application/octet-stream",
-          });
-          let sourceDimensions: { width: number; height: number } | undefined;
-          try {
-            const derivativeSet = await createEncryptedWebPDerivativeSet(
-              item.file,
-              mediaKey.key,
-              mediaKey.keyId,
-            );
-            encryptedDerivatives = derivativeSet.derivatives;
-            faceIndexImage = derivativeSet.faceIndexImage?.blob;
-            sourceDimensions = derivativeSet.source;
-          } catch (err) {
-            // CD4: a NeedsDesktopDecodeError means the in-browser decoder could
-            // not handle this file (CR3/exotic RAW, corrupt input, unsupported
-            // engine) — surface its detail directly. Any other failure keeps the
-            // generic source-side-encryption message. Both land on needs_desktop.
-            const error =
-              err instanceof NeedsDesktopDecodeError
-                ? `RawDrive Desktop is required for this file: ${err.message}`
-                : `RawDrive Desktop is required because source-side WebP generation failed: ${(err as Error).message}`;
-            updateItem(item.id, {
-              status: "needs_desktop",
-              error,
-              scanManifest: manifest,
-            });
-            return;
-          }
-          uploadBlob = encryptedOriginal.ciphertext;
-          mediaEncryption = encryptedOriginal.manifest;
-          sourceMetadata = await extractSourceImageMetadata(
-            item.file,
-            sourceDimensions,
-          );
-          sourceMetadata = {
-            ...sourceMetadata,
-            derivative_variants: encryptedDerivatives.map((d) => d.variant),
-          };
         }
 
         updateItem(item.id, { status: "uploading", scanManifest: manifest });
@@ -719,24 +585,17 @@ export function useUpload(
         // user selected these files. This lets queued files continue after route
         // changes while still linking to the original gallery/sub-gallery.
         const dest = itemDestination;
-        // total_size MUST be the size of what we actually chunk and PATCH. In the
-        // E2EE path that is the encrypted ciphertext (uploadBlob), not the
-        // plaintext source; the chunk loop below iterates uploadBlob.size.
+        // total_size MUST be the size of what we actually chunk and PATCH.
+        // New browser uploads use the direct plaintext file path. Legacy
+        // encrypted assets still decrypt on view, but this path does not
+        // generate or send client-side encryption manifests for new uploads.
         const createBody: Record<string, unknown> = {
           filename: item.file.name,
           content_type: item.file.type || "application/octet-stream",
-          total_size: uploadBlob.size,
+          total_size: item.file.size,
           chunk_size: CHUNK_SIZE,
           scan_manifest: manifest,
         };
-        // E2EE manifests for the encrypted original + source metadata, only
-        // present when client-side encryption ran for this item.
-        if (mediaEncryption) {
-          createBody.media_encryption = mediaEncryption;
-        }
-        if (sourceMetadata) {
-          createBody.source_metadata = sourceMetadata;
-        }
         if (dest?.galleryId) {
           createBody.gallery_id = dest.galleryId;
           if (dest.albumId) createBody.album_id = dest.albumId;
@@ -865,7 +724,7 @@ export function useUpload(
         let offset = 0;
         let finalAssetId: string | undefined;
 
-        while (offset < uploadBlob.size) {
+        while (offset < item.file.size) {
           while (pausedRef.current || pausedItems.current.has(item.id)) {
             await new Promise((resolve) => setTimeout(resolve, 500));
             if (controller.signal.aborted)
@@ -873,8 +732,8 @@ export function useUpload(
           }
           await waitForOnline(controller.signal);
 
-          const end = Math.min(offset + CHUNK_SIZE, uploadBlob.size);
-          const chunk = uploadBlob.slice(offset, end);
+          const end = Math.min(offset + CHUNK_SIZE, item.file.size);
+          const chunk = item.file.slice(offset, end);
 
           const { nextOffset, response: patchRes } =
             await uploadChunkWithResume({
@@ -882,12 +741,12 @@ export function useUpload(
               offset,
               end,
               chunk,
-              totalSize: uploadBlob.size,
+              totalSize: item.file.size,
               signal: controller.signal,
             });
 
           offset = nextOffset;
-          if (offset >= uploadBlob.size) {
+          if (offset >= item.file.size) {
             const body = (await patchRes.json().catch(() => ({}))) as {
               asset?: { id?: string };
             };
@@ -896,64 +755,15 @@ export function useUpload(
             uploadSessionIds.current.delete(item.id);
           }
           updateItem(item.id, {
-            progress: Math.round(
-              (offset / uploadBlob.size) *
-                (encryptedDerivatives.length > 0 ? 80 : 100),
-            ),
+            progress: Math.round((offset / item.file.size) * 100),
           });
-        }
-
-        if (finalAssetId && encryptedDerivatives.length > 0) {
-          for (let i = 0; i < encryptedDerivatives.length; i += 1) {
-            await uploadEncryptedDerivative(
-              finalAssetId,
-              encryptedDerivatives[i],
-              controller.signal,
-            );
-            updateItem(item.id, {
-              progress:
-                80 + Math.round(((i + 1) / encryptedDerivatives.length) * 15),
-            });
-          }
-        }
-
-        // 3e: the upload itself is durable once the bytes are stored; a
-        // post-upload face-index failure must NOT fail the row. But a 503
-        // "service unavailable" from the sidecar means the photo went in with
-        // NO embeddings — silently swallowing that as a console.warn left
-        // Find-Me honestly empty with no signal. Surface an explicit
-        // index-unavailable flag on the (still-successful) complete row so the
-        // UI can tell the photographer to re-sync, while a transient/size
-        // failure stays a quiet warn (the explicit FaceID "Sync Now" path and
-        // its own downscale/retry classifier cover recovery).
-        let faceIndexUnavailable = false;
-        if (finalAssetId && faceIndexImage) {
-          updateItem(item.id, {
-            status: "indexing_faces",
-            progress: 98,
-            assetId: finalAssetId,
-          });
-          try {
-            await uploadAssetFaceIndexImage(finalAssetId, faceIndexImage, {
-              galleryId: itemDestination?.galleryId,
-              signal: controller.signal,
-            });
-          } catch (err) {
-            if (isAbortError(err)) throw err;
-            faceIndexUnavailable = classifyFaceIndexFailure(err).unavailable;
-            console.warn("FaceID indexing failed after upload completion", {
-              assetId: finalAssetId,
-              unavailable: faceIndexUnavailable,
-              error: err,
-            });
-          }
         }
 
         updateItem(item.id, {
           status: "complete",
           progress: 100,
           assetId: finalAssetId,
-          faceIndexUnavailable,
+          faceIndexUnavailable: false,
         });
       } catch (err) {
         if ((err as Error).name === "AbortError") {
@@ -987,12 +797,11 @@ export function useUpload(
           });
           return;
         }
-        // A hash-mismatch finalize verdict (plaintext SCAN_HASH_MISMATCH or the
-        // E2EE ENCRYPTED_MEDIA_HASH_MISMATCH) recovers on retry — Retry
-        // re-screens / re-encrypts fresh bytes and re-verifies server side. We
-        // count attempts so a genuinely-corrupt source crosses the cap and is
-        // sent to a terminal re-select instead of looping. finalizeRetryCount
-        // is preserved across retry()/retryAll() via item spread.
+        // A hash-mismatch finalize verdict recovers on retry — Retry re-screens
+        // fresh bytes and re-verifies server side. We count attempts so a
+        // genuinely-corrupt source crosses the cap and is sent to a terminal
+        // re-select instead of looping. finalizeRetryCount is preserved across
+        // retry()/retryAll() via item spread.
         if (
           err instanceof ChunkUploadError &&
           isRetryableHashMismatchCode(err.code)
@@ -1060,7 +869,6 @@ export function useUpload(
       const currentDestination = destinationRef.current
         ? { ...destinationRef.current }
         : undefined;
-      const currentEncryption = encryptionRef.current ?? null;
       const currentOnTermsRequired = onTermsRequiredRef.current;
       const newItems: QueuedUploadItem[] = files.map((file) => ({
         id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -1068,7 +876,6 @@ export function useUpload(
         progress: 0,
         status: "pending" as const,
         uploadDestination: options?.destination ?? currentDestination,
-        uploadEncryption: currentEncryption,
         uploadOnTermsRequired: currentOnTermsRequired,
       }));
 

@@ -64,7 +64,6 @@ import {
   getWorkspaceProfile,
   type WorkspaceProfile,
 } from "@/lib/api/workspace-profile";
-import { readGalleryClientSideMediaEncryptionEnabled } from "@/lib/gallery-design-config";
 import { getAsset, type Asset } from "@/lib/api/assets";
 import { useUpload } from "@/hooks/use-upload";
 import {
@@ -72,7 +71,6 @@ import {
   GRID_VARIANTS,
   LIGHTBOX_VARIANTS,
 } from "@/lib/media-encryption/asset-media";
-import { getOrCreateSyncedGalleryMediaKey } from "@/lib/media-encryption/gallery-media-key-sync";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { UploadDropzone, UploadProgress } from "@/components/upload";
 import { TermsAcceptanceModal } from "@/components/legal/terms-acceptance-modal";
@@ -2298,17 +2296,7 @@ export default function CoverDesignPage() {
 
   const token = useMemo(() => getStoredAccessToken(), []);
   const apiUrl = useMemo(() => getApiBaseUrl(), []);
-  const uploadEncryption = useMemo(
-    () =>
-      readGalleryClientSideMediaEncryptionEnabled(gallery?.settings)
-        ? {
-            getKey: () => getOrCreateSyncedGalleryMediaKey(galleryId),
-          }
-        : undefined,
-    [gallery?.settings, galleryId],
-  );
   const upload = useUpload(apiUrl, token, {
-    encryption: uploadEncryption,
     destination: { galleryId, albumId: coverUploadTargetAlbumId },
     onTermsRequired: () => setTermsModalOpen(true),
   });

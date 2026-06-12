@@ -8,7 +8,6 @@ import {
   getPublicGalleryWithSession,
   PublicGalleryFetchError,
 } from "@/lib/api/galleries";
-import { listPublicBanners, listPublicProducts } from "@/lib/api/commerce";
 import { GalleryPasswordGate } from "@/components/gallery/gallery-password-gate";
 import { GalleryLockedShell } from "@/components/gallery/gallery-locked-shell";
 import { SharePinGate } from "@/components/gallery/share-pin-gate";
@@ -44,7 +43,7 @@ interface Props {
 
 export const dynamic = "force-dynamic";
 
-const PUBLIC_GALLERY_INITIAL_ASSET_LIMIT = 120;
+const PUBLIC_GALLERY_INITIAL_ASSET_LIMIT = 60;
 
 function pickSharePreviewCoverKey(
   manifest: Record<string, string> | null | undefined,
@@ -228,6 +227,13 @@ export default async function PublicGalleryPage({
     );
   }
 
+  const brandingPromise = getPublicGalleryBranding(
+    slug,
+    ws,
+    followupShareToken,
+    effectiveSessionToken,
+  ).catch(() => null);
+
   // Folder-only galleries: a bare /g/{slug} link (no ?album=) must NOT show the
   // ungrouped gallery root. Resolve the album list first and default to the
   // first folder (HIGHLIGHTS, else lowest position) so clients always land
@@ -288,20 +294,10 @@ export default async function PublicGalleryPage({
   }
   const assets = assetPage.assets;
 
-  // Fetch products, banners, branding, and the public album list in
-  // parallel. Albums are best-effort — getPublicGalleryAlbums swallows
-  // errors and returns [] so an album-service outage doesn't blow up
-  // the whole public page; the chip strip simply hides itself.
-  const [products, banners, branding] = await Promise.all([
-    listPublicProducts(slug, ws, followupShareToken, effectiveSessionToken),
-    listPublicBanners(slug, ws, followupShareToken, effectiveSessionToken),
-    getPublicGalleryBranding(
-      slug,
-      ws,
-      followupShareToken,
-      effectiveSessionToken,
-    ).catch(() => null),
-  ]);
+  // Branding affects the first viewport. Banners and products are lower-page,
+  // optional commerce extras, so the client fetches them after first paint
+  // instead of making the public share URL wait on those APIs before HTML TTFB.
+  const branding = await brandingPromise;
 
   // Design config saved by the Gallery Design Studio. The public viewer
   // needs this so the share link renders with the cover image, cover
@@ -427,8 +423,8 @@ export default async function PublicGalleryPage({
         initialAssetsHasMore={assetPage.has_more}
         initialAssetNextOffset={assetPage.offset + assetPage.limit}
         assetPageLimit={PUBLIC_GALLERY_INITIAL_ASSET_LIMIT}
-        products={products}
-        banners={banners}
+        products={undefined}
+        banners={undefined}
         embeddedVideos={embeddedVideos}
         slug={slug}
         ws={ws ?? null}

@@ -50,7 +50,6 @@ import {
 } from "@/lib/api/favorites";
 import { readEmbeddedVideos, type EmbeddedVideo } from "@/lib/embedded-videos";
 import { assetIsProcessing } from "@/lib/dashboard-ui";
-import { getOrCreateSyncedGalleryMediaKey } from "@/lib/media-encryption/gallery-media-key-sync";
 import {
   appendStoredGalleryKeyFragment,
   setUrlSearchParamBeforeFragment,
@@ -62,7 +61,6 @@ import {
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import { indexAssetFacesFromBrowser } from "@/lib/media-encryption/face-index-browser";
 import { isFaceIndexUnavailableError } from "@/lib/api/ai";
-import { browserE2EEMaxUploadSizeLabel } from "@/lib/media-encryption/browser-upload-support";
 import {
   FILE_PICKER_STILL_IMAGE_ACCEPT,
   isAcceptedStillImageFile,
@@ -121,7 +119,6 @@ import { galleryShareExpiryDays } from "@/lib/gallery-share-expiry";
 import { resolveStablePublicGalleryShareLink } from "@/lib/gallery-share-link-resolver";
 import {
   buildGalleryCoverDeviceDesignConfig,
-  readGalleryClientSideMediaEncryptionEnabled,
   readPublicDesignConfig,
   resolveCoverDeviceProfile,
   type CoverDeviceTarget,
@@ -1955,17 +1952,6 @@ export default function GalleryDetailPage({
     setTermsModalOpen(true);
   }, []);
 
-  // Client-side media encryption is opt-in per gallery. When off, uploads use
-  // the faster plaintext path; existing encrypted assets still decrypt on view.
-  const uploadEncryption = useMemo(
-    () =>
-      readGalleryClientSideMediaEncryptionEnabled(gallery?.settings)
-        ? {
-            getKey: () => getOrCreateSyncedGalleryMediaKey(id),
-          }
-        : undefined,
-    [gallery?.settings, id],
-  );
   const dashboardUploadContext = useDashboardUploadContext();
   const dashboardUpload = dashboardUploadContext?.upload;
   const configureGalleryUpload = dashboardUploadContext?.configureGalleryUpload;
@@ -1979,7 +1965,6 @@ export default function GalleryDetailPage({
   // at finalize. The hook snapshots these fields when files enter the queue so
   // route changes do not break or unbind pending uploads.
   const localUpload = useUpload(apiUrl, token, {
-    encryption: uploadEncryption,
     destination: { galleryId: id, albumId: uploadTargetAlbumId },
     onTermsRequired: openTermsModal,
   });
@@ -1988,7 +1973,6 @@ export default function GalleryDetailPage({
   useEffect(() => {
     if (!configureGalleryUpload || !clearGalleryUpload) return;
     configureGalleryUpload(uploadOwnerKey, {
-      encryption: uploadEncryption,
       destination: { galleryId: id, albumId: uploadTargetAlbumId },
       onTermsRequired: openTermsModal,
     });
@@ -1998,7 +1982,6 @@ export default function GalleryDetailPage({
     configureGalleryUpload,
     id,
     openTermsModal,
-    uploadEncryption,
     uploadOwnerKey,
     uploadTargetAlbumId,
   ]);
@@ -4062,8 +4045,7 @@ export default function GalleryDetailPage({
                 Browser upload supports JPEG/JFIF, PNG, WebP, GIF, HEIC/HEIF,
                 AVIF and common camera RAW from Canon, Nikon, Sony, Fujifilm,
                 OM/Olympus, Panasonic, Pentax, Hasselblad, and Phase One up to{" "}
-                {browserE2EEMaxUploadSizeLabel()}. TIFF and unsupported RAW use
-                RawDrive Desktop.
+                256MB. TIFF and unsupported RAW use RawDrive Desktop.
               </p>
             </div>
 
@@ -4918,8 +4900,8 @@ export default function GalleryDetailPage({
                       Camera JPEG/JFIF, PNG, WebP, GIF, HEIC/HEIF, AVIF and
                       common camera RAW from Canon, Nikon, Sony, Fujifilm,
                       OM/Olympus, Panasonic, Pentax, Hasselblad, and Phase One
-                      up to {browserE2EEMaxUploadSizeLabel()} per file. TIFF and
-                      unsupported RAW use RawDrive Desktop.
+                      up to 256MB per file. TIFF and unsupported RAW use
+                      RawDrive Desktop.
                     </p>
                     <div className="mt-5 flex w-full flex-col items-stretch justify-center gap-2 sm:mt-6 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
                       <button

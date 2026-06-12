@@ -38,11 +38,10 @@ const DEFAULT_METADATA_BUDGET = 512 * 1024; // 512 KB
  * Detect the format of a byte buffer via magic-byte sniffing, then run
  * the matching format screener. Returns a ScanResult.
  *
- * CD5/CD5c: HEIC / HEIF / AVIF and the now-browser-decodable camera RAW
- * families return decision = "pass" with the canonical detected_format, so the
- * source-side encrypted upload's scan manifest lets them finalize. Formats
- * that still need the desktop companion (exotic / proprietary RAW, ambiguous
- * or multi-page TIFF) return
+ * CD5/CD5c: HEIC / HEIF / AVIF and supported camera RAW families return
+ * decision = "pass" with the canonical detected_format, so direct browser
+ * uploads can finalize. Formats that still need the desktop companion
+ * (exotic / proprietary RAW, ambiguous or multi-page TIFF) return
  * decision = "needs_desktop_scan". Anything unrecognized is blocked.
  */
 export function screen(
@@ -111,7 +110,7 @@ export function screen(
         {
           category: "unsupported_format",
           severity: "medium",
-          message: `${detected.format} requires RawDrive Desktop for source-side encryption`,
+          message: `${detected.format} requires RawDrive Desktop for upload processing`,
         },
       ],
     };
@@ -135,7 +134,7 @@ export function screen(
 }
 
 /** A container-format classification: the canonical lowercase format token
- *  plus whether the browser can decode it for source-side encrypted upload. */
+ *  plus whether the browser can send it through the direct upload path. */
 interface ContainerFormat {
   format: string;
   browserDecodable: boolean;

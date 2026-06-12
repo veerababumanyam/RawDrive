@@ -7,11 +7,9 @@ export const BROWSER_DECODE_STILL_IMAGE_MIME_TYPES = [
   "image/x-png",
   "image/webp",
   "image/gif",
-  // CD4: now decoded in-browser. HEIC/HEIF via the libheif WASM decoder, AVIF
-  // natively (gated on feature-detect), camera RAW via embedded-JPEG-preview
-  // extraction. The raw `image/x-*` MIME aliases for these families are matched
-  // by extension (the `image/x-*` block in browser-upload-support narrows
-  // around the BROWSER_DECODE extension check), so they are not listed here.
+  // HEIC/HEIF, AVIF, and common camera RAW are accepted for the direct upload
+  // path and processed after upload. The raw `image/x-*` MIME aliases for
+  // these families are matched by extension below, so they are not listed here.
   "image/heic",
   "image/heif",
   "image/hif",
@@ -27,10 +25,8 @@ export const BROWSER_DECODE_STILL_IMAGE_EXTENSIONS = [
   "png",
   "webp",
   "gif",
-  // CD4/CD5c: HEIC/HEIF/AVIF + camera RAW whose embedded preview the browser
-  // decoders can extract — TIFF-based RAW from common camera families, RAF
-  // (Fuji), and CR3 (Canon, via the ISO-BMFF box parser). Exotic RAW and
-  // ambiguous TIFF/generic .raw stay desktop-only below.
+  // CD5c: HEIC/HEIF/AVIF + common camera RAW accepted by direct browser
+  // upload. Exotic RAW and ambiguous TIFF/generic .raw stay desktop-only below.
   "heic",
   "heif",
   "hif",

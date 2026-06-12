@@ -10,9 +10,12 @@
 // The per-photo preflight will fire once ProductPreview is also
 // instantiated inside the asset viewer lightbox (tracked separately).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import type { GalleryProduct } from "@/lib/api/commerce";
+import {
+  listPublicProducts,
+  type GalleryProduct,
+} from "@/lib/api/commerce";
 
 // PERF-SPLIT: the product catalog only renders when a gallery actually has
 // products (the section early-returns null otherwise). ProductPreview is a
@@ -40,7 +43,7 @@ interface PublicGalleryProductsProps {
   workspaceScope?: string | null;
   shareToken?: string | null;
   gallerySessionToken?: string | null;
-  products: GalleryProduct[];
+  products?: GalleryProduct[];
   previewMode?: boolean;
 }
 
@@ -53,8 +56,31 @@ export function PublicGalleryProducts({
   previewMode = false,
 }: PublicGalleryProductsProps) {
   const [clientEmail, setClientEmail] = useState("");
+  const [loadedProducts, setLoadedProducts] = useState<GalleryProduct[]>(
+    products ?? [],
+  );
+  const [loaded, setLoaded] = useState(Boolean(products));
+  const visibleProducts = products ?? loadedProducts;
 
-  if (products.length === 0) {
+  useEffect(() => {
+    if (products !== undefined || loaded) return;
+    let cancelled = false;
+    listPublicProducts(slug, workspaceScope, shareToken, gallerySessionToken)
+      .then((result) => {
+        if (!cancelled) {
+          setLoadedProducts(result);
+          setLoaded(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, workspaceScope, shareToken, gallerySessionToken, products, loaded]);
+
+  if (visibleProducts.length === 0) {
     return null;
   }
 
@@ -93,7 +119,7 @@ export function PublicGalleryProducts({
       </label>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {products.map((product) => (
+        {visibleProducts.map((product) => (
           <ProductPreview
             key={product.id}
             product={product}

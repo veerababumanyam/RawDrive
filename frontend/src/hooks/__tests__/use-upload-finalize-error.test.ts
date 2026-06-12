@@ -22,22 +22,25 @@ describe("uploadFinalizeErrorMessage", () => {
   });
 
   it("translates the Tier-D hash-mismatch code into an actionable sentence", () => {
-    const msg = uploadFinalizeErrorMessage(422, { error: "SCAN_HASH_MISMATCH" });
+    const msg = uploadFinalizeErrorMessage(422, {
+      error: "SCAN_HASH_MISMATCH",
+    });
     expect(msg).toMatch(/could not verify this upload/i);
     expect(msg).toMatch(/retry will rescan/i);
     // Never leak the opaque status-only fallback for a known code.
     expect(msg).not.toMatch(/^Chunk upload failed/i);
   });
 
-  it("frames the encrypted hash-mismatch code as retryable, not re-select", () => {
+  it("frames a stale encrypted hash-mismatch code as retryable, not re-select", () => {
     const msg = uploadFinalizeErrorMessage(422, {
       error: "ENCRYPTED_MEDIA_HASH_MISMATCH",
     });
-    expect(msg).toMatch(/could not verify this encrypted upload/i);
-    expect(msg).toMatch(/retry will re-encrypt/i);
-    // The encrypted hash mismatch is the code E2EE gallery uploads actually
-    // emit on transient corruption; retry re-encrypts to fresh ciphertext, so
-    // it must NOT tell the user to re-select.
+    expect(msg).toMatch(/could not verify this upload/i);
+    expect(msg).toMatch(/retry will rescan/i);
+    expect(msg).not.toMatch(/encrypted upload/i);
+    expect(msg).not.toMatch(/re-encrypt/i);
+    // Legacy/stale in-flight encrypted sessions can still return this code.
+    // It remains retryable so a user is not forced to re-select immediately.
     expect(msg).not.toMatch(/re-select/i);
   });
 
@@ -57,7 +60,9 @@ describe("uploadFinalizeErrorMessage", () => {
   });
 
   it("falls back to the bare status when no body is present", () => {
-    expect(uploadFinalizeErrorMessage(500, {})).toBe("Chunk upload failed: 500");
+    expect(uploadFinalizeErrorMessage(500, {})).toBe(
+      "Chunk upload failed: 500",
+    );
   });
 });
 
@@ -77,7 +82,7 @@ describe("finalize code classifiers", () => {
     expect(isNonRetryableFinalizeCode(undefined)).toBe(false);
     expect(isNonRetryableFinalizeCode("RATE_LIMITED")).toBe(false);
     expect(isNonRetryableFinalizeCode("SCAN_HASH_MISMATCH")).toBe(false);
-    // Both hash-mismatch codes recover on retry (re-screen / re-encrypt), so
+    // Both hash-mismatch codes recover on retry (re-screen / re-read), so
     // neither is a hard non-retryable rejection.
     expect(isNonRetryableFinalizeCode("ENCRYPTED_MEDIA_HASH_MISMATCH")).toBe(
       false,
@@ -94,7 +99,9 @@ describe("finalize code classifiers", () => {
     expect(finalizeErrorRequiresReselect("SCAN_MANIFEST_INVALID")).toBe(true);
     // A disallowed type is permanent — re-selecting the same file won't help.
     expect(finalizeErrorRequiresReselect("VIDEO_NOT_ALLOWED")).toBe(false);
-    expect(finalizeErrorRequiresReselect("UNSUPPORTED_UPLOAD_TYPE")).toBe(false);
+    expect(finalizeErrorRequiresReselect("UNSUPPORTED_UPLOAD_TYPE")).toBe(
+      false,
+    );
     expect(finalizeErrorRequiresReselect(undefined)).toBe(false);
   });
 });

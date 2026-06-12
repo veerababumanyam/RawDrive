@@ -474,7 +474,7 @@ describe("CoverDesignPage", () => {
       title: "Asha & Ravi",
       slug: "asha-ravi",
       description: "Wedding highlights",
-      cover_asset_id: null,
+      cover_asset_id: undefined,
       gallery_type: "delivery",
       is_published: true,
       max_selections: 0,

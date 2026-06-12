@@ -25,7 +25,6 @@ describe("useUpload", () => {
 
     expect(source).toContain("type QueuedUploadItem");
     expect(source).toContain("uploadDestination?: UploadDestination");
-    expect(source).toContain("uploadEncryption?: UploadEncryption | null");
     expect(source).toContain("uploadOnTermsRequired?");
     expect(source).toContain(
       "const currentDestination = destinationRef.current",
@@ -34,7 +33,7 @@ describe("useUpload", () => {
       "uploadDestination: options?.destination ?? currentDestination",
     );
     expect(source).toContain("const dest = itemDestination");
-    expect(source).toContain("galleryId: itemDestination?.galleryId");
+    expect(source).toContain("createBody.gallery_id = dest.galleryId");
   });
 
   it("exposes pause controls for all and per-photo upload flow", async () => {
@@ -71,9 +70,7 @@ describe("useUpload", () => {
       join(process.cwd(), "src/hooks/use-upload.ts"),
       "utf8",
     );
-    const createSessionStart = source.indexOf(
-      'authFetch("/api/v1/uploads"',
-    );
+    const createSessionStart = source.indexOf('authFetch("/api/v1/uploads"');
     const createSessionBlock = source.slice(
       Math.max(0, createSessionStart - 180),
       createSessionStart + 420,
@@ -96,7 +93,6 @@ describe("useUpload", () => {
       'authFetch("/api/v1/uploads"',
       "authFetch(`/api/v1/uploads/${uploadId}`",
       "authFetch(`/api/v1/uploads/${encodeURIComponent(uploadId)}`",
-      "authFetch(`/api/v1/assets/${assetId}/derivatives`",
     ]) {
       const start = source.indexOf(marker);
       const block = source.slice(start, start + 520);
@@ -128,9 +124,9 @@ describe("useUpload", () => {
     const { uploadCreateSessionErrorMessage } = await import("../use-upload");
 
     expect(uploadCreateSessionErrorMessage(403)).toContain("access was denied");
-    expect(
-      uploadCreateSessionErrorMessage(403, { error: "forbidden" }),
-    ).toBe("Upload could not start: forbidden");
+    expect(uploadCreateSessionErrorMessage(403, { error: "forbidden" })).toBe(
+      "Upload could not start: forbidden",
+    );
     expect(
       uploadCreateSessionErrorMessage(403, {
         message: "This gallery is view-only.",
@@ -138,46 +134,26 @@ describe("useUpload", () => {
     ).toBe("This gallery is view-only.");
   });
 
-  it("has an explicit face indexing phase for encrypted uploads", async () => {
+  it("uses the direct plaintext file for browser upload sessions", async () => {
     const source = await readFile(
       join(process.cwd(), "src/hooks/use-upload.ts"),
       "utf8",
     );
-    expect(source).toContain("uploadAssetFaceIndexImage");
-    expect(source).toContain('status: "indexing_faces"');
-    expect(source).toContain("faceIndexImage");
-    expect(source).toContain("FaceID indexing failed after upload completion");
+    expect(source).toContain("total_size: item.file.size");
+    expect(source).toContain("while (offset < item.file.size)");
+    expect(source).toContain("const chunk = item.file.slice(offset, end)");
+    expect(source).not.toContain("media_encryption:");
+    expect(source).not.toContain("uploadAssetFaceIndexImage");
+    expect(source).not.toContain("encryptBlob");
   });
 
-  it("flags a 503 face-index failure as honest 'unavailable', not a swallowed warn (3e)", async () => {
-    const { classifyFaceIndexFailure } = await import("../use-upload");
-    const { FaceIndexUnavailableError } = await import("@/lib/api/ai");
-
-    // A 503/unavailable from the sidecar surfaces an honest unavailable signal
-    // the caller can flag on the (still-complete) row.
-    expect(
-      classifyFaceIndexFailure(new FaceIndexUnavailableError()).unavailable,
-    ).toBe(true);
-
-    // A transient/size failure (e.g. 502/413) is NOT "unavailable" — it stays a
-    // quiet warn and the explicit Sync-Now path handles downscale/retry.
-    expect(
-      classifyFaceIndexFailure(new Error("502 Bad Gateway")).unavailable,
-    ).toBe(false);
-    expect(
-      classifyFaceIndexFailure(new Error("image file too large")).unavailable,
-    ).toBe(false);
-  });
-
-  it("carries the honest faceIndexUnavailable flag onto the complete row (3e)", async () => {
+  it("marks direct-upload rows complete without upload-time FaceID sidecar work", async () => {
     const source = await readFile(
       join(process.cwd(), "src/hooks/use-upload.ts"),
       "utf8",
     );
-    // The classifier result is threaded into the final complete update so the
-    // UI can show it instead of the upload silently no-indexing.
-    expect(source).toContain("classifyFaceIndexFailure");
-    expect(source).toContain("faceIndexUnavailable,");
+    expect(source).toContain("faceIndexUnavailable: false");
+    expect(source).not.toContain('status: "indexing_faces"');
   });
 
   it("parses server upload offsets for resumable recovery", async () => {

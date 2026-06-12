@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   buildGalleryCoverDeviceDesignConfig,
   normalizeSlideshowIntervalMs,
-  readGalleryClientSideMediaEncryptionEnabled,
   readGalleryCoverAssetId,
   readGallerySlideshowIntervalMs,
   readPublicCoverProfileThumbnails,
@@ -28,23 +27,6 @@ describe("readGallerySlideshowIntervalMs", () => {
     ).toBe(15000);
     expect(readGallerySlideshowIntervalMs({})).toBe(5000);
     expect(normalizeSlideshowIntervalMs("bad")).toBe(5000);
-  });
-});
-
-describe("readGalleryClientSideMediaEncryptionEnabled", () => {
-  it("defaults to fast/plain uploads unless the gallery opts into client-side media encryption", () => {
-    expect(readGalleryClientSideMediaEncryptionEnabled(null)).toBe(false);
-    expect(readGalleryClientSideMediaEncryptionEnabled({})).toBe(false);
-    expect(
-      readGalleryClientSideMediaEncryptionEnabled({
-        client_side_media_encryption_enabled: false,
-      }),
-    ).toBe(false);
-    expect(
-      readGalleryClientSideMediaEncryptionEnabled({
-        client_side_media_encryption_enabled: true,
-      }),
-    ).toBe(true);
   });
 });
 

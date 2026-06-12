@@ -69,15 +69,16 @@ describe("F-089: gallery detail page reads the access token once per mount", () 
     );
 
     // And that snapshot must be the value handed to the upload hook. The hook
-    // now takes a single options object that carries BOTH the client-side
-    // media-encryption key provider (feature branch) AND the S3-G4 destination
-    // binding (galleryId / albumId, server-side gallery linkage), so the call
-    // spans multiple lines. The gallery detail page now prefers the
-    // dashboard-level upload queue so uploads can survive route changes, but
-    // the isolated local fallback must still be backed by the once-per-mount
-    // token snapshot.
+    // takes a single options object with the S3-G4 destination binding
+    // (galleryId / albumId, server-side gallery linkage), so the call spans
+    // multiple lines. The gallery detail page now prefers the dashboard-level
+    // upload queue so uploads can survive route changes, but the isolated
+    // local fallback must still be backed by the once-per-mount token snapshot.
     expect(source).toMatch(/const localUpload = useUpload\(apiUrl, token, \{/);
-    expect(source).toMatch(/encryption: uploadEncryption,/);
+    expect(source).not.toMatch(/encryption: uploadEncryption,/);
+    expect(source).toMatch(
+      /destination: \{ galleryId: id, albumId: uploadTargetAlbumId \},/,
+    );
     expect(source).toContain("const upload = dashboardUpload ?? localUpload");
 
     // And that the same call still allows trailing args after `token` (the

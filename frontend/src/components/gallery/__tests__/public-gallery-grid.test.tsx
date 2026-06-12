@@ -757,6 +757,7 @@ describe("PublicGalleryGrid", () => {
     class MockIntersectionObserver implements IntersectionObserver {
       readonly root = null;
       readonly rootMargin = "0px";
+      readonly scrollMargin = "0px";
       readonly thresholds = [];
       constructor(cb: IntersectionObserverCallback) {
         callback = cb;

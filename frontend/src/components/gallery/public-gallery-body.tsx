@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   Gallery,
   GalleryBranding,
@@ -79,8 +79,8 @@ export function PublicGalleryBody({
   initialAssetsHasMore = false,
   initialAssetNextOffset,
   assetPageLimit = 120,
-  products = [],
-  banners = [],
+  products,
+  banners,
   embeddedVideos = [],
   slug = gallery.slug,
   ws = null,
@@ -102,23 +102,33 @@ export function PublicGalleryBody({
     initialAssetNextOffset ?? assets.length,
     assets.map((asset) => asset.id).join("|"),
   ].join("::");
-  const createInitialAssetState = (): AssetPagingState => ({
-    resetKey: assetResetKey,
-    loadedAssets: assets,
-    assetTotal: initialAssetTotal ?? assets.length,
-    hasMoreAssets: initialAssetsHasMore,
-    nextAssetOffset: initialAssetNextOffset ?? assets.length,
-    loadingMoreAssets: false,
-    assetLoadError: "",
-  });
-  const [assetStateValue, setAssetState] = useState<AssetPagingState>(
-    createInitialAssetState,
+  const initialAssetState = useMemo<AssetPagingState>(
+    () => ({
+      resetKey: assetResetKey,
+      loadedAssets: assets,
+      assetTotal: initialAssetTotal ?? assets.length,
+      hasMoreAssets: initialAssetsHasMore,
+      nextAssetOffset: initialAssetNextOffset ?? assets.length,
+      loadingMoreAssets: false,
+      assetLoadError: "",
+    }),
+    [
+      assetResetKey,
+      assets,
+      initialAssetTotal,
+      initialAssetsHasMore,
+      initialAssetNextOffset,
+    ],
   );
-  let assetState = assetStateValue;
-  if (assetState.resetKey !== assetResetKey) {
-    assetState = createInitialAssetState();
-    setAssetState(assetState);
-  }
+  const [assetState, setAssetState] =
+    useState<AssetPagingState>(initialAssetState);
+  useEffect(() => {
+    setAssetState((current) =>
+      current.resetKey === initialAssetState.resetKey
+        ? current
+        : initialAssetState,
+    );
+  }, [initialAssetState]);
 
   const loadMoreAssets = useCallback(async () => {
     if (assetState.loadingMoreAssets || !assetState.hasMoreAssets) return;

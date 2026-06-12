@@ -34,7 +34,6 @@ import {
 import { getStorageBackedUrl } from "@/lib/dashboard-ui";
 import { useDecryptedAssetUrl } from "@/lib/media-encryption/use-decrypted-asset-url";
 import {
-  readGalleryClientSideMediaEncryptionEnabled,
   readGallerySlideshowIntervalMs,
   SLIDESHOW_INTERVAL_DEFAULT_MS,
   SLIDESHOW_INTERVAL_MAX_MS,
@@ -483,9 +482,7 @@ export default function GallerySettingsPage({
   );
   const [watermarkPanelLayer, setWatermarkPanelLayer] =
     useState<WatermarkLayerKind>("logo");
-  const [accountShares, setAccountShares] = useState<GalleryAccountShare[]>(
-    [],
-  );
+  const [accountShares, setAccountShares] = useState<GalleryAccountShare[]>([]);
   const [shareEmail, setShareEmail] = useState("");
   const [shareBilling, setShareBilling] = useState<"owner" | "shared">(
     "shared",
@@ -1065,9 +1062,6 @@ export default function GallerySettingsPage({
   const slideshowSpeedDirty =
     slideshowIntervalDraftMs !== null &&
     slideshowIntervalMs !== savedSlideshowIntervalMs;
-  const clientSideMediaEncryptionEnabled = gallery
-    ? readGalleryClientSideMediaEncryptionEnabled(gallery.settings)
-    : false;
   const studioLogoName =
     workspaceProfile?.logo_metadata?.filename ||
     (workspaceProfile?.logo_asset_id ? "Uploaded logo" : "");
@@ -1206,31 +1200,6 @@ export default function GallerySettingsPage({
                 </div>
               </div>
             )}
-          </section>
-
-          {/* Upload mode */}
-          <section
-            id="gallery-settings-upload"
-            className="surface-panel space-y-4 p-5"
-          >
-            <h2 className="text-lg font-semibold text-text-primary">Uploads</h2>
-            <p className="text-sm text-text-secondary">
-              Keep new photo uploads on the fast standard path, or turn on
-              browser-side encryption when this gallery needs secure-key access.
-            </p>
-            <ToggleRow
-              label="Client-side media encryption"
-              description={
-                clientSideMediaEncryptionEnabled
-                  ? "New uploads are encrypted in the browser before upload. This is slower and can require desktop support for large or camera-specific files."
-                  : "New uploads skip browser encryption for faster upload and preview. Existing encrypted photos still open through their secure gallery key."
-              }
-              checked={clientSideMediaEncryptionEnabled}
-              disabled={saving}
-              onChange={(v) =>
-                handleToggle("client_side_media_encryption_enabled", v)
-              }
-            />
           </section>
 
           {/* Access window / expiry */}
@@ -1412,8 +1381,7 @@ export default function GallerySettingsPage({
                     </p>
                   ) : accountShares.length > 0 ? (
                     accountShares.map((share) => {
-                      const isPendingInvite =
-                        share.status === "pending_invite";
+                      const isPendingInvite = share.status === "pending_invite";
                       const migratedBytes =
                         share.migrated_original_bytes +
                         share.migrated_derivative_bytes;
